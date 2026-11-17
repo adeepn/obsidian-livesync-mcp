@@ -577,7 +577,7 @@ class CouchDBBackend:
                 rev=meta["rev"],
             )
 
-        datas = await self._fetch_chunk_datas(children, path)
+        datas = await self._fetch_chunk_datas(children, path, doc.get("eden"))
         if doc_type == "plain":
             text = assemble_text(datas)
             return NoteContent(
@@ -605,15 +605,29 @@ class CouchDBBackend:
         )
 
     async def _fetch_chunk_datas(
-        self, children: list[str], path: str
+        self, children: list[str], path: str, eden: object = None
     ) -> list[str]:
         """Fetch chunk documents in one batch, in ``children`` order.
 
         The raised messages carry the note path only; chunk ids stay in
         the server log (audits C4/C7).
         """
-        rows = await self._post_all_docs(children, include_docs=True)
+        if eden is None:
+            eden = {}
+        if not isinstance(eden, dict):
+            raise StorageError(f"note {path!r} is corrupt: invalid eden field")
+        # EntryManager/EntryManagerImpls.ts:578-603 merges inline leaves
+        # with fetched children by id. Accept legacy strings as well as
+        # this upstream checkout's {data: string} entries.
         docs_by_id: dict[str, dict] = {}
+        for child_id in children:
+            if child_id in eden:
+                value = eden[child_id]
+                docs_by_id[child_id] = (
+                    dict(value) if isinstance(value, dict) else {"data": value}
+                )
+        missing = [child for child in children if child not in docs_by_id]
+        rows = await self._post_all_docs(missing, include_docs=True) if missing else []
         for row in rows:
             chunk = row.get("doc") if isinstance(row, dict) else None
             if isinstance(chunk, dict) and isinstance(chunk.get("_id"), str):
@@ -803,6 +817,10 @@ class CouchDBBackend:
             meta["ctime"],
             mtime_ms,
         )
+        # EntryManager/EntryManagerImpls.ts:578-585: eden holds inline
+        # content; retaining children alone would lose that content.
+        if "eden" in doc:
+            body["eden"] = doc["eden"]
         if doc.get("type") == "notes" and isinstance(doc.get("data"), str):
             body["data"] = doc["data"]  # legacy body lives in the doc
         return body

@@ -1185,3 +1185,53 @@ async def test_startup_preferred_settings_override_device_entries():
     }}}
     async with fake_backend(docs) as (backend, _):
         await backend.startup_check()
+
+
+@pytest.mark.parametrize('wrapped', [False, True])
+@pytest.mark.parametrize('operation', ['copy_note', 'rename_note'])
+async def test_eden_only_copy_and_rename_readback(wrapped, operation):
+    eden = {'h:inline': {'data': 'inline body'} if wrapped else 'inline body'}
+    docs = {'a.md': plain_note('a.md', 'a.md', ['h:inline'], eden=eden)}
+    async with fake_vault(docs) as (backend, raw, log):
+        assert (await backend.read_note('a.md'))['text'] == 'inline body'
+        await getattr(backend, operation)('a.md', 'b.md')
+        assert (await backend.read_note('b.md'))['text'] == 'inline body'
+        target = await stored_doc(raw, 'b.md')
+        source = await stored_doc(raw, 'a.md')
+    assert target['eden'] == source['eden'] == eden
+    assert bool(source.get('deleted')) == (operation == 'rename_note')
+    assert not any(r.method == 'POST' and b'h:inline' in r.content for r in log)
+
+
+async def test_read_mixed_eden_and_remote_children_in_order():
+    import json
+    docs = {
+        'a.md': plain_note('a.md', 'a.md', ['h:b', 'h:a', 'h:c', 'h:b'],
+                           eden={'h:a': 'A', 'h:c': {'data': 'C'}}),
+        'h:b': {'type': 'leaf', 'data': 'B'},
+        'h:a': {'type': 'leaf', 'data': 'stale'},
+    }
+    async with fake_backend(docs) as (backend, log):
+        assert (await backend.read_note('a.md'))['text'] == 'BACB'
+    batches = [json.loads(r.content)['keys'] for r in log if r.method == 'POST']
+    assert batches == [['h:b', 'h:b']]
+
+
+@pytest.mark.parametrize('bad', [None, {'data': 12}, {'data': 'secret', 'e_': True}])
+async def test_corrupt_mixed_eden_note_is_isolated(bad):
+    docs = {
+        'good.md': plain_note('good.md', 'good.md', ['h:ok'], eden={'h:ok': 'OK'}),
+        'bad.md': plain_note('bad.md', 'bad.md', ['h:x', 'h:r'], eden={'h:x': bad}),
+        'h:r': {'type': 'leaf', 'data': 'remote'},
+    }
+    async with fake_backend(docs) as (backend, _):
+        results = {meta['path']: text async for meta, text in backend.iterate_texts()}
+    assert results == {'good.md': 'OK', 'bad.md': None}
+
+
+async def test_encrypted_inline_eden_refused():
+    docs = {'a.md': plain_note('a.md', 'a.md', ['h:e'],
+                               eden={'h:e': {'data': 'secret', 'e_': True}})}
+    async with fake_backend(docs) as (backend, _):
+        with pytest.raises(UnsupportedVault):
+            await backend.read_note('a.md')
