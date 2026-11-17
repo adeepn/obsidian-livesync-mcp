@@ -1544,3 +1544,45 @@ async def test_rename_canonical_destination(destination, canonical):
         assert (await stored_doc(raw, canonical))['path'] == canonical
         for path in (destination, canonical):
             assert (await backend.read_note(path))['text'] == 'body'
+
+
+@pytest.mark.parametrize('inline', [False, True])
+async def test_scan_releases_chunk_references_before_next_window(monkeypatch, inline):
+    import weakref
+    from storage_couchdb import _TEXT_WINDOW_SIZE
+
+    class Body(str):
+        pass
+
+    docs = {}
+    for i in range(_TEXT_WINDOW_SIZE + 1):
+        path, child = f'n{i:03}.md', f'h:{i}'
+        docs[path] = plain_note(path, path, [child],
+                               **({'eden': {child: {'data': 'body'}}} if inline else {}))
+        docs[child] = {'type': 'leaf', 'data': 'body'}
+    refs = []
+    async with fake_backend(docs) as (backend, _):
+        await backend.refresh()
+        original = backend._post_all_docs
+
+        async def tracked(keys, **kwargs):
+            if not keys[0].startswith('h:'):
+                assert all(ref() is None for ref in refs)
+            rows = await original(keys, **kwargs)
+            for row in rows:
+                doc = row['doc']
+                leaves = list(doc.get('eden', {}).values()) if inline else [doc]
+                for leaf in leaves:
+                    if 'data' in leaf:
+                        leaf['data'] = Body(leaf['data'])
+                        refs.append(weakref.ref(leaf['data']))
+            return rows
+
+        monkeypatch.setattr(backend, '_post_all_docs', tracked)
+        count = 0
+        async for _, text in backend.iterate_texts():
+            assert text == 'body'
+            count += 1
+            del text
+        assert count == _TEXT_WINDOW_SIZE + 1
+        assert all(ref() is None for ref in refs)

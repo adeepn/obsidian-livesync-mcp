@@ -554,6 +554,7 @@ class CouchDBBackend:
                     yield meta, None
             # No body-bearing window survives into the next HTTP fetch.
             del docs, rows, chunks, chunk_rows, doc, content
+            inline = row = chunk = None
 
     # -- note decoding -------------------------------------------------------
 
