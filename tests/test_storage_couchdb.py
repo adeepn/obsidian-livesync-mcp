@@ -967,7 +967,7 @@ async def test_rename_retire_race_leaves_both_live():
         target = await stored_doc(raw, "b.md")
         ops_end = len(log)
     assert "deleted" not in source  # retirement failed, still live
-    assert source["_rev"] == "2-fake2"  # racing writer's revision
+    assert source["_rev"] == "3-fake3"  # failure-state probe triggers another racing edit
     assert "deleted" not in target  # the copy exists
     assert target["_id"] == "b.md"
     assert not any(r.method == "DELETE" for r in log[:ops_end])
@@ -1516,3 +1516,19 @@ async def test_batched_scan_preserves_read_path_gate(path):
     async with fake_backend({'visible.md': doc}) as (backend, _):
         results = [text async for _, text in backend.iterate_texts(extension='.md')]
     assert 'private' not in results
+
+
+@pytest.mark.parametrize("failure", [StorageUnavailable("response lost"), ConcurrentModification("concurrent delete")])
+async def test_rename_lost_retirement_ack_requires_state_verification(monkeypatch, failure):
+    async with fake_vault({'a.md': plain_note('a.md', 'a.md', [])}) as (backend, raw, _):
+        original = backend._soft_delete
+        async def committed_but_ack_lost(*args):
+            await original(*args)
+            raise failure
+        monkeypatch.setattr(backend, '_soft_delete', committed_but_ack_lost)
+        with pytest.raises(RenamePartialError) as caught:
+            await backend.rename_note('a.md', 'b.md')
+        assert (await stored_doc(raw, 'a.md'))['deleted']
+        assert not (await stored_doc(raw, 'b.md')).get('deleted')
+        assert caught.value.source_state == 'unknown'
+        assert 'verify' in caught.value.hint.lower()

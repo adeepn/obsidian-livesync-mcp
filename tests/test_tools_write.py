@@ -459,3 +459,14 @@ def test_conflict_and_stale_revision_messages_differ():
     conflict = server._storage_message(UnresolvedConflicts())
     assert stale != conflict
     assert 'Obsidian' in conflict and 'resolve' in conflict.lower()
+
+
+async def test_move_unknown_source_state_never_recommends_destination_removal(vault):
+    from storage_base import RenamePartialError
+    vault.errors['rename_note'] = RenamePartialError('N.md', 'Other.md', source_state='unknown')
+    message = await server.obsidian_move_note('N.md', 'Other.md')
+    assert 'N.md' in message and 'Other.md' in message
+    assert 'could not be confirmed' in message
+    assert 'verify both paths' in message.lower()
+    assert 'removing the destination' not in message
+    assert 'exists at both' not in message

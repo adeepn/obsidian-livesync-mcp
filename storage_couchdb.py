@@ -984,7 +984,14 @@ class CouchDBBackend:
             await self._soft_delete(doc, path, _now_ms())
         except Exception as exc:
             logger.exception("rename source retirement failed for %s", path)
-            raise RenamePartialError(path, new_path) from exc
+            source_state = "unknown"
+            try:
+                source = await self._get_doc(path2id(path))
+                if source is not None and is_note_document(source):
+                    source_state = "live"
+            except Exception:
+                logger.exception("unable to confirm rename source state for %s", path)
+            raise RenamePartialError(path, new_path, source_state=source_state) from exc
         return self._meta_from_doc(body)
 
     async def copy_note(

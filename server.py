@@ -154,10 +154,17 @@ def create_app(cfg: Config) -> FastMCP:
 def _storage_message(error: StorageError) -> str:
     """Never forward backend exception text (URLs/revisions) to clients."""
     if isinstance(error, RenamePartialError):
+        if error.source_state != "live":
+            return (
+                f"Error: move target '{error.destination}' was written, but "
+                f"retirement of source '{error.source}' could not be confirmed. "
+                "Verify both paths and their contents before cleanup."
+            )
         return (
             f"Error: move target was written, but source retirement failed; "
             f"the note now exists at both '{error.source}' and "
-            f"'{error.destination}'. Delete one copy, or retry the move "
+            f"'{error.destination}'. Verify both paths and their contents first. "
+            "Delete one copy, or retry the move "
             "after removing the destination."
         )
     messages = {

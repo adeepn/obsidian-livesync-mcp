@@ -37,14 +37,22 @@ class UnresolvedConflicts(ConcurrentModification):
 
 
 class RenamePartialError(StorageError):
-    """Destination published durably, but source retirement failed."""
+    """Destination published, but source retirement failed or is unconfirmed.
 
-    def __init__(self, source: str, destination: str):
+    source_state is "live" only after observing a surviving source; callers
+    must verify both paths and contents before cleanup, even in that case.
+    """
+
+    def __init__(self, source: str, destination: str, *, source_state: str = "live"):
         self.source = source
         self.destination = destination
         self.completed_phase = "target_written"
+        self.source_state = source_state
         self.hint = (
+            "Verify both paths and their contents before cleanup. "
             "Delete one copy, or retry the move after removing the destination."
+            if source_state == "live" else
+            "Verify both paths and their contents; source retirement is unconfirmed."
         )
         super().__init__("rename target published; source retirement failed")
 
