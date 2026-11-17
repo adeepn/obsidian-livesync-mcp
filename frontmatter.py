@@ -111,12 +111,25 @@ def _empty_with_comments(fm_raw: str) -> CommentedMap:
     return data
 
 
-def _to_plain(value):
+def _to_plain(value, *, _seen=None, _budget=None, _depth=0):
     """Convert round-trip scalars/containers to plain Python values."""
+    if _seen is None:
+        _seen, _budget = set(), [10000]
+    _budget[0] -= 1
+    if _budget[0] < 0:
+        raise FrontmatterError("frontmatter exceeds maximum nodes")
+    if _depth > 32:
+        raise FrontmatterError("frontmatter exceeds maximum depth")
+    if isinstance(value, (dict, list, tuple)):
+        if id(value) in _seen:
+            raise FrontmatterError("YAML aliases are not supported in frontmatter")
+        _seen.add(id(value))
+    def convert(item):
+        return _to_plain(item, _seen=_seen, _budget=_budget, _depth=_depth + 1)
     if isinstance(value, dict):
-        return {str(key): _to_plain(item) for key, item in value.items()}
+        return {str(convert(key)): convert(item) for key, item in value.items()}
     if isinstance(value, (list, tuple)):
-        return [_to_plain(item) for item in value]
+        return [convert(item) for item in value]
     if isinstance(value, bool):  # before int: bool is an int subclass
         return value
     if isinstance(value, int):  # keeps '01234' as 1234, '0x1F' as 31
