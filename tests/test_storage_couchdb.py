@@ -1444,3 +1444,27 @@ async def test_rename_partial_failure_fields(monkeypatch, failure):
         assert caught.value.hint
         assert not (await stored_doc(raw, 'a.md')).get('deleted')
         assert not (await stored_doc(raw, 'b.md')).get('deleted')
+
+
+async def test_iteration_batches_chunks_by_bounded_windows():
+    import json
+    import math
+    count = 123
+    docs = {}
+    expected = {}
+    for i in range(count):
+        path, chunk = f'n{i:03}.md', f'h:{i}'
+        docs[path] = plain_note(path, path, [chunk, 'h:shared'])
+        docs[chunk] = {'type': 'leaf', 'data': str(i)}
+        expected[path] = str(i) + ' shared'
+    docs['h:shared'] = {'type': 'leaf', 'data': ' shared'}
+    docs['bad.md'] = plain_note('bad.md', 'bad.md', ['h:missing'])
+    expected['bad.md'] = None
+    async with fake_backend(docs) as (backend, log):
+        actual = {m['path']: t async for m, t in backend.iterate_texts()}
+    assert actual == expected
+    chunk_calls = [json.loads(r.content)['keys'] for r in log
+                   if r.method == 'POST' and r.url.path.endswith('/_all_docs')
+                   and any(k.startswith('h:') for k in json.loads(r.content)['keys'])]
+    assert len(chunk_calls) <= math.ceil((count + 1) / 50) * 2
+    assert all(len(keys) == len(set(keys)) and len(keys) <= 500 for keys in chunk_calls)

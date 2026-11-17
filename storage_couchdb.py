@@ -105,6 +105,7 @@ def _milestone_settings(body: dict) -> list[dict]:
 
 # _all_docs page size for id scans and metadata batch fetches.
 _PAGE_SIZE = 500
+_TEXT_WINDOW_SIZE = 50
 
 # CouchDB 404 body when the *database* is gone (a missing document
 # answers with reason "missing" instead); conflating the two turns a
@@ -512,27 +513,57 @@ class CouchDBBackend:
             index.values(),
             key=lambda doc: str(doc.get("path") or doc.get("_id") or ""),
         )
-        for doc in ordered:
-            meta = self._meta_from_doc(doc)
-            if not _matches_extension(meta["path"], extension):
-                continue
-            if not is_text_doc(doc.get("type"), meta["path"]):
-                yield meta, None
-                continue
+        candidates = [doc for doc in ordered if _matches_extension(
+            str(doc.get("path") or doc.get("_id") or ""), extension
+        )]
+        for start in range(0, len(candidates), _TEXT_WINDOW_SIZE):
+            window = candidates[start:start + _TEXT_WINDOW_SIZE]
             try:
-                content = await self.read_note(meta["path"])
-            except StorageError as exc:
-                logger.error("skipping note %s: %s", meta["path"], exc)
-                yield meta, None
-                continue
+                rows = await self._post_all_docs(
+                    [doc["_id"] for doc in window], include_docs=True
+                )
             except Exception:
-                logger.exception("skipping note %s: unexpected error", meta["path"])
-                yield meta, None
+                logger.exception("unable to fetch scan metadata window")
+                for doc in window:
+                    yield self._meta_from_doc(doc), None
                 continue
-            if content is None or content["text"] is None:
-                yield meta, None
-                continue
-            yield meta, content["text"]
+            docs = {row["doc"]["_id"]: row["doc"] for row in rows
+                    if isinstance(row, dict) and isinstance(row.get("doc"), dict)
+                    and _is_note_doc(row["doc"])}
+            missing = set()
+            for doc in docs.values():
+                children, eden = doc.get("children"), doc.get("eden") or {}
+                if not isinstance(children, list) or not isinstance(eden, dict):
+                    continue  # decoding below isolates malformed notes
+                missing.update(child for child in children
+                               if isinstance(child, str) and child not in eden)
+            chunks = {}
+            chunk_rows = []
+            content = None
+            keys = sorted(missing)
+            for offset in range(0, len(keys), _PAGE_SIZE):
+                try:
+                    chunk_rows = await self._post_all_docs(
+                        keys[offset:offset + _PAGE_SIZE], include_docs=True
+                    )
+                    for row in chunk_rows:
+                        chunk = row.get("doc") if isinstance(row, dict) else None
+                        if isinstance(chunk, dict) and isinstance(chunk.get("_id"), str):
+                            chunks[chunk["_id"]] = chunk
+                except Exception:
+                    logger.exception("unable to fetch scan chunk batch")
+            for indexed in window:
+                meta = self._meta_from_doc(indexed)
+                try:
+                    doc = docs.get(indexed["_id"])
+                    content = (await self._content_from_doc(doc, chunks)
+                               if doc is not None else None)
+                    yield (content["meta"], content["text"]) if content else (meta, None)
+                except Exception:
+                    logger.exception("skipping note %s", meta["path"])
+                    yield meta, None
+            # No body-bearing window survives into the next HTTP fetch.
+            del docs, rows, chunks, chunk_rows, doc, content
 
     # -- note decoding -------------------------------------------------------
 
@@ -559,7 +590,7 @@ class CouchDBBackend:
             rev=rev,
         )
 
-    async def _content_from_doc(self, doc: dict) -> NoteContent | None:
+    async def _content_from_doc(self, doc: dict, chunks: dict | None = None) -> NoteContent | None:
         meta = self._meta_from_doc(doc)
         path = meta["path"]
         doc_type = doc.get("type")
@@ -601,7 +632,7 @@ class CouchDBBackend:
                 rev=meta["rev"],
             )
 
-        datas = await self._fetch_chunk_datas(children, path, doc.get("eden"))
+        datas = await self._fetch_chunk_datas(children, path, doc.get("eden"), chunks)
         if doc_type == "plain":
             text = assemble_text(datas)
             return NoteContent(
@@ -629,7 +660,8 @@ class CouchDBBackend:
         )
 
     async def _fetch_chunk_datas(
-        self, children: list[str], path: str, eden: object = None
+        self, children: list[str], path: str, eden: object = None,
+        prefetched: dict | None = None
     ) -> list[str]:
         """Fetch chunk documents in one batch, in ``children`` order.
 
@@ -651,7 +683,11 @@ class CouchDBBackend:
                     dict(value) if isinstance(value, dict) else {"data": value}
                 )
         missing = [child for child in children if child not in docs_by_id]
-        rows = await self._post_all_docs(missing, include_docs=True) if missing else []
+        rows = (await self._post_all_docs(missing, include_docs=True)
+                if missing and prefetched is None else [])
+        if prefetched is not None:
+            docs_by_id.update({key: prefetched[key] for key in missing
+                               if key in prefetched})
         for row in rows:
             chunk = row.get("doc") if isinstance(row, dict) else None
             if isinstance(chunk, dict) and isinstance(chunk.get("_id"), str):
