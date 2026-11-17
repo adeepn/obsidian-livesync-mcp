@@ -16,6 +16,10 @@ S3_URI_SCHEME = "sls://"
 
 BACKENDS = ("couchdb", "s3")
 
+# Audit A4: the URL default is the standard CouchDB port, matching README
+# and .env.example. Credentials and database stay required (no defaults).
+COUCHDB_URL_DEFAULT = "http://localhost:5984"
+
 # Values that look like an untouched copy of .env.example; startup must
 # refuse them instead of silently running with known credentials.
 PLACEHOLDER_SECRET_VALUES = frozenset(
@@ -137,7 +141,7 @@ def _load_couchdb(env: Mapping[str, str]) -> CouchDBConfig:
     password = _read(env, "COUCHDB_PASSWORD")
     _reject_placeholder(password, "COUCHDB_PASSWORD")
     return CouchDBConfig(
-        url=_read(env, "COUCHDB_URL"),
+        url=env.get("COUCHDB_URL", "").strip() or COUCHDB_URL_DEFAULT,
         user=_read(env, "COUCHDB_USER"),
         password=password,
         database=_read(env, "COUCHDB_DATABASE"),

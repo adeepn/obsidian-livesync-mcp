@@ -2,17 +2,23 @@
 
 ## Project Structure & Module Organization
 
-This repository is a small Python MCP server for accessing an Obsidian LiveSync vault through CouchDB. Core files live at the root:
+This repository is a small Python MCP server for accessing an Obsidian LiveSync vault through a configurable storage backend (CouchDB today). Core files live at the root:
 
-- `server.py`: FastMCP server setup, tool definitions, OAuth wiring, and environment-driven configuration.
-- `couchdb.py`: CouchDB client and note/document access logic.
+- `server.py`: FastMCP server setup, all MCP tool definitions, auth wiring, and the `get_backend(cfg)` factory that builds the storage backend from configuration.
+- `config.py`: strict environment validation (`load_config`) — backend selection, backend credentials, client auth; rejects placeholder secrets.
+- `storage_base.py`: storage-agnostic `StorageBackend` protocol plus the storage exception hierarchy.
+- `storage_couchdb.py`: `CouchDBBackend`, the LiveSync-aware CouchDB implementation of the protocol.
+- `livesync_format.py`: LiveSync document/chunk codecs, path rules, and vault validation.
+- `frontmatter.py`: round-trip YAML frontmatter editing (ruamel.yaml).
+- `links.py`: Obsidian-compatible link extraction, resolution, and graph building.
+- `auth_config.py`: auth-mode selection and the static bearer token verifier.
 - `oauth_provider.py`: OAuth 2.1 authorization provider used when OAuth is enabled.
-- `run.py`: local entry point for starting the server.
-- `requirements.txt`: runtime Python dependencies.
+- `run.py`: local entry point; loads `.env` before importing the server.
+- `requirements.txt` / `requirements-dev.txt` / `requirements.lock`: runtime, dev, and frozen dependency sets.
 - `.env.example`: required configuration template.
 - `obsidian-mcp.service`: optional systemd deployment unit.
 
-There is no `tests/` directory or packaged source tree yet. Keep new modules focused and colocated unless the project grows enough to justify a package layout.
+Tests live in `tests/` as `tests/test_<module>.py` (pytest + pytest-asyncio, auto mode via `pytest.ini`); shared doubles are `tests/fake_backend.py` (in-memory backend) and `tests/couchdb_fake.py` (HTTP-level CouchDB double). Keep new modules focused and colocated unless the project grows enough to justify a package layout.
 
 ## Build, Test, and Development Commands
 
@@ -21,7 +27,7 @@ Create a virtual environment before local work:
 ```bash
 python -m venv venv
 source venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 ```
 
 On Windows PowerShell, activate with `.\venv\Scripts\Activate.ps1`.
@@ -32,7 +38,13 @@ Run the server locally:
 python run.py
 ```
 
-Copy `.env.example` to `.env` and set CouchDB, OAuth, and MCP host values before running against real data.
+Run the test suite:
+
+```bash
+./venv/bin/python -m pytest
+```
+
+Copy `.env.example` to `.env` and set `LIVESYNC_BACKEND`, the backend credentials, and exactly one auth mode before running against real data.
 
 ## Coding Style & Naming Conventions
 
@@ -42,9 +54,9 @@ No formatter or linter config is committed. If adding one, document the command 
 
 ## Testing Guidelines
 
-No automated test suite is present. For changes to note parsing, CouchDB document handling, OAuth, or MCP tools, add focused tests before broad refactors. Use `tests/test_<module>.py` with pytest-style functions, for example `tests/test_couchdb.py`.
+The automated suite covers configuration, codecs, frontmatter, links, the CouchDB backend (against an HTTP-level fake), all tool groups, and auth. Keep it green; add focused tests in `tests/test_<module>.py` before broad refactors, especially for note parsing, CouchDB document handling, OAuth, or MCP tools.
 
-Until tests exist, verify manually with a configured CouchDB instance and `python run.py`. Exercise the changed MCP tool and check note content, frontmatter, and CouchDB revisions.
+Tool tests run against `tests/fake_backend.py`; backend tests against `tests/couchdb_fake.py`. Manual verification with a configured CouchDB instance and `python run.py` remains useful for end-to-end checks: exercise the changed MCP tool and check note content, frontmatter, and CouchDB revisions.
 
 ## Commit & Pull Request Guidelines
 

@@ -12,6 +12,15 @@ Obsidian (phone/desktop) <-> CouchDB <-> MCP Server <-> Claude Code / Claude.ai
 
 Obsidian clients sync via the LiveSync plugin to a CouchDB instance. This MCP server reads and writes directly to CouchDB, providing 20 tools for managing your vault — no Obsidian REST API or desktop app needed on the server side.
 
+## Backends
+
+Storage is selected by a single environment variable, `LIVESYNC_BACKEND`:
+
+- **`couchdb`** (current) — talks directly to the CouchDB instance your vault syncs to. Configure it with the `COUCHDB_*` variables below.
+- **`s3`** (Plan B, not yet available) — will support Self-hosted LiveSync setups that keep the vault in S3-compatible storage. Selecting it today fails at startup with an explicit message.
+
+All tools work through a storage-agnostic backend interface, so switching backends later is a configuration change, not a rewrite. The `vault_stats` tool reports the active backend in its `backend` field.
+
 ## Features
 
 ### Notes
@@ -65,28 +74,38 @@ pip install -r requirements.txt
 
 ```bash
 cp .env.example .env
-# Edit .env with your settings
+# Edit .env: pick LIVESYNC_BACKEND, fill the backend credentials,
+# and set exactly one auth mode (see Authentication below).
 ```
 
-| Variable | Description |
-|---|---|
-| `COUCHDB_URL` | CouchDB URL (e.g. `http://localhost:5984`) |
-| `COUCHDB_USER` | CouchDB admin username |
-| `COUCHDB_PASSWORD` | CouchDB admin password |
-| `COUCHDB_DATABASE` | Database name (default: `obsidian`) |
-| `MCP_API_KEY` | Shared bearer token for MCP clients such as Codex (bearer mode) |
-| `OAUTH_PASSWORD` | Password enforced at the `/authorize` form in OAuth mode (leave empty to disable OAuth) |
-| `OAUTH_CLIENT_ID` | OAuth client ID for pre-registered client |
-| `OAUTH_CLIENT_SECRET` | OAuth client secret |
-| `MCP_SERVER_URL` | Public HTTPS URL of this server |
-| `MCP_HOST` | Bind address (default: `0.0.0.0`) |
-| `MCP_PORT` | Port (default: `8484`) |
+`run.py` loads `.env` via python-dotenv before the server reads the environment. If you start the server any other way (systemd uses `EnvironmentFile=`), the variables must already be in the environment.
+
+The server refuses to start when required variables are missing, an auth mode is not configured, or a secret still holds a placeholder value from `.env.example`.
+
+| Variable | Description | Default |
+|---|---|---|
+| `LIVESYNC_BACKEND` | Storage backend: `couchdb` or `s3` (Plan B, not yet available) | required, no default |
+| `COUCHDB_URL` | CouchDB URL | `http://localhost:5984` |
+| `COUCHDB_USER` | CouchDB username | required when backend is `couchdb` |
+| `COUCHDB_PASSWORD` | CouchDB password | required when backend is `couchdb` |
+| `COUCHDB_DATABASE` | LiveSync database name | required when backend is `couchdb` |
+| `MCP_API_KEY` | Shared bearer token for MCP clients such as Codex (bearer mode) | required unless OAuth group is set |
+| `OAUTH_PASSWORD` | Password enforced at the `/authorize` form in OAuth mode | required for OAuth, together with the two below |
+| `OAUTH_CLIENT_ID` | OAuth client ID for pre-registered client | required for OAuth |
+| `OAUTH_CLIENT_SECRET` | OAuth client secret | required for OAuth |
+| `MCP_SERVER_URL` | Public HTTPS URL of this server | `https://localhost:8484` |
+| `MCP_HOST` | Bind address | `0.0.0.0` |
+| `MCP_PORT` | Port | `8484` |
 
 ### 3. Run
+
+With the virtualenv from step 1 activated:
 
 ```bash
 python run.py
 ```
+
+The server serves streamable HTTP at `/mcp`; all client URLs below assume that transport.
 
 ### 4. Systemd service (optional)
 

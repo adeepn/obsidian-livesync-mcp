@@ -43,6 +43,24 @@ def test_couchdb_missing_creds():
         load_config(env)
 
 
+def test_couchdb_url_defaults_to_standard_port():
+    # Audit A4: the in-code default must be the standard CouchDB port
+    # 5984, matching README and .env.example (never 5443 again).
+    env = {k: v for k, v in COUCHDB_ENV.items() if k != "COUCHDB_URL"}
+    config = load_config(env)
+    assert config.couchdb.url == "http://localhost:5984"
+
+    env_blank = {**COUCHDB_ENV, "COUCHDB_URL": ""}
+    assert load_config(env_blank).couchdb.url == "http://localhost:5984"
+
+
+def test_couchdb_user_password_database_have_no_default():
+    for name in ("COUCHDB_USER", "COUCHDB_PASSWORD", "COUCHDB_DATABASE"):
+        env = {k: v for k, v in COUCHDB_ENV.items() if k != name}
+        with pytest.raises(ConfigError, match=name):
+            load_config(env)
+
+
 def test_placeholder_api_key_rejected():
     env = {**COUCHDB_ENV, "MCP_API_KEY": "your_api_key"}
     with pytest.raises(ConfigError, match="MCP_API_KEY"):

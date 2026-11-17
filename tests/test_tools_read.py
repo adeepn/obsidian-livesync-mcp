@@ -2,6 +2,7 @@
 
 import hashlib
 import os
+import secrets
 import subprocess
 import sys
 from types import SimpleNamespace
@@ -171,7 +172,7 @@ async def test_search_regex_and_invalid_pattern(tools):
     assert "invalid" in (await server.obsidian_search("[", regex=True)).lower()
 
 
-async def test_factory_builds_couchdb_backend():
+async def test_get_backend_couchdb():
     from config import CouchDBConfig
     from storage_couchdb import CouchDBBackend
     cfg = SimpleNamespace(backend="couchdb", couchdb=CouchDBConfig(
@@ -181,9 +182,44 @@ async def test_factory_builds_couchdb_backend():
     await backend.close()
 
 
-def test_factory_rejects_s3():
+def test_get_backend_s3_pending():
     with pytest.raises(RuntimeError, match="^S3 backend arrives in Plan B$"):
         server.get_backend(SimpleNamespace(backend="s3"))
+
+
+async def test_vault_stats_reports_backend(tools):
+    module, fake = tools
+    fake.add("note.md", "")
+    result = json.loads(await module.obsidian_vault_stats())
+    assert result["backend"] == "fake"
+
+
+def _smoke_env(extra: dict) -> dict:
+    """Clean environment plus a fully configured couchdb backend."""
+    env = {key: value for key, value in os.environ.items()
+           if not key.startswith(("COUCHDB_", "MCP_", "OAUTH_", "LIVESYNC_"))}
+    return {**env, "LIVESYNC_BACKEND": "couchdb",
+            "COUCHDB_URL": "http://localhost:5984",
+            "COUCHDB_USER": "smoke", "COUCHDB_PASSWORD": "smoke-password",
+            "COUCHDB_DATABASE": "vault", **extra}
+
+
+def test_import_server_smoke_bearer_mode_real_mcp():
+    # A1 regression pin: import must stay clean on the real mcp SDK with a
+    # throwaway bearer key (32+ chars, never a real secret).
+    env = _smoke_env({"MCP_API_KEY": secrets.token_hex(32)})
+    result = subprocess.run([sys.executable, "-c", "import server"], env=env,
+                            capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+
+
+def test_import_server_smoke_oauth_mode_real_mcp():
+    env = _smoke_env({"OAUTH_PASSWORD": secrets.token_hex(16),
+                      "OAUTH_CLIENT_ID": "smoke-client",
+                      "OAUTH_CLIENT_SECRET": secrets.token_hex(32)})
+    result = subprocess.run([sys.executable, "-c", "import server"], env=env,
+                            capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
 
 
 def test_import_without_configuration_and_startup_fails_closed():
