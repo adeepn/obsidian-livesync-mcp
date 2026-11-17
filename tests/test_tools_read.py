@@ -513,3 +513,30 @@ async def test_factory_scan_limits_are_frozen_and_reach_backend(monkeypatch):
             assert payload['returned'] == 2
             assert payload['scan']['max_notes'] == 2
             assert payload['scan']['max_bytes'] == 4096
+
+
+@pytest.mark.parametrize('name', ['obsidian_list_notes', 'obsidian_list_templates'])
+@pytest.mark.parametrize('cap', ['bytes', 'index'])
+async def test_capped_empty_listing_does_not_claim_absence(tools, monkeypatch, name, cap):
+    module, fake = tools
+    if cap == 'bytes':
+        fake.add('templates/a.md', 'body')
+        monkeypatch.setattr(module, '_active_scan_limits',
+                            module.ContextVar('test_limits', default=(2, 1)))
+    else:
+        # A capped index omitted the requested folder entirely.
+        fake.add('other/a.md', 'body')
+        fake.index_truncated = True
+    kwargs = {'folder': 'templates'}
+    response = await getattr(module, name)(**kwargs)
+    result = json.loads(response)
+    assert result['truncated'] is True
+    assert result['results'] == []
+    assert result['returned'] == 0
+    assert result['total'] == (1 if cap == 'bytes' else 0)
+    if cap == 'index':
+        assert result['total_is_lower_bound'] is True
+    assert 'results truncated' in result['message'].lower()
+    assert 'narrow' in result['message'].lower()
+    assert 'No notes found' not in response
+    assert 'No templates found' not in response

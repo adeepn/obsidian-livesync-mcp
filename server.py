@@ -289,6 +289,12 @@ def _vault_scan(handler):
                         result = {"message": response}
                     if not isinstance(result, dict):
                         result = {"results": result}
+                    if (handler.__name__ in ("obsidian_list_notes", "obsidian_list_templates")
+                            and not budget.paths):
+                        result = {
+                            "results": [],
+                            "message": "Results truncated; narrow the folder/extension filter.",
+                        }
                     result.update(truncated=True, scan=budget.report())
                     if hasattr(budget, "total"):
                         result.update(returned=len(result["results"]) if "results" in result
