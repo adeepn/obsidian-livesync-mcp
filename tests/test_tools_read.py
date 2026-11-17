@@ -116,6 +116,34 @@ async def test_tags_and_graph_isolate_unreadable_notes(tools):
     assert graph["edges"] == [{"from": "good.md", "to": "target.md"}]
 
 
+async def test_graph_resolves_unreadable_target(tools):
+    module, fake = tools
+    fake.add("source.md", "[[target]]")
+    fake.add("target.md", "")
+    fake.errors[("read_note", "target.md")] = StorageError("unreadable")
+
+    graph = json.loads(await module.obsidian_get_link_graph())
+    assert set(graph["nodes"]) == {"source.md", "target.md"}
+    assert graph["edges"] == [{"from": "source.md", "to": "target.md"}]
+    assert graph["skipped"] == ["target.md"]
+    assert json.loads(await module.obsidian_find_orphaned_notes()) == {
+        "orphans": [], "skipped": ["target.md"]}
+
+
+async def test_graph_keeps_unreadable_basename_candidate(tools):
+    module, fake = tools
+    fake.add("source.md", "[[target]]")
+    fake.add("one/target.md", "")
+    fake.add("two/target.md", "")
+    fake.errors[("read_note", "two/target.md")] = StorageError("unreadable")
+
+    graph = json.loads(await module.obsidian_get_link_graph())
+    assert set(graph["nodes"]) == {
+        "source.md", "one/target.md", "two/target.md"}
+    assert graph["edges"] == []
+    assert graph["skipped"] == ["two/target.md"]
+
+
 async def test_malformed_frontmatter_is_clear_and_isolated(tools):
     server, fake = tools
     fake.add("bad.md", "---\ntags: [unterminated\n---\n#tag")

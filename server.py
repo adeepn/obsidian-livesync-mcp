@@ -239,13 +239,14 @@ async def _legacy_metadata(path: str) -> dict | None:
 
 
 async def _graph() -> dict:
+    paths = [meta["path"] for meta in await backend.list_notes()]
     texts, skipped = [], []
     async for meta, text in backend.iterate_texts():
         if text is None:
             skipped.append(meta["path"])
         else:
             texts.append((meta["path"], text))
-    return {**build_graph(texts), "skipped": skipped}
+    return {**build_graph(texts, all_paths=paths), "skipped": skipped}
 
 
 async def _tags() -> dict:
@@ -721,7 +722,9 @@ async def obsidian_find_orphaned_notes() -> str:
     for edge in graph["edges"]:
         connected.add(edge["from"])
         connected.add(edge["to"])
-    orphans = [n for n in graph["nodes"] if n not in connected]
+    # Unreadable bodies may contain outgoing links, so cannot prove orphanhood.
+    skipped = set(graph["skipped"])
+    orphans = [n for n in graph["nodes"] if n not in connected and n not in skipped]
     if graph["skipped"]:
         return json.dumps(
             {"orphans": orphans, "skipped": graph["skipped"]},

@@ -183,10 +183,18 @@ def resolve_link(target: str, paths: list[str]) -> str | None:
     return None
 
 
-def build_graph(texts: Iterable[tuple[str, str]]) -> dict:
-    """Build a stable graph containing only resolved, distinct directed edges."""
+def build_graph(
+    texts: Iterable[tuple[str, str]], all_paths: Iterable[str] | None = None
+) -> dict:
+    """Build resolved, distinct edges from readable bodies.
+
+    Optional all_paths supplies the complete node and resolution namespace,
+    including notes whose bodies could not be read.
+    """
     notes = list(texts)
-    paths = list(dict.fromkeys(path for path, _ in notes))
+    paths = list(dict.fromkeys(
+        all_paths if all_paths is not None else (path for path, _ in notes)
+    ))
     edges = []
     seen = set()
     for source, text in notes:
