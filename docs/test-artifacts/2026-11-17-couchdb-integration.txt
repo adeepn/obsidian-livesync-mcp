@@ -1,16 +1,25 @@
 CouchDB integration smoke run - CouchDBBackend vs real CouchDB
-Date: 2026-11-17
+Date: 2026-11-17 (fix round 1: deletion-aware invariants, safe teardown)
 Repo: obsidian-livesync-mcp, worktree .worktrees/plan-a (branch plan-a-universal-mcp)
-HEAD at run time: 53e4c8f
+HEAD at run time: e6a879c
+
+Test invariants (deletion-aware): _changes?style=all_docs drained after every
+operation must contain no deleted:true entry (a bare CouchDB DELETE cannot hide
+there, unlike unkeyed _all_docs which excludes deleted docs); every chunk id ever
+written is discovered from the changes feed - including chunks referenced only by
+later soft-deleted notes - and must stay a live leaf document with exactly the
+bytes written; the retired rename source and the soft-deleted duplicate must be
+retrievable by id as live CouchDB documents carrying deleted:true with
+type/path/children intact; cleanup runs in per-resource fixture teardowns.
 
 Docker image: couchdb:3 (digest sha256:907eab5b7e55ab7cfd241d39b90b2a335ea40bef82acee5a37388c08bf201dda)
-Container: mcp-itest-couchdb, 127.0.0.1:62563 -> 5984, COUCHDB_SINGLE_NODE=true
+Container: mcp-itest-couchdb, 127.0.0.1:64358 -> 5984, COUCHDB_SINGLE_NODE=true
 Admin credentials: throwaway, generated per run; the password is intentionally
 not recorded here and does not appear anywhere in the captured output below
 (verified by grep over both captured logs - no [REDACTED] substitutions needed).
 
 GET / (CouchDB version endpoint):
-{"couchdb":"Welcome","version":"3.5.3","git_sha":"7a1f97558","uuid":"3fa57e40fa78de27e0595d53ae36e6c1","features":["access-ready","partitioned","pluggable-storage-engines","reshard","scheduler"],"vendor":{"name":"The Apache Software Foundation"}}
+{"couchdb":"Welcome","version":"3.5.3","git_sha":"7a1f97558","uuid":"dca8f8536faf814ddf2fa6ce3db20e40","features":["access-ready","partitioned","pluggable-storage-engines","reshard","scheduler"],"vendor":{"name":"The Apache Software Foundation"}}
 
 
 POST-run cleanup check - GET /_all_dbs after the test (scratch db mcp_test_<rand> must be gone):
@@ -19,7 +28,7 @@ POST-run cleanup check - GET /_all_dbs after the test (scratch db mcp_test_<rand
 
 =======================================================================
 Run 1: integration test with env vars set
-Command: COUCHDB_TEST_URL=http://127.0.0.1:62563 COUCHDB_TEST_USER=admin \
+Command: COUCHDB_TEST_URL=http://127.0.0.1:64358 COUCHDB_TEST_USER=admin \
   COUCHDB_TEST_PASSWORD=<throwaway> ./venv/bin/python -m pytest tests/test_integration_couchdb.py -v -s
 
 /Volumes/Devel/jHOME/obsidian-livesync-mcp/.worktrees/plan-a/venv/lib/python3.13/site-packages/pytest_asyncio/plugin.py:306: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
@@ -37,7 +46,7 @@ collecting ... collected 1 item
 
 tests/test_integration_couchdb.py::test_real_couchdb_write_lifecycle PASSED
 
-============================== 1 passed in 0.40s ===============================
+============================== 1 passed in 0.67s ===============================
 
 =======================================================================
 Run 2: full suite WITHOUT env vars (integration must SKIP, suite stays green)
@@ -52,4 +61,4 @@ The event loop scope for asynchronous fixtures will default to the fixture scope
 ........................................................................ [ 72%]
 ........................................................................ [ 96%]
 .........                                                                [100%]
-293 passed, 1 skipped, 3 subtests passed in 3.35s
+293 passed, 1 skipped, 3 subtests passed in 9.69s
