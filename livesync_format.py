@@ -1,15 +1,21 @@
-"""Shared LiveSync format semantics: paths and namespaces.
+"""Shared LiveSync format semantics: paths, namespaces, document and chunk codecs.
 
-Single source of truth for the ``path -> document id`` mapping and the
-vault-path namespace rules used by every storage backend (audit B7/B9/B10).
+Single source of truth for the ``path -> document id`` mapping, the
+vault-path namespace rules, and the note/chunk document codecs used by
+every storage backend (audit B2/B3/B4/B7/B9/B10).
 
-Mirrors upstream livesync-commonlib ``src/string_and_binary/path.ts`` for the
-configuration this server supports: ``handleFilenameCaseSensitive=false``
-(ids are lowercased) and path obfuscation disabled. Vaults that use
-obfuscation or E2EE are rejected at backend startup instead.
+Mirrors upstream livesync-commonlib ``src/string_and_binary/path.ts`` and
+``src/managers/EntryManager/EntryManagerImpls.ts`` for the configuration
+this server supports: ``handleFilenameCaseSensitive=false`` (ids are
+lowercased) and path obfuscation disabled. Vaults that use obfuscation or
+E2EE are rejected at backend startup instead.
 """
 
 from __future__ import annotations
+
+import base64
+import binascii
+import hashlib
 
 # Upstream isPlainText (path.ts): extensions stored as plain text chunks.
 TEXT_EXTENSIONS = frozenset(
@@ -115,3 +121,105 @@ def is_text_doc(doc_type: str | None, path: str) -> bool:
     if doc_type == "plain":
         return True
     return path.endswith(_TEXT_SUFFIXES)
+
+
+def assemble_text(chunk_datas: list[str]) -> str:
+    """Concatenate plain-text chunk data into the document body.
+
+    ``plain`` documents store each chunk verbatim (no encoding), so the
+    body is the plain join of the chunk data strings in order.
+    """
+    return "".join(chunk_datas)
+
+
+def assemble_binary(chunk_datas: list[str]) -> bytes:
+    """Decode base64 newnote chunks and concatenate the raw bytes.
+
+    Audit B4: every chunk is base64-encoded *separately*; the document
+    body is the concatenation of the per-chunk decoded bytes, never one
+    base64 decode over the joined string. Raises ``ValueError`` when any
+    chunk is not valid base64.
+    """
+    parts: list[bytes] = []
+    for index, chunk in enumerate(chunk_datas):
+        try:
+            parts.append(base64.b64decode(chunk, validate=True))
+        except binascii.Error as exc:
+            raise ValueError(f"chunk {index} is not valid base64: {exc}") from exc
+    return b"".join(parts)
+
+
+def encode_newnote(data: bytes) -> list[str]:
+    """Encode a body as newnote chunk data (v1: a single chunk).
+
+    The inverse of ``assemble_binary``: the whole body becomes one
+    base64-encoded chunk. Multi-chunk splitting can be added later without
+    changing readers, because decoding is per chunk either way.
+    """
+    return [base64.b64encode(data).decode("ascii")]
+
+
+def chunk_id_for(data: str) -> str:
+    """Deterministic chunk document id for chunk data.
+
+    ``h:`` plus the first 16 hex characters of sha256 over the chunk
+    data's UTF-8 bytes. The ``h:`` namespace is reserved for chunk
+    documents (see ``_FORBIDDEN_PREFIXES`` / validate_vault_path).
+    """
+    return "h:" + hashlib.sha256(data.encode("utf-8")).hexdigest()[:16]
+
+
+def new_metadata_doc(
+    path: str,
+    children: list[str],
+    size: int,
+    doc_type: str,
+    ctime_ms: int,
+    mtime_ms: int,
+) -> dict:
+    """Build a LiveSync file metadata document.
+
+    Upstream ``EntryManagerImpls`` writes exactly the fields ``_id, path,
+    children, ctime, mtime, size, type, eden``. Times are millisecond
+    ints. ``size`` is the decoded body byte length (spec §7), not the
+    encoded chunk length. ``_id`` comes from path2id; ``eden`` starts
+    empty (it only carries E2EE-related chunks, which this server does
+    not support).
+    """
+    return {
+        "_id": path2id(path),
+        "path": path,
+        "children": children,
+        "ctime": ctime_ms,
+        "mtime": mtime_ms,
+        "size": size,
+        "type": doc_type,
+        "eden": {},
+    }
+
+
+def soft_delete_revision(doc: dict, mtime_ms: int) -> dict:
+    """Return a soft-deleted copy of a metadata document (audit B2).
+
+    The copy only flips ``deleted`` to True and stamps the new mtime.
+    Body-related fields (``children``, ``type``, ``size``) are preserved
+    untouched and the original document is not modified. LiveSync marks
+    deletions this way instead of writing a bare CouchDB tombstone, so a
+    delete can be undone and conflict diffs stay meaningful.
+    """
+    revision = dict(doc)
+    revision["deleted"] = True
+    revision["mtime"] = mtime_ms
+    return revision
+
+
+def doc_type_for(path: str) -> str:
+    """LiveSync document type for a body written by this server.
+
+    Audit B3: any text is written as type ``plain`` regardless of
+    extension; the extension only matters when *reading* documents written
+    elsewhere, which is ``is_text_doc``'s job. This server only writes
+    textual bodies today, so every path maps to ``plain``; the parameter
+    is kept for future binary (``newnote``) support.
+    """
+    return "plain"
