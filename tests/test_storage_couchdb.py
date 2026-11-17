@@ -512,6 +512,9 @@ async def test_write_409_concurrent():
 
 async def test_write_conflicts_refused():
     # C3: a note with unresolved conflict revisions is never written.
+    # The fake serves _conflicts only when asked (like CouchDB), so the
+    # refusal also proves the backend requests conflicts=true on the
+    # metadata GET — without the parameter the write would proceed.
     docs = {
         "note.md": plain_note(
             "note.md", "note.md", [], _conflicts=["2-other"], _rev="2-fake2"
@@ -520,6 +523,16 @@ async def test_write_conflicts_refused():
     async with fake_backend(docs) as (backend, log):
         with pytest.raises(ConcurrentModification, match="conflict"):
             await backend.write_note("note.md", "x", overwrite=True)
+        metadata_gets = [
+            r
+            for r in log
+            if r.method == "GET"
+            and urllib.parse.unquote(str(r.url.path)) == f"/{DATABASE}/note.md"
+        ]
+    assert metadata_gets
+    assert all(
+        r.url.params.get("conflicts") == "true" for r in metadata_gets
+    )
     assert mutation_free(log, len(log))
 
 
@@ -561,25 +574,50 @@ async def test_write_size_is_decoded_bytes():
 
 
 async def test_write_reuses_existing_chunk():
-    # Deterministic chunk ids: identical content reuses the stored
-    # chunk instead of PUTting (and conflicting) a second time.
-    async with fake_vault({}) as (backend, raw, log):
+    # Deterministic chunk ids: a chunk already stored under the
+    # computed id with exactly the intended data is reused verbatim —
+    # no PUT of the chunk, no spurious conflict.
+    docs = {chunk_id_for("same"): {"data": "same", "type": "leaf"}}
+    async with fake_vault(docs) as (backend, raw, log):
         await backend.write_note("a.md", "same", create=True)
-        first_end = len(log)
-        await backend.write_note("b.md", "same", create=True)
         ops_end = len(log)
         chunk = await stored_doc(raw, chunk_id_for("same"))
         a = await backend.read_note("a.md")
-        b = await backend.read_note("b.md")
-    second_chunk_puts = [
+    chunk_puts = [
         r
-        for r in log[first_end:ops_end]
+        for r in log[:ops_end]
         if r.method == "PUT"
         and chunk_id_for("same") in urllib.parse.unquote(str(r.url.path))
     ]
-    assert second_chunk_puts == []
-    assert chunk["_rev"] == "1-fake1"  # untouched since creation
-    assert a["text"] == b["text"] == "same"
+    assert chunk_puts == []
+    assert chunk["_rev"] == "1-fake1"  # untouched since seeding
+    assert chunk["data"] == "same"
+    assert a["text"] == "same"
+
+
+async def test_write_conflicting_chunk_refused():
+    # A chunk stored under the computed id with DIFFERENT data must
+    # never be published as the note's content (corrupt or collided
+    # shared chunk — sha256-16 truncation). It is not overwritten or
+    # "repaired" — other notes may reference it — and the metadata
+    # stays untouched.
+    docs = {
+        chunk_id_for("collide"): {"data": "other payload", "type": "leaf"}
+    }
+    async with fake_vault(docs) as (backend, raw, log):
+        with pytest.raises(StorageError, match="content chunk"):
+            await backend.write_note("note.md", "collide", create=True)
+        ops_end = len(log)
+        chunk = await stored_doc(raw, chunk_id_for("collide"))
+        meta_response = await raw.get(
+            f"{DATABASE}/{urllib.parse.quote('note.md', safe='')}"
+        )
+    assert not any(
+        r.method in ("PUT", "POST", "DELETE") for r in log[:ops_end]
+    )
+    assert chunk["data"] == "other payload"  # chunk left untouched
+    assert chunk["_rev"] == "1-fake1"
+    assert meta_response.status_code == 404  # metadata never created
 
 
 async def test_resurrect_requires_create():
@@ -632,8 +670,30 @@ async def test_delete_missing_returns_false():
         assert await backend.delete_note("a.md") is False
 
 
+async def test_delete_note_stale_rev_raises():
+    # A real rev race (no forced status): another writer commits after
+    # our GET, so the soft-delete PUT carries a stale rev. The delete
+    # must surface ConcurrentModification and leave the note live.
+    docs = {"note.md": plain_note("note.md", "note.md", [])}
+    async with fake_vault(docs, bump_rev_on_get=("note.md",)) as (
+        backend, raw, log,
+    ):
+        with pytest.raises(ConcurrentModification, match="concurrent"):
+            await backend.delete_note("note.md")
+        ops_end = len(log)
+        stored = await stored_doc(raw, "note.md")
+    assert not any(r.method == "DELETE" for r in log[:ops_end])
+    assert "deleted" not in stored  # still live after the failed delete
+    assert stored["_rev"] == "2-fake2"  # the racing writer's revision
+
+
 async def test_rename_same_path_noop():
     # D1: renaming onto the identical path mutates nothing.
+    #
+    # RULING (controller): the binding contract for same-path rename is
+    # the plan's "no HTTP MUTATIONS" — a single read-only GET is
+    # permitted and unavoidable (the existence check behind the returned
+    # meta); the requirement is zero PUT/POST/DELETE requests.
     docs = {"a.md": plain_note("a.md", "a.md", [])}
     async with fake_backend(docs) as (backend, log):
         meta = await backend.rename_note("a.md", "a.md")
@@ -704,13 +764,68 @@ async def test_rename_copies_children_and_ctime():
     assert content["data"] == b"\x89PNG-bytes"
     assert old_doc["deleted"] is True  # source soft-deleted...
     assert old_doc["children"] == ["h:p1"]  # ...with children preserved
-    put_paths = sorted(
+    put_paths = [
         urllib.parse.unquote(str(r.url.path))
         for r in log[:ops_end]
         if r.method == "PUT"
-    )
-    # exactly two metadata PUTs — no chunk was rewritten or deleted
-    assert put_paths == [f"/{DATABASE}/img.png", f"/{DATABASE}/moved/pic.png"]
+    ]
+    # CHRONOLOGICAL order, not sorted: the target is published before
+    # the source is retired — retiring first could lose the note if the
+    # copy failed. Exactly two metadata PUTs, no chunk rewritten.
+    assert put_paths == [
+        f"/{DATABASE}/moved/pic.png",
+        f"/{DATABASE}/img.png",
+    ]
+    assert not any(r.method == "DELETE" for r in log[:ops_end])
+
+
+async def test_rename_target_race_keeps_source_live():
+    # Failure window 1 (real rev race, no forced status): the target
+    # PUT loses to a concurrent writer. The source must remain live and
+    # untouched — the soft delete is never issued before the copy
+    # exists.
+    docs = {
+        "a.md": plain_note("a.md", "a.md", ["h:c"]),
+        # soft-deleted target: its stored rev is the one raced away
+        "b.md": plain_note("b.md", "b.md", [], deleted=True),
+        "h:c": {"data": "x", "type": "leaf"},
+    }
+    async with fake_vault(docs, bump_rev_on_get=("b.md",)) as (
+        backend, raw, log,
+    ):
+        with pytest.raises(ConcurrentModification, match="concurrent"):
+            await backend.rename_note("a.md", "b.md")
+        ops_end = len(log)
+        source = await stored_doc(raw, "a.md")
+    put_paths = [
+        urllib.parse.unquote(str(r.url.path))
+        for r in log[:ops_end]
+        if r.method == "PUT"
+    ]
+    assert f"/{DATABASE}/a.md" not in put_paths  # no retire attempt
+    assert "deleted" not in source  # source still live
+    assert source["_rev"] == "1-fake1"  # and untouched
+    assert not any(r.method == "DELETE" for r in log[:ops_end])
+
+
+async def test_rename_retire_race_leaves_both_live():
+    # Failure window 2 (real rev race): the copy lands, but the source
+    # soft delete carries a stale rev. Both notes stay live — a
+    # duplicate is recoverable, lost data is not — and the error
+    # surfaces to the caller.
+    docs = {"a.md": plain_note("a.md", "a.md", [])}
+    async with fake_vault(docs, bump_rev_on_get=("a.md",)) as (
+        backend, raw, log,
+    ):
+        with pytest.raises(ConcurrentModification, match="concurrent"):
+            await backend.rename_note("a.md", "b.md")
+        source = await stored_doc(raw, "a.md")
+        target = await stored_doc(raw, "b.md")
+        ops_end = len(log)
+    assert "deleted" not in source  # retirement failed, still live
+    assert source["_rev"] == "2-fake2"  # racing writer's revision
+    assert "deleted" not in target  # the copy exists
+    assert target["_id"] == "b.md"
     assert not any(r.method == "DELETE" for r in log[:ops_end])
 
 

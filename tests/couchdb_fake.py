@@ -27,7 +27,14 @@ requests succeed and kills the database from request N+1 on;
 ``force_status=N`` makes every request answer ``N`` (401/500/...);
 ``put_conflict_ids`` makes every PUT to the listed document ids answer
 409 regardless of the rev — a racing writer won the rev tree between
-our GET and our PUT.
+our GET and our PUT; ``bump_rev_on_get`` serves the requested revision
+of the listed ids but commits a newer revision to the store right
+after the read, so a subsequent PUT carrying the seen rev fails as a
+genuine stale-revision 409 (a real rev race, not a forced status).
+
+Like CouchDB, a stored ``_conflicts`` field is only served when the
+request carries ``conflicts=true`` (query parameter); every other
+response omits it.
 
 Every incoming request is appended to ``request_log`` so tests can assert
 which documents were fetched and with which query parameters.
@@ -57,6 +64,7 @@ def make_fake_couchdb(
     db_dies_after: int | None = None,
     force_status: int | None = None,
     put_conflict_ids: tuple[str, ...] = (),
+    bump_rev_on_get: tuple[str, ...] = (),
 ) -> tuple[httpx.MockTransport, list[httpx.Request]]:
     """Build a fake CouchDB over ``docs`` (id -> document body).
 
@@ -77,7 +85,13 @@ def make_fake_couchdb(
         # CouchDB's doc_count/total_rows exclude tombstones.
         return sum(1 for doc in store.values() if not doc.get("_deleted"))
 
-    def row_for(doc_id: str, include_docs: bool, *, by_keys: bool) -> dict:
+    def row_for(
+        doc_id: str,
+        include_docs: bool,
+        *,
+        by_keys: bool,
+        with_conflicts: bool = False,
+    ) -> dict:
         doc = store.get(doc_id)
         if doc is None:
             return {"key": doc_id, "error": "not_found"}
@@ -93,6 +107,12 @@ def make_fake_couchdb(
         row = {"id": doc_id, "key": doc_id, "value": {"rev": doc["_rev"]}}
         if include_docs:
             row["doc"] = doc
+            if not with_conflicts and "_conflicts" in doc:
+                row["doc"] = {
+                    key: value
+                    for key, value in doc.items()
+                    if key != "_conflicts"
+                }
         return row
 
     def all_docs_response(request: httpx.Request) -> httpx.Response:
@@ -104,8 +124,12 @@ def make_fake_couchdb(
             params.get("include_docs") == "true"
         )
         if "keys" in body:
+            with_conflicts = params.get("conflicts") == "true"
             rows = [
-                row_for(key, include_docs, by_keys=True) for key in body["keys"]
+                row_for(
+                    key, include_docs, by_keys=True, with_conflicts=with_conflicts
+                )
+                for key in body["keys"]
             ]
             return httpx.Response(
                 200, json={"total_rows": live_count(), "rows": rows}
@@ -179,7 +203,19 @@ def make_fake_couchdb(
                 return httpx.Response(
                     404, json={"error": "not_found", "reason": "deleted"}
                 )
-            return httpx.Response(200, json=doc)
+            body = dict(doc)
+            if doc_id in bump_rev_on_get:
+                # Serve the revision that was read, but commit a newer
+                # one right after the read — a concurrent writer won
+                # the rev tree, so a PUT with the seen rev is a genuine
+                # stale-revision conflict.
+                bumped = dict(doc)
+                bumped["_rev"] = _next_rev(doc["_rev"])
+                store[doc_id] = bumped
+                state["update_seq"] += 1
+            if request.url.params.get("conflicts") != "true":
+                body.pop("_conflicts", None)  # served only on request
+            return httpx.Response(200, json=body)
 
         if request.method == "PUT":
             if doc_id in put_conflict_ids:

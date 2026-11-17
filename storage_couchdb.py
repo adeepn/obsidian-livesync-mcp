@@ -584,18 +584,39 @@ class CouchDBBackend:
             raise StorageError("CouchDB rejected the document write")
         return str(result["rev"])
 
-    async def _write_chunk(self, data: str) -> str:
+    async def _write_chunk(self, path: str, data: str) -> str:
         """PUT one content chunk (before any metadata change).
 
-        Chunk ids are deterministic (``chunk_id_for``), so an existing
-        chunk with the same id already holds exactly this data and is
-        reused — upstream's content-addressed dedup. Chunks are never
-        deleted or rewritten (audit B1); a PUT happens only when the
-        chunk is absent, so rewriting identical content never conflicts.
+        Chunk ids are deterministic (``chunk_id_for``), so a chunk
+        already stored under the computed id *should* hold exactly this
+        data — but it is verified, never trusted: a differing or corrupt
+        chunk under the id (a sha256-16 truncation collision, or a
+        damaged shared chunk) must not be published as the note's
+        content. On mismatch the write aborts with the metadata
+        untouched; the stored chunk is never overwritten or "repaired"
+        because other notes may reference it. Chunks are never deleted
+        or rewritten (audit B1); a PUT happens only when the chunk is
+        absent, so rewriting identical content never conflicts.
         """
         chunk_id = chunk_id_for(data)
-        if await self._get_doc(chunk_id) is not None:
-            return chunk_id
+        existing = await self._get_doc(chunk_id)
+        if existing is not None:
+            if (
+                not existing.get("deleted")
+                and existing.get("type") == "leaf"
+                and existing.get("data") == data
+            ):
+                return chunk_id  # content-addressed reuse, no PUT
+            logger.warning(
+                "note %s: chunk %r under the computed id holds different "
+                "data; refusing to reuse or overwrite it",
+                path,
+                chunk_id,
+            )
+            raise StorageError(
+                f"note {path!r} cannot be written: an existing shared "
+                "content chunk holds different data"
+            )
         await self._put_doc(chunk_id, {"data": data, "type": "leaf"})
         return chunk_id
 
@@ -687,7 +708,7 @@ class CouchDBBackend:
         if not live and not create:
             raise NoteNotFound(f"note not found: {path}")
 
-        children = [await self._write_chunk(content)]
+        children = [await self._write_chunk(path, content)]
         new_mtime = _now_ms() if mtime is None else mtime
         size = len(content.encode("utf-8"))
         if doc is None:
