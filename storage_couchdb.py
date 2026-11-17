@@ -82,16 +82,21 @@ _MILESTONE_DOC_ID = "_local/obsydian_livesync_milestone"
 _VERSION_DOC_ID = "obsydian_livesync_version"
 
 
-def _milestone_setting(body: dict, tweak: dict, key: str) -> object:
-    """Resolve a LiveSync setting from the milestone document.
-
-    The milestone doc shape varies across LiveSync versions: settings
-    live in ``tweak_values`` when present, otherwise at the top level.
-    Missing keys return ``None`` (the plugin default).
-    """
-    if key in tweak:
-        return tweak[key]
-    return body.get(key)
+def _milestone_settings(body: dict) -> list[dict]:
+    """Resolve preferred settings, or conservatively check every device."""
+    if "tweak_values" not in body:
+        return [body]  # older milestones stored settings at the top level
+    # common/models/tweak.definition.ts:153 and journal/
+    # LiveSyncJournalReplicator.ts:135: tweak_values is keyed by device id.
+    entries = body["tweak_values"]
+    if isinstance(entries, dict):
+        preferred = entries.get("PREFERRED")
+        if isinstance(preferred, dict):
+            return [preferred]
+        devices = [value for value in entries.values() if isinstance(value, dict)]
+        if devices:
+            return devices
+    raise UnsupportedVault("the vault milestone has no readable device settings")
 
 # _all_docs page size for id scans and metadata batch fetches.
 _PAGE_SIZE = 500
@@ -367,37 +372,34 @@ class CouchDBBackend:
         except ValueError:
             body = None
         body = body if isinstance(body, dict) else {}
-        tweak = body.get("tweak_values")
-        tweak = tweak if isinstance(tweak, dict) else {}
-        if _milestone_setting(body, tweak, "encrypt"):
-            raise UnsupportedVault(
-                "the vault uses LiveSync end-to-end encryption, "
-                "which this server does not support"
-            )
-        if _milestone_setting(body, tweak, "usePathObfuscation"):
-            raise UnsupportedVault(
-                "the vault uses path obfuscation, "
-                "which this server does not support"
-            )
-        if _milestone_setting(body, tweak, "handleFilenameCaseSensitive"):
-            raise UnsupportedVault(
-                "the vault uses case-sensitive filenames "
-                "(handleFilenameCaseSensitive); this server maps paths "
-                "to document ids case-insensitively and cannot serve "
-                "such a vault"
-            )
-        normalization = _milestone_setting(
-            body, tweak, "pathNormalizationVersion"
-        )
-        if isinstance(normalization, (int, float)) and not isinstance(
-            normalization, bool
-        ) and normalization >= 1:
-            raise UnsupportedVault(
-                "the vault normalizes paths with Unicode NFC when "
-                "deriving document ids (pathNormalizationVersion >= 1); "
-                "this server does not normalize paths and cannot serve "
-                "such a vault"
-            )
+        for settings in _milestone_settings(body):
+            if settings.get("encrypt"):
+                raise UnsupportedVault(
+                    "the vault uses LiveSync end-to-end encryption, "
+                    "which this server does not support"
+                )
+            if settings.get("usePathObfuscation"):
+                raise UnsupportedVault(
+                    "the vault uses path obfuscation, "
+                    "which this server does not support"
+                )
+            if settings.get("handleFilenameCaseSensitive"):
+                raise UnsupportedVault(
+                    "the vault uses case-sensitive filenames "
+                    "(handleFilenameCaseSensitive); this server maps paths "
+                    "to document ids case-insensitively and cannot serve "
+                    "such a vault"
+                )
+            normalization = settings.get("pathNormalizationVersion")
+            if isinstance(normalization, (int, float)) and not isinstance(
+                normalization, bool
+            ) and normalization >= 1:
+                raise UnsupportedVault(
+                    "the vault normalizes paths with Unicode NFC when "
+                    "deriving document ids (pathNormalizationVersion >= 1); "
+                    "this server does not normalize paths and cannot serve "
+                    "such a vault"
+                )
 
     async def refresh(self) -> None:
         info = await self._db_info()

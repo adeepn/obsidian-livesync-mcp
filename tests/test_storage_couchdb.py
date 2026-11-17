@@ -118,7 +118,7 @@ async def test_startup_check_db_missing():
 async def test_startup_detects_e2ee():
     docs = {
         "_local/obsydian_livesync_milestone": {
-            "tweak_values": {"encrypt": True},
+            "tweak_values": {"PREFERRED": {"encrypt": True}},
         }
     }
     async with fake_backend(docs) as (backend, _log):
@@ -129,7 +129,7 @@ async def test_startup_detects_e2ee():
 async def test_startup_detects_path_obfuscation():
     docs = {
         "_local/obsydian_livesync_milestone": {
-            "tweak_values": {"usePathObfuscation": True},
+            "tweak_values": {"PREFERRED": {"usePathObfuscation": True}},
         }
     }
     async with fake_backend(docs) as (backend, _log):
@@ -142,10 +142,10 @@ async def test_startup_accepts_default_filename_and_normalization():
     # are the defaults this server's path2id mirrors: both fine.
     docs = {
         "_local/obsydian_livesync_milestone": {
-            "tweak_values": {
+            "tweak_values": {"PREFERRED": {
                 "handleFilenameCaseSensitive": False,
                 "pathNormalizationVersion": 0,
-            }
+            }}
         }
     }
     async with fake_backend(docs) as (backend, _log):
@@ -157,7 +157,7 @@ async def test_startup_rejects_case_sensitive_filenames():
     # distinct paths onto one document.
     docs = {
         "_local/obsydian_livesync_milestone": {
-            "tweak_values": {"handleFilenameCaseSensitive": True},
+            "tweak_values": {"PREFERRED": {"handleFilenameCaseSensitive": True}},
         }
     }
     async with fake_backend(docs) as (backend, _log):
@@ -183,7 +183,7 @@ async def test_startup_rejects_nfc_path_normalization():
     # this server's path2id does not normalize, so ids would diverge.
     docs = {
         "_local/obsydian_livesync_milestone": {
-            "tweak_values": {"pathNormalizationVersion": 1},
+            "tweak_values": {"PREFERRED": {"pathNormalizationVersion": 1}},
         }
     }
     async with fake_backend(docs) as (backend, _log):
@@ -196,7 +196,7 @@ async def test_startup_version_doc_is_informational(caplog):
     docs = {
         "obsydian_livesync_version": {"version": "1.9.2"},
         "_local/obsydian_livesync_milestone": {
-            "tweak_values": {"pathNormalizationVersion": 0}
+            "tweak_values": {"PREFERRED": {"pathNormalizationVersion": 0}}
         },
     }
     async with fake_backend(docs) as (backend, _log):
@@ -1152,3 +1152,36 @@ async def test_rename_non_201_target_keeps_source():
             await backend.rename_note("a.md", "b.md")
         source = await stored_doc(raw, "a.md")
     assert "deleted" not in source  # still live, retirement skipped
+
+
+@pytest.mark.parametrize('key,value', [
+    ('encrypt', True), ('usePathObfuscation', True),
+    ('handleFilenameCaseSensitive', True), ('pathNormalizationVersion', 1),
+])
+@pytest.mark.parametrize('preferred', [True, False])
+async def test_startup_per_device_incompatible_settings(key, value, preferred):
+    entries = {'device-a': {key: value}}
+    if preferred:
+        entries = {'PREFERRED': {key: value}, 'device-a': {'encrypt': False}}
+    docs = {'_local/obsydian_livesync_milestone': {'tweak_values': entries}}
+    async with fake_backend(docs) as (backend, _):
+        with pytest.raises(UnsupportedVault):
+            await backend.startup_check()
+
+
+@pytest.mark.parametrize('entries', [{}, {'device-a': None}, {'PREFERRED': 'bad'}])
+async def test_startup_unreadable_device_settings_fail_closed(entries):
+    docs = {'_local/obsydian_livesync_milestone': {'tweak_values': entries}}
+    async with fake_backend(docs) as (backend, _):
+        with pytest.raises(UnsupportedVault, match='settings'):
+            await backend.startup_check()
+
+
+async def test_startup_preferred_settings_override_device_entries():
+    docs = {'_local/obsydian_livesync_milestone': {'tweak_values': {
+        'PREFERRED': {'encrypt': False, 'handleFilenameCaseSensitive': False,
+                      'pathNormalizationVersion': 0},
+        'device-a': {'encrypt': True},
+    }}}
+    async with fake_backend(docs) as (backend, _):
+        await backend.startup_check()
