@@ -1,6 +1,7 @@
 """Obsidian MCP Server — remote MCP server for Obsidian via CouchDB/LiveSync."""
 
 import json
+import logging
 import os
 import re
 import secrets
@@ -10,6 +11,11 @@ import hashlib
 from contextlib import asynccontextmanager
 from functools import wraps
 from typing import Any
+
+# httpx/httpcore log every request line — full internal CouchDB URLs —
+# at INFO. Pin them to WARNING so server logs never carry those URLs.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 from pydantic import AnyHttpUrl
 from mcp.server.fastmcp import FastMCP

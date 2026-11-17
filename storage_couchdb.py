@@ -210,12 +210,17 @@ class CouchDBBackend:
         if code == 404:
             return response  # callers decide: missing doc vs missing db
         if code >= 400:
+            # Log the status and the body's error code only — never the
+            # raw response body (log hygiene, audit C7's sibling).
+            try:
+                body = response.json()
+            except ValueError:
+                body = None
+            error_code = (
+                body.get("error") if isinstance(body, dict) else None
+            )
             logger.warning(
-                "CouchDB %s %s -> %s %s",
-                method,
-                path,
-                code,
-                response.text[:200],
+                "CouchDB %s %s -> %s %s", method, path, code, error_code
             )
             if code in (401, 403):
                 raise StorageUnavailable("CouchDB authorization error")

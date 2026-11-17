@@ -219,6 +219,19 @@ async def test_server_error_maps_to_storage_unavailable():
     assert "couchdb.test" not in str(excinfo.value)
 
 
+async def test_error_logs_carry_status_and_code_only(caplog):
+    # Log hygiene: the server log may carry the method, path, status and
+    # the body's error code — never the raw response body.
+    async with fake_backend({}, force_status=401) as (backend, _log):
+        with caplog.at_level(logging.WARNING, logger="storage_couchdb"):
+            with pytest.raises(StorageUnavailable):
+                await backend.startup_check()
+    messages = [record.getMessage() for record in caplog.records]
+    assert any("401" in message for message in messages)
+    assert any("forced" in message for message in messages)
+    assert not any("sentinel-raw-body" in message for message in messages)
+
+
 # --- list_notes ------------------------------------------------------------
 
 FILTER_DOCS = {

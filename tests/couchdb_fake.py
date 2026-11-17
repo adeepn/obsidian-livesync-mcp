@@ -158,7 +158,12 @@ def make_fake_couchdb(
     def handler(request: httpx.Request) -> httpx.Response:
         request_log.append(request)
         if force_status is not None:
-            return httpx.Response(force_status, json={"error": "forced"})
+            # "reason" doubles as a raw-body sentinel for log-hygiene
+            # tests: error logs may carry the error code, never the body.
+            return httpx.Response(
+                force_status,
+                json={"error": "forced", "reason": "sentinel-raw-body"},
+            )
 
         db_alive = db_exists and (
             db_dies_after is None or len(request_log) <= db_dies_after

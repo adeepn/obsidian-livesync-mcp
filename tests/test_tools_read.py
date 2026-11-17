@@ -232,6 +232,20 @@ def test_import_does_not_construct_backend():
     assert result.returncode == 0, result.stderr
 
 
+def test_import_quiets_httpx_request_logging():
+    # httpx logs every request line (full internal CouchDB URLs) at
+    # INFO; importing the server must pin httpx/httpcore to WARNING.
+    env = _smoke_env({"MCP_API_KEY": secrets.token_hex(32)})
+    code = "\n".join([
+        "import logging, server",
+        "assert logging.getLogger('httpx').level == logging.WARNING",
+        "assert logging.getLogger('httpcore').level == logging.WARNING",
+    ])
+    result = subprocess.run([sys.executable, "-c", code], env=env,
+                            capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+
+
 async def test_lifespan_reconstructs_backend_from_startup_config(monkeypatch):
     # A backend built from import-time config must never survive into
     # startup: the lifespan re-runs load_config and hands THAT cfg to the
