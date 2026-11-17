@@ -388,14 +388,20 @@ async def obsidian_update_note(
     heading: str = "",
     regex: bool = False,
 ) -> str:
-    """Update a note's content.
+    """Update a note's content using an explicitly required mode.
+
+    Overwrite refuses empty content and any search, replace, heading or regex
+    options. Search-replace uses literal replacement text (no escape or group
+    expansion), even with regex searches, and returns the number of matches
+    replaced; zero matches are reported without writing. After-heading matches
+    headings outside fenced code and YAML frontmatter.
 
     Args:
         path: Path to the note
         mode: Required: overwrite, append, prepend, after-heading, search-replace
         content: New content (for overwrite/append/prepend/after-heading modes)
         search: Search string (for search-replace mode)
-        replace: Replacement string (for search-replace mode)
+        replace: Literal replacement string (for search-replace mode)
         heading: Heading text to insert after (for after-heading mode)
         regex: Use regex for search-replace
     """
