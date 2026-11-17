@@ -504,6 +504,81 @@ def mcp_distribution_available() -> bool:
     return True
 
 
+REAL_FASTMCP_SCRIPT = r"""
+import asyncio
+import sys
+
+sys.path.insert(0, ".")
+
+import httpx
+from pydantic import AnyHttpUrl
+
+from oauth_provider import SimpleOAuthProvider
+
+provider = SimpleOAuthProvider(
+    server_url="https://example.com",
+    access_password="fastmcp-pw",
+    client_id="claude-client",
+    client_secret="client-secret",
+)
+
+from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
+from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
+
+# Assemble FastMCP the way server.py does in OAuth mode.
+mcp = FastMCP(
+    name="Obsidian MCP Server",
+    host="127.0.0.1",
+    port=8484,
+    auth_server_provider=provider,
+    auth=AuthSettings(
+        issuer_url=AnyHttpUrl("https://example.com"),
+        resource_server_url=AnyHttpUrl("https://example.com/mcp"),
+        client_registration_options=ClientRegistrationOptions(enabled=False),
+    ),
+    transport_security=TransportSecuritySettings(
+        enable_dns_rebinding_protection=False,
+    ),
+)
+
+# The same ASGI app that run.py serves via mcp.run("streamable-http").
+app = mcp.streamable_http_app()
+
+QUERY = {
+    "client_id": "claude-client",
+    "redirect_uri": "https://claude.ai/api/mcp/auth_callback",
+    "response_type": "code",
+    "code_challenge": "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
+    "code_challenge_method": "S256",
+    "state": "fastmcp-wiring",
+    "scope": "claudeai",
+}
+
+
+async def main():
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="https://example.com"
+    ) as client:
+        response = await client.get("/authorize", params=QUERY)
+        assert response.status_code == 200, response.status_code
+        assert response.headers["content-type"].startswith("text/html")
+        assert 'action="/authorize"' in response.text, response.text
+        assert 'name="client_id" value="claude-client"' in response.text
+        assert not provider.auth_codes, provider.auth_codes
+
+        response = await client.head("/authorize", params=QUERY)
+        assert response.status_code == 405, response.status_code
+        assert response.headers.get("allow") == "GET, POST"
+        assert not provider.auth_codes, provider.auth_codes
+    print("REAL-FASTMCP-GATE-OK")
+
+
+asyncio.run(main())
+"""
+
+
 @unittest.skipUnless(
     mcp_distribution_available(), "MCP SDK distribution not installed"
 )
@@ -522,3 +597,21 @@ class PasswordGateRealStackTests(unittest.TestCase):
             result.returncode, 0, f"stderr: {result.stderr}\nstdout: {result.stdout}"
         )
         self.assertIn("REAL-STACK-GATE-OK", result.stdout)
+
+    def test_real_fastmcp_app_serves_gated_authorize(self):
+        # End-to-end wiring: the FINAL FastMCP application (the app run.py
+        # serves) must route /authorize through the password gate. If
+        # FastMCP's construction ever stops going through the patched
+        # create_auth_routes seam, the GET below returns the SDK's
+        # auto-approve redirect (302), not the form, and this fails.
+        result = subprocess.run(
+            [sys.executable, "-c", REAL_FASTMCP_SCRIPT],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            cwd=str(Path(__file__).resolve().parent.parent),
+        )
+        self.assertEqual(
+            result.returncode, 0, f"stderr: {result.stderr}\nstdout: {result.stdout}"
+        )
+        self.assertIn("REAL-FASTMCP-GATE-OK", result.stdout)
