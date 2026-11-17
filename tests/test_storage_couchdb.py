@@ -1405,3 +1405,23 @@ async def test_canonical_paths_persist_and_list():
         assert (await stored_doc(raw, 'dir/c.md'))['path'] == 'dir/c.md'
         await backend.write_note('./b.md', 'new')
         assert (await stored_doc(raw, 'b.md'))['path'] == 'b.md'
+
+
+@pytest.mark.parametrize('revision', [None, '', 42])
+async def test_existing_note_requires_revision(revision):
+    async with fake_backend() as (backend, _):
+        doc = plain_note('n.md', 'n.md', [], _rev=revision)
+        with pytest.raises(StorageError):
+            await backend._content_from_doc(doc)
+
+
+async def test_existing_note_read_paths_carry_revision():
+    from tests.fake_backend import FakeBackend
+    fake = FakeBackend()
+    fake.add('n.md', 'body')
+    async with fake_backend({'n.md': plain_note('n.md', 'n.md', [])}) as (real, _):
+        for backend in (fake, real):
+            note = await backend.read_note('n.md')
+            assert isinstance(note['rev'], str) and note['rev']
+            assert note['rev'] == (await backend.get_meta('n.md'))['rev']
+            assert all(meta['rev'] for meta in await backend.list_notes())

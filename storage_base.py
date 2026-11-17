@@ -44,8 +44,9 @@ class StorageUnavailable(StorageError):
 class NoteMeta(TypedDict):
     """Metadata of one note. ``ctime``/``mtime`` are Unix milliseconds.
 
-    ``rev`` is the storage-level revision of the note's metadata
-    document (CouchDB ``_rev``) at read time — ``None`` when absent.
+    ``rev`` is a mandatory opaque backend token for an existing note.
+    CouchDB passes through ``_rev``; the Plan B journal backend uses its
+    local winner lineage token. An absent note has no metadata result.
     ``get_meta`` populates it so read-modify-write callers can pass it
     back as ``expected_rev``.
     """
@@ -56,7 +57,7 @@ class NoteMeta(TypedDict):
     mtime: int
     size: int
     type: str
-    rev: str | None
+    rev: str
 
 
 class NoteContent(TypedDict):
@@ -65,8 +66,8 @@ class NoteContent(TypedDict):
     Textual notes carry ``text``; binary notes carry ``data``. ``is_text``
     follows LiveSync ``isPlainText`` semantics (audit B3/B4), so a note
     can be textual by type (``plain``) or by extension. ``rev`` is the
-    revision of the metadata document the body was decoded from (the
-    same value as ``meta["rev"]``); ``None`` for new or absent notes.
+    mandatory opaque token of the metadata the body was decoded from
+    (the same value as ``meta["rev"]``). Existing notes never carry None.
     Read-modify-write callers pass it back as ``write_note``'s /
     ``delete_note``'s ``expected_rev`` to prevent lost updates across
     the tool's read and write.
@@ -76,12 +77,20 @@ class NoteContent(TypedDict):
     text: str | None
     data: bytes | None
     is_text: bool
-    rev: str | None
+    rev: str
 
 
 @runtime_checkable
 class StorageBackend(Protocol):
-    """Async storage interface consumed by every MCP tool (design §4.2)."""
+    """Async storage interface consumed by every MCP tool (design §4.2).
+
+    Revision preconditions compare against the refreshed local winner under
+    the backend's mutation lock (or equivalent conditional publication).
+    Unseen remote concurrent writes may still land: journal appends commute
+    and conflicts resolve by a deterministic winner. CouchDB provides stronger
+    conditional-write semantics through _rev. Success means durable
+    publication, not eventual winner status.
+    """
 
     async def startup_check(self) -> None:
         """Verify availability and vault compatibility.
@@ -106,7 +115,7 @@ class StorageBackend(Protocol):
         ...
 
     async def get_meta(self, path: str) -> NoteMeta:
-        """Metadata of one note; raises ``NoteNotFound`` for absent notes."""
+        """Metadata with a mandatory opaque rev; NoteNotFound when absent."""
         ...
 
     async def read_note(self, path: str) -> NoteContent | None:
@@ -129,7 +138,7 @@ class StorageBackend(Protocol):
         """Write a textual body under the central D1/D2 rules.
 
         ``expected_rev`` is the read-through lost-update precondition:
-        when it is not ``None`` and the current winning revision differs
+        when it is not ``None`` and the refreshed local winning token differs
         (or the document appeared/vanished since the read), the write is
         refused with ``ConcurrentModification`` before anything is
         written. ``None`` keeps last-writer-wins semantics and must be

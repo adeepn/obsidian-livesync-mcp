@@ -545,6 +545,8 @@ class CouchDBBackend:
             data = doc.get("data")
             size = len(data.encode("utf-8")) if isinstance(data, str) else 0
         rev = doc.get("_rev")
+        if not isinstance(rev, str) or not rev:
+            raise StorageError("existing note has no revision token")
         return NoteMeta(
             path=path,
             doc_id=doc_id,
@@ -552,7 +554,7 @@ class CouchDBBackend:
             mtime=_as_ms(doc.get("mtime")),
             size=size,
             type=str(doc.get("type") or ""),
-            rev=rev if isinstance(rev, str) else None,
+            rev=rev,
         )
 
     async def _content_from_doc(self, doc: dict) -> NoteContent | None:
