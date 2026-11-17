@@ -113,7 +113,9 @@ def create_app(cfg: Config) -> FastMCP:
     }
     mode = select_auth_mode(cfg.api_key, cfg.oauth_password)
     if mode == "bearer":
-        kwargs["token_verifier"] = StaticBearerTokenVerifier(cfg.api_key)
+        kwargs["token_verifier"] = StaticBearerTokenVerifier(
+            cfg.api_key, resource_server_url=f"{cfg.server_url}/mcp"
+        )
         kwargs["auth"] = AuthSettings(
             validate_token_resource=True,
             issuer_url=AnyHttpUrl(cfg.server_url),

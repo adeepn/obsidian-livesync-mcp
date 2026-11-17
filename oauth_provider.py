@@ -44,12 +44,8 @@ class SimpleAuthCode:
     expires_at: float
 
 
-@dataclass
-class SimpleAccessToken:
-    token: str
-    client_id: str
-    scopes: list[str]
-    expires_at: float
+class SimpleAccessToken(AccessToken):
+    """SDK access token, including resource and principal context fields."""
 
 
 @dataclass
@@ -58,6 +54,7 @@ class SimpleRefreshToken:
     client_id: str
     scopes: list[str]
     expires_at: float
+    resource: str
 
 
 class AuthorizePasswordGate:
@@ -197,6 +194,7 @@ class SimpleOAuthProvider(
         client_secret: str = "",
     ):
         self.server_url = server_url.rstrip("/")
+        self.resource_server_url = f"{server_url}/mcp"
         self.access_password = access_password
         self.clients: dict[str, OAuthClientInformationFull] = {}
         self.auth_codes: dict[str, SimpleAuthCode] = {}
@@ -365,13 +363,15 @@ class SimpleOAuthProvider(
             token=access_token,
             client_id=client.client_id,
             scopes=authorization_code.scopes,
-            expires_at=time.time() + 86400,
+            expires_at=int(time.time()) + 86400,
+            resource=self.resource_server_url,
         )
         self.refresh_tokens[refresh_token] = SimpleRefreshToken(
             token=refresh_token,
             client_id=client.client_id,
             scopes=authorization_code.scopes,
             expires_at=time.time() + 86400 * 30,
+            resource=self.resource_server_url,
         )
 
         return OAuthToken(
@@ -416,13 +416,15 @@ class SimpleOAuthProvider(
             token=new_access_token,
             client_id=client.client_id,
             scopes=effective_scopes,
-            expires_at=time.time() + 86400,
+            expires_at=int(time.time()) + 86400,
+            resource=self.resource_server_url,
         )
         self.refresh_tokens[new_refresh_token] = SimpleRefreshToken(
             token=new_refresh_token,
             client_id=client.client_id,
             scopes=effective_scopes,
             expires_at=time.time() + 86400 * 30,
+            resource=self.resource_server_url,
         )
 
         return OAuthToken(

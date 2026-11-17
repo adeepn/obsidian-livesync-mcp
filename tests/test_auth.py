@@ -6,11 +6,12 @@ import unittest
 
 
 class AccessToken:
-    def __init__(self, token, client_id, scopes, expires_at=None):
+    def __init__(self, token, client_id, scopes, expires_at=None, resource=None):
         self.token = token
         self.client_id = client_id
         self.scopes = scopes
         self.expires_at = expires_at
+        self.resource = resource
 
 
 class TokenVerifier:
@@ -61,7 +62,7 @@ class StaticBearerTokenVerifierTests(unittest.TestCase):
         self.auth_config = importlib.import_module("auth_config")
 
     def test_accepts_matching_token(self):
-        verifier = self.auth_config.StaticBearerTokenVerifier("secret")
+        verifier = self.auth_config.StaticBearerTokenVerifier("secret", "https://example.com/mcp")
 
         token = asyncio.run(verifier.verify_token("secret"))
 
@@ -69,9 +70,10 @@ class StaticBearerTokenVerifierTests(unittest.TestCase):
         self.assertEqual(token.token, "secret")
         self.assertEqual(token.client_id, "obsidian-mcp")
         self.assertEqual(token.scopes, ["obsidian"])
+        self.assertEqual(token.resource, "https://example.com/mcp")
 
     def test_rejects_wrong_token(self):
-        verifier = self.auth_config.StaticBearerTokenVerifier("secret")
+        verifier = self.auth_config.StaticBearerTokenVerifier("secret", "https://example.com/mcp")
 
         token = asyncio.run(verifier.verify_token("wrong"))
 

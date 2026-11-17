@@ -533,6 +533,7 @@ def mcp_distribution_available() -> bool:
 REAL_FASTMCP_SCRIPT = r"""
 import asyncio
 import sys
+import urllib.parse
 
 sys.path.insert(0, ".")
 
@@ -558,6 +559,8 @@ mcp = FastMCP(
     host="127.0.0.1",
     port=8484,
     auth_server_provider=provider,
+    stateless_http=True,
+    json_response=True,
     auth=AuthSettings(
         issuer_url=AnyHttpUrl("https://example.com"),
         resource_server_url=AnyHttpUrl("https://example.com/mcp"),
@@ -567,6 +570,8 @@ mcp = FastMCP(
         enable_dns_rebinding_protection=False,
     ),
 )
+
+mcp.settings.auth.validate_token_resource = True
 
 # The same ASGI app that run.py serves via mcp.run("streamable-http").
 app = mcp.streamable_http_app()
@@ -598,6 +603,34 @@ async def main():
         assert response.status_code == 405, response.status_code
         assert response.headers.get("allow") == "GET, POST"
         assert not provider.auth_codes, provider.auth_codes
+        response = await client.post("/authorize", data={**QUERY, "password": "fastmcp-pw"})
+        assert response.status_code == 302, (response.status_code, response.text)
+        code = urllib.parse.parse_qs(urllib.parse.urlparse(response.headers["location"]).query)["code"][0]
+        response = await client.post("/token", data={
+            "grant_type": "authorization_code", "code": code,
+            "client_id": "claude-client", "client_secret": "client-secret",
+            "redirect_uri": QUERY["redirect_uri"],
+            "code_verifier": "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk",
+        })
+        assert response.status_code == 200, (response.status_code, response.text)
+        tokens = response.json()
+        async with app.router.lifespan_context(app):
+            for refreshed in (False, True):
+                if refreshed:
+                    response = await client.post("/token", data={
+                        "grant_type": "refresh_token", "refresh_token": tokens["refresh_token"],
+                        "client_id": "claude-client", "client_secret": "client-secret",
+                    })
+                    assert response.status_code == 200, (response.status_code, response.text)
+                    tokens = response.json()
+                response = await client.post("/mcp", headers={
+                    "Authorization": "Bearer " + tokens["access_token"],
+                    "Accept": "application/json, text/event-stream",
+                }, json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
+                    "protocolVersion": "2025-03-26", "capabilities": {},
+                    "clientInfo": {"name": "oauth-resource-test", "version": "1"}}})
+                assert response.status_code == 200, (response.status_code, response.text)
+                assert "result" in response.json(), response.text
     print("REAL-FASTMCP-GATE-OK")
 
 
