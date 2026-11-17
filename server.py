@@ -174,6 +174,32 @@ async def _legacy_content(path: str) -> str | None:
     return note["text"]
 
 
+def _load_canvas(content: str | None) -> dict | None:
+    """Parse a JSON Canvas document for in-place mutation.
+
+    Returns ``None`` when the payload is not JSON or not an object.
+    Spec-valid files without ``nodes``/``edges`` keys (e.g. ``{}``) and
+    empty non-list fields are normalized to empty lists (audit D16), so
+    callers load, mutate, and dump the original document instead of
+    rebuilding it from scratch.
+    """
+    try:
+        canvas = json.loads(content) if content else {}
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(canvas, dict):
+        return None
+    for key in ("nodes", "edges"):
+        if not isinstance(canvas.get(key), list):
+            canvas[key] = []
+    return canvas
+
+
+def _entry_id(entry: Any) -> Any:
+    """ID of a canvas node/edge entry; non-object entries have none."""
+    return entry.get("id") if isinstance(entry, dict) else None
+
+
 async def _graph() -> dict:
     paths = [meta["path"] for meta in await backend.list_notes()]
     texts, skipped = [], []
@@ -713,19 +739,20 @@ async def obsidian_canvas_node(
         y: Y position
         width: Node width
         height: Node height
-        node_id: Node ID (required for remove)
+        node_id: Node ID (required for remove, must be unique for add)
     """
     doc_id = path
     content = await _legacy_content(doc_id)
     if content is None and action != "add":
         return f"Canvas '{path}' not found."
 
-    try:
-        canvas = json.loads(content) if content else {"nodes": [], "edges": []}
-    except json.JSONDecodeError:
+    canvas = _load_canvas(content)
+    if canvas is None:
         return "Invalid canvas format."
 
     if action == "add":
+        if node_id and any(_entry_id(n) == node_id for n in canvas["nodes"]):
+            return f"Node '{node_id}' already exists in '{path}'."
         new_id = node_id or secrets.token_hex(8)
         node: dict[str, Any] = {
             "id": new_id,
@@ -751,8 +778,15 @@ async def obsidian_canvas_node(
     elif action == "remove":
         if not node_id:
             return "node_id required for remove action."
-        canvas["nodes"] = [n for n in canvas["nodes"] if n["id"] != node_id]
-        canvas["edges"] = [e for e in canvas["edges"] if e.get("fromNode") != node_id and e.get("toNode") != node_id]
+        kept_nodes = [n for n in canvas["nodes"] if _entry_id(n) != node_id]
+        if len(kept_nodes) == len(canvas["nodes"]):
+            return f"Node '{node_id}' not found in '{path}'."
+        canvas["nodes"] = kept_nodes
+        canvas["edges"] = [
+            e for e in canvas["edges"]
+            if not (isinstance(e, dict)
+                    and node_id in (e.get("fromNode"), e.get("toNode")))
+        ]
         await backend.write_note(path, json.dumps(canvas, ensure_ascii=False))
         return f"Removed node '{node_id}' from '{path}'."
 
@@ -775,24 +809,29 @@ async def obsidian_canvas_edge(
     Args:
         path: Path to the .canvas file
         action: "add" or "remove"
-        from_node: Source node ID (for add)
-        to_node: Target node ID (for add)
+        from_node: Source node ID (for add, must reference an existing node)
+        to_node: Target node ID (for add, must reference an existing node)
         label: Edge label (optional)
-        edge_id: Edge ID (required for remove)
+        edge_id: Edge ID (required for remove, must be unique for add)
     """
     doc_id = path
     content = await _legacy_content(doc_id)
     if content is None:
         return f"Canvas '{path}' not found."
 
-    try:
-        canvas = json.loads(content)
-    except json.JSONDecodeError:
+    canvas = _load_canvas(content)
+    if canvas is None:
         return "Invalid canvas format."
 
     if action == "add":
         if not from_node or not to_node:
             return "from_node and to_node required for add action."
+        known_nodes = {_entry_id(n) for n in canvas["nodes"]}
+        for endpoint in (from_node, to_node):
+            if endpoint not in known_nodes:
+                return f"Node '{endpoint}' not found in '{path}'."
+        if edge_id and any(_entry_id(e) == edge_id for e in canvas["edges"]):
+            return f"Edge '{edge_id}' already exists in '{path}'."
         new_id = edge_id or secrets.token_hex(8)
         edge: dict[str, Any] = {
             "id": new_id,
@@ -808,7 +847,10 @@ async def obsidian_canvas_edge(
     elif action == "remove":
         if not edge_id:
             return "edge_id required for remove action."
-        canvas["edges"] = [e for e in canvas["edges"] if e["id"] != edge_id]
+        kept_edges = [e for e in canvas["edges"] if _entry_id(e) != edge_id]
+        if len(kept_edges) == len(canvas["edges"]):
+            return f"Edge '{edge_id}' not found in '{path}'."
+        canvas["edges"] = kept_edges
         await backend.write_note(path, json.dumps(canvas, ensure_ascii=False))
         return f"Removed edge '{edge_id}' from '{path}'."
 
