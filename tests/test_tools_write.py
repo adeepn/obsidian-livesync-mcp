@@ -333,3 +333,12 @@ async def test_create_invalid_properties_never_mutate(vault, path, properties):
     assert vault.notes["N.md"]["text"] == "original"
     assert "N.canvas" not in vault.notes
     assert_no_mutations(vault)
+
+
+async def test_canvas_invalid_content_never_mutates(vault):
+    content = "not json{"
+    vault.add("N.canvas", content)
+    result = await server.obsidian_canvas_node("N.canvas", text="new node")
+    assert result == "Invalid canvas format."
+    assert vault.notes["N.canvas"]["text"] == content
+    assert_no_mutations(vault)
