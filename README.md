@@ -58,6 +58,17 @@ All tools work through a storage-agnostic backend interface, so switching backen
 - CouchDB with Obsidian LiveSync data
 - Python 3.11+
 
+### Vault compatibility
+
+The server derives document ids from vault paths the same way LiveSync does, so it supports vaults using the plugin's default path settings:
+
+- **No end-to-end encryption** — E2EE vaults are rejected at startup (and encrypted chunks are refused on read).
+- **No path obfuscation** — obfuscated vaults are rejected at startup.
+- **Case-insensitive filenames** (`handleFilenameCaseSensitive` off, the default) — document ids are lowercased paths.
+- **No Unicode NFC path normalization** (`pathNormalizationVersion` 0, the default).
+
+A vault using an unsupported combination fails the startup check with an explicit error instead of serving mismatched data.
+
 ## Setup
 
 ### 1. Install

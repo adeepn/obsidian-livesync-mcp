@@ -77,6 +77,19 @@ _SERVICE_PREFIXES = ("i:", "ix:", "ps:", "h:", "f:")
 _SERVICE_DOC_IDS = frozenset({"obsydian_livesync_version", "syncinfo"})
 
 _MILESTONE_DOC_ID = "_local/obsydian_livesync_milestone"
+_VERSION_DOC_ID = "obsydian_livesync_version"
+
+
+def _milestone_setting(body: dict, tweak: dict, key: str) -> object:
+    """Resolve a LiveSync setting from the milestone document.
+
+    The milestone doc shape varies across LiveSync versions: settings
+    live in ``tweak_values`` when present, otherwise at the top level.
+    Missing keys return ``None`` (the plugin default).
+    """
+    if key in tweak:
+        return tweak[key]
+    return body.get(key)
 
 # _all_docs page size for id scans and metadata batch fetches.
 _PAGE_SIZE = 500
@@ -310,6 +323,18 @@ class CouchDBBackend:
 
     async def startup_check(self) -> None:
         await self._db_info()
+        version_doc = await self._get_doc(_VERSION_DOC_ID)
+        if version_doc is not None:
+            # Informational only: any value is accepted (audit B5
+            # restricts behavior, not versions).
+            logger.info(
+                "vault advertises an obsydian_livesync_version document: %r",
+                {
+                    key: value
+                    for key, value in version_doc.items()
+                    if not key.startswith("_")
+                },
+            )
         milestone = await self._request(
             "GET", self._doc_path(_MILESTONE_DOC_ID)
         )
@@ -321,17 +346,37 @@ class CouchDBBackend:
             body = milestone.json()
         except ValueError:
             body = None
-        tweak = body.get("tweak_values") if isinstance(body, dict) else None
+        body = body if isinstance(body, dict) else {}
+        tweak = body.get("tweak_values")
         tweak = tweak if isinstance(tweak, dict) else {}
-        if tweak.get("encrypt"):
+        if _milestone_setting(body, tweak, "encrypt"):
             raise UnsupportedVault(
                 "the vault uses LiveSync end-to-end encryption, "
                 "which this server does not support"
             )
-        if tweak.get("usePathObfuscation"):
+        if _milestone_setting(body, tweak, "usePathObfuscation"):
             raise UnsupportedVault(
                 "the vault uses path obfuscation, "
                 "which this server does not support"
+            )
+        if _milestone_setting(body, tweak, "handleFilenameCaseSensitive"):
+            raise UnsupportedVault(
+                "the vault uses case-sensitive filenames "
+                "(handleFilenameCaseSensitive); this server maps paths "
+                "to document ids case-insensitively and cannot serve "
+                "such a vault"
+            )
+        normalization = _milestone_setting(
+            body, tweak, "pathNormalizationVersion"
+        )
+        if isinstance(normalization, (int, float)) and not isinstance(
+            normalization, bool
+        ) and normalization >= 1:
+            raise UnsupportedVault(
+                "the vault normalizes paths with Unicode NFC when "
+                "deriving document ids (pathNormalizationVersion >= 1); "
+                "this server does not normalize paths and cannot serve "
+                "such a vault"
             )
 
     async def refresh(self) -> None:

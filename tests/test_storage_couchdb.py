@@ -137,6 +137,74 @@ async def test_startup_detects_path_obfuscation():
             await backend.startup_check()
 
 
+async def test_startup_accepts_default_filename_and_normalization():
+    # handleFilenameCaseSensitive=false and pathNormalizationVersion=0
+    # are the defaults this server's path2id mirrors: both fine.
+    docs = {
+        "_local/obsydian_livesync_milestone": {
+            "tweak_values": {
+                "handleFilenameCaseSensitive": False,
+                "pathNormalizationVersion": 0,
+            }
+        }
+    }
+    async with fake_backend(docs) as (backend, _log):
+        await backend.startup_check()  # must not raise
+
+
+async def test_startup_rejects_case_sensitive_filenames():
+    # path2id lowercases; a vault with case-sensitive ids would collide
+    # distinct paths onto one document.
+    docs = {
+        "_local/obsydian_livesync_milestone": {
+            "tweak_values": {"handleFilenameCaseSensitive": True},
+        }
+    }
+    async with fake_backend(docs) as (backend, _log):
+        with pytest.raises(UnsupportedVault, match="case-sensitive"):
+            await backend.startup_check()
+
+
+async def test_startup_rejects_case_sensitive_setting_at_top_level():
+    # The milestone doc shape varies across LiveSync versions; the
+    # setting may sit at the top level instead of tweak_values.
+    docs = {
+        "_local/obsydian_livesync_milestone": {
+            "handleFilenameCaseSensitive": True,
+        }
+    }
+    async with fake_backend(docs) as (backend, _log):
+        with pytest.raises(UnsupportedVault, match="case-sensitive"):
+            await backend.startup_check()
+
+
+async def test_startup_rejects_nfc_path_normalization():
+    # pathNormalizationVersion>=1 derives ids from NFC-normalized paths;
+    # this server's path2id does not normalize, so ids would diverge.
+    docs = {
+        "_local/obsydian_livesync_milestone": {
+            "tweak_values": {"pathNormalizationVersion": 1},
+        }
+    }
+    async with fake_backend(docs) as (backend, _log):
+        with pytest.raises(UnsupportedVault, match="normali[sz]"):
+            await backend.startup_check()
+
+
+async def test_startup_version_doc_is_informational(caplog):
+    # Any obsydian_livesync_version value is accepted; it is only logged.
+    docs = {
+        "obsydian_livesync_version": {"version": "1.9.2"},
+        "_local/obsydian_livesync_milestone": {
+            "tweak_values": {"pathNormalizationVersion": 0}
+        },
+    }
+    async with fake_backend(docs) as (backend, _log):
+        with caplog.at_level(logging.INFO, logger="storage_couchdb"):
+            await backend.startup_check()  # must not raise
+    assert any("1.9.2" in record.message for record in caplog.records)
+
+
 async def test_auth_error_maps_to_storage_unavailable():
     async with fake_backend({}, force_status=401) as (backend, _log):
         with pytest.raises(StorageUnavailable, match="authorization"):
