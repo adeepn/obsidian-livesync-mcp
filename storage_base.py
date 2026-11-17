@@ -115,8 +115,12 @@ class StorageBackend(Protocol):
         """Write a textual body under the central D1/D2 rules."""
         ...
 
-    async def delete_note(self, path: str) -> None:
-        """Soft-delete the note (never chunk deletion, audit B1/B2)."""
+    async def delete_note(self, path: str) -> bool:
+        """Soft-delete the note (never chunk deletion, audit B1/B2).
+
+        Returns ``True`` when a live note was deleted, ``False`` when no
+        live note exists at the path.
+        """
         ...
 
     async def rename_note(

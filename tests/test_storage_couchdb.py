@@ -1,4 +1,4 @@
-"""Tests for the CouchDB storage backend read path (storage_couchdb)."""
+"""Tests for the CouchDB storage backend (storage_couchdb)."""
 
 from __future__ import annotations
 
@@ -8,9 +8,14 @@ import inspect
 import logging
 import urllib.parse
 
+import httpx
 import pytest
 
+from livesync_format import chunk_id_for
 from storage_base import (
+    BinaryNoteError,
+    ConcurrentModification,
+    NoteExists,
     NoteNotFound,
     StorageError,
     StorageUnavailable,
@@ -36,6 +41,44 @@ async def fake_backend(docs=None, **fake_kwargs):
         yield backend, request_log
     finally:
         await backend.close()
+
+
+@contextlib.asynccontextmanager
+async def fake_vault(docs=None, **fake_kwargs):
+    """Backend plus a raw client on the same fake, for store inspection.
+
+    Write tests must observe the fake's stored documents (revisions,
+    soft-delete flags, surviving chunks), not just the backend's API.
+    """
+    transport, request_log = make_fake_couchdb(docs or {}, **fake_kwargs)
+    backend = CouchDBBackend(
+        URL, USER, PASSWORD, DATABASE, transport=transport
+    )
+    raw = httpx.AsyncClient(
+        transport=transport, base_url=URL + "/", auth=(USER, PASSWORD)
+    )
+    try:
+        yield backend, raw, request_log
+    finally:
+        await raw.aclose()
+        await backend.close()
+
+
+async def stored_doc(raw: httpx.AsyncClient, doc_id: str) -> dict:
+    """Fetch a document straight from the fake (asserting it exists)."""
+    response = await raw.get(
+        f"{DATABASE}/{urllib.parse.quote(doc_id, safe='')}"
+    )
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+def mutation_free(log, up_to: int) -> bool:
+    """No PUT/POST/DELETE among the first ``up_to`` logged requests."""
+    return all(
+        request.method not in ("PUT", "POST", "DELETE")
+        for request in log[:up_to]
+    )
 
 
 def plain_note(doc_id: str, path: str, children, **extra) -> dict:
@@ -393,16 +436,309 @@ async def test_iterate_texts_custom_extension_includes_text_types():
     assert results == {"data.txt": "plain text"}
 
 
-# --- write stubs (Task 6) --------------------------------------------------
+# --- write path (Task 6) ---------------------------------------------------
 
 
-async def test_write_methods_are_not_implemented_yet():
+def test_write_signatures_are_pinned():
+    write = inspect.signature(CouchDBBackend.write_note)
+    assert list(write.parameters) == [
+        "self", "path", "content", "create", "overwrite", "mtime",
+    ]
+    assert write.parameters["create"].default is False
+    assert write.parameters["overwrite"].default is False
+    assert write.parameters["mtime"].default is None
+    assert list(inspect.signature(CouchDBBackend.delete_note).parameters) == [
+        "self", "path",
+    ]
+    for method in (CouchDBBackend.rename_note, CouchDBBackend.copy_note):
+        parameters = inspect.signature(method).parameters
+        assert list(parameters) == ["self", "path", "new_path", "overwrite"]
+        assert parameters["overwrite"].default is False
+
+
+async def test_write_never_deletes_chunks():
+    # B1/C1: rewriting a chunked note PUTs the new chunk before the
+    # metadata document and never issues a single DELETE.
+    docs = {
+        "note.md": plain_note("note.md", "note.md", ["h:old1", "h:old2"]),
+        "h:old1": {"data": "old1", "type": "leaf"},
+        "h:old2": {"data": "old2", "type": "leaf"},
+    }
+    async with fake_vault(docs) as (backend, raw, log):
+        await backend.write_note("note.md", "brand new body", overwrite=True)
+        ops_end = len(log)
+        old1 = await stored_doc(raw, "h:old1")
+        old2 = await stored_doc(raw, "h:old2")
+        content = await backend.read_note("note.md")
+    assert not any(r.method == "DELETE" for r in log[:ops_end])
+    put_paths = [
+        urllib.parse.unquote(str(r.url.path))
+        for r in log[:ops_end]
+        if r.method == "PUT"
+    ]
+    chunk_path = f"/{DATABASE}/{chunk_id_for('brand new body')}"
+    assert put_paths.index(chunk_path) < put_paths.index(f"/{DATABASE}/note.md")
+    # old chunks survive the rewrite untouched (B1)
+    assert old1["data"] == "old1"
+    assert old2["data"] == "old2"
+    assert content["text"] == "brand new body"
+
+
+async def test_write_409_concurrent():
+    # A racing writer wins the metadata revision between our GET and
+    # PUT: ConcurrentModification, metadata untouched, chunk orphans
+    # acceptable (C1/C2).
+    docs = {
+        "note.md": plain_note("note.md", "note.md", ["h:old"]),
+        "h:old": {"data": "old", "type": "leaf"},
+    }
+    async with fake_vault(docs, put_conflict_ids=("note.md",)) as (
+        backend, raw, log,
+    ):
+        with pytest.raises(ConcurrentModification, match="concurrent") as excinfo:
+            await backend.write_note("note.md", "loser body", overwrite=True)
+        ops_end = len(log)
+        stored = await stored_doc(raw, "note.md")
+        orphan = await stored_doc(raw, chunk_id_for("loser body"))
+    assert stored["children"] == ["h:old"]
+    assert stored["size"] == 11
+    assert stored["_rev"] == "1-fake1"  # metadata revision untouched
+    assert orphan["data"] == "loser body"  # orphaned chunk tolerated
+    assert not any(r.method == "DELETE" for r in log[:ops_end])
+    message = str(excinfo.value)
+    assert "http" not in message.lower()  # C7: no URL leak
+    assert "fake1" not in message  # C7: no revision leak
+
+
+async def test_write_conflicts_refused():
+    # C3: a note with unresolved conflict revisions is never written.
+    docs = {
+        "note.md": plain_note(
+            "note.md", "note.md", [], _conflicts=["2-other"], _rev="2-fake2"
+        ),
+    }
+    async with fake_backend(docs) as (backend, log):
+        with pytest.raises(ConcurrentModification, match="conflict"):
+            await backend.write_note("note.md", "x", overwrite=True)
+    assert mutation_free(log, len(log))
+
+
+async def test_create_existing_refused():
+    # D2: create without overwrite on a live note is an error.
+    docs = {"a.md": plain_note("a.md", "a.md", [])}
+    async with fake_backend(docs) as (backend, log):
+        with pytest.raises(NoteExists):
+            await backend.write_note("a.md", "x", create=True)
+    assert mutation_free(log, len(log))
+
+
+async def test_overwrite_missing_refused():
+    # D2: writing a missing note without create is an error.
+    async with fake_backend({}) as (backend, log):
+        with pytest.raises(NoteNotFound):
+            await backend.write_note("ghost.md", "x", overwrite=True)
+    assert mutation_free(log, len(log))
+
+
+async def test_write_requires_text():
+    # Spec §5: binary paths cannot receive textual writes, and the
+    # refusal happens before any HTTP request (spec §7.5).
+    async with fake_backend({}) as (backend, log):
+        with pytest.raises(BinaryNoteError):
+            await backend.write_note("img.png", "not really a png")
+    assert log == []
+
+
+async def test_write_size_is_decoded_bytes():
+    # Spec §7.4: size is the decoded body length, not the chunk length.
+    content = "Съешь ещё этих мягких булок"
     async with fake_backend({}) as (backend, _log):
-        with pytest.raises(NotImplementedError):
-            await backend.write_note("x.md", "body")
-        with pytest.raises(NotImplementedError):
-            await backend.delete_note("x.md")
-        with pytest.raises(NotImplementedError):
-            await backend.rename_note("x.md", "y.md")
-        with pytest.raises(NotImplementedError):
-            await backend.copy_note("x.md", "y.md")
+        meta = await backend.write_note("ru.md", content, create=True)
+        roundtrip = await backend.read_note("ru.md")
+    assert meta["size"] == len(content.encode("utf-8"))
+    assert meta["type"] == "plain"
+    assert roundtrip["text"] == content
+
+
+async def test_write_reuses_existing_chunk():
+    # Deterministic chunk ids: identical content reuses the stored
+    # chunk instead of PUTting (and conflicting) a second time.
+    async with fake_vault({}) as (backend, raw, log):
+        await backend.write_note("a.md", "same", create=True)
+        first_end = len(log)
+        await backend.write_note("b.md", "same", create=True)
+        ops_end = len(log)
+        chunk = await stored_doc(raw, chunk_id_for("same"))
+        a = await backend.read_note("a.md")
+        b = await backend.read_note("b.md")
+    second_chunk_puts = [
+        r
+        for r in log[first_end:ops_end]
+        if r.method == "PUT"
+        and chunk_id_for("same") in urllib.parse.unquote(str(r.url.path))
+    ]
+    assert second_chunk_puts == []
+    assert chunk["_rev"] == "1-fake1"  # untouched since creation
+    assert a["text"] == b["text"] == "same"
+
+
+async def test_resurrect_requires_create():
+    # B12: a soft-deleted note is absent; only an explicit create
+    # resurrects it, as a new revision of the same document.
+    docs = {"note.md": plain_note("note.md", "note.md", ["h:old"], deleted=True)}
+    async with fake_vault(docs) as (backend, raw, log):
+        with pytest.raises(NoteNotFound):
+            await backend.write_note("note.md", "fresh", overwrite=True)
+        meta = await backend.write_note("note.md", "fresh", create=True)
+        ops_end = len(log)
+        stored = await stored_doc(raw, "note.md")
+        content = await backend.read_note("note.md")
+    assert "deleted" not in stored
+    assert stored["_rev"] == "2-fake2"  # one revision on the old body
+    assert stored["path"] == "note.md"
+    assert stored["children"] == [chunk_id_for("fresh")]
+    assert content["text"] == "fresh"
+    assert meta["size"] == len("fresh".encode("utf-8"))
+
+
+async def test_delete_soft():
+    # B2: deletion is a new revision with deleted:true; type/path/
+    # children preserved, chunk untouched, zero DELETE requests.
+    docs = {
+        "note.md": plain_note("note.md", "note.md", ["h:body"]),
+        "h:body": {"data": "hello", "type": "leaf"},
+    }
+    async with fake_vault(docs) as (backend, raw, log):
+        deleted = await backend.delete_note("note.md")
+        ops_end = len(log)
+        stored = await stored_doc(raw, "note.md")
+        chunk = await stored_doc(raw, "h:body")
+        gone = await backend.read_note("note.md")
+    assert deleted is True
+    assert not any(r.method == "DELETE" for r in log[:ops_end])
+    assert stored["deleted"] is True
+    assert stored["type"] == "plain"
+    assert stored["path"] == "note.md"
+    assert stored["children"] == ["h:body"]
+    assert chunk["data"] == "hello"  # chunk survives (B1)
+    assert gone is None  # B12: soft-deleted reads as absent
+
+
+async def test_delete_missing_returns_false():
+    async with fake_backend({}) as (backend, _log):
+        assert await backend.delete_note("ghost.md") is False
+    docs = {"a.md": plain_note("a.md", "a.md", [], deleted=True)}
+    async with fake_backend(docs) as (backend, _log):
+        assert await backend.delete_note("a.md") is False
+
+
+async def test_rename_same_path_noop():
+    # D1: renaming onto the identical path mutates nothing.
+    docs = {"a.md": plain_note("a.md", "a.md", [])}
+    async with fake_backend(docs) as (backend, log):
+        meta = await backend.rename_note("a.md", "a.md")
+        ops_end = len(log)
+    assert meta["path"] == "a.md"
+    assert meta["doc_id"] == "a.md"
+    assert mutation_free(log, ops_end)
+
+
+async def test_rename_case_only_updates_path():
+    # D1: a case-only rename is one revision updating the path field —
+    # no new document, no deletion.
+    docs = {"a.md": plain_note("a.md", "A.md", ["h:c"])}
+    async with fake_vault(docs) as (backend, raw, log):
+        meta = await backend.rename_note("A.md", "a.md")
+        ops_end = len(log)
+        stored = await stored_doc(raw, "a.md")
+    puts = [r for r in log[:ops_end] if r.method == "PUT"]
+    assert len(puts) == 1
+    assert not any(r.method == "DELETE" for r in log[:ops_end])
+    assert meta["path"] == "a.md"
+    assert stored["path"] == "a.md"
+    assert stored["_rev"] == "2-fake2"  # exactly one new revision
+    assert stored["ctime"] == 10  # preserved
+    assert "deleted" not in stored
+
+
+async def test_rename_target_exists_refused():
+    # D2: moving onto a live note without overwrite is an error.
+    docs = {
+        "a.md": plain_note("a.md", "a.md", []),
+        "b.md": plain_note("b.md", "b.md", []),
+    }
+    async with fake_backend(docs) as (backend, log):
+        with pytest.raises(NoteExists):
+            await backend.rename_note("a.md", "b.md")
+    assert mutation_free(log, len(log))
+
+
+async def test_rename_copies_children_and_ctime():
+    # B4: a binary note moves chunk-wise — same children ids, no
+    # content reassembly, ctime preserved, source soft-deleted.
+    payload = base64.b64encode(b"\x89PNG-bytes").decode("ascii")
+    docs = {
+        "img.png": {
+            "_id": "img.png",
+            "path": "img.png",
+            "type": "newnote",
+            "children": ["h:p1"],
+            "ctime": 111,
+            "mtime": 222,
+            "size": 13,
+        },
+        "h:p1": {"data": payload, "type": "leaf"},
+    }
+    async with fake_vault(docs) as (backend, raw, log):
+        meta = await backend.rename_note("img.png", "moved/pic.png")
+        ops_end = len(log)
+        new_doc = await stored_doc(raw, "moved/pic.png")
+        old_doc = await stored_doc(raw, "img.png")
+        content = await backend.read_note("moved/pic.png")
+    assert meta["path"] == "moved/pic.png"
+    assert meta["ctime"] == 111
+    assert new_doc["children"] == ["h:p1"]  # same chunk reference
+    assert new_doc["type"] == "newnote"
+    assert new_doc["ctime"] == 111
+    assert new_doc["_rev"] == "1-fake1"  # brand-new metadata document
+    assert content["data"] == b"\x89PNG-bytes"
+    assert old_doc["deleted"] is True  # source soft-deleted...
+    assert old_doc["children"] == ["h:p1"]  # ...with children preserved
+    put_paths = sorted(
+        urllib.parse.unquote(str(r.url.path))
+        for r in log[:ops_end]
+        if r.method == "PUT"
+    )
+    # exactly two metadata PUTs — no chunk was rewritten or deleted
+    assert put_paths == [f"/{DATABASE}/img.png", f"/{DATABASE}/moved/pic.png"]
+    assert not any(r.method == "DELETE" for r in log[:ops_end])
+
+
+async def test_copy_note_shares_chunks_and_keeps_source():
+    docs = {
+        "a.md": plain_note("a.md", "a.md", ["h:c"], ctime=77),
+        "h:c": {"data": "body", "type": "leaf"},
+    }
+    async with fake_vault(docs) as (backend, raw, log):
+        meta = await backend.copy_note("a.md", "b.md")
+        ops_end = len(log)
+        source = await stored_doc(raw, "a.md")
+        target = await stored_doc(raw, "b.md")
+        copied = await backend.read_note("b.md")
+    assert meta["path"] == "b.md"
+    assert meta["ctime"] == 77
+    assert target["children"] == ["h:c"]  # chunks shared, not duplicated
+    assert "deleted" not in source  # copy never deletes the source
+    assert copied["text"] == "body"
+    assert not any(r.method == "DELETE" for r in log[:ops_end])
+
+
+async def test_copy_note_onto_existing_refused():
+    docs = {
+        "a.md": plain_note("a.md", "a.md", []),
+        "b.md": plain_note("b.md", "b.md", []),
+    }
+    async with fake_backend(docs) as (backend, log):
+        with pytest.raises(NoteExists):
+            await backend.copy_note("a.md", "b.md")
+    assert mutation_free(log, len(log))

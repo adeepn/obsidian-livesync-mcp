@@ -1,4 +1,4 @@
-"""CouchDB implementation of the ``StorageBackend`` protocol — read path.
+"""CouchDB implementation of the ``StorageBackend`` protocol.
 
 Documents follow Obsidian LiveSync semantics (audit 2026-11-10):
 
@@ -20,14 +20,24 @@ Documents follow Obsidian LiveSync semantics (audit 2026-11-10):
 - all HTTP errors are mapped to storage exceptions with messages free of
   internal URLs and revisions (details go to the server log) — audit C7.
 
-The write path (write/delete/rename/copy) is Task 6 and raises
-``NotImplementedError`` here.
+Write path (spec §7): every write validates the vault path before any
+HTTP request; new content chunks are PUT before the metadata document,
+so a failed metadata update can only orphan chunks, never point a note
+at missing content (audits C1/C2); a note with unresolved CouchDB
+conflicts is refused (audit C3); success is reported only after the
+metadata revision is persisted. Deletion is always a LiveSync soft
+delete (a new revision with ``deleted: true``, body preserved — audit
+B2); chunk documents are never deleted or rewritten (audit B1), and no
+bare HTTP DELETE is ever issued. Renames/copies move chunk references
+without reassembling content, so binary notes travel chunk-wise
+(audit B4).
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import time
 import urllib.parse
 from typing import AsyncIterator
 
@@ -36,12 +46,19 @@ import httpx
 from livesync_format import (
     assemble_binary,
     assemble_text,
+    chunk_id_for,
+    doc_type_for,
     is_text_doc,
+    new_metadata_doc,
     path2id,
+    soft_delete_revision,
+    validate_vault_path,
 )
 from storage_base import (
+    BinaryNoteError,
     ConcurrentModification,
     NoteContent,
+    NoteExists,
     NoteMeta,
     NoteNotFound,
     StorageError,
@@ -108,6 +125,10 @@ def _as_ms(value: object) -> int:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return 0
     return int(value)
+
+
+def _now_ms() -> int:
+    return int(time.time() * 1000)
 
 
 class CouchDBBackend:
@@ -194,8 +215,13 @@ class CouchDBBackend:
         body = response.json()
         return body if isinstance(body, dict) else {}
 
-    async def _get_doc(self, doc_id: str) -> dict | None:
-        response = await self._request("GET", self._doc_path(doc_id))
+    async def _get_doc(
+        self, doc_id: str, *, conflicts: bool = False
+    ) -> dict | None:
+        params = {"conflicts": "true"} if conflicts else None
+        response = await self._request(
+            "GET", self._doc_path(doc_id), params=params
+        )
         if response.status_code == 404:
             if _is_db_missing(response):
                 raise StorageUnavailable("CouchDB database not found")
@@ -511,7 +537,121 @@ class CouchDBBackend:
             datas.append(chunk["data"])
         return datas
 
-    # -- StorageBackend: writes (Task 6) --------------------------------------
+    # -- StorageBackend: writes ----------------------------------------------
+
+    @staticmethod
+    def _refuse_unresolved_conflicts(doc: dict, path: str) -> None:
+        """Refuse writes to a document with sibling revisions (C3)."""
+        conflicts = doc.get("_conflicts")
+        if conflicts:
+            logger.warning(
+                "note %s has %d unresolved conflicting revisions",
+                path,
+                len(conflicts) if isinstance(conflicts, list) else 1,
+            )
+            raise ConcurrentModification(
+                f"note {path!r} has unresolved conflicts; resolve them "
+                "in Obsidian (or another client) before writing"
+            )
+
+    async def _put_doc(self, doc_id: str, body: dict) -> str:
+        """PUT a document and return its new revision.
+
+        Success is a 2xx response whose body confirms the write; the
+        caller may report success only once this returns (spec §7.6).
+        Stale ``_rev`` bodies surface as CouchDB 409s, which ``_request``
+        maps to ``ConcurrentModification``.
+        """
+        response = await self._request(
+            "PUT", self._doc_path(doc_id), json_body=body
+        )
+        if response.status_code == 404:
+            # A present database never 404s a document PUT.
+            logger.warning("CouchDB PUT %s -> 404 %s", doc_id, response.text[:200])
+            raise StorageUnavailable("CouchDB database not found")
+        try:
+            result = response.json()
+        except ValueError:
+            result = None
+        if (
+            not isinstance(result, dict)
+            or result.get("ok") is not True
+            or "rev" not in result
+        ):
+            logger.warning(
+                "CouchDB PUT %s -> unexpected body %s", doc_id, response.text[:200]
+            )
+            raise StorageError("CouchDB rejected the document write")
+        return str(result["rev"])
+
+    async def _write_chunk(self, data: str) -> str:
+        """PUT one content chunk (before any metadata change).
+
+        Chunk ids are deterministic (``chunk_id_for``), so an existing
+        chunk with the same id already holds exactly this data and is
+        reused — upstream's content-addressed dedup. Chunks are never
+        deleted or rewritten (audit B1); a PUT happens only when the
+        chunk is absent, so rewriting identical content never conflicts.
+        """
+        chunk_id = chunk_id_for(data)
+        if await self._get_doc(chunk_id) is not None:
+            return chunk_id
+        await self._put_doc(chunk_id, {"data": data, "type": "leaf"})
+        return chunk_id
+
+    async def _get_note_doc(self, path: str) -> dict:
+        """Live metadata document for ``path`` (conflicts refused)."""
+        doc = await self._get_doc(path2id(path), conflicts=True)
+        if doc is None or not _is_note_doc(doc):
+            raise NoteNotFound(f"note not found: {path}")
+        self._refuse_unresolved_conflicts(doc, path)
+        return doc
+
+    async def _target_doc_for_write(
+        self, new_path: str, *, overwrite: bool
+    ) -> dict | None:
+        """Existing target document, or ``None``; guards D2.
+
+        A soft-deleted or missing target is free to write; its stored
+        ``_rev`` is still needed to replace the revision.
+        """
+        target = await self._get_doc(path2id(new_path), conflicts=True)
+        if target is not None:
+            self._refuse_unresolved_conflicts(target, new_path)
+            if not target.get("deleted") and not overwrite:
+                raise NoteExists(f"note already exists: {new_path}")
+        return target
+
+    def _moved_body(self, doc: dict, new_path: str, mtime_ms: int) -> dict:
+        """Metadata document publishing ``doc`` under ``new_path``.
+
+        The ``children`` ids are copied verbatim — content never
+        round-trips through decode/encode, so binary notes move
+        chunk-wise (audit B4) — and ``ctime``/``size``/``type`` keep
+        describing the same body.
+        """
+        meta = self._meta_from_doc(doc)
+        children = [
+            child
+            for child in (doc.get("children") or [])
+            if isinstance(child, str)
+        ]
+        body = new_metadata_doc(
+            new_path,
+            children,
+            meta["size"],
+            meta["type"] or doc_type_for(new_path),
+            meta["ctime"],
+            mtime_ms,
+        )
+        if doc.get("type") == "notes" and isinstance(doc.get("data"), str):
+            body["data"] = doc["data"]  # legacy body lives in the doc
+        return body
+
+    async def _soft_delete(self, doc: dict, path: str, mtime_ms: int) -> None:
+        revision = soft_delete_revision(doc, mtime_ms)
+        revision.pop("_conflicts", None)
+        await self._put_doc(path2id(path), revision)
 
     async def write_note(
         self,
@@ -522,17 +662,113 @@ class CouchDBBackend:
         overwrite: bool = False,
         mtime: int | None = None,
     ) -> NoteMeta:
-        raise NotImplementedError("write_note is not implemented yet")
+        """Write a textual body under the central D1/D2 rules.
 
-    async def delete_note(self, path: str) -> None:
-        raise NotImplementedError("delete_note is not implemented yet")
+        Namespace validation (spec §7.5) and the binary-path refusal
+        (spec §5) precede every HTTP request. New chunks are PUT before
+        the metadata document; the metadata revision carries the old
+        ``_rev`` (optimistic locking), and a soft-deleted note is only
+        resurrected through an explicit ``create`` (audit B12).
+        """
+        validate_vault_path(path)
+        if not is_text_doc(None, path):
+            raise BinaryNoteError(
+                f"note {path!r} has a binary extension; "
+                "this server writes textual notes only"
+            )
+
+        doc_id = path2id(path)
+        doc = await self._get_doc(doc_id, conflicts=True)
+        if doc is not None:
+            self._refuse_unresolved_conflicts(doc, path)
+        live = doc is not None and not doc.get("deleted")
+        if live and create and not overwrite:
+            raise NoteExists(f"note already exists: {path}")
+        if not live and not create:
+            raise NoteNotFound(f"note not found: {path}")
+
+        children = [await self._write_chunk(content)]
+        new_mtime = _now_ms() if mtime is None else mtime
+        size = len(content.encode("utf-8"))
+        if doc is None:
+            body = new_metadata_doc(
+                path, children, size, doc_type_for(path), new_mtime, new_mtime
+            )
+        else:
+            # New revision of the old body: children/mtime/size/type
+            # replaced (a write always stores plain text — audit B3),
+            # soft-delete flag and conflict shadows dropped.
+            body = dict(doc)
+            body.pop("_conflicts", None)
+            body.pop("deleted", None)
+            body["children"] = children
+            body["mtime"] = new_mtime
+            body["size"] = size
+            body["type"] = doc_type_for(path)
+        body["_rev"] = await self._put_doc(doc_id, body)
+        return self._meta_from_doc(body)
+
+    async def delete_note(self, path: str) -> bool:
+        """Soft-delete the note; ``True`` iff a live note was deleted.
+
+        Deletion is a new document revision with ``deleted: true``
+        (``children``/``type``/``path`` preserved — audit B2), never a
+        bare HTTP DELETE: a CouchDB tombstone would drop the body
+        LiveSync needs to undo the deletion, and chunk deletion is
+        reserved for LiveSync's own GC (audit B1).
+        """
+        validate_vault_path(path)
+        doc = await self._get_doc(path2id(path), conflicts=True)
+        if doc is None or doc.get("deleted"):
+            return False
+        self._refuse_unresolved_conflicts(doc, path)
+        await self._soft_delete(doc, path, _now_ms())
+        return True
 
     async def rename_note(
         self, path: str, new_path: str, *, overwrite: bool = False
     ) -> NoteMeta:
-        raise NotImplementedError("rename_note is not implemented yet")
+        """Move a note: republish its chunk references, then retire it.
+
+        Same-path renames are no-ops and case-only renames update the
+        ``path`` field in a single revision (D1 — no delete); otherwise
+        a new metadata document with the *same* ``children`` ids is PUT
+        first, and only then is the source soft-deleted, so a failed
+        copy can duplicate a note but never lose one.
+        """
+        validate_vault_path(path)
+        validate_vault_path(new_path)
+        if path == new_path:
+            return await self.get_meta(path)
+
+        doc = await self._get_note_doc(path)
+        if path2id(new_path) == path2id(path):
+            # One document, two spellings: one revision, path updated.
+            body = dict(doc)
+            body.pop("_conflicts", None)
+            body["path"] = new_path
+            body["mtime"] = _now_ms()
+            body["_rev"] = await self._put_doc(path2id(path), body)
+            return self._meta_from_doc(body)
+
+        target = await self._target_doc_for_write(new_path, overwrite=overwrite)
+        body = self._moved_body(doc, new_path, _now_ms())
+        if target is not None:
+            body["_rev"] = target["_rev"]  # replace the old revision
+        body["_rev"] = await self._put_doc(path2id(new_path), body)
+        await self._soft_delete(doc, path, _now_ms())
+        return self._meta_from_doc(body)
 
     async def copy_note(
         self, path: str, new_path: str, *, overwrite: bool = False
     ) -> NoteMeta:
-        raise NotImplementedError("copy_note is not implemented yet")
+        """Duplicate a note by re-publishing its chunk references."""
+        validate_vault_path(path)
+        validate_vault_path(new_path)
+        doc = await self._get_note_doc(path)
+        target = await self._target_doc_for_write(new_path, overwrite=overwrite)
+        body = self._moved_body(doc, new_path, _now_ms())
+        if target is not None:
+            body["_rev"] = target["_rev"]  # replace the old revision
+        body["_rev"] = await self._put_doc(path2id(new_path), body)
+        return self._meta_from_doc(body)
