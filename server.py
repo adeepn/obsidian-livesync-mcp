@@ -6,21 +6,27 @@ import re
 import secrets
 import time
 import copy
+import hashlib
+from contextlib import asynccontextmanager
+from functools import wraps
 from typing import Any
 
 from pydantic import AnyHttpUrl
 from mcp.server.fastmcp import FastMCP
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
 from mcp.server.transport_security import TransportSecuritySettings
-from couchdb import CouchDBClient
+from config import Config, ConfigError, load_config
+from storage_base import (
+    StorageBackend, StorageError, NoteNotFound, NoteExists, BinaryNoteError,
+    ConcurrentModification, UnsupportedVault, StorageUnavailable,
+)
+from storage_couchdb import CouchDBBackend
+from frontmatter import FrontmatterError, get_properties, split_frontmatter
+from links import build_graph, extract_links, resolve_link
 from auth_config import StaticBearerTokenVerifier, select_auth_mode
 from oauth_provider import SimpleOAuthProvider
 
 # --- Configuration ---
-COUCHDB_URL = os.environ.get("COUCHDB_URL", "http://localhost:5443")
-COUCHDB_USER = os.environ.get("COUCHDB_USER", "admin")
-COUCHDB_PASSWORD = os.environ.get("COUCHDB_PASSWORD", "")
-COUCHDB_DATABASE = os.environ.get("COUCHDB_DATABASE", "obsidian")
 MCP_API_KEY = os.environ.get("MCP_API_KEY", "")
 OAUTH_PASSWORD = os.environ.get("OAUTH_PASSWORD", "")
 OAUTH_CLIENT_ID = os.environ.get("OAUTH_CLIENT_ID", "")
@@ -29,13 +35,61 @@ SERVER_URL = os.environ.get("MCP_SERVER_URL", "https://localhost:8484")
 
 # --- Initialize MCP ---
 MCP_HOST = os.environ.get("MCP_HOST", "0.0.0.0")
-MCP_PORT = int(os.environ.get("MCP_PORT", "8484"))
-AUTH_MODE = select_auth_mode(MCP_API_KEY, OAUTH_PASSWORD)
+try:
+    MCP_PORT = int(os.environ.get("MCP_PORT", "8484"))
+except ValueError:
+    MCP_PORT = 8484  # load_config rejects the invalid value at startup.
+try:
+    AUTH_MODE = select_auth_mode(MCP_API_KEY, OAUTH_PASSWORD)
+except RuntimeError:
+    AUTH_MODE = None  # Import is safe; lifespan still fails closed.
+
+
+def get_backend(cfg: Config) -> StorageBackend:
+    """Construct the selected storage implementation."""
+    if cfg.backend == "s3":
+        raise RuntimeError("S3 backend arrives in Plan B")
+    if cfg.couchdb is None:
+        raise ConfigError("CouchDB configuration is required.")
+    return CouchDBBackend(
+        url=cfg.couchdb.url,
+        username=cfg.couchdb.user,
+        password=cfg.couchdb.password,
+        database=cfg.couchdb.database,
+    )
+
+
+# Guard configuration at import so tools can be tested without credentials.
+# Lifespan validates again before serving any requests.
+backend: StorageBackend
+try:
+    backend = get_backend(load_config(os.environ))
+except (ConfigError, RuntimeError):
+    backend = None  # type: ignore[assignment]
+
+
+@asynccontextmanager
+async def _lifespan(app):
+    global backend
+    cfg = load_config(os.environ)
+    if AUTH_MODE is None:
+        raise ConfigError(
+            "Authentication was absent at import; restart with configuration set."
+        )
+    if backend is None:
+        backend = get_backend(cfg)
+    try:
+        await backend.startup_check()
+        yield
+    finally:
+        await backend.close()
+
 
 mcp_kwargs: dict[str, Any] = {
     "name": "Obsidian MCP Server",
     "instructions": "MCP server for Obsidian vault via CouchDB/LiveSync",
     "host": MCP_HOST,
+    "lifespan": _lifespan,
     "port": MCP_PORT,
     "transport_security": TransportSecuritySettings(
         enable_dns_rebinding_protection=False,
@@ -68,14 +122,6 @@ elif AUTH_MODE == "oauth":
     )
 
 mcp = FastMCP(**mcp_kwargs)
-
-db = CouchDBClient(
-    url=COUCHDB_URL,
-    username=COUCHDB_USER,
-    password=COUCHDB_PASSWORD,
-    database=COUCHDB_DATABASE,
-)
-
 
 # --- Helper functions ---
 
@@ -142,15 +188,103 @@ def _serialize_frontmatter(props: dict) -> str:
     return "\n".join(lines)
 
 
-def _resolve_doc_id(path: str) -> str:
-    """Resolve a path to a CouchDB document ID (lowercase)."""
-    return path.lower()
+def _storage_message(error: StorageError) -> str:
+    """Never forward backend exception text (URLs/revisions) to clients."""
+    messages = {
+        NoteNotFound: "Note not found.",
+        NoteExists: "Error: note already exists.",
+        BinaryNoteError: "Error: this operation requires a text note.",
+        ConcurrentModification: (
+            "Error: note changed concurrently; read it again and retry."
+        ),
+        UnsupportedVault: "Error: unsupported vault configuration.",
+        StorageUnavailable: "Error: storage is unavailable; try again later.",
+    }
+    for kind, message in messages.items():
+        if isinstance(error, kind):
+            return message
+    return "Error: unable to access vault storage."
+
+
+def _tool_errors(handler):
+    @wraps(handler)
+    async def guarded(*args, **kwargs):
+        if backend is None:
+            return "Error: server storage configuration is missing or invalid."
+        try:
+            return await handler(*args, **kwargs)
+        except StorageError as error:
+            return _storage_message(error)
+        except FrontmatterError:
+            return "Error: invalid YAML frontmatter."
+    return guarded
+
+
+# Temporary protocol adapters for unchanged Task 9/10 write/canvas logic.
+# These deliberately reference the module backend, never a captured client.
+async def _legacy_content(path: str) -> str | None:
+    note = await backend.read_note(path)
+    if note is None:
+        return None
+    if not note["is_text"]:
+        raise BinaryNoteError()
+    return note["text"]
+
+
+async def _legacy_metadata(path: str) -> dict | None:
+    try:
+        return await backend.get_meta(path)
+    except NoteNotFound:
+        return None
+
+
+async def _graph() -> dict:
+    texts, skipped = [], []
+    async for meta, text in backend.iterate_texts():
+        if text is None:
+            skipped.append(meta["path"])
+        else:
+            texts.append((meta["path"], text))
+    return {**build_graph(texts), "skipped": skipped}
+
+
+async def _tags() -> dict:
+    counts, skipped, errors = {}, [], {}
+    async for meta, text in backend.iterate_texts():
+        path = meta["path"]
+        if text is None:
+            skipped.append(path)
+            continue
+        try:
+            props = get_properties(text)
+            _, body = split_frontmatter(text)
+        except FrontmatterError:
+            skipped.append(path)
+            errors[path] = "Error: invalid YAML frontmatter."
+            continue
+        tags = props.get("tags", [])
+        if isinstance(tags, str):
+            tags = [tags]
+        elif not isinstance(tags, list):
+            tags = []
+        for tag in tags + re.findall(r'(?<!\w)#([\w/\-]+)', body):
+            if isinstance(tag, str) and tag:
+                counts[tag] = counts.get(tag, 0) + 1
+    result = {
+        "tags": dict(sorted(counts.items(), key=lambda item: item[1],
+                            reverse=True)),
+        "skipped": skipped,
+    }
+    if errors:
+        result["errors"] = errors
+    return result
 
 
 # === TOOLS ===
 
 # 1. obsidian-search
 @mcp.tool()
+@_tool_errors
 async def obsidian_search(query: str, regex: bool = False) -> str:
     """Search notes in the vault by content.
 
@@ -158,14 +292,33 @@ async def obsidian_search(query: str, regex: bool = False) -> str:
         query: Search query (text or regex pattern)
         regex: If true, treat query as regex pattern
     """
-    results = await db.search_content(query, regex=regex)
-    if not results:
-        return "No matches found."
-    return json.dumps(results, ensure_ascii=False, indent=2)
+    try:
+        pattern = re.compile(query, re.IGNORECASE) if regex else None
+    except re.error:
+        return "Invalid regular expression."
+    results, skipped = [], []
+    async for meta, text in backend.iterate_texts():
+        if text is None:
+            skipped.append(meta["path"])
+            continue
+        if pattern is not None:
+            matches = pattern.findall(text)
+            if matches:
+                results.append({"path": meta["path"], "matches": matches[:10]})
+        elif query.lower() in text.lower():
+            index = text.lower().index(query.lower())
+            results.append({
+                "path": meta["path"],
+                "context": text[max(0, index - 50):index + len(query) + 50],
+            })
+    return json.dumps(
+        {"results": results, "skipped": skipped}, ensure_ascii=False, indent=2
+    )
 
 
 # 2. obsidian-fetch
 @mcp.tool()
+@_tool_errors
 async def obsidian_fetch(path: str, include_properties: bool = True, include_stats: bool = False) -> str:
     """Fetch the content and metadata of a note, base, or canvas file.
 
@@ -174,45 +327,43 @@ async def obsidian_fetch(path: str, include_properties: bool = True, include_sta
         include_properties: Include frontmatter properties in response
         include_stats: Include word/character count statistics
     """
-    doc_id = _resolve_doc_id(path)
-    metadata = await db.read_note_metadata(doc_id)
-    if metadata is None:
+    note = await backend.read_note(path)
+    if note is None:
         return f"Note '{path}' not found."
-
-    content = await db.read_note_content(doc_id)
-    result: dict[str, Any] = {"path": metadata["path"]}
-
-    if include_properties and content and path.lower().endswith(".md"):
-        props, body = _parse_frontmatter(content)
-        if props:
-            result["properties"] = props
-        result["content"] = body
+    meta = note["meta"]
+    result = {
+        key: meta.get(key)
+        for key in ("path", "ctime", "mtime", "type", "size")
+    }
+    if not note["is_text"]:
+        data = note["data"]
+        if data is None:
+            raise StorageError()
+        result.update(size=len(data), sha256=hashlib.sha256(data).hexdigest())
     else:
+        content = note["text"]
+        if content is None:
+            raise StorageError()
         result["content"] = content
-
-    result["ctime"] = metadata.get("ctime")
-    result["mtime"] = metadata.get("mtime")
-
-    if include_stats and content:
-        text = content
-        if path.lower().endswith(".md"):
-            _, text = _parse_frontmatter(content)
-        words = len(text.split())
-        chars = len(text)
-        lines = text.count("\n") + 1
-        links = len(re.findall(r'\[\[([^\]]+)\]\]', text))
-        result["stats"] = {
-            "words": words,
-            "characters": chars,
-            "lines": lines,
-            "links": links,
-        }
-
+        if include_properties:
+            result["properties"] = (
+                get_properties(content) if path.endswith(".md") else {}
+            )
+        if include_stats:
+            text = (
+                split_frontmatter(content)[1]
+                if path.endswith(".md") else content
+            )
+            result["stats"] = {
+                "words": len(text.split()), "characters": len(text),
+                "lines": text.count("\n") + 1, "links": len(extract_links(text)),
+            }
     return json.dumps(result, ensure_ascii=False, indent=2)
 
 
 # 3. obsidian-create-note
 @mcp.tool()
+@_tool_errors
 async def obsidian_create_note(
     path: str,
     content: str = "",
@@ -225,8 +376,8 @@ async def obsidian_create_note(
         content: Note content (markdown for .md, YAML for .base)
         properties: JSON string of frontmatter properties (for .md files)
     """
-    doc_id = _resolve_doc_id(path)
-    existing = await db.read_note_metadata(doc_id)
+    doc_id = path
+    existing = await _legacy_metadata(doc_id)
     if existing and not existing.get("deleted"):
         return f"Note '{path}' already exists."
 
@@ -239,12 +390,13 @@ async def obsidian_create_note(
         fm = _serialize_frontmatter(props)
         full_content = fm + "\n" + content if content else fm
 
-    await db.write_note(path, full_content, create=True)
+    await backend.write_note(path, full_content, create=True)
     return f"Created '{path}'."
 
 
 # 4. obsidian-update-note
 @mcp.tool()
+@_tool_errors
 async def obsidian_update_note(
     path: str,
     mode: str = "overwrite",
@@ -265,9 +417,9 @@ async def obsidian_update_note(
         heading: Heading text to insert after (for after-heading mode)
         regex: Use regex for search-replace
     """
-    doc_id = _resolve_doc_id(path)
+    doc_id = path
     try:
-        existing = await db.read_note_content(doc_id)
+        existing = await _legacy_content(doc_id)
     except ValueError as e:
         return f"Error reading '{path}': {e}"
     if existing is None:
@@ -308,20 +460,21 @@ async def obsidian_update_note(
     else:
         return f"Unknown mode: {mode}. Use: overwrite, append, prepend, after-heading, search-replace"
 
-    await db.write_note(path, new_content)
+    await backend.write_note(path, new_content)
     return f"Updated '{path}' ({mode})."
 
 
 # 5. obsidian-delete-note
 @mcp.tool()
+@_tool_errors
 async def obsidian_delete_note(path: str) -> str:
     """Delete a note from the vault.
 
     Args:
         path: Path to the note to delete
     """
-    doc_id = _resolve_doc_id(path)
-    success = await db.delete_note(doc_id)
+    doc_id = path
+    success = await backend.delete_note(doc_id)
     if success:
         return f"Deleted '{path}'."
     return f"Note '{path}' not found."
@@ -329,6 +482,7 @@ async def obsidian_delete_note(path: str) -> str:
 
 # 6. obsidian-move-note
 @mcp.tool()
+@_tool_errors
 async def obsidian_move_note(path: str, new_path: str) -> str:
     """Move or rename a note.
 
@@ -336,9 +490,9 @@ async def obsidian_move_note(path: str, new_path: str) -> str:
         path: Current path of the note
         new_path: New path for the note
     """
-    doc_id = _resolve_doc_id(path)
+    doc_id = path
     try:
-        await db.rename_note(doc_id, new_path)
+        await backend.rename_note(doc_id, new_path)
     except ValueError as e:
         return str(e)
     return f"Moved '{path}' -> '{new_path}'."
@@ -346,6 +500,7 @@ async def obsidian_move_note(path: str, new_path: str) -> str:
 
 # 7. obsidian-duplicate-note
 @mcp.tool()
+@_tool_errors
 async def obsidian_duplicate_note(path: str, new_path: str = "") -> str:
     """Duplicate a note.
 
@@ -353,19 +508,20 @@ async def obsidian_duplicate_note(path: str, new_path: str = "") -> str:
         path: Path to the note to duplicate
         new_path: Path for the copy (default: adds ' copy' before extension)
     """
-    doc_id = _resolve_doc_id(path)
-    content = await db.read_note_content(doc_id)
+    doc_id = path
+    content = await _legacy_content(doc_id)
     if content is None:
         return f"Note '{path}' not found."
     if not new_path:
         base, ext = path.rsplit(".", 1) if "." in path else (path, "md")
         new_path = f"{base} copy.{ext}"
-    await db.write_note(new_path, content, create=True)
+    await backend.write_note(new_path, content, create=True)
     return f"Duplicated '{path}' -> '{new_path}'."
 
 
 # 8. obsidian-list-notes
 @mcp.tool()
+@_tool_errors
 async def obsidian_list_notes(
     folder: str = "",
     extension: str = "",
@@ -373,26 +529,24 @@ async def obsidian_list_notes(
     """List notes in the vault, optionally filtered by folder and extension.
 
     Args:
-        folder: Filter by folder path (e.g. "projects/"). Empty for root.
+        folder: Folder prefix (e.g. "projects/"); includes descendants recursively.
+            Empty lists the entire vault.
         extension: Filter by extension (e.g. ".md", ".base", ".canvas")
     """
-    notes = await db.list_notes(
-        folder=folder or None,
-        extension=extension or None,
+    notes = await backend.list_notes(
+        folder=folder, extension=extension or None, recursive=True
     )
     if not notes:
         return "No notes found."
-    result = []
-    for n in notes:
-        entry = {"path": n["path"], "size": n["size"]}
-        if n.get("mtime"):
-            entry["modified"] = n["mtime"]
-        result.append(entry)
-    return json.dumps(result, ensure_ascii=False, indent=2)
+    return json.dumps([
+        {"path": n["path"], "size": n.get("size") or 0, "modified": n.get("mtime")}
+        for n in notes
+    ], ensure_ascii=False, indent=2)
 
 
 # 9. obsidian-manage-properties
 @mcp.tool()
+@_tool_errors
 async def obsidian_manage_properties(
     path: str,
     action: str = "get",
@@ -407,8 +561,8 @@ async def obsidian_manage_properties(
         properties: JSON string of properties to set (for 'set' action)
         keys: Comma-separated property keys to delete (for 'delete' action)
     """
-    doc_id = _resolve_doc_id(path)
-    content = await db.read_note_content(doc_id)
+    doc_id = path
+    content = await _legacy_content(doc_id)
     if content is None:
         return f"Note '{path}' not found."
 
@@ -429,7 +583,7 @@ async def obsidian_manage_properties(
         props.update(new_props)
         fm = _serialize_frontmatter(props)
         new_content = fm + "\n" + body
-        await db.write_note(path, new_content)
+        await backend.write_note(path, new_content)
         return f"Updated properties of '{path}'."
 
     elif action == "delete":
@@ -442,7 +596,7 @@ async def obsidian_manage_properties(
             new_content = fm + "\n" + body
         else:
             new_content = body
-        await db.write_note(path, new_content)
+        await backend.write_note(path, new_content)
         return f"Deleted properties from '{path}'."
 
     return f"Unknown action: {action}. Use: get, set, delete"
@@ -450,6 +604,7 @@ async def obsidian_manage_properties(
 
 # 10. obsidian-manage-tags
 @mcp.tool()
+@_tool_errors
 async def obsidian_manage_tags(
     path: str,
     action: str = "list",
@@ -462,8 +617,8 @@ async def obsidian_manage_tags(
         action: One of: list, add, remove
         tags: Comma-separated tags (without #) for add/remove
     """
-    doc_id = _resolve_doc_id(path)
-    content = await db.read_note_content(doc_id)
+    doc_id = path
+    content = await _legacy_content(doc_id)
     if content is None:
         return f"Note '{path}' not found."
 
@@ -494,7 +649,7 @@ async def obsidian_manage_tags(
         props["tags"] = fm_tags
         fm = _serialize_frontmatter(props)
         new_content = fm + "\n" + body
-        await db.write_note(path, new_content)
+        await backend.write_note(path, new_content)
         return f"Added tags {tag_list} to '{path}'."
 
     elif action == "remove":
@@ -505,7 +660,7 @@ async def obsidian_manage_tags(
             props.pop("tags", None)
         fm = _serialize_frontmatter(props)
         new_content = fm + "\n" + body if props else body
-        await db.write_note(path, new_content)
+        await backend.write_note(path, new_content)
         return f"Removed tags {tag_list} from '{path}'."
 
     return f"Unknown action: {action}. Use: list, add, remove"
@@ -513,17 +668,15 @@ async def obsidian_manage_tags(
 
 # 11. obsidian-get-all-tags
 @mcp.tool()
+@_tool_errors
 async def obsidian_get_all_tags() -> str:
     """Get all tags across the vault with usage counts."""
-    tags = await db.get_all_tags()
-    if not tags:
-        return "No tags found."
-    sorted_tags = sorted(tags.items(), key=lambda x: x[1], reverse=True)
-    return json.dumps(dict(sorted_tags), ensure_ascii=False, indent=2)
+    return json.dumps(await _tags(), ensure_ascii=False, indent=2)
 
 
 # 12. obsidian-get-links
 @mcp.tool()
+@_tool_errors
 async def obsidian_get_links(
     path: str,
     direction: str = "both",
@@ -534,39 +687,46 @@ async def obsidian_get_links(
         path: Path to the note
         direction: One of: out (outgoing), in (backlinks), both
     """
-    doc_id = _resolve_doc_id(path)
-    result: dict[str, Any] = {"path": path}
-
+    if direction not in ("out", "in", "both"):
+        return "Invalid direction. Use: out, in, both."
+    graph = await _graph()
+    resolved = resolve_link(path, graph["nodes"])
+    result = {"path": resolved or path, "skipped": graph["skipped"]}
     if direction in ("out", "both"):
-        links = await db.get_links_from_note(doc_id)
-        result["outgoing"] = links
-
+        result["outgoing"] = [
+            e["to"] for e in graph["edges"] if e["from"] == resolved
+        ]
     if direction in ("in", "both"):
-        # Use the path without extension for backlink search
-        backlinks = await db.get_backlinks(path)
-        result["backlinks"] = backlinks
-
+        result["backlinks"] = [
+            {"path": e["from"]} for e in graph["edges"] if e["to"] == resolved
+        ]
     return json.dumps(result, ensure_ascii=False, indent=2)
 
 
 # 13. obsidian-get-link-graph
 @mcp.tool()
+@_tool_errors
 async def obsidian_get_link_graph() -> str:
     """Get the full link graph of the vault (all nodes and edges)."""
-    graph = await db.get_link_graph()
-    return json.dumps(graph, ensure_ascii=False, indent=2)
+    return json.dumps(await _graph(), ensure_ascii=False, indent=2)
 
 
 # 14. obsidian-find-orphaned-notes
 @mcp.tool()
+@_tool_errors
 async def obsidian_find_orphaned_notes() -> str:
     """Find notes that have no incoming or outgoing links."""
-    graph = await db.get_link_graph()
+    graph = await _graph()
     connected = set()
     for edge in graph["edges"]:
         connected.add(edge["from"])
         connected.add(edge["to"])
     orphans = [n for n in graph["nodes"] if n not in connected]
+    if graph["skipped"]:
+        return json.dumps(
+            {"orphans": orphans, "skipped": graph["skipped"]},
+            ensure_ascii=False, indent=2,
+        )
     if not orphans:
         return "No orphaned notes found."
     return json.dumps(orphans, ensure_ascii=False, indent=2)
@@ -574,13 +734,14 @@ async def obsidian_find_orphaned_notes() -> str:
 
 # 15. obsidian-find-hub-notes
 @mcp.tool()
+@_tool_errors
 async def obsidian_find_hub_notes(min_links: int = 3) -> str:
     """Find the most connected notes in the vault.
 
     Args:
         min_links: Minimum total links (in + out) to be considered a hub
     """
-    graph = await db.get_link_graph()
+    graph = await _graph()
     link_counts: dict[str, dict[str, int]] = {}
     for node in graph["nodes"]:
         link_counts[node] = {"in": 0, "out": 0}
@@ -597,6 +758,11 @@ async def obsidian_find_hub_notes(min_links: int = 3) -> str:
         if total >= min_links:
             hubs.append({"path": node, "incoming": counts["in"], "outgoing": counts["out"], "total": total})
     hubs.sort(key=lambda x: x["total"], reverse=True)
+    if graph["skipped"]:
+        return json.dumps(
+            {"hubs": hubs, "skipped": graph["skipped"]},
+            ensure_ascii=False, indent=2,
+        )
     if not hubs:
         return f"No notes with {min_links}+ links found."
     return json.dumps(hubs, ensure_ascii=False, indent=2)
@@ -604,6 +770,7 @@ async def obsidian_find_hub_notes(min_links: int = 3) -> str:
 
 # 16. obsidian-canvas-node
 @mcp.tool()
+@_tool_errors
 async def obsidian_canvas_node(
     path: str,
     action: str = "add",
@@ -632,8 +799,8 @@ async def obsidian_canvas_node(
         height: Node height
         node_id: Node ID (required for remove)
     """
-    doc_id = _resolve_doc_id(path)
-    content = await db.read_note_content(doc_id)
+    doc_id = path
+    content = await _legacy_content(doc_id)
     if content is None and action != "add":
         return f"Canvas '{path}' not found."
 
@@ -659,7 +826,10 @@ async def obsidian_canvas_node(
         elif node_type == "group":
             node["label"] = text
         canvas["nodes"].append(node)
-        await db.write_note(path, json.dumps(canvas, ensure_ascii=False), create=True)
+        # Task 10: retain add-to-existing behavior under the new create contract.
+        await backend.write_note(
+            path, json.dumps(canvas, ensure_ascii=False), create=content is None
+        )
         return f"Added {node_type} node '{new_id}' to '{path}'."
 
     elif action == "remove":
@@ -667,7 +837,7 @@ async def obsidian_canvas_node(
             return "node_id required for remove action."
         canvas["nodes"] = [n for n in canvas["nodes"] if n["id"] != node_id]
         canvas["edges"] = [e for e in canvas["edges"] if e.get("fromNode") != node_id and e.get("toNode") != node_id]
-        await db.write_note(path, json.dumps(canvas, ensure_ascii=False))
+        await backend.write_note(path, json.dumps(canvas, ensure_ascii=False))
         return f"Removed node '{node_id}' from '{path}'."
 
     return f"Unknown action: {action}. Use: add, remove"
@@ -675,6 +845,7 @@ async def obsidian_canvas_node(
 
 # 17. obsidian-canvas-edge
 @mcp.tool()
+@_tool_errors
 async def obsidian_canvas_edge(
     path: str,
     action: str = "add",
@@ -693,8 +864,8 @@ async def obsidian_canvas_edge(
         label: Edge label (optional)
         edge_id: Edge ID (required for remove)
     """
-    doc_id = _resolve_doc_id(path)
-    content = await db.read_note_content(doc_id)
+    doc_id = path
+    content = await _legacy_content(doc_id)
     if content is None:
         return f"Canvas '{path}' not found."
 
@@ -715,14 +886,14 @@ async def obsidian_canvas_edge(
         if label:
             edge["label"] = label
         canvas["edges"].append(edge)
-        await db.write_note(path, json.dumps(canvas, ensure_ascii=False))
+        await backend.write_note(path, json.dumps(canvas, ensure_ascii=False))
         return f"Added edge '{new_id}' ({from_node} -> {to_node}) to '{path}'."
 
     elif action == "remove":
         if not edge_id:
             return "edge_id required for remove action."
         canvas["edges"] = [e for e in canvas["edges"] if e["id"] != edge_id]
-        await db.write_note(path, json.dumps(canvas, ensure_ascii=False))
+        await backend.write_note(path, json.dumps(canvas, ensure_ascii=False))
         return f"Removed edge '{edge_id}' from '{path}'."
 
     return f"Unknown action: {action}. Use: add, remove"
@@ -730,30 +901,29 @@ async def obsidian_canvas_edge(
 
 # 18. obsidian-vault-stats
 @mcp.tool()
+@_tool_errors
 async def obsidian_vault_stats() -> str:
     """Get aggregate statistics for the entire vault."""
-    notes = await db.list_notes()
-    total = len(notes)
-    by_ext: dict[str, int] = {}
-    total_size = 0
-    for n in notes:
-        path = n["path"]
+    notes = await backend.list_notes()
+    by_ext = {}
+    for note in notes:
+        path = note["path"]
         ext = path.rsplit(".", 1)[-1] if "." in path else "unknown"
         by_ext[ext] = by_ext.get(ext, 0) + 1
-        total_size += n.get("size", 0)
-
-    tags = await db.get_all_tags()
-
+    tags = await _tags()
+    info = await backend.backend_info()
     return json.dumps({
-        "total_notes": total,
-        "by_extension": by_ext,
-        "total_size_bytes": total_size,
-        "total_tags": len(tags),
+        "total_notes": len(notes), "by_extension": by_ext,
+        "total_size_bytes": sum(n.get("size") or 0 for n in notes),
+        "total_tags": len(tags["tags"]), "backend": info.get("backend"),
+        "skipped": tags["skipped"],
+        **({"errors": tags["errors"]} if "errors" in tags else {}),
     }, ensure_ascii=False, indent=2)
 
 
 # 19. obsidian-create-from-template
 @mcp.tool()
+@_tool_errors
 async def obsidian_create_from_template(
     template_path: str,
     new_path: str,
@@ -766,8 +936,8 @@ async def obsidian_create_from_template(
         new_path: Path for the new note
         variables: JSON string of variable replacements (e.g. {"title": "My Note", "date": "2026-03-20"})
     """
-    doc_id = _resolve_doc_id(template_path)
-    content = await db.read_note_content(doc_id)
+    doc_id = template_path
+    content = await _legacy_content(doc_id)
     if content is None:
         return f"Template '{template_path}' not found."
 
@@ -779,30 +949,39 @@ async def obsidian_create_from_template(
         for key, val in vars_dict.items():
             content = content.replace("{{" + key + "}}", str(val))
 
-    new_doc_id = _resolve_doc_id(new_path)
-    existing = await db.read_note_metadata(new_doc_id)
+    new_doc_id = new_path
+    existing = await _legacy_metadata(new_doc_id)
     if existing and not existing.get("deleted"):
         return f"Note '{new_path}' already exists."
 
-    await db.write_note(new_path, content, create=True)
+    await backend.write_note(new_path, content, create=True)
     return f"Created '{new_path}' from template '{template_path}'."
 
 
 # 20. obsidian-list-templates
 @mcp.tool()
+@_tool_errors
 async def obsidian_list_templates(folder: str = "templates") -> str:
     """List available templates in the templates folder.
 
     Args:
         folder: Templates folder path (default: "templates")
     """
-    notes = await db.list_notes(folder=folder)
+    notes = await backend.list_notes(folder=folder)
     if not notes:
         return f"No templates found in '{folder}/'."
     return json.dumps(
         [{"path": n["path"], "size": n["size"]} for n in notes],
         ensure_ascii=False, indent=2,
     )
+
+
+@mcp.tool()
+@_tool_errors
+async def obsidian_refresh() -> str:
+    """Refresh the backend's local vault representation."""
+    await backend.refresh()
+    return "Vault refreshed."
 
 
 # --- Main ---
