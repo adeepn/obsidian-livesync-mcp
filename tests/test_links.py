@@ -119,3 +119,62 @@ def test_nested_image_label_uses_outer_destination():
     assert extract_links("![caption [inner](Hidden.md)](Image.png)") == [
         Link("Image.png", "embed"),
     ]
+
+
+@pytest.mark.parametrize('destination,target', [
+    ('Note_(draft).md', 'Note_(draft)'),
+    ('Note_(a_(b)).md', 'Note_(a_(b))'),
+    (r'Note_\).md', 'Note_)'),
+])
+def test_balanced_and_escaped_destinations(destination, target):
+    assert extract_links(f'[draft]({destination})') == [Link(target, 'markdown')]
+
+
+@pytest.mark.parametrize('destination,target', [
+    ('./Target.md', 'folder/Target.md'),
+    ('../Target.md', 'Target.md'),
+    ('./sub/Target.md', 'folder/sub/Target.md'),
+    ('../missing.md', None),
+])
+def test_graph_relative_markdown(destination, target):
+    paths = ['folder/source.md', 'folder/Target.md', 'Target.md',
+             'folder/sub/Target.md']
+    graph = build_graph([('folder/source.md', f'[x]({destination})')], paths)
+    assert graph['edges'] == ([] if target is None else [
+        {'from': 'folder/source.md', 'to': target}])
+    assert build_graph([('folder/source.md', '[[./Target]]')], paths)['edges'] == []
+
+
+def test_large_graph_resolution_time():
+    from time import perf_counter
+    paths = [f'folder/N{i}.md' for i in range(2000)]
+    texts = [(path, ' '.join(f'[[N{(i+j)%2000}]]' for j in range(5)))
+             for i, path in enumerate(paths)]
+    start = perf_counter()
+    graph = build_graph(texts)
+    assert perf_counter() - start < 2
+    assert len(graph['edges']) == 10000
+
+
+def test_indexed_graph_matches_naive_resolution():
+    paths = ['Hub.md', 'a/Hub.md', 'a/proj/X.md', 'b/proj/X.md', 'a/Only.md']
+    targets = ['Hub', 'a/Hub', 'proj/X', 'Only', 'missing', 'A/ONLY.MD']
+    def naive(target):
+        key = target.removesuffix('.MD').removesuffix('.md').casefold()
+        names = [(p, p[:-3].casefold()) for p in paths]
+        for matches in ([p for p,n in names if n == key],
+                        [p for p,n in names if n.rsplit('/',1)[-1] == key],
+                        [p for p,n in names if n.endswith('/'+key)]):
+            if matches:
+                return matches[0] if len(matches) == 1 else None
+    for target in targets:
+        resolved = naive(target)
+        assert build_graph([('source.md', f'[[{target}]]')], paths)['edges'] == (
+            [] if resolved is None else [{'from': 'source.md', 'to': resolved}])
+
+
+def test_relative_embed_origin():
+    paths = ['folder/source.md', 'folder/Target.md']
+    assert build_graph([('folder/source.md', '![[./Target]]')], paths)['edges'] == []
+    assert build_graph([('folder/source.md', '![x](./Target.md)')], paths)['edges'] == [
+        {'from': 'folder/source.md', 'to': 'folder/Target.md'}]

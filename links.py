@@ -2,6 +2,7 @@
 
 from collections import namedtuple
 from collections.abc import Iterable
+import posixpath
 import re
 from urllib.parse import unquote
 
@@ -62,9 +63,28 @@ def _delimiter_positions(text: str) -> tuple[list[int], ...]:
     """Index destination delimiters once instead of rescanning failed tails."""
     size = len(text)
     word, angle, title, nonspace = ([size] * (size + 1) for _ in range(4))
+    escaped = set()
+    pairs = {}
+    stack = []
+    i = 0
+    while i < size:
+        if text[i] == "\\" and i + 1 < size:
+            escaped.add(i + 1)
+            i += 2
+            continue
+        if text[i] == "(":
+            stack.append(i)
+        elif text[i] == ")" and stack:
+            pairs[stack.pop()] = i
+        i += 1
     for i in range(size - 1, -1, -1):
         char = text[i]
-        word[i] = i if char.isspace() or char == ")" else word[i + 1]
+        if i in escaped:
+            word[i] = word[i + 1]
+        elif i in pairs:
+            word[i] = word[pairs[i] + 1]
+        else:
+            word[i] = i if char.isspace() or char == ")" else word[i + 1]
         angle[i] = i if char in ">\n" else angle[i + 1]
         title[i] = i if char in '\n"' else title[i + 1]
         nonspace[i] = nonspace[i + 1] if char.isspace() else i
@@ -102,7 +122,7 @@ def _markdown_destination(
     return text[target_start:target_end], end + 1
 
 
-def extract_links(text: str) -> list[Link]:
+def _extract_links(text: str, distinguish_embeds: bool = False) -> list[Link]:
     """Extract links in source order, excluding fenced and inline code.
 
     Pair label brackets and index destination delimiters in bounded passes.
@@ -146,7 +166,7 @@ def extract_links(text: str) -> list[Link]:
                 i += 1
                 continue
             target, i = destination
-            target = unquote(target)
+            target = unquote(re.sub(r"\\([()\\])", r"\1", target))
             kind = "markdown"
         else:
             i += 1
@@ -157,30 +177,49 @@ def extract_links(text: str) -> list[Link]:
             continue
         target = _without_md(re.split(r"[#^]", target, maxsplit=1)[0].strip())
         if target:
-            links.append(Link(target, "embed" if embed else kind))
+            links.append(Link(target, "embed" if embed and not distinguish_embeds else kind))
     return links
 
 
-def resolve_link(target: str, paths: list[str]) -> str | None:
-    """Return the original vault path for an unambiguous target.
+def extract_links(text: str) -> list[Link]:
+    """Extract targets and public link kinds in source order."""
+    return _extract_links(text)
 
-    Prefer exact paths, then basenames, then component-aligned path suffixes
-    (the shortest unique path form). Ambiguous matches return None rather
-    than depending on input order. The optional .md suffix is ignored.
-    """
-    key = _without_md(target.strip()).casefold()
-    if not key:
+
+class _PathIndex:
+    """Index unique original paths; None records an ambiguous lookup."""
+
+    def __init__(self, paths: Iterable[str]):
+        self.exact = {}
+        self.basename = {}
+        self.suffix = {}
+        for path in dict.fromkeys(paths):
+            name = _without_md(path).casefold()
+            parts = name.split("/")
+            for table, key in [(self.exact, name),
+                               (self.basename, parts[-1])]:
+                table[key] = None if key in table else path
+            for i in range(1, len(parts)):
+                key = "/".join(parts[i:])
+                self.suffix[key] = None if key in self.suffix else path
+
+    def resolve(self, target: str, source: str | None = None) -> str | None:
+        key = _without_md(target.strip()).casefold()
+        if not key:
+            return None
+        if source is not None and key.startswith(("./", "../")):
+            key = posixpath.normpath(posixpath.join(
+                posixpath.dirname(source), target.strip()))
+            return self.exact.get(_without_md(key).casefold())
+        for table in (self.exact, self.basename, self.suffix):
+            if key in table:
+                return table[key]
         return None
-    candidates = list(dict.fromkeys(paths))
-    normalized = [(path, _without_md(path).casefold()) for path in candidates]
-    for matches in (
-        [path for path, name in normalized if name == key],
-        [path for path, name in normalized if name.rsplit("/", 1)[-1] == key],
-        [path for path, name in normalized if name.endswith("/" + key)],
-    ):
-        if matches:
-            return matches[0] if len(matches) == 1 else None
-    return None
+
+
+def resolve_link(target: str, paths: list[str]) -> str | None:
+    """Resolve exact paths, basenames, then suffixes; reject ambiguities."""
+    return _PathIndex(paths).resolve(target)
 
 
 def build_graph(
@@ -195,11 +234,13 @@ def build_graph(
     paths = list(dict.fromkeys(
         all_paths if all_paths is not None else (path for path, _ in notes)
     ))
+    index = _PathIndex(paths)
     edges = []
     seen = set()
     for source, text in notes:
-        for link in extract_links(text):
-            target = resolve_link(link.target, paths)
+        for link in _extract_links(text, distinguish_embeds=True):
+            target = index.resolve(
+                link.target, source if link.kind != "wikilink" else None)
             if target is not None and (source, target) not in seen:
                 seen.add((source, target))
                 edges.append({"from": source, "to": target})
