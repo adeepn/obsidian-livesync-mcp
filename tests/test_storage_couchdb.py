@@ -1507,3 +1507,12 @@ async def test_scan_retains_only_one_window_of_legacy_bodies(monkeypatch):
         assert seen == count
     assert peak <= _TEXT_WINDOW_SIZE + 2
     assert all(ref() is None for ref in refs)
+
+
+@pytest.mark.parametrize('path', ['h:private.md', 'syncinfo', '.obsidian/private.md', '../private.md'])
+async def test_batched_scan_preserves_read_path_gate(path):
+    # A normal id with a forbidden display path used to go through read_note.
+    doc = plain_note('visible.md', path, [], type='notes', data='private')
+    async with fake_backend({'visible.md': doc}) as (backend, _):
+        results = [text async for _, text in backend.iterate_texts(extension='.md')]
+    assert 'private' not in results

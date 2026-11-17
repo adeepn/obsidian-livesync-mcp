@@ -512,8 +512,9 @@ class CouchDBBackend:
                 if not isinstance(children, list) or not all(isinstance(c, str) for c in children):
                     continue
                 try:
+                    self._validate_read_path(self._meta_from_doc(doc)["path"])
                     inline = extract_inline_chunks(doc)
-                except ValueError:
+                except (StorageError, ValueError):
                     continue  # decoding below isolates malformed notes
                 missing.update(child for child in children if child not in inline)
             chunks = {}
@@ -534,7 +535,10 @@ class CouchDBBackend:
             for indexed in window:
                 meta = self._meta_from_doc(indexed)
                 try:
+                    self._validate_read_path(meta["path"])
                     doc = docs.get(indexed["_id"])
+                    if doc is not None:
+                        self._validate_read_path(self._meta_from_doc(doc)["path"])
                     content = (await self._content_from_doc(doc, chunks)
                                if doc is not None else None)
                     yield (content["meta"], content["text"]) if content else (meta, None)
