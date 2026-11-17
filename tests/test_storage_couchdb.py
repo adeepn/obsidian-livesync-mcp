@@ -1371,3 +1371,21 @@ async def test_encrypted_existing_chunk_refused_without_metadata_write():
             await backend.write_note('a.md', 'same')
         assert await stored_doc(raw, 'a.md') == before
         assert not [r for r in log if r.method == 'PUT']
+
+
+async def test_index_drops_body_payloads_but_reads_eden():
+    docs = {'a.md': plain_note('a.md', 'a.md', ['h:inline'],
+                              eden={'h:inline': {'data': 'body'}})}
+    async with fake_backend(docs) as (backend, _):
+        await backend.list_notes()
+        assert 'eden' not in backend._index['a.md']
+        assert 'children' not in backend._index['a.md']
+        assert [text async for _, text in backend.iterate_texts()] == ['body']
+
+
+async def test_index_budget_is_bounded(monkeypatch):
+    monkeypatch.setenv('LIVESYNC_SCAN_MAX_NOTES', '2')
+    docs = {f'{i}.md': plain_note(f'{i}.md', f'{i}.md', []) for i in range(8)}
+    async with fake_backend(docs) as (backend, _):
+        assert len(await backend.list_notes()) == 2
+        assert backend.index_truncated is True

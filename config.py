@@ -199,6 +199,11 @@ def load_config(env: Mapping[str, str]) -> Config:
     then client auth. Raises ConfigError on the first problem; messages
     mention variable names but never secret values.
     """
+    from scan_budget import limits
+    try:
+        limits(env)
+    except ValueError as error:
+        raise ConfigError(str(error)) from None
     backend = env.get("LIVESYNC_BACKEND", "")
     if not backend:
         raise ConfigError(

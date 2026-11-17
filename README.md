@@ -180,3 +180,18 @@ Dynamic Client Registration (DCR) is disabled and should stay disabled: with it 
 ## License
 
 Apache 2.0
+
+### Vault scan limits
+
+`LIVESYNC_SCAN_MAX_NOTES` (default `10000`) and `LIVESYNC_SCAN_MAX_BYTES`
+(default `67108864`, 64 MiB) must be positive integers. They bound aggregate
+UTF-8 body and metadata input to search, tags, graph, links and statistics.
+At most two vault scans run concurrently. Partial responses include
+`"truncated": true` and `scan` counts (`notes`, `bytes`, and configured maxima).
+Previously list-shaped responses become `{ "results": [...], ... }` when
+truncated. Counts and graph conclusions then describe only the scanned subset.
+The CouchDB metadata index uses the same caps, retains no bodies or eden, and
+propagates truncation to these tools. Direct note reads remain available.
+These are aggregate scan limits: an individual HTTP response or note is still
+loaded before its actual size can be checked. Regex replacements have a separate
+10 MiB UTF-8 output cap and a two-second disposable-process deadline.

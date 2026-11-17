@@ -41,6 +41,8 @@ import time
 import urllib.parse
 from typing import AsyncIterator
 
+from scan_budget import ScanBudget
+
 import httpx
 
 from livesync_format import (
@@ -286,6 +288,7 @@ class CouchDBBackend:
         ids outside that range are filtered here.
         """
         ids: list[str] = []
+        budget = ScanBudget()
         range_params = (
             {"endkey": json.dumps("h:")},
             {"startkey": json.dumps("h;")},
@@ -310,6 +313,9 @@ class CouchDBBackend:
                         continue  # hard CouchDB tombstone
                     doc_id = row.get("id") or row.get("key")
                     if isinstance(doc_id, str) and not _is_service_id(doc_id):
+                        if not budget.admit(doc_id, len(doc_id.encode())):
+                            self.index_truncated = True
+                            return ids
                         ids.append(doc_id)
                 if len(rows) < _PAGE_SIZE:
                     break
@@ -317,7 +323,9 @@ class CouchDBBackend:
         return ids
 
     async def _load_index(self) -> dict[str, dict]:
+        self.index_truncated = False
         ids = await self._note_doc_ids()
+        budget = ScanBudget()
         index: dict[str, dict] = {}
         for start in range(0, len(ids), _PAGE_SIZE):
             batch = ids[start : start + _PAGE_SIZE]
@@ -333,7 +341,16 @@ class CouchDBBackend:
                     )
                     if _has_hidden_segment(path):
                         continue  # hidden files never surface as notes
-                    index[str(doc["_id"])] = doc
+                    # Body/chunk/eden payloads must never live in the index.
+                    meta = self._meta_from_doc(doc)
+                    compact = {key: doc[key] for key in
+                               ("_id", "_rev", "path", "type", "ctime", "mtime")
+                               if key in doc}
+                    compact["size"] = meta["size"]
+                    if not budget.admit(path, len(json.dumps(compact).encode())):
+                        self.index_truncated = True
+                        return index
+                    index[str(doc["_id"])] = compact
         return index
 
     async def _current_index(self) -> dict[str, dict]:
@@ -500,7 +517,7 @@ class CouchDBBackend:
                 yield meta, None
                 continue
             try:
-                content = await self._content_from_doc(doc)
+                content = await self.read_note(meta["path"])
             except StorageError as exc:
                 logger.error("skipping note %s: %s", meta["path"], exc)
                 yield meta, None

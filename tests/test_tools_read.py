@@ -365,3 +365,67 @@ async def test_regex_worker_tool_timeout_and_normal(tools, monkeypatch):
     assert '1 matches replaced' in await server.obsidian_update_note(
         'a.md', 'search-replace', search='a+', replace='x', regex=True)
     assert fake.notes['a.md']['text'] == 'x!'
+
+@pytest.mark.parametrize('tool', ['obsidian_search', 'obsidian_get_all_tags',
+                                  'obsidian_get_link_graph', 'obsidian_get_links',
+                                  'obsidian_vault_stats', 'obsidian_find_hub_notes',
+                                  'obsidian_find_orphaned_notes'])
+async def test_scan_budget_reports_partial_result(tools, monkeypatch, tool):
+    server, fake = tools
+    monkeypatch.setenv('LIVESYNC_SCAN_MAX_NOTES', '2')
+    monkeypatch.setenv('LIVESYNC_SCAN_MAX_BYTES', '4096')
+    for i in range(8):
+        fake.add(f'{i}.md', '#tag [[0]] needle')
+    args = {'obsidian_search': ('needle',), 'obsidian_get_links': ('0.md',)}
+    result = json.loads(await getattr(server, tool)(*args.get(tool, ())))
+    assert result['truncated'] is True
+    assert result['scan']['notes'] <= 2
+    assert result['scan']['bytes'] <= 4096
+
+
+async def test_scan_byte_budget_and_concurrency(tools, monkeypatch):
+    import asyncio
+    server, fake = tools
+    monkeypatch.setenv('LIVESYNC_SCAN_MAX_BYTES', '1000')
+    fake.add('large.md', 'x' * 2000)
+    result = json.loads(await server.obsidian_search('x'))
+    assert result['truncated'] is True
+    assert result['scan']['bytes'] <= 1000
+    active = peak = 0
+    original = fake.iterate_texts
+    async def delayed(*args, **kwargs):
+        nonlocal active, peak
+        active += 1
+        peak = max(peak, active)
+        try:
+            await asyncio.sleep(.03)
+            async for item in original(*args, **kwargs):
+                yield item
+        finally:
+            active -= 1
+    monkeypatch.setattr(fake, 'iterate_texts', delayed)
+    await asyncio.gather(*(server.obsidian_search('x') for _ in range(4)))
+    assert peak == 2
+
+
+async def test_graph_drops_bodies_before_reading_next(tools, monkeypatch):
+    import weakref
+    server, fake = tools
+    for i in range(30):
+        fake.add(f'{i}.md', '')
+    class Body(str):
+        pass
+    previous = None
+    async def texts():
+        nonlocal previous
+        for i in range(30):
+            if previous is not None:
+                assert previous() is None, 'previous body retained'
+            body = Body('[[0]]' + ' ' * 10000)
+            previous = weakref.ref(body)
+            yield fake.notes[f'{i}.md']['meta'], body
+            del body
+    monkeypatch.setattr(fake, 'iterate_texts', texts)
+    result = json.loads(await server.obsidian_get_link_graph())
+    assert len(result['nodes']) == 30
+    assert len(result['edges']) == 30

@@ -230,18 +230,39 @@ def build_graph(
     Optional all_paths supplies the complete node and resolution namespace,
     including notes whose bodies could not be read.
     """
-    notes = list(texts)
-    paths = list(dict.fromkeys(
-        all_paths if all_paths is not None else (path for path, _ in notes)
-    ))
-    index = _PathIndex(paths)
-    edges = []
-    seen = set()
-    for source, text in notes:
-        for link in _extract_links(text, distinguish_embeds=True):
-            target = index.resolve(
+    if all_paths is not None:
+        graph = GraphBuilder(all_paths)
+        for path, text in texts:
+            graph.add(path, text)
+        return graph.result()
+    # Forward references require the namespace first. Retain extracted links,
+    # never the bodies supplied by a one-shot iterable.
+    extracted = [(path, _extract_links(text, distinguish_embeds=True))
+                 for path, text in texts]
+    graph = GraphBuilder(path for path, _ in extracted)
+    for path, links in extracted:
+        graph.add_links(path, links)
+    return graph.result()
+
+
+class GraphBuilder:
+    """Incrementally extract and resolve edges without retaining bodies."""
+    def __init__(self, paths):
+        self.paths = list(dict.fromkeys(paths))
+        self.index = _PathIndex(self.paths)
+        self.edges = []
+        self.seen = set()
+
+    def add(self, source, text):
+        self.add_links(source, _extract_links(text, distinguish_embeds=True))
+
+    def add_links(self, source, links):
+        for link in links:
+            target = self.index.resolve(
                 link.target, source if link.kind != "wikilink" else None)
-            if target is not None and (source, target) not in seen:
-                seen.add((source, target))
-                edges.append({"from": source, "to": target})
-    return {"nodes": paths, "edges": edges}
+            if target is not None and (source, target) not in self.seen:
+                self.seen.add((source, target))
+                self.edges.append({"from": source, "to": target})
+
+    def result(self):
+        return {"nodes": self.paths, "edges": self.edges}

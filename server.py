@@ -10,7 +10,9 @@ import secrets
 import time
 import copy
 import hashlib
-from contextlib import asynccontextmanager
+from contextlib import aclosing, asynccontextmanager
+from contextvars import ContextVar
+from scan_budget import ScanBudget
 from functools import wraps
 from typing import Any
 
@@ -34,7 +36,7 @@ from frontmatter import (
     delete_properties, add_tags, remove_tags, insert_after_frontmatter,
 )
 from livesync_format import ForbiddenPathError
-from links import build_graph, extract_links, resolve_link
+from links import GraphBuilder, extract_links, resolve_link
 from auth_config import StaticBearerTokenVerifier, select_auth_mode
 from oauth_provider import SimpleOAuthProvider
 
@@ -226,39 +228,94 @@ def _entry_id(entry: Any) -> Any:
     return entry.get("id") if isinstance(entry, dict) else None
 
 
+_scan_semaphore = asyncio.Semaphore(2)
+_scan_budget = ContextVar("scan_budget", default=None)
+
+
+def _vault_scan(handler):
+    @wraps(handler)
+    async def scanned(*args, **kwargs):
+        async with _scan_semaphore:
+            budget = ScanBudget()
+            token = _scan_budget.set(budget)
+            try:
+                response = await handler(*args, **kwargs)
+                if getattr(backend, "index_truncated", False):
+                    budget.truncated = True
+                if budget.truncated:
+                    try:
+                        result = json.loads(response)
+                    except (ValueError, TypeError):
+                        result = {"message": response}
+                    if not isinstance(result, dict):
+                        result = {"results": result}
+                    result.update(truncated=True, scan=budget.report())
+                    return json.dumps(result, ensure_ascii=False, indent=2)
+                return response
+            finally:
+                _scan_budget.reset(token)
+    return scanned
+
+
+async def _scan_notes():
+    result = []
+    budget = _scan_budget.get()
+    for meta in await backend.list_notes():
+        if budget and not budget.admit(meta["path"], len(json.dumps(meta).encode())):
+            break
+        result.append(meta)
+    return result
+
+
+async def _scan_texts():
+    budget = _scan_budget.get()
+    async with aclosing(backend.iterate_texts()) as texts:
+        async for meta, text in texts:
+            size = len(meta["path"].encode()) + (len(text.encode()) if text else 0)
+            if budget and not budget.admit(meta["path"], size):
+                break
+            yield meta, text
+            del text
+
+
+
 async def _graph() -> dict:
-    paths = [meta["path"] for meta in await backend.list_notes()]
-    texts, skipped = [], []
-    async for meta, text in backend.iterate_texts():
-        if text is None:
-            skipped.append(meta["path"])
-        else:
-            texts.append((meta["path"], text))
-    return {**build_graph(texts, all_paths=paths), "skipped": skipped}
+    paths = [meta["path"] for meta in await _scan_notes()]
+    graph = GraphBuilder(paths)
+    skipped = []
+    async with aclosing(_scan_texts()) as texts:
+        async for meta, text in texts:
+            if text is None:
+                skipped.append(meta["path"])
+            else:
+                graph.add(meta["path"], text)
+            del text
+    return {**graph.result(), "skipped": skipped}
 
 
 async def _tags() -> dict:
     counts, skipped, errors = {}, [], {}
-    async for meta, text in backend.iterate_texts():
-        path = meta["path"]
-        if text is None:
-            skipped.append(path)
-            continue
-        try:
-            props = get_properties(text)
-            _, body = split_frontmatter(text)
-        except FrontmatterError:
-            skipped.append(path)
-            errors[path] = "Error: invalid YAML frontmatter."
-            continue
-        tags = props.get("tags", [])
-        if isinstance(tags, str):
-            tags = [tags]
-        elif not isinstance(tags, list):
-            tags = []
-        for tag in tags + re.findall(r'(?<!\w)#([\w/\-]+)', body):
-            if isinstance(tag, str) and tag:
-                counts[tag] = counts.get(tag, 0) + 1
+    async with aclosing(_scan_texts()) as texts:
+        async for meta, text in texts:
+            path = meta["path"]
+            if text is None:
+                skipped.append(path)
+                continue
+            try:
+                props = get_properties(text)
+                _, body = split_frontmatter(text)
+            except FrontmatterError:
+                skipped.append(path)
+                errors[path] = "Error: invalid YAML frontmatter."
+                continue
+            tags = props.get("tags", [])
+            if isinstance(tags, str):
+                tags = [tags]
+            elif not isinstance(tags, list):
+                tags = []
+            for tag in tags + re.findall(r'(?<!\w)#([\w/\-]+)', body):
+                if isinstance(tag, str) and tag:
+                    counts[tag] = counts.get(tag, 0) + 1
     result = {
         "tags": dict(sorted(counts.items(), key=lambda item: item[1],
                             reverse=True)),
@@ -274,6 +331,7 @@ async def _tags() -> dict:
 # 1. obsidian-search
 @mcp.tool()
 @_tool_errors
+@_vault_scan
 async def obsidian_search(query: str, regex: bool = False) -> str:
     """Search notes in the vault by content.
 
@@ -281,29 +339,27 @@ async def obsidian_search(query: str, regex: bool = False) -> str:
         query: Search query (text or regex pattern)
         regex: If true, treat query as regex pattern
     """
-    try:
-        pattern = query if regex else None
-    except re.error:
-        return "Invalid regular expression."
+    pattern = query if regex else None
     results, skipped = [], []
-    async for meta, text in backend.iterate_texts():
-        if text is None:
-            skipped.append(meta["path"])
-            continue
-        if pattern is not None:
-            try:
-                matches = (await asyncio.to_thread(
-                    regex_runner.apply, pattern, text, "findall"))["matches"]
-            except re.error:
-                return "Invalid regular expression."
-            if matches:
-                results.append({"path": meta["path"], "matches": matches[:10]})
-        elif query.lower() in text.lower():
-            index = text.lower().index(query.lower())
-            results.append({
-                "path": meta["path"],
-                "context": text[max(0, index - 50):index + len(query) + 50],
-            })
+    async with aclosing(_scan_texts()) as texts:
+        async for meta, text in texts:
+            if text is None:
+                skipped.append(meta["path"])
+                continue
+            if pattern is not None:
+                try:
+                    matches = (await asyncio.to_thread(
+                        regex_runner.apply, pattern, text, "findall"))["matches"]
+                except re.error:
+                    return "Invalid regular expression."
+                if matches:
+                    results.append({"path": meta["path"], "matches": matches[:10]})
+            elif query.lower() in text.lower():
+                index = text.lower().index(query.lower())
+                results.append({
+                    "path": meta["path"],
+                    "context": text[max(0, index - 50):index + len(query) + 50],
+                })
     return json.dumps(
         {"results": results, "skipped": skipped}, ensure_ascii=False, indent=2
     )
@@ -658,6 +714,7 @@ async def obsidian_manage_tags(
 # 11. obsidian-get-all-tags
 @mcp.tool()
 @_tool_errors
+@_vault_scan
 async def obsidian_get_all_tags() -> str:
     """Get all tags across the vault with usage counts."""
     return json.dumps(await _tags(), ensure_ascii=False, indent=2)
@@ -666,6 +723,7 @@ async def obsidian_get_all_tags() -> str:
 # 12. obsidian-get-links
 @mcp.tool()
 @_tool_errors
+@_vault_scan
 async def obsidian_get_links(
     path: str,
     direction: str = "both",
@@ -695,6 +753,7 @@ async def obsidian_get_links(
 # 13. obsidian-get-link-graph
 @mcp.tool()
 @_tool_errors
+@_vault_scan
 async def obsidian_get_link_graph() -> str:
     """Get the full link graph of the vault (all nodes and edges)."""
     return json.dumps(await _graph(), ensure_ascii=False, indent=2)
@@ -703,6 +762,7 @@ async def obsidian_get_link_graph() -> str:
 # 14. obsidian-find-orphaned-notes
 @mcp.tool()
 @_tool_errors
+@_vault_scan
 async def obsidian_find_orphaned_notes() -> str:
     """Find notes that have no incoming or outgoing links."""
     graph = await _graph()
@@ -726,6 +786,7 @@ async def obsidian_find_orphaned_notes() -> str:
 # 15. obsidian-find-hub-notes
 @mcp.tool()
 @_tool_errors
+@_vault_scan
 async def obsidian_find_hub_notes(min_links: int = 3) -> str:
     """Find the most connected notes in the vault.
 
@@ -921,9 +982,10 @@ async def obsidian_canvas_edge(
 # 18. obsidian-vault-stats
 @mcp.tool()
 @_tool_errors
+@_vault_scan
 async def obsidian_vault_stats() -> str:
     """Get aggregate statistics for the entire vault."""
-    notes = await backend.list_notes()
+    notes = await _scan_notes()
     by_ext = {}
     for note in notes:
         path = note["path"]
