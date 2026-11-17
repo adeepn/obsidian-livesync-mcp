@@ -441,3 +441,21 @@ async def test_create_tools_keep_last_writer_wins(vault):
     )
     assert write[-1] is None
     assert write[2] is True
+
+
+async def test_move_partial_failure_message(vault):
+    from storage_base import RenamePartialError
+    vault.errors['rename_note'] = RenamePartialError('N.md', 'Other.md')
+    message = await server.obsidian_move_note('N.md', 'Other.md')
+    assert 'N.md' in message and 'Other.md' in message
+    assert 'both' in message.lower()
+    assert 'removing the destination' in message
+    assert 'read it again' not in message
+
+
+def test_conflict_and_stale_revision_messages_differ():
+    from storage_base import UnresolvedConflicts
+    stale = server._storage_message(ConcurrentModification())
+    conflict = server._storage_message(UnresolvedConflicts())
+    assert stale != conflict
+    assert 'Obsidian' in conflict and 'resolve' in conflict.lower()

@@ -62,6 +62,8 @@ from livesync_format import (
 from storage_base import (
     BinaryNoteError,
     ConcurrentModification,
+    RenamePartialError,
+    UnresolvedConflicts,
     NoteContent,
     NoteExists,
     NoteMeta,
@@ -691,7 +693,7 @@ class CouchDBBackend:
                 path,
                 len(conflicts) if isinstance(conflicts, list) else 1,
             )
-            raise ConcurrentModification(
+            raise UnresolvedConflicts(
                 f"note {path!r} has unresolved conflicts; resolve them "
                 "in Obsidian (or another client) before writing"
             )
@@ -982,7 +984,11 @@ class CouchDBBackend:
         if target is not None:
             body["_rev"] = target["_rev"]  # replace the old revision
         body["_rev"] = await self._put_doc(path2id(new_path), body)
-        await self._soft_delete(doc, path, _now_ms())
+        try:
+            await self._soft_delete(doc, path, _now_ms())
+        except Exception as exc:
+            logger.exception("rename source retirement failed for %s", path)
+            raise RenamePartialError(path, new_path) from exc
         return self._meta_from_doc(body)
 
     async def copy_note(

@@ -32,6 +32,23 @@ class ConcurrentModification(StorageError):
     """The note changed concurrently; the caller must re-read and retry."""
 
 
+class UnresolvedConflicts(ConcurrentModification):
+    """Sibling revisions require resolution before a mutation can proceed."""
+
+
+class RenamePartialError(StorageError):
+    """Destination published durably, but source retirement failed."""
+
+    def __init__(self, source: str, destination: str):
+        self.source = source
+        self.destination = destination
+        self.completed_phase = "target_written"
+        self.hint = (
+            "Delete one copy, or retry the move after removing the destination."
+        )
+        super().__init__("rename target published; source retirement failed")
+
+
 class UnsupportedVault(StorageError):
     """The vault uses features this server cannot support (E2EE, path
     obfuscation, case-sensitive ids, ...)."""

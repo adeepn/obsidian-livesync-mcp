@@ -15,6 +15,7 @@ from livesync_format import ForbiddenPathError, chunk_id_for
 from storage_base import (
     BinaryNoteError,
     ConcurrentModification,
+    RenamePartialError,
     NoteExists,
     NoteNotFound,
     StorageError,
@@ -960,7 +961,7 @@ async def test_rename_retire_race_leaves_both_live():
     async with fake_vault(docs, bump_rev_on_get=("a.md",)) as (
         backend, raw, log,
     ):
-        with pytest.raises(ConcurrentModification, match="concurrent"):
+        with pytest.raises(RenamePartialError):
             await backend.rename_note("a.md", "b.md")
         source = await stored_doc(raw, "a.md")
         target = await stored_doc(raw, "b.md")
@@ -1425,3 +1426,21 @@ async def test_existing_note_read_paths_carry_revision():
             assert isinstance(note['rev'], str) and note['rev']
             assert note['rev'] == (await backend.get_meta('n.md'))['rev']
             assert all(meta['rev'] for meta in await backend.list_notes())
+
+
+@pytest.mark.parametrize('failure', [ConcurrentModification('race'), RuntimeError('offline')])
+async def test_rename_partial_failure_fields(monkeypatch, failure):
+    import storage_base
+    async with fake_vault({'a.md': plain_note('a.md', 'a.md', [])}) as (backend, raw, _):
+        async def fail(*args):
+            raise failure
+        monkeypatch.setattr(backend, '_soft_delete', fail)
+        with pytest.raises(StorageError) as caught:
+            await backend.rename_note('a.md', 'b.md')
+        assert isinstance(caught.value, storage_base.RenamePartialError)
+        assert caught.value.source == 'a.md'
+        assert caught.value.destination == 'b.md'
+        assert caught.value.completed_phase == 'target_written'
+        assert caught.value.hint
+        assert not (await stored_doc(raw, 'a.md')).get('deleted')
+        assert not (await stored_doc(raw, 'b.md')).get('deleted')

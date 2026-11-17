@@ -27,6 +27,7 @@ from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
 from mcp.server.transport_security import TransportSecuritySettings
 from config import Config, ConfigError, load_config
 from storage_base import (
+    RenamePartialError, UnresolvedConflicts,
     StorageBackend, StorageError, NoteNotFound, NoteExists, BinaryNoteError,
     ConcurrentModification, UnsupportedVault, StorageUnavailable, NoteContent,
 )
@@ -140,7 +141,18 @@ mcp = FastMCP(**mcp_kwargs)
 
 def _storage_message(error: StorageError) -> str:
     """Never forward backend exception text (URLs/revisions) to clients."""
+    if isinstance(error, RenamePartialError):
+        return (
+            f"Error: move target was written, but source retirement failed; "
+            f"the note now exists at both '{error.source}' and "
+            f"'{error.destination}'. Delete one copy, or retry the move "
+            "after removing the destination."
+        )
     messages = {
+        UnresolvedConflicts: (
+            "Error: note has unresolved sibling conflicts; resolve them in "
+            "Obsidian (or another client) before writing."
+        ),
         NoteNotFound: "Note not found.",
         NoteExists: "Error: note already exists.",
         BinaryNoteError: "Error: this operation requires a text note.",
