@@ -562,6 +562,7 @@ mcp = FastMCP(
     stateless_http=True,
     json_response=True,
     auth=AuthSettings(
+        validate_token_resource=True,
         issuer_url=AnyHttpUrl("https://example.com"),
         resource_server_url=AnyHttpUrl("https://example.com/mcp"),
         client_registration_options=ClientRegistrationOptions(enabled=False),
@@ -570,8 +571,6 @@ mcp = FastMCP(
         enable_dns_rebinding_protection=False,
     ),
 )
-
-mcp.settings.auth.validate_token_resource = True
 
 # The same ASGI app that run.py serves via mcp.run("streamable-http").
 app = mcp.streamable_http_app()
@@ -646,7 +645,7 @@ class PasswordGateRealStackTests(unittest.TestCase):
         # Runs in a subprocess so the stubbed sys.modules entries used by
         # the other tests cannot leak into the real SDK import.
         result = subprocess.run(
-            [sys.executable, "-c", REAL_STACK_SCRIPT],
+            [sys.executable, "-W", "default::DeprecationWarning", "-c", REAL_STACK_SCRIPT],
             capture_output=True,
             text=True,
             timeout=120,
@@ -655,6 +654,7 @@ class PasswordGateRealStackTests(unittest.TestCase):
         self.assertEqual(
             result.returncode, 0, f"stderr: {result.stderr}\nstdout: {result.stdout}"
         )
+        self.assertNotIn("DeprecationWarning", result.stderr)
         self.assertIn("REAL-STACK-GATE-OK", result.stdout)
 
     def test_real_fastmcp_app_serves_gated_authorize(self):
@@ -664,7 +664,7 @@ class PasswordGateRealStackTests(unittest.TestCase):
         # create_auth_routes seam, the GET below returns the SDK's
         # auto-approve redirect (302), not the form, and this fails.
         result = subprocess.run(
-            [sys.executable, "-c", REAL_FASTMCP_SCRIPT],
+            [sys.executable, "-W", "default::DeprecationWarning", "-c", REAL_FASTMCP_SCRIPT],
             capture_output=True,
             text=True,
             timeout=120,
@@ -673,4 +673,5 @@ class PasswordGateRealStackTests(unittest.TestCase):
         self.assertEqual(
             result.returncode, 0, f"stderr: {result.stderr}\nstdout: {result.stdout}"
         )
+        self.assertNotIn("DeprecationWarning", result.stderr)
         self.assertIn("REAL-FASTMCP-GATE-OK", result.stdout)
