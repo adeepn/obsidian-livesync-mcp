@@ -44,6 +44,7 @@ from typing import AsyncIterator
 import httpx
 
 from livesync_format import (
+    ForbiddenPathError,
     assemble_binary,
     assemble_text,
     chunk_id_for,
@@ -127,6 +128,11 @@ def _is_note_doc(doc: dict) -> bool:
     if doc.get("type") not in _NOTE_TYPES:
         return False
     return not _is_service_id(str(doc.get("_id", "")))
+
+
+def _has_hidden_segment(path: str) -> bool:
+    """Whether any path segment is a dotfile (``.obsidian``, ...)."""
+    return any(segment.startswith(".") for segment in path.split("/"))
 
 
 def _matches_extension(path: str, extension: str) -> bool:
@@ -308,6 +314,14 @@ class CouchDBBackend:
             for row in rows:
                 doc = row.get("doc") if isinstance(row, dict) else None
                 if isinstance(doc, dict) and _is_note_doc(doc):
+                    path = doc.get("path")
+                    path = (
+                        path
+                        if isinstance(path, str) and path
+                        else str(doc.get("_id", ""))
+                    )
+                    if _has_hidden_segment(path):
+                        continue  # hidden files never surface as notes
                     index[str(doc["_id"])] = doc
         return index
 
@@ -428,13 +442,35 @@ class CouchDBBackend:
         metas.sort(key=lambda meta: meta["path"])
         return metas
 
+    @staticmethod
+    def _validate_read_path(path: str) -> None:
+        """Read-side namespace gate (same policy as writes).
+
+        ``.obsidian/...`` documents are plain-typed rows in the
+        database; without this check they would be directly readable
+        and listed as notes. Forbidden paths report the note as absent
+        (``NoteNotFound`` / ``None``) with the reason logged
+        server-side, and no HTTP request is issued.
+        """
+        try:
+            validate_vault_path(path)
+        except ForbiddenPathError as exc:
+            logger.info("read refused for vault path %r: %s", path, exc)
+            raise NoteNotFound(f"note not found: {path}") from None
+
     async def get_meta(self, path: str) -> NoteMeta:
+        self._validate_read_path(path)
         doc = await self._get_doc(path2id(path))
         if doc is None or not _is_note_doc(doc):
             raise NoteNotFound(f"note not found: {path}")
         return self._meta_from_doc(doc)
 
     async def read_note(self, path: str) -> NoteContent | None:
+        try:
+            validate_vault_path(path)
+        except ForbiddenPathError as exc:
+            logger.info("read refused for vault path %r: %s", path, exc)
+            return None
         doc = await self._get_doc(path2id(path))
         if doc is None or not _is_note_doc(doc):
             return None

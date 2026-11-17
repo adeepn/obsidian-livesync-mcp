@@ -462,6 +462,50 @@ async def test_get_meta_ok_and_missing():
     assert meta["size"] == 11
 
 
+async def test_reads_refuse_hidden_and_service_paths_without_http():
+    # `.obsidian/config.md` is a plain-typed document in the database;
+    # reads must refuse it at the namespace gate (not found, zero HTTP)
+    # instead of serving LiveSync/CouchDB service documents as notes.
+    docs = {
+        ".obsidian/config.md": plain_note(
+            ".obsidian/config.md", ".obsidian/config.md", []
+        ),
+    }
+    forbidden = (
+        ".obsidian/config.md",
+        "folder/.hidden/secret.md",
+        "i:machine",
+        "syncinfo",
+    )
+    async with fake_backend(docs) as (backend, log):
+        for path in forbidden:
+            assert await backend.read_note(path) is None, path
+            with pytest.raises(NoteNotFound):
+                await backend.get_meta(path)
+        assert log == []  # refused before any HTTP request
+        assert await backend.read_note(".obsidian/config.md") is None
+
+
+async def test_listing_and_iteration_exclude_hidden_segments():
+    docs = {
+        ".obsidian/config.md": plain_note(
+            ".obsidian/config.md", ".obsidian/config.md", []
+        ),
+        "folder/.hidden/x.md": plain_note(
+            "folder/.hidden/x.md", "folder/.hidden/x.md", []
+        ),
+        "folder/ok.md": plain_note("folder/ok.md", "folder/ok.md", []),
+        "note.md": plain_note("note.md", "note.md", []),
+    }
+    async with fake_backend(docs) as (backend, _log):
+        listed = [meta["path"] for meta in await backend.list_notes()]
+        iterated = [
+            meta["path"] async for meta, _ in backend.iterate_texts(".md")
+        ]
+    assert listed == ["folder/ok.md", "note.md"]
+    assert iterated == ["folder/ok.md", "note.md"]
+
+
 # --- iterate_texts ---------------------------------------------------------
 
 
