@@ -81,3 +81,41 @@ def test_graph_resolves_deduplicates_and_drops_missing():
 
 def test_empty_graph():
     assert build_graph(iter([])) == {"nodes": [], "edges": []}
+
+
+@pytest.mark.parametrize("prefix", [
+    "[" * 10_000, "[x](" * 10_000 + "\n", "[x](<" * 10_000 + "\n",
+])
+def test_unmatched_brackets_are_bounded(prefix):
+    from time import perf_counter
+
+    start = perf_counter()
+    links = extract_links(prefix + "[[Visible]]")
+    elapsed = perf_counter() - start
+    assert links == [Link("Visible", "wikilink")]
+    assert elapsed < 1.0
+
+
+@pytest.mark.parametrize("delimiter", ["`", "``", "```"])
+def test_inline_code_does_not_create_links_or_edges(delimiter):
+    text = (f"Before {delimiter}[[Hidden]] [x](Hidden.md){delimiter} "
+            "[[Visible]]")
+    assert extract_links(text) == [Link("Visible", "wikilink")]
+    assert build_graph([
+        ("Start.md", text), ("Hidden.md", ""), ("Visible.md", ""),
+    ])["edges"] == [{"from": "Start.md", "to": "Visible.md"}]
+
+
+def test_inline_code_requires_matching_delimiter_length():
+    assert extract_links("``code ` [[Hidden]]`` [[Visible]]") == [
+        Link("Visible", "wikilink"),
+    ]
+    assert extract_links("`unclosed [[Visible]]") == [
+        Link("Visible", "wikilink"),
+    ]
+
+
+def test_nested_image_label_uses_outer_destination():
+    assert extract_links("![caption [inner](Hidden.md)](Image.png)") == [
+        Link("Image.png", "embed"),
+    ]

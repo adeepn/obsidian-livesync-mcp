@@ -7,12 +7,6 @@ from urllib.parse import unquote
 
 Link = namedtuple("Link", ["target", "kind"])
 
-_LINK = re.compile(
-    r'(?P<wiki>!?\[\[(?P<target>[^\]\n]+)\]\])'
-    r'|(?P<markdown>!?\[[^\]\n]*\]\('
-    r'(?P<destination><[^>\n]*>|[^\s)]+)'
-    r'(?:\s+"[^"\n]*")?\))'
-)
 _FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
 
 
@@ -40,30 +34,130 @@ def _prose(text: str) -> str:
     return "".join(lines)
 
 
-def extract_links(text: str) -> list[Link]:
-    """Extract inline wiki/Markdown links in text order, excluding fences.
+def _without_code_spans(text: str) -> str:
+    """Mask spans using the next backtick run of exactly the same length."""
+    runs = list(re.finditer(r"`+", text))
+    following = {}
+    closing = {}
+    for run in reversed(runs):
+        length = run.end() - run.start()
+        if length in following:
+            closing[run.start()] = following[length]
+        following[length] = run
+    pieces = []
+    cursor = 0
+    for run in runs:
+        if run.start() < cursor or run.start() not in closing:
+            continue
+        end = closing[run.start()].end()
+        pieces.append(text[cursor:run.start()])
+        pieces.append("".join("\n" if c == "\n" else " "
+                              for c in text[run.start():end]))
+        cursor = end
+    pieces.append(text[cursor:])
+    return "".join(pieces)
 
-    Strip aliases, headings, block references and the optional note extension.
-    Attachment extensions are preserved. External URLs and local anchors do
-    not identify vault files and are omitted.
+
+def _delimiter_positions(text: str) -> tuple[list[int], ...]:
+    """Index destination delimiters once instead of rescanning failed tails."""
+    size = len(text)
+    word, angle, title, nonspace = ([size] * (size + 1) for _ in range(4))
+    for i in range(size - 1, -1, -1):
+        char = text[i]
+        word[i] = i if char.isspace() or char == ")" else word[i + 1]
+        angle[i] = i if char in ">\n" else angle[i + 1]
+        title[i] = i if char in '\n"' else title[i + 1]
+        nonspace[i] = nonspace[i + 1] if char.isspace() else i
+    return word, angle, title, nonspace
+
+
+def _markdown_destination(
+    text: str, start: int, positions: tuple[list[int], ...],
+) -> tuple[str, int] | None:
+    word, angle, title, nonspace = positions
+    size = len(text)
+    if start >= size:
+        return None
+    if text[start] == "<":
+        end = angle[start + 1]
+        if end == size or text[end] != ">":
+            return None
+        target_start, target_end = start + 1, end
+        end += 1
+    else:
+        end = word[start]
+        if end == start:
+            return None
+        target_start, target_end = start, end
+    if end < size and text[end].isspace():
+        end = nonspace[end]
+        if end >= size or text[end] != '"':
+            return None
+        end = title[end + 1]
+        if end >= size or text[end] != '"':
+            return None
+        end += 1
+    if end >= size or text[end] != ")":
+        return None
+    return text[target_start:target_end], end + 1
+
+
+def extract_links(text: str) -> list[Link]:
+    """Extract links in source order, excluding fenced and inline code.
+
+    Pair label brackets and index destination delimiters in bounded passes.
+    Strip aliases, headings, block references and optional note extensions;
+    preserve attachment extensions and omit external URLs and local anchors.
     """
+    text = _without_code_spans(_prose(text))
+    positions = _delimiter_positions(text)
+    pairs = {}
+    leaves = set()
+    stack = []
+    previous_bracket = -1
+    for i, char in enumerate(text):
+        if char == "\n":
+            stack.clear()
+        elif char == "[":
+            stack.append(i)
+            previous_bracket = i
+        elif char == "]" and stack:
+            start = stack.pop()
+            pairs[start] = i
+            if previous_bracket == start:
+                leaves.add(start)
+            previous_bracket = i
+
     links = []
-    for match in _LINK.finditer(_prose(text)):
-        if match["wiki"]:
-            target = match["target"].split("|", 1)[0].strip()
+    i = 0
+    while i < len(text):
+        end = pairs.get(i)
+        if end is None:
+            i += 1
+            continue
+        embed = i > 0 and text[i - 1] == "!"
+        if (i + 1 in leaves and pairs.get(i + 1) == end - 1):
+            target = text[i + 2:end - 1].split("|", 1)[0].strip()
             kind = "wikilink"
-        else:
-            target = unquote(match["destination"].strip("<>"))
+            i = end + 1
+        elif text[end + 1:end + 2] == "(":
+            destination = _markdown_destination(text, end + 2, positions)
+            if destination is None:
+                i += 1
+                continue
+            target, i = destination
+            target = unquote(target)
             kind = "markdown"
+        else:
+            i += 1
+            continue
         if re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*:", target):
             continue
         if target.startswith("//"):
             continue
         target = _without_md(re.split(r"[#^]", target, maxsplit=1)[0].strip())
         if target:
-            if match[0].startswith("!"):
-                kind = "embed"
-            links.append(Link(target, kind))
+            links.append(Link(target, "embed" if embed else kind))
     return links
 
 
