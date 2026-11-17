@@ -248,3 +248,19 @@ def test_doc_type_for():
     # Audit B3: any text is written as type "plain" regardless of extension.
     assert doc_type_for("x.md") == "plain"
     assert doc_type_for("x.base") == "plain"
+
+
+@pytest.mark.parametrize('suffix', ['/', '/.', '\\', '\\.'])
+@pytest.mark.parametrize('name', ['image.png', 'image.PNG', 'archive.zip'])
+def test_normalized_binary_paths_refuse_text_writes(name, suffix):
+    assert path2id(name + suffix) == path2id(name)
+    assert not is_writable_text_path(name + suffix)
+
+
+@pytest.mark.parametrize('path,expected', [
+    ('note.md/', True), ('note.md/.', True), ('note.md\\.', True),
+    ('image.png/.', False), ('note.MD/.', False), ('note.json/', False),
+])
+def test_text_doc_classification_uses_normalized_path(path, expected):
+    assert is_text_doc('newnote', path) is expected
+    assert is_text_doc('plain', path)

@@ -1235,3 +1235,11 @@ async def test_encrypted_inline_eden_refused():
     async with fake_backend(docs) as (backend, _):
         with pytest.raises(UnsupportedVault):
             await backend.read_note('a.md')
+
+
+@pytest.mark.parametrize('path', ['image.png/', 'image.png/.', 'image.PNG\\.'])
+async def test_write_normalized_binary_path_refused_before_io(path):
+    async with fake_backend() as (backend, log):
+        with pytest.raises(BinaryNoteError):
+            await backend.write_note(path, 'text', create=True)
+    assert not log

@@ -136,7 +136,7 @@ def is_text_doc(doc_type: str | None, path: str) -> bool:
     """
     if doc_type == "plain":
         return True
-    return path.endswith(_TEXT_SUFFIXES)
+    return _normalize_path(path).endswith(_TEXT_SUFFIXES)
 
 
 def is_writable_text_path(path: str) -> bool:
@@ -150,7 +150,7 @@ def is_writable_text_path(path: str) -> bool:
     text regardless of extension (audit B3). Case-insensitive: a
     binary ``Photo.PNG`` must not slip through spelling.
     """
-    lowered = path.lower()
+    lowered = _normalize_path(path).lower()
     return not any(
         lowered.endswith(extension) for extension in WRITABLE_BINARY_EXTENSIONS
     )
