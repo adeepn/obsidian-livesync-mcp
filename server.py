@@ -177,21 +177,27 @@ async def _legacy_content(path: str) -> str | None:
 def _load_canvas(content: str | None) -> dict | None:
     """Parse a JSON Canvas document for in-place mutation.
 
-    Returns ``None`` when the payload is not JSON or not an object.
-    Spec-valid files without ``nodes``/``edges`` keys (e.g. ``{}``) and
-    empty non-list fields are normalized to empty lists (audit D16), so
-    callers load, mutate, and dump the original document instead of
-    rebuilding it from scratch.
+    Returns ``None`` when the payload is unusable: not JSON (an
+    existing-but-empty file included), not an object, or ``nodes``/
+    ``edges`` present with a non-list value — callers must then refuse
+    without mutating. ``content is None`` (missing file) yields an empty
+    document. Spec-valid files without ``nodes``/``edges`` keys
+    (e.g. ``{}``) get empty lists (audit D16), so callers load, mutate,
+    and dump the original document instead of rebuilding it.
     """
-    try:
-        canvas = json.loads(content) if content else {}
-    except json.JSONDecodeError:
-        return None
+    if content is None:
+        canvas = {}
+    else:
+        try:
+            canvas = json.loads(content)
+        except json.JSONDecodeError:
+            return None
     if not isinstance(canvas, dict):
         return None
     for key in ("nodes", "edges"):
-        if not isinstance(canvas.get(key), list):
-            canvas[key] = []
+        if key in canvas and not isinstance(canvas[key], list):
+            return None
+        canvas.setdefault(key, [])
     return canvas
 
 

@@ -90,7 +90,8 @@ async def test_canvas_node_requires_id_for_remove(vault):
     assert_no_mutations(vault)
 
 
-@pytest.mark.parametrize("content", ["not json{", "[]", '"str"', "null", "3"])
+@pytest.mark.parametrize("content", ["not json{", "[]", '"str"', "null", "3",
+                                     "", "   "])
 async def test_canvas_invalid_json_error(vault, content):
     vault.add("Bad.canvas", content)
     calls = (
@@ -105,6 +106,40 @@ async def test_canvas_invalid_json_error(vault, content):
     for call in calls:
         assert await call() == "Invalid canvas format."
     assert vault.notes["Bad.canvas"]["text"] == content
+    assert_no_mutations(vault)
+
+
+async def test_canvas_empty_file_add_refused_not_created(vault):
+    vault.add("Blank.canvas", "")
+    result = await server.obsidian_canvas_node("Blank.canvas", text="x")
+    assert result == "Invalid canvas format."
+    result = await server.obsidian_canvas_edge(
+        "Blank.canvas", from_node="a", to_node="b")
+    assert result == "Invalid canvas format."
+    assert vault.notes["Blank.canvas"]["text"] == ""
+    assert_no_mutations(vault)
+
+
+@pytest.mark.parametrize(
+    "content",
+    ['{"nodes": {"a": 1}, "edges": []}',
+     '{"nodes": [], "edges": "x"}',
+     '{"nodes": null}'],
+)
+async def test_canvas_non_list_fields_refused(vault, content):
+    vault.add("M.canvas", content)
+    calls = (
+        lambda: server.obsidian_canvas_node("M.canvas", text="x"),
+        lambda: server.obsidian_canvas_node(
+            "M.canvas", action="remove", node_id="n1"),
+        lambda: server.obsidian_canvas_edge(
+            "M.canvas", from_node="a", to_node="b"),
+        lambda: server.obsidian_canvas_edge(
+            "M.canvas", action="remove", edge_id="e1"),
+    )
+    for call in calls:
+        assert await call() == "Invalid canvas format."
+    assert vault.notes["M.canvas"]["text"] == content
     assert_no_mutations(vault)
 
 
