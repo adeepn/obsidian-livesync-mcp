@@ -299,3 +299,38 @@ def test_non_ascii_binary_chunk_rejected():
 def test_empty_chunks():
     assert assemble_binary([]) == b''
     assert assemble_text([]) == ''
+
+
+def test_shared_note_classification():
+    from livesync_format import is_note_document, SERVICE_NAMESPACE_PREFIXES, SERVICE_DOC_IDS
+    for kind in ('plain', 'newnote', 'notes'):
+        assert is_note_document({'_id': 'a.md', 'type': kind})
+        assert not is_note_document({'_id': 'a.md', 'type': kind, 'deleted': True})
+        for name in (*SERVICE_NAMESPACE_PREFIXES, *SERVICE_DOC_IDS, '_design/a', '_local/a'):
+            assert not is_note_document({'_id': name, 'type': kind})
+    assert not is_note_document({'_id': 'a.md', 'type': 'leaf'})
+
+
+def test_shared_inline_and_legacy_helpers():
+    from livesync_format import extract_inline_chunks, legacy_body
+    doc = {'children': ['h:a', 'h:b'], 'eden': {'h:a': 'a', 'h:b': {'data': 'b'}, 'h:unused': 'x'}}
+    assert extract_inline_chunks(doc) == {'h:a': 'a', 'h:b': 'b'}
+    assert legacy_body({'type': 'notes', 'data': 'old'}) == 'old'
+    assert legacy_body({'type': 'plain', 'data': 'unused'}) is None
+    with pytest.raises(ValueError):
+        extract_inline_chunks({'children': ['h:a'], 'eden': []})
+    with pytest.raises(ValueError):
+        legacy_body({'type': 'notes', 'data': None})
+
+
+def test_clone_metadata_preserves_all_content_fields():
+    from livesync_format import clone_metadata
+    original = {'_id': 'a', '_rev': '1-a', 'children': ['h:a'],
+                'eden': {'h:a': {'data': 'body'}}, 'data': 'legacy',
+                'custom': {'future': [1]}, 'type': 'notes'}
+    cloned = clone_metadata(original, path='b', mtime=99)
+    assert cloned == {**original, 'path': 'b', 'mtime': 99}
+    cloned['custom']['future'].append(2)
+    cloned['eden']['h:a']['data'] = 'different'
+    assert original['custom'] == {'future': [1]}
+    assert original['eden']['h:a']['data'] == 'body'

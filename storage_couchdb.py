@@ -46,7 +46,9 @@ from scan_budget import ScanBudget
 import httpx
 
 from livesync_format import (
-    ForbiddenPathError,
+    ForbiddenPathError, EncryptedInlineChunk,
+    clone_metadata, extract_inline_chunks, legacy_body,
+    is_note_document, is_service_document_id,
     assemble_binary,
     assemble_text,
     canonical_path,
@@ -74,14 +76,6 @@ from storage_base import (
 )
 
 logger = logging.getLogger(__name__)
-
-# LiveSync note document types (audits B3/B8/B13).
-_NOTE_TYPES = frozenset({"plain", "newnote", "notes"})
-
-# Service namespaces that must never surface as notes (audit B8/B10).
-# Keep in sync with livesync_format._FORBIDDEN_PREFIXES / _RESERVED_PATHS.
-_SERVICE_PREFIXES = ("i:", "ix:", "ps:", "h:", "f:")
-_SERVICE_DOC_IDS = frozenset({"obsydian_livesync_version", "syncinfo"})
 
 _MILESTONE_DOC_ID = "_local/obsydian_livesync_milestone"
 _VERSION_DOC_ID = "obsydian_livesync_version"
@@ -122,24 +116,6 @@ def _is_db_missing(response: httpx.Response) -> bool:
     except ValueError:
         return False
     return isinstance(body, dict) and body.get("reason") == _DB_MISSING_REASON
-
-
-def _is_service_id(doc_id: str) -> bool:
-    lowered = doc_id.lower()
-    return (
-        lowered.startswith(_SERVICE_PREFIXES)
-        or lowered in _SERVICE_DOC_IDS
-        or doc_id.startswith("_design/")
-        or doc_id.startswith("_local")
-    )
-
-
-def _is_note_doc(doc: dict) -> bool:
-    if doc.get("deleted"):
-        return False
-    if doc.get("type") not in _NOTE_TYPES:
-        return False
-    return not _is_service_id(str(doc.get("_id", "")))
 
 
 def _has_hidden_segment(path: str) -> bool:
@@ -316,7 +292,7 @@ class CouchDBBackend:
                     if (row.get("value") or {}).get("deleted"):
                         continue  # hard CouchDB tombstone
                     doc_id = row.get("id") or row.get("key")
-                    if isinstance(doc_id, str) and not _is_service_id(doc_id):
+                    if isinstance(doc_id, str) and not is_service_document_id(doc_id):
                         if not budget.admit(doc_id, len(doc_id.encode())):
                             self.index_truncated = True
                             return ids
@@ -336,7 +312,7 @@ class CouchDBBackend:
             rows = await self._post_all_docs(batch, include_docs=True)
             for row in rows:
                 doc = row.get("doc") if isinstance(row, dict) else None
-                if isinstance(doc, dict) and _is_note_doc(doc):
+                if isinstance(doc, dict) and is_note_document(doc):
                     path = doc.get("path")
                     path = (
                         path
@@ -490,7 +466,7 @@ class CouchDBBackend:
     async def get_meta(self, path: str) -> NoteMeta:
         self._validate_read_path(path)
         doc = await self._get_doc(path2id(path))
-        if doc is None or not _is_note_doc(doc):
+        if doc is None or not is_note_document(doc):
             raise NoteNotFound(f"note not found: {path}")
         return self._meta_from_doc(doc)
 
@@ -501,7 +477,7 @@ class CouchDBBackend:
             logger.info("read refused for vault path %r: %s", path, exc)
             return None
         doc = await self._get_doc(path2id(path))
-        if doc is None or not _is_note_doc(doc):
+        if doc is None or not is_note_document(doc):
             return None
         return await self._content_from_doc(doc)
 
@@ -529,14 +505,17 @@ class CouchDBBackend:
                 continue
             docs = {row["doc"]["_id"]: row["doc"] for row in rows
                     if isinstance(row, dict) and isinstance(row.get("doc"), dict)
-                    and _is_note_doc(row["doc"])}
+                    and is_note_document(row["doc"])}
             missing = set()
             for doc in docs.values():
-                children, eden = doc.get("children"), doc.get("eden") or {}
-                if not isinstance(children, list) or not isinstance(eden, dict):
+                children = doc.get("children")
+                if not isinstance(children, list) or not all(isinstance(c, str) for c in children):
+                    continue
+                try:
+                    inline = extract_inline_chunks(doc)
+                except ValueError:
                     continue  # decoding below isolates malformed notes
-                missing.update(child for child in children
-                               if isinstance(child, str) and child not in eden)
+                missing.update(child for child in children if child not in inline)
             chunks = {}
             chunk_rows = []
             content = None
@@ -595,13 +574,11 @@ class CouchDBBackend:
         path = meta["path"]
         doc_type = doc.get("type")
 
-        if doc_type == "notes":
-            # Legacy vaults keep the body in the document (audit B13).
-            data = doc.get("data")
-            if not isinstance(data, str):
-                raise StorageError(
-                    f"note {path!r} is corrupt: missing legacy data field"
-                )
+        try:
+            data = legacy_body(doc)
+        except ValueError:
+            raise StorageError(f"note {path!r} is corrupt: missing legacy data field") from None
+        if data is not None:
             return NoteContent(
                 meta=meta, text=data, data=None, is_text=True,
                 rev=meta["rev"],
@@ -668,20 +645,13 @@ class CouchDBBackend:
         The raised messages carry the note path only; chunk ids stay in
         the server log (audits C4/C7).
         """
-        if eden is None:
-            eden = {}
-        if not isinstance(eden, dict):
-            raise StorageError(f"note {path!r} is corrupt: invalid eden field")
-        # EntryManager/EntryManagerImpls.ts:578-603 merges inline leaves
-        # with fetched children by id. Accept legacy strings as well as
-        # this upstream checkout's {data: string} entries.
-        docs_by_id: dict[str, dict] = {}
-        for child_id in children:
-            if child_id in eden:
-                value = eden[child_id]
-                docs_by_id[child_id] = (
-                    dict(value) if isinstance(value, dict) else {"data": value}
-                )
+        try:
+            inline = extract_inline_chunks({"children": children, "eden": eden})
+        except EncryptedInlineChunk:
+            raise UnsupportedVault(f"note {path!r} uses end-to-end encryption") from None
+        except ValueError:
+            raise StorageError(f"note {path!r} is corrupt: invalid eden field") from None
+        docs_by_id = {key: {"data": data} for key, data in inline.items()}
         missing = [child for child in children if child not in docs_by_id]
         rows = (await self._post_all_docs(missing, include_docs=True)
                 if missing and prefetched is None else [])
@@ -851,7 +821,7 @@ class CouchDBBackend:
     async def _get_note_doc(self, path: str) -> dict:
         """Live metadata document for ``path`` (conflicts refused)."""
         doc = await self._get_doc(path2id(path), conflicts=True)
-        if doc is None or not _is_note_doc(doc):
+        if doc is None or not is_note_document(doc):
             raise NoteNotFound(f"note not found: {path}")
         self._refuse_unresolved_conflicts(doc, path)
         return doc
@@ -879,26 +849,12 @@ class CouchDBBackend:
         chunk-wise (audit B4) — and ``ctime``/``size``/``type`` keep
         describing the same body.
         """
-        meta = self._meta_from_doc(doc)
-        children = [
-            child
-            for child in (doc.get("children") or [])
-            if isinstance(child, str)
-        ]
-        body = new_metadata_doc(
-            new_path,
-            children,
-            meta["size"],
-            meta["type"] or doc_type_for(new_path),
-            meta["ctime"],
-            mtime_ms,
+        body = clone_metadata(
+            doc, _id=path2id(new_path), path=canonical_path(new_path),
+            mtime=mtime_ms,
         )
-        # EntryManager/EntryManagerImpls.ts:578-585: eden holds inline
-        # content; retaining children alone would lose that content.
-        if "eden" in doc:
-            body["eden"] = doc["eden"]
-        if doc.get("type") == "notes" and isinstance(doc.get("data"), str):
-            body["data"] = doc["data"]  # legacy body lives in the doc
+        body.pop("_rev", None)
+        body.pop("_conflicts", None)
         return body
 
     async def _soft_delete(self, doc: dict, path: str, mtime_ms: int) -> None:
@@ -956,7 +912,7 @@ class CouchDBBackend:
             # New revision of the old body: children/mtime/size/type
             # replaced (a write always stores plain text — audit B3),
             # soft-delete flag and conflict shadows dropped.
-            body = dict(doc)
+            body = clone_metadata(doc)
             body.pop("_conflicts", None)
             body.pop("deleted", None)
             body["eden"] = {}
@@ -1008,7 +964,7 @@ class CouchDBBackend:
         doc = await self._get_note_doc(path)
         if path2id(new_path) == path2id(path):
             # One document, two spellings: one revision, path updated.
-            body = dict(doc)
+            body = clone_metadata(doc)
             body.pop("_conflicts", None)
             body["path"] = new_path
             body["mtime"] = _now_ms()

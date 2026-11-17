@@ -16,6 +16,7 @@ from __future__ import annotations
 import base64
 import binascii
 import hashlib
+from copy import deepcopy
 
 # Upstream isPlainText (path.ts): extensions stored as plain text chunks.
 TEXT_EXTENSIONS = frozenset(
@@ -43,7 +44,7 @@ WRITABLE_BINARY_EXTENSIONS = frozenset(
 # LiveSync metadata namespaces (upstream fileaccess.const.ts): hidden files,
 # chunk documents, machine info, obfuscated ids. Case is ignored on purpose
 # (audit B7), since ids are lowercased anyway.
-_FORBIDDEN_PREFIXES = ("i:", "ix:", "ps:", "h:", "f:")
+SERVICE_NAMESPACE_PREFIXES = ("i:", "ix:", "ps:", "h:", "f:")
 
 # CouchDB reserves document ids ``_design/...`` and ``_local/...`` (audit B10).
 # Other leading-underscore paths are valid vault paths; path2id escapes them
@@ -51,7 +52,7 @@ _FORBIDDEN_PREFIXES = ("i:", "ix:", "ps:", "h:", "f:")
 _RESERVED_FIRST_SEGMENTS = frozenset({"_design", "_local"})
 
 # LiveSync service documents that live at the vault root (db.const.ts).
-_RESERVED_PATHS = frozenset({"obsydian_livesync_version", "syncinfo"})
+SERVICE_DOC_IDS = frozenset({"obsydian_livesync_version", "syncinfo"})
 
 
 class ForbiddenPathError(Exception):
@@ -112,7 +113,7 @@ def validate_vault_path(path: str) -> None:
     if not lowered:
         raise ForbiddenPathError("vault path is empty")
 
-    for prefix in _FORBIDDEN_PREFIXES:
+    for prefix in SERVICE_NAMESPACE_PREFIXES:
         if lowered.startswith(prefix):
             raise ForbiddenPathError(
                 f"vault path uses the reserved prefix {prefix!r}"
@@ -130,7 +131,7 @@ def validate_vault_path(path: str) -> None:
                 f"vault path segment {segment!r} is hidden (starts with '.')"
             )
 
-    if lowered in _RESERVED_PATHS:
+    if lowered in SERVICE_DOC_IDS:
         raise ForbiddenPathError(
             f"vault path is the reserved service document {lowered!r}"
         )
@@ -206,7 +207,7 @@ def chunk_id_for(data: str) -> str:
 
     ``h:`` plus the first 16 hex characters of sha256 over the chunk
     data's UTF-8 bytes. The ``h:`` namespace is reserved for chunk
-    documents (see ``_FORBIDDEN_PREFIXES`` / validate_vault_path).
+    documents (see ``SERVICE_NAMESPACE_PREFIXES`` / validate_vault_path).
     """
     return "h:" + hashlib.sha256(data.encode("utf-8")).hexdigest()[:16]
 
@@ -249,10 +250,7 @@ def soft_delete_revision(doc: dict, mtime_ms: int) -> dict:
     deletions this way instead of writing a bare CouchDB tombstone, so a
     delete can be undone and conflict diffs stay meaningful.
     """
-    revision = dict(doc)
-    revision["deleted"] = True
-    revision["mtime"] = mtime_ms
-    return revision
+    return clone_metadata(doc, deleted=True, mtime=mtime_ms)
 
 
 def doc_type_for(path: str) -> str:
@@ -265,3 +263,69 @@ def doc_type_for(path: str) -> str:
     is kept for future binary (``newnote``) support.
     """
     return "plain"
+
+
+class EncryptedInlineChunk(ValueError):
+    """An inline leaf requires unsupported end-to-end decryption."""
+
+
+def is_service_document_id(doc_id: str) -> bool:
+    """Classify reserved LiveSync/CouchDB document ids."""
+    lowered = doc_id.lower()
+    return (lowered.startswith(SERVICE_NAMESPACE_PREFIXES)
+            or lowered in SERVICE_DOC_IDS
+            or doc_id.startswith("_design/") or doc_id.startswith("_local"))
+
+
+def is_note_document(doc: dict) -> bool:
+    """Whether a document is live note metadata, excluding service ids."""
+    return (not doc.get("deleted")
+            and doc.get("type") in ("plain", "newnote", "notes")
+            and not is_service_document_id(str(doc.get("_id", ""))))
+
+
+def extract_inline_chunks(doc: dict) -> dict[str, str]:
+    """Resolve referenced eden leaves (strings or upstream {data: ...}).
+
+    Ignore unreferenced leaves, but refuse corrupt or encrypted referenced
+    leaves rather than falling back to a remote chunk with the same id.
+    """
+    eden = doc.get("eden")
+    if eden is None:
+        eden = {}
+    if not isinstance(eden, dict):
+        raise ValueError("invalid eden field")
+    result = {}
+    for child in doc.get("children") or []:
+        if child not in eden:
+            continue
+        value = eden[child]
+        if isinstance(value, dict):
+            if value.get("deleted") or not isinstance(value.get("data"), str):
+                raise ValueError("invalid inline chunk")
+            if value.get("e_"):
+                raise EncryptedInlineChunk("encrypted inline chunk")
+            value = value["data"]
+        if not isinstance(value, str):
+            raise ValueError("invalid inline chunk")
+        result[child] = value
+    return result
+
+
+def legacy_body(doc: dict) -> str | None:
+    """Return the in-document legacy notes body; refuse malformed bodies."""
+    if doc.get("type") != "notes":
+        return None
+    data = doc.get("data")
+    if not isinstance(data, str):
+        raise ValueError("missing legacy data field")
+    return data
+
+
+def clone_metadata(doc: dict, **overrides) -> dict:
+    """Clone all metadata/content fields, including unknown future fields.
+
+    Publication identity, revision and conflict shadows are backend concerns;
+    callers explicitly override or remove them for the intended operation.
+    """
+    return deepcopy({**doc, **overrides})
