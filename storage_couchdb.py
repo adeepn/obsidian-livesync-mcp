@@ -322,7 +322,11 @@ class CouchDBBackend:
                     if _has_hidden_segment(path):
                         continue  # hidden files never surface as notes
                     # Body/chunk/eden payloads must never live in the index.
-                    meta = self._meta_from_doc(doc)
+                    try:
+                        meta = self._meta_from_doc(doc)
+                    except StorageError:
+                        logger.exception("skipping note %s: invalid metadata", path)
+                        continue
                     compact = {key: doc[key] for key in
                                ("_id", "_rev", "path", "type", "ctime", "mtime")
                                if key in doc}
@@ -762,13 +766,14 @@ class CouchDBBackend:
         if (
             not isinstance(result, dict)
             or result.get("ok") is not True
-            or "rev" not in result
+            or not isinstance(result.get("rev"), str)
+            or not result["rev"]
         ):
             logger.warning(
                 "CouchDB PUT %s -> unexpected acknowledgement body", doc_id
             )
             raise StorageError("CouchDB rejected the document write")
-        return str(result["rev"])
+        return result["rev"]
 
     async def _write_chunk(self, path: str, data: str) -> str:
         """PUT one content chunk (before any metadata change).
