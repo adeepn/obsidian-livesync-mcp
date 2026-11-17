@@ -1,0 +1,22 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+__________ test_truncated_graph_does_not_label_unread_bodies_orphaned __________
+
+tools = (<module 'server' from '/Volumes/Devel/jHOME/obsidian-livesync-mcp/.worktrees/plan-a/server.py'>, <tests.fake_backend.FakeBackend object at 0x108d2ef90>)
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x108baf950>
+
+    async def test_truncated_graph_does_not_label_unread_bodies_orphaned(tools, monkeypatch):
+        server, fake = tools
+        fake.add('a.md', 'x' * 2000)
+        fake.add('b.md', '[[a]]')
+        monkeypatch.setenv('LIVESYNC_SCAN_MAX_BYTES', '1000')
+        result = json.loads(await server.obsidian_find_orphaned_notes())
+        assert result['truncated'] is True
+>       assert result['orphans'] == []
+               ^^^^^^^^^^^^^^^^^
+E       KeyError: 'orphans'
+
+tests/test_tools_read.py:446: KeyError
+=========================== short test summary info ============================
+FAILED tests/test_tools_read.py::test_truncated_graph_does_not_label_unread_bodies_orphaned
+1 failed, 45 deselected in 0.34s

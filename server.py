@@ -282,14 +282,17 @@ async def _scan_texts():
 async def _graph() -> dict:
     paths = [meta["path"] for meta in await _scan_notes()]
     graph = GraphBuilder(paths)
+    processed = set()
     skipped = []
     async with aclosing(_scan_texts()) as texts:
         async for meta, text in texts:
+            processed.add(meta["path"])
             if text is None:
                 skipped.append(meta["path"])
             else:
                 graph.add(meta["path"], text)
             del text
+    skipped.extend(path for path in paths if path not in processed)
     return {**graph.result(), "skipped": skipped}
 
 

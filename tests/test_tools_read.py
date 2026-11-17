@@ -434,3 +434,14 @@ async def test_graph_drops_bodies_before_reading_next(tools, monkeypatch):
 async def test_regex_invalid_on_empty_vault(tools):
     server, _ = tools
     assert 'Invalid regular expression' in await server.obsidian_search('[', True)
+
+
+async def test_truncated_graph_does_not_label_unread_bodies_orphaned(tools, monkeypatch):
+    server, fake = tools
+    fake.add('a.md', 'x' * 2000)
+    fake.add('b.md', '[[a]]')
+    monkeypatch.setenv('LIVESYNC_SCAN_MAX_BYTES', '1000')
+    result = json.loads(await server.obsidian_find_orphaned_notes())
+    assert result['truncated'] is True
+    assert result['orphans'] == []
+    assert set(result['skipped']) == {'a.md', 'b.md'}
