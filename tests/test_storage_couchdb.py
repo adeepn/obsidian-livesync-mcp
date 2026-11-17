@@ -181,6 +181,25 @@ async def test_list_notes_folder_and_extension():
     ]
 
 
+async def test_list_notes_root_nonrecursive():
+    docs = {
+        "root.md": plain_note("root.md", "root.md", []),
+        "sub/nested.md": plain_note("sub/nested.md", "sub/nested.md", []),
+        "sub/deep/leaf.md": plain_note(
+            "sub/deep/leaf.md", "sub/deep/leaf.md", []
+        ),
+    }
+    async with fake_backend(docs) as (backend, _log):
+        top = await backend.list_notes(recursive=False)
+        everything = await backend.list_notes(recursive=True)
+    assert [m["path"] for m in top] == ["root.md"]
+    assert [m["path"] for m in everything] == [
+        "root.md",
+        "sub/deep/leaf.md",
+        "sub/nested.md",
+    ]
+
+
 async def test_list_notes_does_not_fetch_chunk_bodies():
     async with fake_backend(dict(FILTER_DOCS)) as (backend, log):
         await backend.list_notes()
@@ -265,6 +284,38 @@ async def test_read_legacy_notes_type():
 async def test_read_note_missing_returns_none():
     async with fake_backend({}) as (backend, _log):
         assert await backend.read_note("ghost.md") is None
+
+
+async def test_read_note_on_missing_db_raises():
+    # A vanished database must not look like an absent note (reason
+    # "no_db_file" vs "missing" in the 404 body).
+    async with fake_backend({}, db_exists=False) as (backend, _log):
+        with pytest.raises(StorageUnavailable, match="database"):
+            await backend.read_note("note.md")
+        with pytest.raises(StorageUnavailable, match="database"):
+            await backend.get_meta("note.md")
+
+
+async def test_all_docs_on_missing_db_raises():
+    # Database disappears between the metadata GET and the chunk fetch.
+    docs = {
+        "note.md": plain_note("note.md", "note.md", ["h:aaa"]),
+        "h:aaa": {"_id": "h:aaa", "data": "x"},
+    }
+    async with fake_backend(docs, db_dies_after=1) as (backend, _log):
+        with pytest.raises(StorageUnavailable, match="database"):
+            await backend.read_note("note.md")
+
+    # Same for the _all_docs id scan behind list_notes.
+    async with fake_backend(dict(docs), db_dies_after=1) as (backend, _log):
+        with pytest.raises(StorageUnavailable, match="database"):
+            await backend.list_notes()
+
+
+async def test_startup_check_db_gone_before_milestone_raises():
+    async with fake_backend({}, db_dies_after=1) as (backend, _log):
+        with pytest.raises(StorageUnavailable, match="database"):
+            await backend.startup_check()
 
 
 async def test_read_missing_chunk_raises_storageerror():

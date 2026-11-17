@@ -64,6 +64,22 @@ _MILESTONE_DOC_ID = "_local/obsydian_livesync_milestone"
 # _all_docs page size for id scans and metadata batch fetches.
 _PAGE_SIZE = 500
 
+# CouchDB 404 body when the *database* is gone (a missing document
+# answers with reason "missing" instead); conflating the two turns a
+# dead database into apparent note absence.
+_DB_MISSING_REASON = "no_db_file"
+
+
+def _is_db_missing(response: httpx.Response) -> bool:
+    """Whether a 404 response means the database is gone, not the doc."""
+    if response.status_code != 404:
+        return False
+    try:
+        body = response.json()
+    except ValueError:
+        return False
+    return isinstance(body, dict) and body.get("reason") == _DB_MISSING_REASON
+
 
 def _is_service_id(doc_id: str) -> bool:
     lowered = doc_id.lower()
@@ -181,6 +197,8 @@ class CouchDBBackend:
     async def _get_doc(self, doc_id: str) -> dict | None:
         response = await self._request("GET", self._doc_path(doc_id))
         if response.status_code == 404:
+            if _is_db_missing(response):
+                raise StorageUnavailable("CouchDB database not found")
             return None
         body = response.json()
         return body if isinstance(body, dict) else None
@@ -193,6 +211,10 @@ class CouchDBBackend:
             f"{self._db_path}/_all_docs",
             json_body={"keys": keys, "include_docs": include_docs},
         )
+        if response.status_code == 404:
+            # A present database never 404s on _all_docs, regardless of
+            # the keys; only the database path can be missing.
+            raise StorageUnavailable("CouchDB database not found")
         rows = response.json().get("rows", [])
         return rows if isinstance(rows, list) else []
 
@@ -219,6 +241,9 @@ class CouchDBBackend:
                 response = await self._request(
                     "GET", f"{self._db_path}/_all_docs", params=params
                 )
+                if response.status_code == 404:
+                    # A present database never 404s on _all_docs.
+                    raise StorageUnavailable("CouchDB database not found")
                 rows = response.json().get("rows", [])
                 for row in rows:
                     if not isinstance(row, dict):
@@ -263,6 +288,8 @@ class CouchDBBackend:
             "GET", self._doc_path(_MILESTONE_DOC_ID)
         )
         if milestone.status_code != 200:
+            if _is_db_missing(milestone):
+                raise StorageUnavailable("CouchDB database not found")
             return  # no milestone document: pre-E2EE or fresh vault
         try:
             body = milestone.json()
@@ -319,8 +346,11 @@ class CouchDBBackend:
             if folder_prefix:
                 if not path.startswith(folder_prefix + "/"):
                     continue
-                if not recursive and "/" in path[len(folder_prefix) + 1 :]:
-                    continue
+                remainder = path[len(folder_prefix) + 1 :]
+            else:
+                remainder = path
+            if not recursive and "/" in remainder:
+                continue  # direct children only, also at the vault root
             if extension is not None and not _matches_extension(path, extension):
                 continue
             metas.append(meta)

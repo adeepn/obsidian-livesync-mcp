@@ -9,7 +9,11 @@ The transport emulates the CouchDB surface the storage backend uses:
 - ``startkey``/``endkey``/``skip``/``limit`` paging with bytewise key
   ordering, exactly like CouchDB's ``_all_docs`` raw collation.
 
-Scenes: ``db_exists=False`` makes ``GET /{db}`` answer 404;
+Scenes: ``db_exists=False`` makes every request against the database
+answer 404 ``{"error": "not_found", "reason": "no_db_file"}`` like a
+real CouchDB with a missing database (document-level 404s carry
+reason ``"missing"`` instead); ``db_dies_after=N`` lets the first N
+requests succeed and kills the database from request N+1 on;
 ``force_status=N`` makes every request answer ``N`` (401/500/...).
 
 Every incoming request is appended to ``request_log`` so tests can assert
@@ -37,6 +41,7 @@ def make_fake_couchdb(
     docs: dict[str, dict],
     *,
     db_exists: bool = True,
+    db_dies_after: int | None = None,
     force_status: int | None = None,
 ) -> tuple[httpx.MockTransport, list[httpx.Request]]:
     """Build a fake CouchDB over ``docs`` (id -> document body).
@@ -95,6 +100,15 @@ def make_fake_couchdb(
         if force_status is not None:
             return httpx.Response(force_status, json={"error": "forced"})
 
+        db_alive = db_exists and (
+            db_dies_after is None or len(request_log) <= db_dies_after
+        )
+        if not db_alive:
+            # Missing database: every request fails like CouchDB does.
+            return httpx.Response(
+                404, json={"error": "not_found", "reason": "no_db_file"}
+            )
+
         parts = request.url.path.lstrip("/").split("/", 1)
         database = unquote(parts[0])
         rest = unquote(parts[1]) if len(parts) > 1 else ""
@@ -102,8 +116,6 @@ def make_fake_couchdb(
         if not rest:
             # Database-level requests.
             if request.method == "GET":
-                if not db_exists:
-                    return httpx.Response(404, json={"error": "not_found"})
                 return httpx.Response(
                     200,
                     json={
@@ -127,7 +139,9 @@ def make_fake_couchdb(
         if request.method == "GET":
             doc = store.get(doc_id)
             if doc is None:
-                return httpx.Response(404, json={"error": "not_found"})
+                return httpx.Response(
+                    404, json={"error": "not_found", "reason": "missing"}
+                )
             return httpx.Response(200, json=doc)
 
         if request.method == "PUT":
@@ -151,7 +165,9 @@ def make_fake_couchdb(
         if request.method == "DELETE":
             doc = store.get(doc_id)
             if doc is None:
-                return httpx.Response(404, json={"error": "not_found"})
+                return httpx.Response(
+                    404, json={"error": "not_found", "reason": "missing"}
+                )
             if request.url.params.get("rev") != doc["_rev"]:
                 return httpx.Response(409, json={"error": "conflict"})
             del store[doc_id]
