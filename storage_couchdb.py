@@ -769,7 +769,21 @@ class CouchDBBackend:
                 f"note {path!r} cannot be written: an existing shared "
                 "content chunk holds different data"
             )
-        await self._put_doc(chunk_id, {"data": data, "type": "leaf"})
+        try:
+            await self._put_doc(chunk_id, {"data": data, "type": "leaf"})
+        except ConcurrentModification:
+            # Another writer may have published the same immutable chunk
+            # after our absence check. Never overwrite the winning leaf.
+            winner = await self._get_doc(chunk_id)
+            if not (
+                winner is not None
+                and not winner.get("deleted")
+                and winner.get("type") == "leaf"
+                and winner.get("data") == data
+            ):
+                raise ConcurrentModification(
+                    f"note {path!r} cannot be written: content chunk changed concurrently"
+                ) from None
         return chunk_id
 
     async def _get_note_doc(self, path: str) -> dict:

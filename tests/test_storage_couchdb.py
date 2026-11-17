@@ -1243,3 +1243,49 @@ async def test_write_normalized_binary_path_refused_before_io(path):
         with pytest.raises(BinaryNoteError):
             await backend.write_note(path, 'text', create=True)
     assert not log
+
+
+@pytest.mark.parametrize('winner', [
+    {'data': 'same', 'type': 'leaf'},
+    {'data': 'different', 'type': 'leaf'},
+    {'data': 'same', 'type': 'plain'},
+    {'data': 'same', 'type': 'leaf', 'deleted': True},
+    None,
+])
+async def test_chunk_creation_409_rereads_winner(winner):
+    inner, log = make_fake_couchdb({})
+    chunk_id = chunk_id_for('same')
+    raced = False
+
+    async def handle(request):
+        nonlocal raced
+        if request.method == 'PUT' and urllib.parse.unquote(request.url.path).endswith(chunk_id):
+            assert not raced, 'chunk must not be overwritten after a conflict'
+            raced = True
+            if winner is not None:
+                rival = httpx.Request('PUT', request.url, json=winner)
+                response = await inner.handle_async_request(rival)
+                assert response.status_code == 201
+            return httpx.Response(409, json={'error': 'conflict'})
+        return await inner.handle_async_request(request)
+
+    transport = httpx.MockTransport(handle)
+    backend = CouchDBBackend(URL, USER, PASSWORD, DATABASE, transport=transport)
+    try:
+        if winner == {'data': 'same', 'type': 'leaf'}:
+            await backend.write_note('new.md', 'same', create=True)
+            assert (await backend.read_note('new.md'))['text'] == 'same'
+        else:
+            with pytest.raises(ConcurrentModification):
+                await backend.write_note('new.md', 'same', create=True)
+            with pytest.raises(NoteNotFound):
+                await backend.get_meta('new.md')
+        assert raced
+        gets = [r for r in log if r.method == 'GET' and
+                urllib.parse.unquote(r.url.path).endswith(chunk_id)]
+        assert len(gets) == 2  # absent before PUT, winner re-read after 409
+        writes = [r for r in log if r.method == 'PUT' and
+                  urllib.parse.unquote(r.url.path).endswith('new.md')]
+        assert len(writes) == (1 if winner == {'data': 'same', 'type': 'leaf'} else 0)
+    finally:
+        await backend.close()
