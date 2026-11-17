@@ -281,6 +281,12 @@ def _vault_scan(handler):
                     if not isinstance(result, dict):
                         result = {"results": result}
                     result.update(truncated=True, scan=budget.report())
+                    if hasattr(budget, "total"):
+                        result.update(returned=len(result["results"]) if "results" in result
+                                      else result.get("total_notes", len(budget.paths)),
+                                      total=budget.total)
+                        if getattr(_backend(), "index_truncated", False):
+                            result["total_is_lower_bound"] = True
                     return json.dumps(result, ensure_ascii=False, indent=2)
                 return response
             finally:
@@ -288,10 +294,13 @@ def _vault_scan(handler):
     return scanned
 
 
-async def _scan_notes():
+async def _scan_notes(**filters):
     result = []
     budget = _scan_budget.get()
-    for meta in await _backend().list_notes():
+    notes = await _backend().list_notes(**filters)
+    if budget:
+        budget.total = len(notes)
+    for meta in notes:
         if budget and not budget.admit(meta["path"], len(json.dumps(meta).encode())):
             break
         result.append(meta)
@@ -637,6 +646,7 @@ async def obsidian_duplicate_note(path: str, new_path: str = "") -> str:
 # 8. obsidian-list-notes
 @_tool
 @_tool_errors
+@_vault_scan
 async def obsidian_list_notes(
     folder: str = "",
     extension: str = "",
@@ -651,7 +661,7 @@ async def obsidian_list_notes(
             Empty lists the entire vault.
         extension: Filter by extension (e.g. ".md", ".base", ".canvas")
     """
-    notes = await _backend().list_notes(
+    notes = await _scan_notes(
         folder=folder, extension=extension or None, recursive=True
     )
     if not notes:
@@ -1109,6 +1119,7 @@ async def obsidian_create_from_template(
 # 20. obsidian-list-templates
 @_tool
 @_tool_errors
+@_vault_scan
 async def obsidian_list_templates(folder: str = "templates") -> str:
     """List available templates in the templates folder.
 
@@ -1118,7 +1129,7 @@ async def obsidian_list_templates(folder: str = "templates") -> str:
     Args:
         folder: Templates folder path (default: "templates")
     """
-    notes = await _backend().list_notes(folder=folder)
+    notes = await _scan_notes(folder=folder)
     if not notes:
         return f"No templates found in '{folder}/'."
     return json.dumps(

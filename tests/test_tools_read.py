@@ -466,3 +466,23 @@ def test_server_has_no_direct_environment_reads():
     from pathlib import Path
     assert 'os.environ' not in Path(server.__file__).read_text()
     assert 'os.getenv' not in Path(server.__file__).read_text()
+
+
+@pytest.mark.parametrize('name', ['obsidian_list_notes', 'obsidian_list_templates',
+                                  'obsidian_vault_stats'])
+async def test_capped_listings_report_counts(tools, monkeypatch, name):
+    module, fake = tools
+    for i in range(3):
+        fake.add(f'templates/{i}.md', 'body')
+    monkeypatch.setenv('LIVESYNC_SCAN_MAX_NOTES', '2')
+    result = json.loads(await getattr(module, name)())
+    assert result['truncated'] is True
+    assert result['returned'] == 2
+    assert result['total'] == 3
+
+
+@pytest.mark.parametrize('name', ['obsidian_list_notes', 'obsidian_list_templates'])
+async def test_uncapped_listings_keep_list_shape(tools, name):
+    module, fake = tools
+    fake.add('templates/a.md', 'body')
+    assert isinstance(json.loads(await getattr(module, name)()), list)
