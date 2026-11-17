@@ -42,7 +42,13 @@ class StorageUnavailable(StorageError):
 
 
 class NoteMeta(TypedDict):
-    """Metadata of one note. ``ctime``/``mtime`` are Unix milliseconds."""
+    """Metadata of one note. ``ctime``/``mtime`` are Unix milliseconds.
+
+    ``rev`` is the storage-level revision of the note's metadata
+    document (CouchDB ``_rev``) at read time — ``None`` when absent.
+    ``get_meta`` populates it so read-modify-write callers can pass it
+    back as ``expected_rev``.
+    """
 
     path: str
     doc_id: str
@@ -50,6 +56,7 @@ class NoteMeta(TypedDict):
     mtime: int
     size: int
     type: str
+    rev: str | None
 
 
 class NoteContent(TypedDict):
@@ -57,13 +64,19 @@ class NoteContent(TypedDict):
 
     Textual notes carry ``text``; binary notes carry ``data``. ``is_text``
     follows LiveSync ``isPlainText`` semantics (audit B3/B4), so a note
-    can be textual by type (``plain``) or by extension.
+    can be textual by type (``plain``) or by extension. ``rev`` is the
+    revision of the metadata document the body was decoded from (the
+    same value as ``meta["rev"]``); ``None`` for new or absent notes.
+    Read-modify-write callers pass it back as ``write_note``'s /
+    ``delete_note``'s ``expected_rev`` to prevent lost updates across
+    the tool's read and write.
     """
 
     meta: NoteMeta
     text: str | None
     data: bytes | None
     is_text: bool
+    rev: str | None
 
 
 @runtime_checkable
@@ -111,15 +124,28 @@ class StorageBackend(Protocol):
         create: bool = False,
         overwrite: bool = False,
         mtime: int | None = None,
+        expected_rev: str | None = None,
     ) -> NoteMeta:
-        """Write a textual body under the central D1/D2 rules."""
+        """Write a textual body under the central D1/D2 rules.
+
+        ``expected_rev`` is the read-through lost-update precondition:
+        when it is not ``None`` and the current winning revision differs
+        (or the document appeared/vanished since the read), the write is
+        refused with ``ConcurrentModification`` before anything is
+        written. ``None`` keeps last-writer-wins semantics and must be
+        reserved for callers that genuinely intend an unconditional
+        overwrite or a plain create.
+        """
         ...
 
-    async def delete_note(self, path: str) -> bool:
+    async def delete_note(
+        self, path: str, expected_rev: str | None = None
+    ) -> bool:
         """Soft-delete the note (never chunk deletion, audit B1/B2).
 
-        Returns ``True`` when a live note was deleted, ``False`` when no
-        live note exists at the path.
+        ``expected_rev`` guards the same read-through race as in
+        ``write_note``. Returns ``True`` when a live note was deleted,
+        ``False`` when no live note exists at the path.
         """
         ...
 

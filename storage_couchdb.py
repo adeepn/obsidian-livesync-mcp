@@ -437,6 +437,7 @@ class CouchDBBackend:
             # Audit B8: legacy/service-ish docs may carry a null size.
             data = doc.get("data")
             size = len(data.encode("utf-8")) if isinstance(data, str) else 0
+        rev = doc.get("_rev")
         return NoteMeta(
             path=path,
             doc_id=doc_id,
@@ -444,6 +445,7 @@ class CouchDBBackend:
             mtime=_as_ms(doc.get("mtime")),
             size=size,
             type=str(doc.get("type") or ""),
+            rev=rev if isinstance(rev, str) else None,
         )
 
     async def _content_from_doc(self, doc: dict) -> NoteContent | None:
@@ -458,7 +460,10 @@ class CouchDBBackend:
                 raise StorageError(
                     f"note {path!r} is corrupt: missing legacy data field"
                 )
-            return NoteContent(meta=meta, text=data, data=None, is_text=True)
+            return NoteContent(
+                meta=meta, text=data, data=None, is_text=True,
+                rev=meta["rev"],
+            )
 
         if doc_type not in ("plain", "newnote"):
             return None
@@ -474,13 +479,22 @@ class CouchDBBackend:
             )
         if not children:
             if doc_type == "plain":
-                return NoteContent(meta=meta, text="", data=None, is_text=True)
-            return NoteContent(meta=meta, text=None, data=b"", is_text=False)
+                return NoteContent(
+                    meta=meta, text="", data=None, is_text=True,
+                    rev=meta["rev"],
+                )
+            return NoteContent(
+                meta=meta, text=None, data=b"", is_text=False,
+                rev=meta["rev"],
+            )
 
         datas = await self._fetch_chunk_datas(children, path)
         if doc_type == "plain":
             text = assemble_text(datas)
-            return NoteContent(meta=meta, text=text, data=None, is_text=True)
+            return NoteContent(
+                meta=meta, text=text, data=None, is_text=True,
+                rev=meta["rev"],
+            )
 
         try:
             body = assemble_binary(datas)
@@ -496,7 +510,10 @@ class CouchDBBackend:
                 text = body.decode("utf-8")
             except UnicodeDecodeError:
                 is_text = False
-        return NoteContent(meta=meta, text=text, data=body, is_text=is_text)
+        return NoteContent(
+            meta=meta, text=text, data=body, is_text=is_text,
+            rev=meta["rev"],
+        )
 
     async def _fetch_chunk_datas(
         self, children: list[str], path: str
@@ -552,6 +569,29 @@ class CouchDBBackend:
             raise ConcurrentModification(
                 f"note {path!r} has unresolved conflicts; resolve them "
                 "in Obsidian (or another client) before writing"
+            )
+
+    @staticmethod
+    def _check_expected_rev(
+        doc: dict | None, path: str, expected_rev: str | None
+    ) -> None:
+        """Read-through lost-update precondition.
+
+        ``expected_rev`` is the revision the caller read; when the
+        current winner differs, or the document appeared/vanished since,
+        the caller must re-read and retry instead of clobbering. Checked
+        against the GET performed inside the write, before any PUT.
+        """
+        if expected_rev is None:
+            return
+        if doc is None or doc.get("_rev") != expected_rev:
+            logger.info(
+                "note %s: expected revision no longer current; "
+                "refusing the write",
+                path,
+            )
+            raise ConcurrentModification(
+                "note changed concurrently; re-read and retry"
             )
 
     async def _put_doc(self, doc_id: str, body: dict) -> str:
@@ -682,6 +722,7 @@ class CouchDBBackend:
         create: bool = False,
         overwrite: bool = False,
         mtime: int | None = None,
+        expected_rev: str | None = None,
     ) -> NoteMeta:
         """Write a textual body under the central D1/D2 rules.
 
@@ -690,6 +731,9 @@ class CouchDBBackend:
         the metadata document; the metadata revision carries the old
         ``_rev`` (optimistic locking), and a soft-deleted note is only
         resurrected through an explicit ``create`` (audit B12).
+        ``expected_rev`` (from the caller's read) is compared against the
+        GET inside this write and refuses the write entirely on mismatch
+        — a device edit that landed in between is never overwritten.
         """
         validate_vault_path(path)
         if not is_text_doc(None, path):
@@ -702,6 +746,7 @@ class CouchDBBackend:
         doc = await self._get_doc(doc_id, conflicts=True)
         if doc is not None:
             self._refuse_unresolved_conflicts(doc, path)
+        self._check_expected_rev(doc, path, expected_rev)
         live = doc is not None and not doc.get("deleted")
         if live and create and not overwrite:
             raise NoteExists(f"note already exists: {path}")
@@ -729,17 +774,21 @@ class CouchDBBackend:
         body["_rev"] = await self._put_doc(doc_id, body)
         return self._meta_from_doc(body)
 
-    async def delete_note(self, path: str) -> bool:
+    async def delete_note(
+        self, path: str, expected_rev: str | None = None
+    ) -> bool:
         """Soft-delete the note; ``True`` iff a live note was deleted.
 
         Deletion is a new document revision with ``deleted: true``
         (``children``/``type``/``path`` preserved — audit B2), never a
         bare HTTP DELETE: a CouchDB tombstone would drop the body
         LiveSync needs to undo the deletion, and chunk deletion is
-        reserved for LiveSync's own GC (audit B1).
+        reserved for LiveSync's own GC (audit B1). ``expected_rev``
+        guards the read-through race exactly as in ``write_note``.
         """
         validate_vault_path(path)
         doc = await self._get_doc(path2id(path), conflicts=True)
+        self._check_expected_rev(doc, path, expected_rev)
         if doc is None or doc.get("deleted"):
             return False
         self._refuse_unresolved_conflicts(doc, path)

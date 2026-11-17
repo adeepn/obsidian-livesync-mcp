@@ -342,3 +342,102 @@ async def test_canvas_invalid_content_never_mutates(vault):
     assert result == "Invalid canvas format."
     assert vault.notes["N.canvas"]["text"] == content
     assert_no_mutations(vault)
+
+
+# --- read-through revision races (device writes between tool read/write) ----
+
+
+class RacingFake(FakeBackend):
+    """A device commit lands right after the tool's read_note.
+
+    The read still returns the pre-device content and revision, so a
+    tool that ignores revisions would clobber the device edit, while a
+    tool carrying ``expected_rev`` must fail with ConcurrentModification.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.race_paths = set()
+
+    async def read_note(self, path):
+        note = await super().read_note(path)
+        if note is not None and path in self.race_paths:
+            self.race_paths.discard(path)
+            self.add(path, "device edit")
+        return note
+
+
+def racing_vault(monkeypatch, path, text="original"):
+    fake = RacingFake()
+    fake.add(path, text)
+    fake.race_paths = {path}
+    monkeypatch.setattr(server, "backend", fake)
+    return fake
+
+
+async def test_update_note_lost_update_prevented(monkeypatch):
+    fake = racing_vault(monkeypatch, "N.md")
+    result = await server.obsidian_update_note("N.md", "append", "tool edit")
+    assert "concurrent" in result.lower()
+    assert fake.notes["N.md"]["text"] == "device edit"
+
+
+async def test_manage_properties_lost_update_prevented(monkeypatch):
+    fake = racing_vault(monkeypatch, "N.md")
+    result = await server.obsidian_manage_properties("N.md", "set", '{"x": 1}')
+    assert "concurrent" in result.lower()
+    assert fake.notes["N.md"]["text"] == "device edit"
+
+
+async def test_manage_tags_lost_update_prevented(monkeypatch):
+    fake = racing_vault(monkeypatch, "N.md")
+    result = await server.obsidian_manage_tags("N.md", "add", "urgent")
+    assert "concurrent" in result.lower()
+    assert fake.notes["N.md"]["text"] == "device edit"
+
+
+async def test_canvas_node_lost_update_prevented(monkeypatch):
+    fake = racing_vault(monkeypatch, "B.canvas", '{"nodes": [], "edges": []}')
+    result = await server.obsidian_canvas_node("B.canvas", text="tool node")
+    assert "concurrent" in result.lower()
+    assert fake.notes["B.canvas"]["text"] == "device edit"
+
+
+async def test_canvas_edge_lost_update_prevented(monkeypatch):
+    fake = racing_vault(
+        monkeypatch, "B.canvas",
+        '{"nodes": [{"id": "n1"}], "edges": []}',
+    )
+    result = await server.obsidian_canvas_edge(
+        "B.canvas", from_node="n1", to_node="n1"
+    )
+    assert "concurrent" in result.lower()
+    assert fake.notes["B.canvas"]["text"] == "device edit"
+
+
+async def test_read_modify_write_tools_pass_expected_rev(vault):
+    # Happy path: the write carries the revision captured by the read.
+    await server.obsidian_update_note("N.md", "append", "more")
+    write = next(args for m, args in vault.calls if m == "write_note")
+    assert write[-1] == "1-x"  # expected_rev from the read
+    # Canvas writes carry it too, and creation keeps None (create semantics).
+    vault.calls.clear()
+    vault.add("B.canvas", "{}")
+    await server.obsidian_canvas_node("B.canvas", text="x", node_id="n1")
+    write = next(
+        args for m, args in vault.calls
+        if m == "write_note" and args[0] == "B.canvas"
+    )
+    assert write[-1] == "1-x"
+    assert write[2] is False  # update, not create
+
+
+async def test_create_tools_keep_last_writer_wins(vault):
+    # Plain creates never carry a revision precondition.
+    await server.obsidian_create_note("fresh.md", "body")
+    write = next(
+        args for m, args in vault.calls
+        if m == "write_note" and args[0] == "fresh.md"
+    )
+    assert write[-1] is None
+    assert write[2] is True

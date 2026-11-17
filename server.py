@@ -18,7 +18,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 from config import Config, ConfigError, load_config
 from storage_base import (
     StorageBackend, StorageError, NoteNotFound, NoteExists, BinaryNoteError,
-    ConcurrentModification, UnsupportedVault, StorageUnavailable,
+    ConcurrentModification, UnsupportedVault, StorageUnavailable, NoteContent,
 )
 from storage_couchdb import CouchDBBackend
 from frontmatter import (
@@ -164,13 +164,24 @@ def _tool_errors(handler):
 
 # Compatibility readers for canvas tools and shared text validation.
 # These deliberately reference the module backend, never a captured client.
-async def _legacy_content(path: str) -> str | None:
+async def _read_text_note(path: str) -> NoteContent | None:
+    """Textual note content together with the revision it was read at.
+
+    The revision flows back into ``write_note(expected_rev=...)`` so a
+    device edit landing between the tool's read and write surfaces as a
+    ConcurrentModification error instead of being silently overwritten.
+    """
     note = await backend.read_note(path)
     if note is None:
         return None
     if not note["is_text"]:
         raise BinaryNoteError()
-    return note["text"]
+    return note
+
+
+async def _legacy_content(path: str) -> str | None:
+    note = await _read_text_note(path)
+    return None if note is None else note["text"]
 
 
 def _load_canvas(content: str | None) -> dict | None:
@@ -390,9 +401,10 @@ async def obsidian_update_note(
             return "Error: empty overwrite content is refused."
         if search or replace or heading or regex:
             return "Error: search, replace, heading and regex require their own mode."
-    existing = await _legacy_content(path)
-    if existing is None:
+    note = await _read_text_note(path)
+    if note is None:
         return f"Note '{path}' not found."
+    existing = note["text"]
     matches = None
     if mode == "overwrite":
         new_content = content
@@ -441,7 +453,7 @@ async def obsidian_update_note(
         if not matches:
             return "No matches found for search string."
     if new_content != existing:
-        await backend.write_note(path, new_content)
+        await backend.write_note(path, new_content, expected_rev=note["rev"])
     if matches is not None:
         return f"Updated '{path}': {matches} matches replaced."
     return f"Updated '{path}' ({mode})."
@@ -536,9 +548,10 @@ async def obsidian_manage_properties(
         properties: JSON string of properties to set (for 'set' action)
         keys: Comma-separated property keys to delete (for 'delete' action)
     """
-    content = await _legacy_content(path)
-    if content is None:
+    note = await _read_text_note(path)
+    if note is None:
         return f"Note '{path}' not found."
+    content = note["text"]
     if not path.lower().endswith(".md"):
         return "Error: properties require a .md file."
     if action == "get":
@@ -561,7 +574,7 @@ async def obsidian_manage_properties(
         return f"Error: unknown action: {action}. Use: get, set, delete"
     if new_content == content:
         return f"No property changes in '{path}'."
-    await backend.write_note(path, new_content)
+    await backend.write_note(path, new_content, expected_rev=note["rev"])
     return f"Updated properties of '{path}'."
 
 
@@ -580,9 +593,10 @@ async def obsidian_manage_tags(
         action: One of: list, add, remove
         tags: Comma-separated tags (without #) for add/remove
     """
-    content = await _legacy_content(path)
-    if content is None:
+    note = await _read_text_note(path)
+    if note is None:
         return f"Note '{path}' not found."
+    content = note["text"]
     if not path.lower().endswith(".md"):
         return "Error: tags require a .md file."
     props = get_properties(content)
@@ -607,7 +621,7 @@ async def obsidian_manage_tags(
     new_content = (add_tags if action == "add" else remove_tags)(content, tag_list)
     if new_content == content:
         return f"No frontmatter tag changes in '{path}'; inline tags untouched."
-    await backend.write_note(path, new_content)
+    await backend.write_note(path, new_content, expected_rev=note["rev"])
     return f"Updated frontmatter tags in '{path}'; inline tags untouched."
 
 
@@ -746,8 +760,9 @@ async def obsidian_canvas_node(
         height: Node height
         node_id: Node ID (required for remove, must be unique for add)
     """
-    doc_id = path
-    content = await _legacy_content(doc_id)
+    note = await _read_text_note(path)
+    content = None if note is None else note["text"]
+    rev = None if note is None else note["rev"]
     if content is None and action != "add":
         return f"Canvas '{path}' not found."
 
@@ -775,8 +790,11 @@ async def obsidian_canvas_node(
             node["label"] = text
         canvas["nodes"].append(node)
         # Task 10: retain add-to-existing behavior under the new create contract.
+        # An existing canvas is an update guarded by the read revision; a
+        # brand-new one is a plain create (no precondition).
         await backend.write_note(
-            path, json.dumps(canvas, ensure_ascii=False), create=content is None
+            path, json.dumps(canvas, ensure_ascii=False),
+            create=content is None, expected_rev=rev,
         )
         return f"Added {node_type} node '{new_id}' to '{path}'."
 
@@ -792,7 +810,9 @@ async def obsidian_canvas_node(
             if not (isinstance(e, dict)
                     and node_id in (e.get("fromNode"), e.get("toNode")))
         ]
-        await backend.write_note(path, json.dumps(canvas, ensure_ascii=False))
+        await backend.write_note(
+            path, json.dumps(canvas, ensure_ascii=False), expected_rev=rev
+        )
         return f"Removed node '{node_id}' from '{path}'."
 
     return f"Unknown action: {action}. Use: add, remove"
@@ -819,10 +839,10 @@ async def obsidian_canvas_edge(
         label: Edge label (optional)
         edge_id: Edge ID (required for remove, must be unique for add)
     """
-    doc_id = path
-    content = await _legacy_content(doc_id)
-    if content is None:
+    note = await _read_text_note(path)
+    if note is None:
         return f"Canvas '{path}' not found."
+    content = note["text"]
 
     canvas = _load_canvas(content)
     if canvas is None:
@@ -846,7 +866,10 @@ async def obsidian_canvas_edge(
         if label:
             edge["label"] = label
         canvas["edges"].append(edge)
-        await backend.write_note(path, json.dumps(canvas, ensure_ascii=False))
+        await backend.write_note(
+            path, json.dumps(canvas, ensure_ascii=False),
+            expected_rev=note["rev"],
+        )
         return f"Added edge '{new_id}' ({from_node} -> {to_node}) to '{path}'."
 
     elif action == "remove":
@@ -856,7 +879,10 @@ async def obsidian_canvas_edge(
         if len(kept_edges) == len(canvas["edges"]):
             return f"Edge '{edge_id}' not found in '{path}'."
         canvas["edges"] = kept_edges
-        await backend.write_note(path, json.dumps(canvas, ensure_ascii=False))
+        await backend.write_note(
+            path, json.dumps(canvas, ensure_ascii=False),
+            expected_rev=note["rev"],
+        )
         return f"Removed edge '{edge_id}' from '{path}'."
 
     return f"Unknown action: {action}. Use: add, remove"

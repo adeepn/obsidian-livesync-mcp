@@ -443,13 +443,15 @@ def test_write_signatures_are_pinned():
     write = inspect.signature(CouchDBBackend.write_note)
     assert list(write.parameters) == [
         "self", "path", "content", "create", "overwrite", "mtime",
+        "expected_rev",
     ]
     assert write.parameters["create"].default is False
     assert write.parameters["overwrite"].default is False
     assert write.parameters["mtime"].default is None
-    assert list(inspect.signature(CouchDBBackend.delete_note).parameters) == [
-        "self", "path",
-    ]
+    assert write.parameters["expected_rev"].default is None
+    delete = inspect.signature(CouchDBBackend.delete_note).parameters
+    assert list(delete) == ["self", "path", "expected_rev"]
+    assert delete["expected_rev"].default is None
     for method in (CouchDBBackend.rename_note, CouchDBBackend.copy_note):
         parameters = inspect.signature(method).parameters
         assert list(parameters) == ["self", "path", "new_path", "overwrite"]
@@ -857,3 +859,116 @@ async def test_copy_note_onto_existing_refused():
         with pytest.raises(NoteExists):
             await backend.copy_note("a.md", "b.md")
     assert mutation_free(log, len(log))
+
+
+# --- read-through revision precondition (lost update) ----------------------
+
+
+async def _device_write(raw: httpx.AsyncClient, doc_id: str, **changes) -> None:
+    """Simulate a device committing a new revision of ``doc_id``."""
+    doc = await stored_doc(raw, doc_id)
+    doc.update(changes)
+    response = await raw.put(
+        f"{DATABASE}/{urllib.parse.quote(doc_id, safe='')}", json=doc
+    )
+    assert response.status_code == 201, response.text
+
+
+async def test_read_note_and_get_meta_expose_revision():
+    docs = {"note.md": plain_note("note.md", "note.md", [])}
+    async with fake_backend(docs) as (backend, _log):
+        content = await backend.read_note("note.md")
+        meta = await backend.get_meta("note.md")
+    assert content["rev"] == "1-fake1"
+    assert content["meta"]["rev"] == "1-fake1"
+    assert meta["rev"] == "1-fake1"
+
+
+async def test_write_stale_expected_rev_refused():
+    # A device commit lands between the tool's read and its write: the
+    # read-through precondition fails BEFORE any chunk or metadata PUT,
+    # and the device's revision survives untouched.
+    docs = {
+        "note.md": plain_note("note.md", "note.md", ["h:old"]),
+        "h:old": {"data": "old", "type": "leaf"},
+    }
+    async with fake_vault(docs) as (backend, raw, log):
+        read = await backend.read_note("note.md")
+        assert read["rev"] == "1-fake1"
+        await _device_write(
+            raw, "note.md", children=[chunk_id_for("device edit")], mtime=999
+        )
+        with pytest.raises(ConcurrentModification, match="concurrent"):
+            await backend.write_note(
+                "note.md", "tool edit", expected_rev=read["rev"]
+            )
+        stored = await stored_doc(raw, "note.md")
+        tool_chunk_response = await raw.get(
+            f"{DATABASE}/{urllib.parse.quote(chunk_id_for('tool edit'), safe='')}"
+        )
+    assert stored["children"] == [chunk_id_for("device edit")]  # device won
+    assert stored["_rev"] == "2-fake2"
+    assert tool_chunk_response.status_code == 404  # refused before chunk PUT
+
+
+async def test_write_matching_expected_rev_succeeds():
+    docs = {
+        "note.md": plain_note("note.md", "note.md", ["h:old"]),
+        "h:old": {"data": "old", "type": "leaf"},
+    }
+    async with fake_backend(docs) as (backend, _log):
+        read = await backend.read_note("note.md")
+        meta = await backend.write_note(
+            "note.md", "fresh", expected_rev=read["rev"]
+        )
+        content = await backend.read_note("note.md")
+    assert meta["rev"] == "2-fake2"
+    assert content["text"] == "fresh"
+
+
+async def test_write_expected_rev_on_vanished_note_refused():
+    # The note the tool read is gone (hard tombstone): refusing beats
+    # silently recreating it (which would resurrect a deleted note).
+    async with fake_backend({}) as (backend, log):
+        with pytest.raises(ConcurrentModification, match="concurrent"):
+            await backend.write_note(
+                "ghost.md", "x", create=True, expected_rev="1-fake1"
+            )
+    assert mutation_free(log, len(log))
+
+
+async def test_write_without_expected_rev_keeps_last_writer_wins():
+    # expected_rev=None is the documented last-writer-wins escape hatch.
+    docs = {"note.md": plain_note("note.md", "note.md", [])}
+    async with fake_vault(docs) as (backend, raw, _log):
+        await backend.read_note("note.md")
+        await _device_write(raw, "note.md", mtime=999)
+        await backend.write_note("note.md", "tool edit", overwrite=True)
+        stored = await stored_doc(raw, "note.md")
+    assert stored["mtime"] != 999  # the later write won, by contract
+
+
+async def test_delete_stale_expected_rev_refused():
+    docs = {"note.md": plain_note("note.md", "note.md", [])}
+    async with fake_vault(docs) as (backend, raw, log):
+        read = await backend.read_note("note.md")
+        await _device_write(raw, "note.md", mtime=999)
+        log.clear()  # only the delete attempt is scrutinized from here
+        with pytest.raises(ConcurrentModification, match="concurrent"):
+            await backend.delete_note("note.md", expected_rev=read["rev"])
+        stored = await stored_doc(raw, "note.md")
+    assert "deleted" not in stored  # the racing delete never landed
+    assert stored["mtime"] == 999  # the device's revision survived
+    assert mutation_free(log, len(log))  # no write was attempted at all
+
+
+async def test_delete_matching_expected_rev_succeeds():
+    docs = {"note.md": plain_note("note.md", "note.md", [])}
+    async with fake_backend(docs) as (backend, _log):
+        read = await backend.read_note("note.md")
+        deleted = await backend.delete_note(
+            "note.md", expected_rev=read["rev"]
+        )
+        gone = await backend.read_note("note.md")
+    assert deleted is True
+    assert gone is None

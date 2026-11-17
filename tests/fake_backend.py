@@ -3,10 +3,20 @@
 from copy import deepcopy
 
 from livesync_format import is_text_doc
-from storage_base import NoteExists, NoteNotFound, StorageError
+from storage_base import (
+    ConcurrentModification, NoteExists, NoteNotFound, StorageError,
+)
 
 
 class FakeBackend:
+    """Emulates the ``StorageBackend`` contract, including revisions.
+
+    Every mutation bumps a monotonic per-note revision (``"1-x"``,
+    ``"2-x"``, ...). ``write_note``/``delete_note`` honor ``expected_rev``
+    like CouchDB: a stale or vanished revision raises
+    ``ConcurrentModification`` instead of clobbering the newer write.
+    """
+
     def __init__(self, notes=None):
         self.notes = notes or {}
         self.calls = []
@@ -18,14 +28,29 @@ class FakeBackend:
         if error:
             raise error
 
+    def _next_rev(self, path):
+        previous = self.notes.get(path, {}).get("rev")
+        if previous is None:
+            return "1-x"
+        try:
+            generation = int(previous.split("-", 1)[0])
+        except ValueError:
+            generation = 1
+        return f"{generation + 1}-x"
+
     def add(self, path, text=None, data=None, **meta):
+        rev = self._next_rev(path)
         self.notes[path] = {
             "meta": {"path": path, "doc_id": path.lower(), "ctime": 1,
                      "mtime": 2, "size": len(data or (text or "").encode()),
                      "type": "plain" if text is not None else "newnote",
-                     **meta},
-            "text": text, "data": data,
+                     "rev": rev, **meta},
+            "text": text, "data": data, "rev": rev,
         }
+
+    def _current_rev(self, path):
+        note = self.notes.get(path)
+        return note["rev"] if note is not None else None
 
     async def startup_check(self):
         self._call("startup_check")
@@ -74,8 +99,13 @@ class FakeBackend:
             yield deepcopy(note["meta"]), text
 
     async def write_note(self, path, content, *, create=False,
-                         overwrite=False, mtime=None):
-        self._call("write_note", path, content, create, overwrite, mtime)
+                         overwrite=False, mtime=None, expected_rev=None):
+        self._call("write_note", path, content, create, overwrite, mtime,
+                   expected_rev)
+        if expected_rev is not None and self._current_rev(path) != expected_rev:
+            raise ConcurrentModification(
+                "note changed concurrently; re-read and retry"
+            )
         if path in self.notes and create and not overwrite:
             raise NoteExists(path)
         if path not in self.notes and not create:
@@ -83,8 +113,12 @@ class FakeBackend:
         self.add(path, content, mtime=mtime if mtime is not None else 2)
         return deepcopy(self.notes[path]["meta"])
 
-    async def delete_note(self, path):
-        self._call("delete_note", path)
+    async def delete_note(self, path, expected_rev=None):
+        self._call("delete_note", path, expected_rev)
+        if expected_rev is not None and self._current_rev(path) != expected_rev:
+            raise ConcurrentModification(
+                "note changed concurrently; re-read and retry"
+            )
         return self.notes.pop(path, None) is not None
 
     async def copy_note(self, path, new_path, *, overwrite=False):
@@ -94,8 +128,10 @@ class FakeBackend:
         if new_path in self.notes and not overwrite:
             raise NoteExists(new_path)
         self.notes[new_path] = deepcopy(self.notes[path])
+        self.notes[new_path]["rev"] = self._next_rev(new_path)
         self.notes[new_path]["meta"].update(
-            path=new_path, doc_id=new_path.lower()
+            path=new_path, doc_id=new_path.lower(),
+            rev=self.notes[new_path]["rev"],
         )
         return deepcopy(self.notes[new_path]["meta"])
 
