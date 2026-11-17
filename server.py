@@ -21,7 +21,11 @@ from storage_base import (
     ConcurrentModification, UnsupportedVault, StorageUnavailable,
 )
 from storage_couchdb import CouchDBBackend
-from frontmatter import FrontmatterError, get_properties, split_frontmatter
+from frontmatter import (
+    FrontmatterError, get_properties, split_frontmatter, set_properties,
+    delete_properties, add_tags, remove_tags, insert_after_frontmatter,
+)
+from livesync_format import ForbiddenPathError
 from links import build_graph, extract_links, resolve_link
 from auth_config import StaticBearerTokenVerifier, select_auth_mode
 from oauth_provider import SimpleOAuthProvider
@@ -125,69 +129,6 @@ mcp = FastMCP(**mcp_kwargs)
 
 # --- Helper functions ---
 
-def _parse_frontmatter(content: str) -> tuple[dict, str]:
-    """Parse YAML frontmatter from note content. Returns (properties, body)."""
-    if not content.startswith("---"):
-        return {}, content
-    end = content.find("---", 3)
-    if end == -1:
-        return {}, content
-    fm_text = content[3:end].strip()
-    body = content[end + 3:].lstrip("\n")
-    props = {}
-    current_key = None
-    current_list = None
-    for line in fm_text.split("\n"):
-        if not line.strip():
-            continue
-        if line.startswith("  - ") and current_key and current_list is not None:
-            current_list.append(line.strip()[2:].strip().strip('"').strip("'"))
-            props[current_key] = current_list
-            continue
-        if ":" in line:
-            key, _, val = line.partition(":")
-            key = key.strip()
-            val = val.strip()
-            current_key = key
-            if val == "":
-                current_list = []
-            elif val.startswith("[") and val.endswith("]"):
-                items = [v.strip().strip('"').strip("'") for v in val[1:-1].split(",") if v.strip()]
-                props[key] = items
-                current_list = None
-            elif val.lower() in ("true", "false"):
-                props[key] = val.lower() == "true"
-                current_list = None
-            else:
-                try:
-                    props[key] = int(val)
-                except ValueError:
-                    try:
-                        props[key] = float(val)
-                    except ValueError:
-                        props[key] = val.strip('"').strip("'")
-                current_list = None
-    return props, body
-
-
-def _serialize_frontmatter(props: dict) -> str:
-    """Serialize properties dict to YAML frontmatter string."""
-    if not props:
-        return ""
-    lines = ["---"]
-    for key, val in props.items():
-        if isinstance(val, list):
-            lines.append(f"{key}:")
-            for item in val:
-                lines.append(f"  - {item}")
-        elif isinstance(val, bool):
-            lines.append(f"{key}: {'true' if val else 'false'}")
-        else:
-            lines.append(f"{key}: {val}")
-    lines.append("---")
-    return "\n".join(lines)
-
-
 def _storage_message(error: StorageError) -> str:
     """Never forward backend exception text (URLs/revisions) to clients."""
     messages = {
@@ -215,12 +156,14 @@ def _tool_errors(handler):
             return await handler(*args, **kwargs)
         except StorageError as error:
             return _storage_message(error)
+        except ForbiddenPathError:
+            return "Error: forbidden vault path."
         except FrontmatterError:
             return "Error: invalid YAML frontmatter."
     return guarded
 
 
-# Temporary protocol adapters for unchanged Task 9/10 write/canvas logic.
+# Compatibility readers for canvas tools and shared text validation.
 # These deliberately reference the module backend, never a captured client.
 async def _legacy_content(path: str) -> str | None:
     note = await backend.read_note(path)
@@ -229,13 +172,6 @@ async def _legacy_content(path: str) -> str | None:
     if not note["is_text"]:
         raise BinaryNoteError()
     return note["text"]
-
-
-async def _legacy_metadata(path: str) -> dict | None:
-    try:
-        return await backend.get_meta(path)
-    except NoteNotFound:
-        return None
 
 
 async def _graph() -> dict:
@@ -377,20 +313,17 @@ async def obsidian_create_note(
         content: Note content (markdown for .md, YAML for .base)
         properties: JSON string of frontmatter properties (for .md files)
     """
-    doc_id = path
-    existing = await _legacy_metadata(doc_id)
-    if existing and not existing.get("deleted"):
-        return f"Note '{path}' already exists."
-
     full_content = content
-    if properties and path.lower().endswith(".md"):
+    if properties:
+        if not path.lower().endswith(".md"):
+            return "Error: properties require a .md file."
         try:
             props = json.loads(properties)
         except json.JSONDecodeError:
-            return "Invalid JSON in properties parameter."
-        fm = _serialize_frontmatter(props)
-        full_content = fm + "\n" + content if content else fm
-
+            return "Error: invalid JSON in properties parameter."
+        if not isinstance(props, dict):
+            return "Error: properties must be a JSON object."
+        full_content = set_properties(content, props)
     await backend.write_note(path, full_content, create=True)
     return f"Created '{path}'."
 
@@ -400,7 +333,7 @@ async def obsidian_create_note(
 @_tool_errors
 async def obsidian_update_note(
     path: str,
-    mode: str = "overwrite",
+    mode: str,
     content: str = "",
     search: str = "",
     replace: str = "",
@@ -411,57 +344,74 @@ async def obsidian_update_note(
 
     Args:
         path: Path to the note
-        mode: One of: overwrite, append, prepend, after-heading, search-replace
+        mode: Required: overwrite, append, prepend, after-heading, search-replace
         content: New content (for overwrite/append/prepend/after-heading modes)
         search: Search string (for search-replace mode)
         replace: Replacement string (for search-replace mode)
         heading: Heading text to insert after (for after-heading mode)
         regex: Use regex for search-replace
     """
-    doc_id = path
-    try:
-        existing = await _legacy_content(doc_id)
-    except ValueError as e:
-        return f"Error reading '{path}': {e}"
+    modes = "overwrite, append, prepend, after-heading, search-replace"
+    if mode not in modes.split(", "):
+        return f"Error: unknown mode: {mode}. Use: {modes}"
+    if mode == "overwrite":
+        if not content:
+            return "Error: empty overwrite content is refused."
+        if search or replace or heading or regex:
+            return "Error: search, replace, heading and regex require their own mode."
+    existing = await _legacy_content(path)
     if existing is None:
         return f"Note '{path}' not found."
-
+    matches = None
     if mode == "overwrite":
         new_content = content
     elif mode == "append":
         new_content = existing + "\n" + content
     elif mode == "prepend":
-        new_content = content + "\n" + existing
+        new_content = insert_after_frontmatter(existing, content + "\n")
     elif mode == "after-heading":
-        if not heading:
-            return "Heading parameter required for after-heading mode."
-        lines = existing.split("\n")
-        inserted = False
-        new_lines = []
-        for i, line in enumerate(lines):
-            new_lines.append(line)
-            stripped = line.strip()
-            if not inserted and stripped.startswith("#"):
-                heading_text = stripped.lstrip("#").strip()
-                if heading_text.lower() == heading.lower():
-                    new_lines.append(content)
-                    inserted = True
-        if not inserted:
-            return f"Heading '{heading}' not found in '{path}'."
-        new_content = "\n".join(new_lines)
-    elif mode == "search-replace":
-        if not search:
-            return "Search parameter required for search-replace mode."
-        if regex:
-            new_content = re.sub(search, replace, existing)
+        wanted = heading.lstrip("#").strip().casefold()
+        if not wanted:
+            return "Error: heading parameter required for after-heading mode."
+        _, prose = split_frontmatter(existing)
+        offset = len(existing) - len(prose)
+        fence_char = ""
+        fence_length = 0
+        for line in prose.splitlines(keepends=True):
+            fence = re.match(r"^ {0,3}(`{3,}|~{3,})(.*)$", line.rstrip("\r\n"))
+            if fence_char:
+                if (fence and fence[1][0] == fence_char
+                        and len(fence[1]) >= fence_length
+                        and not fence[2].strip()):
+                    fence_char = ""
+            elif fence:
+                fence_char, fence_length = fence[1][0], len(fence[1])
+            else:
+                match = re.match(r"^#{1,6}\s+(.+?)\s*$", line)
+                if match and re.sub(r"\s+#+$", "", match[1]).casefold() == wanted:
+                    end = offset + len(line)
+                    separator = "" if line.endswith("\n") else "\n"
+                    new_content = (
+                        existing[:end] + separator + content + "\n"
+                        + existing[end:]
+                    )
+                    break
+            offset += len(line)
         else:
-            new_content = existing.replace(search, replace)
-        if new_content == existing:
-            return "No matches found for search string."
+            return f"Error: heading '{heading}' not found in '{path}'."
     else:
-        return f"Unknown mode: {mode}. Use: overwrite, append, prepend, after-heading, search-replace"
-
+        if not search:
+            return "Error: search parameter required for search-replace mode."
+        try:
+            pattern = search if regex else re.escape(search)
+            new_content, matches = re.subn(pattern, lambda match: replace, existing)
+        except re.error:
+            return "Error: invalid regex search pattern."
+        if not matches:
+            return "No matches found for search string."
     await backend.write_note(path, new_content)
+    if matches is not None:
+        return f"Updated '{path}': {matches} matches replaced."
     return f"Updated '{path}' ({mode})."
 
 
@@ -491,11 +441,7 @@ async def obsidian_move_note(path: str, new_path: str) -> str:
         path: Current path of the note
         new_path: New path for the note
     """
-    doc_id = path
-    try:
-        await backend.rename_note(doc_id, new_path)
-    except ValueError as e:
-        return str(e)
+    await backend.rename_note(path, new_path)
     return f"Moved '{path}' -> '{new_path}'."
 
 
@@ -509,14 +455,10 @@ async def obsidian_duplicate_note(path: str, new_path: str = "") -> str:
         path: Path to the note to duplicate
         new_path: Path for the copy (default: adds ' copy' before extension)
     """
-    doc_id = path
-    content = await _legacy_content(doc_id)
-    if content is None:
-        return f"Note '{path}' not found."
     if not new_path:
-        base, ext = path.rsplit(".", 1) if "." in path else (path, "md")
-        new_path = f"{base} copy.{ext}"
-    await backend.write_note(new_path, content, create=True)
+        base, ext = os.path.splitext(path)
+        new_path = f"{base} copy{ext}"
+    await backend.copy_note(path, new_path)
     return f"Duplicated '{path}' -> '{new_path}'."
 
 
@@ -562,45 +504,33 @@ async def obsidian_manage_properties(
         properties: JSON string of properties to set (for 'set' action)
         keys: Comma-separated property keys to delete (for 'delete' action)
     """
-    doc_id = path
-    content = await _legacy_content(doc_id)
+    content = await _legacy_content(path)
     if content is None:
         return f"Note '{path}' not found."
-
-    props, body = _parse_frontmatter(content)
-
+    if not path.lower().endswith(".md"):
+        return "Error: properties require a .md file."
     if action == "get":
-        if not props:
-            return "No properties found."
-        return json.dumps(props, ensure_ascii=False, indent=2)
-
-    elif action == "set":
-        if not properties:
-            return "Properties parameter required for 'set' action."
+        return json.dumps(get_properties(content), ensure_ascii=False, indent=2)
+    if action == "set":
         try:
-            new_props = json.loads(properties)
+            props = json.loads(properties)
         except json.JSONDecodeError:
-            return "Invalid JSON in properties parameter."
-        props.update(new_props)
-        fm = _serialize_frontmatter(props)
-        new_content = fm + "\n" + body
-        await backend.write_note(path, new_content)
-        return f"Updated properties of '{path}'."
-
+            return "Error: invalid JSON in properties parameter."
+        if not isinstance(props, dict):
+            return "Error: properties must be a JSON object."
+        new_content = set_properties(content, props)
     elif action == "delete":
         if not keys:
-            return "Keys parameter required for 'delete' action."
-        for key in [k.strip() for k in keys.split(",")]:
-            props.pop(key, None)
-        if props:
-            fm = _serialize_frontmatter(props)
-            new_content = fm + "\n" + body
-        else:
-            new_content = body
-        await backend.write_note(path, new_content)
-        return f"Deleted properties from '{path}'."
-
-    return f"Unknown action: {action}. Use: get, set, delete"
+            return "Error: keys parameter required for delete."
+        new_content = delete_properties(
+            content, [key.strip() for key in keys.split(",")]
+        )
+    else:
+        return f"Error: unknown action: {action}. Use: get, set, delete"
+    if new_content == content:
+        return f"No property changes in '{path}'."
+    await backend.write_note(path, new_content)
+    return f"Updated properties of '{path}'."
 
 
 # 10. obsidian-manage-tags
@@ -611,60 +541,42 @@ async def obsidian_manage_tags(
     action: str = "list",
     tags: str = "",
 ) -> str:
-    """Manage tags on a note (frontmatter and inline).
+    """Manage frontmatter tags and report inline tags without editing them.
 
     Args:
         path: Path to the note
         action: One of: list, add, remove
         tags: Comma-separated tags (without #) for add/remove
     """
-    doc_id = path
-    content = await _legacy_content(doc_id)
+    content = await _legacy_content(path)
     if content is None:
         return f"Note '{path}' not found."
-
-    props, body = _parse_frontmatter(content)
-
-    # Get current tags from frontmatter
-    fm_tags = props.get("tags", [])
-    if isinstance(fm_tags, str):
-        fm_tags = [fm_tags]
-
-    # Get inline tags
-    inline_tags = re.findall(r'(?<!\w)#([\w/\-]+)', body)
-
+    if not path.lower().endswith(".md"):
+        return "Error: tags require a .md file."
+    props = get_properties(content)
+    _, body = split_frontmatter(content)
+    value = props.get("tags", [])
+    fm_tags = [] if value is None else [str(tag) for tag in (
+        value if isinstance(value, list) else [value])]
     if action == "list":
+        inline_tags = re.findall(r'(?<!\w)#([\w/\-]+)', body)
         return json.dumps({
             "frontmatter_tags": fm_tags,
-            "inline_tags": list(set(inline_tags)),
+            "inline_tags": sorted(set(inline_tags)),
         }, ensure_ascii=False, indent=2)
-
-    tag_list = [t.strip().lstrip("#") for t in tags.split(",") if t.strip()]
+    tag_list = [
+        tag.strip().lstrip("#") for tag in tags.split(",")
+        if tag.strip().lstrip("#")
+    ]
+    if action not in ("add", "remove"):
+        return f"Error: unknown action: {action}. Use: list, add, remove"
     if not tag_list:
-        return "Tags parameter required."
-
-    if action == "add":
-        for tag in tag_list:
-            if tag not in fm_tags:
-                fm_tags.append(tag)
-        props["tags"] = fm_tags
-        fm = _serialize_frontmatter(props)
-        new_content = fm + "\n" + body
-        await backend.write_note(path, new_content)
-        return f"Added tags {tag_list} to '{path}'."
-
-    elif action == "remove":
-        fm_tags = [t for t in fm_tags if t not in tag_list]
-        if fm_tags:
-            props["tags"] = fm_tags
-        else:
-            props.pop("tags", None)
-        fm = _serialize_frontmatter(props)
-        new_content = fm + "\n" + body if props else body
-        await backend.write_note(path, new_content)
-        return f"Removed tags {tag_list} from '{path}'."
-
-    return f"Unknown action: {action}. Use: list, add, remove"
+        return "Error: tags parameter required."
+    new_content = (add_tags if action == "add" else remove_tags)(content, tag_list)
+    if new_content == content:
+        return f"No frontmatter tag changes in '{path}'; inline tags untouched."
+    await backend.write_note(path, new_content)
+    return f"Updated frontmatter tags in '{path}'; inline tags untouched."
 
 
 # 11. obsidian-get-all-tags
@@ -937,26 +849,26 @@ async def obsidian_create_from_template(
     Args:
         template_path: Path to the template note
         new_path: Path for the new note
-        variables: JSON string of variable replacements (e.g. {"title": "My Note", "date": "2026-03-20"})
+        variables: JSON object whose values are rendered as JSON scalars.
     """
-    doc_id = template_path
-    content = await _legacy_content(doc_id)
+    content = await _legacy_content(template_path)
     if content is None:
         return f"Template '{template_path}' not found."
-
     if variables:
         try:
-            vars_dict = json.loads(variables)
+            replacements = json.loads(variables)
         except json.JSONDecodeError:
-            return "Invalid JSON in variables parameter."
-        for key, val in vars_dict.items():
-            content = content.replace("{{" + key + "}}", str(val))
-
-    new_doc_id = new_path
-    existing = await _legacy_metadata(new_doc_id)
-    if existing and not existing.get("deleted"):
-        return f"Note '{new_path}' already exists."
-
+            return "Error: invalid JSON in variables parameter."
+        if not isinstance(replacements, dict):
+            return "Error: template variables must be a JSON object."
+        if any(isinstance(value, (dict, list)) or value is None
+               for value in replacements.values()):
+            return "Error: template values must be string, number or boolean JSON scalars."
+        content = re.sub(
+            r"\{\{\s*([^{}]*?)\s*\}\}",
+            lambda match: json.dumps(replacements[match[1]], ensure_ascii=False)
+            if match[1] in replacements else match[0], content,
+        )
     await backend.write_note(new_path, content, create=True)
     return f"Created '{new_path}' from template '{template_path}'."
 
