@@ -167,12 +167,12 @@ class AuthorizePasswordGate:
                     return None
             except ValueError:
                 pass  # malformed length: the streaming cap below applies
-        buffer = b""
+        buffer = bytearray()
         async for chunk in request.stream():
-            buffer += chunk
-            if len(buffer) > self.max_body_bytes:
+            if len(buffer) + len(chunk) > self.max_body_bytes:
                 return None
-        return buffer
+            buffer.extend(chunk)
+        return bytes(buffer)
 
     def _form_response(
         self, params: Iterable[tuple[str, str]], status_code: int = 200

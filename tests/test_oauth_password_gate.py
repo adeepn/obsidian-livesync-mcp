@@ -169,6 +169,32 @@ class PasswordGateTests(unittest.TestCase):
             self.provider, recording_inner
         )
 
+    def test_many_small_body_chunks_and_midstream_limit(self):
+        import time
+
+        class StreamingRequest:
+            headers = {}
+            consumed = 0
+
+            async def stream(self):
+                for _ in range(32768):
+                    self.consumed += 1
+                    yield b"x" * 256
+
+        self.gate.max_body_bytes = 32768 * 256
+        request = StreamingRequest()
+        start = time.monotonic()
+        body = asyncio.run(self.gate._read_limited_body(request))
+        elapsed = time.monotonic() - start
+        self.assertEqual(body, b"x" * self.gate.max_body_bytes)
+        self.assertIsInstance(body, bytes)
+        self.assertLess(elapsed, 2.0)
+
+        self.gate.max_body_bytes = 512
+        request = StreamingRequest()
+        self.assertIsNone(asyncio.run(self.gate._read_limited_body(request)))
+        self.assertEqual(request.consumed, 3)
+
     def test_get_returns_password_form_with_original_params(self):
         query = urllib.parse.urlencode({**AUTHORIZE_PARAMS, "state": "st'ate <x>"})
 
