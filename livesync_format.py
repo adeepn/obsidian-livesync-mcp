@@ -24,6 +24,22 @@ TEXT_EXTENSIONS = frozenset(
 
 _TEXT_SUFFIXES = tuple(TEXT_EXTENSIONS)
 
+# Write-side binary denylist. The read classification (TEXT_EXTENSIONS)
+# describes how *upstream* stored a document; it must not gate writes,
+# or textual-but-unclassified formats (.base, .json, .yaml) become
+# unwritable. Writes are therefore allowed for every path except an
+# explicit list of binary extensions. SVG is deliberately absent: it
+# is XML text.
+WRITABLE_BINARY_EXTENSIONS = frozenset(
+    {
+        ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".ico",
+        ".pdf", ".zip", ".gz",
+        ".mp3", ".mp4", ".mov", ".avi", ".wav", ".flac", ".ogg",
+        ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
+        ".epub", ".mobi",
+    }
+)
+
 # LiveSync metadata namespaces (upstream fileaccess.const.ts): hidden files,
 # chunk documents, machine info, obfuscated ids. Case is ignored on purpose
 # (audit B7), since ids are lowercased anyway.
@@ -121,6 +137,23 @@ def is_text_doc(doc_type: str | None, path: str) -> bool:
     if doc_type == "plain":
         return True
     return path.endswith(_TEXT_SUFFIXES)
+
+
+def is_writable_text_path(path: str) -> bool:
+    """Write-side policy: whether a path may receive a textual body.
+
+    Inverse of the read classification: a path is writable unless its
+    extension is in the explicit binary denylist
+    (``WRITABLE_BINARY_EXTENSIONS``). Textual formats upstream never
+    classifies — ``.base`` (YAML), ``.json``, ``.yaml``, ``.svg`` —
+    stay writable, because every write this server performs is plain
+    text regardless of extension (audit B3). Case-insensitive: a
+    binary ``Photo.PNG`` must not slip through spelling.
+    """
+    lowered = path.lower()
+    return not any(
+        lowered.endswith(extension) for extension in WRITABLE_BINARY_EXTENSIONS
+    )
 
 
 def assemble_text(chunk_datas: list[str]) -> str:

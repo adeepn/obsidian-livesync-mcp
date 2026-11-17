@@ -676,6 +676,19 @@ async def test_write_requires_text():
     assert log == []
 
 
+async def test_write_allows_textual_base_files():
+    # .base is textual YAML advertised by the tools (fetch/create);
+    # the write-side policy is a binary denylist, not the upstream
+    # read classification, so .base must be writable as plain text.
+    async with fake_backend({}) as (backend, _log):
+        meta = await backend.write_note(
+            "Tasks.base", "views: []", create=True
+        )
+        content = await backend.read_note("Tasks.base")
+    assert meta["type"] == "plain"
+    assert content["text"] == "views: []"
+
+
 async def test_write_size_is_decoded_bytes():
     # Spec §7.4: size is the decoded body length, not the chunk length.
     content = "Съешь ещё этих мягких булок"

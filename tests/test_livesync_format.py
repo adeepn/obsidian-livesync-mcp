@@ -6,6 +6,7 @@ import hashlib
 import pytest
 
 from livesync_format import (
+    WRITABLE_BINARY_EXTENSIONS,
     ForbiddenPathError,
     TEXT_EXTENSIONS,
     assemble_binary,
@@ -14,6 +15,7 @@ from livesync_format import (
     doc_type_for,
     encode_newnote,
     is_text_doc,
+    is_writable_text_path,
     new_metadata_doc,
     path2id,
     soft_delete_revision,
@@ -115,6 +117,37 @@ def test_is_text_doc_text_extensions(extension):
 @pytest.mark.parametrize("extension", [".png", ".jpg", ".pdf", ".bin"])
 def test_is_text_doc_binary_extensions(extension):
     assert is_text_doc("newnote", "note" + extension) is False
+
+
+def test_is_writable_text_path_write_side_policy():
+    # The write allowlist is the inverse of the read classification:
+    # everything textual the tools advertise is writable, including
+    # extensions upstream never classifies as text (.base, .json,
+    # .yaml) and text-ish formats (.svg, .canvas).
+    for path in [
+        "Tasks.base", "DB.base", "note.md", "Board.canvas", "logo.svg",
+        "data.json", "conf.yaml", "no-extension", "notes.txt",
+    ]:
+        assert is_writable_text_path(path) is True, path
+
+
+@pytest.mark.parametrize(
+    "extension",
+    sorted(WRITABLE_BINARY_EXTENSIONS),
+)
+def test_is_writable_text_path_binary_denylist(extension):
+    assert is_writable_text_path("file" + extension) is False
+
+
+def test_is_writable_text_path_denylist_is_case_insensitive():
+    assert is_writable_text_path("Photo.PNG") is False
+    assert is_writable_text_path("Archive.ZIP") is False
+
+
+def test_is_writable_text_path_svg_is_not_a_binary_extension():
+    # Regression guard: svg is XML text and must stay writable even if
+    # someone "completes" the image denylist carelessly.
+    assert ".svg" not in WRITABLE_BINARY_EXTENSIONS
 
 
 # --- Document and chunk codecs (task 3) ---

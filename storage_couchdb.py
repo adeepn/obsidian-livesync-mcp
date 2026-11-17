@@ -50,6 +50,7 @@ from livesync_format import (
     chunk_id_for,
     doc_type_for,
     is_text_doc,
+    is_writable_text_path,
     new_metadata_doc,
     path2id,
     soft_delete_revision,
@@ -826,7 +827,7 @@ class CouchDBBackend:
         — a device edit that landed in between is never overwritten.
         """
         validate_vault_path(path)
-        if not is_text_doc(None, path):
+        if not is_writable_text_path(path):
             raise BinaryNoteError(
                 f"note {path!r} has a binary extension; "
                 "this server writes textual notes only"
