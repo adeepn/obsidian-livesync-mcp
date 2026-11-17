@@ -1253,6 +1253,7 @@ async def test_write_normalized_binary_path_refused_before_io(path):
     {'data': 'different', 'type': 'leaf'},
     {'data': 'same', 'type': 'plain'},
     {'data': 'same', 'type': 'leaf', 'deleted': True},
+    {'data': 'same', 'type': 'leaf', 'e_': True},
     None,
 ])
 async def test_chunk_creation_409_rereads_winner(winner):
@@ -1358,3 +1359,15 @@ async def test_body_replacement_clears_colliding_eden():
         await backend.write_note('a.md', new)
         assert (await backend.read_note('a.md'))['text'] == new
         assert (await stored_doc(raw, 'a.md'))['eden'] == {}
+
+
+async def test_encrypted_existing_chunk_refused_without_metadata_write():
+    chunk = chunk_id_for('same')
+    docs = {chunk: {'_id': chunk, 'type': 'leaf', 'data': 'same', 'e_': True},
+            'a.md': plain_note('a.md', 'a.md', [])}
+    async with fake_vault(docs) as (backend, raw, log):
+        before = await stored_doc(raw, 'a.md')
+        with pytest.raises(StorageError):
+            await backend.write_note('a.md', 'same')
+        assert await stored_doc(raw, 'a.md') == before
+        assert not [r for r in log if r.method == 'PUT']

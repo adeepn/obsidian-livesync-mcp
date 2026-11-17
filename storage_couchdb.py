@@ -756,7 +756,8 @@ class CouchDBBackend:
         existing = await self._get_doc(chunk_id)
         if existing is not None:
             if (
-                not existing.get("deleted")
+                not existing.get("e_")
+                and not existing.get("deleted")
                 and existing.get("type") == "leaf"
                 and existing.get("data") == data
             ):
@@ -769,7 +770,7 @@ class CouchDBBackend:
             )
             raise StorageError(
                 f"note {path!r} cannot be written: an existing shared "
-                "content chunk holds different data"
+                "content chunk is encrypted or holds different data"
             )
         try:
             await self._put_doc(chunk_id, {"data": data, "type": "leaf"})
@@ -779,12 +780,13 @@ class CouchDBBackend:
             winner = await self._get_doc(chunk_id)
             if not (
                 winner is not None
+                and not winner.get("e_")
                 and not winner.get("deleted")
                 and winner.get("type") == "leaf"
                 and winner.get("data") == data
             ):
                 raise ConcurrentModification(
-                    f"note {path!r} cannot be written: content chunk changed concurrently"
+                    f"note {path!r} cannot be written: content chunk is encrypted or changed concurrently"
                 ) from None
         return chunk_id
 
