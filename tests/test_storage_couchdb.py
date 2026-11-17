@@ -1289,3 +1289,25 @@ async def test_chunk_creation_409_rereads_winner(winner):
         assert len(writes) == (1 if winner == {'data': 'same', 'type': 'leaf'} else 0)
     finally:
         await backend.close()
+
+
+@pytest.mark.parametrize('path,folder', [('Inbox/Note.md', 'inbox'),
+                                        ('inbox/Note.md', 'INBOX')])
+async def test_folder_identity_is_case_insensitive(path, folder):
+    async with fake_backend({'inbox/note.md': plain_note('inbox/note.md', path, [])}) as (backend, _):
+        assert [m['path'] for m in await backend.list_notes(folder=folder)] == [path]
+
+
+@pytest.mark.parametrize('extension,is_text', [('.md', True), ('.canvas', True),
+                                              ('.png', False)])
+async def test_empty_newnote_classification(extension, is_text):
+    path = 'empty' + extension
+    doc = plain_note(path, path, [], type='newnote', eden={})
+    async with fake_backend({path: doc}) as (backend, _):
+        content = await backend.read_note(path)
+        assert content['is_text'] is is_text
+        assert content['text'] == ('' if is_text else None)
+        if extension == '.md':
+            assert [text async for _, text in backend.iterate_texts()] == ['']
+            await backend.write_note(path, 'edited')
+            assert (await backend.read_note(path))['text'] == 'edited'

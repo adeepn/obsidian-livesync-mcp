@@ -437,7 +437,7 @@ class CouchDBBackend:
             meta = self._meta_from_doc(doc)
             path = meta["path"]
             if folder_prefix:
-                if not path.startswith(folder_prefix + "/"):
+                if not path.lower().startswith(folder_prefix.lower() + "/"):
                     continue
                 remainder = path[len(folder_prefix) + 1 :]
             else:
@@ -567,7 +567,9 @@ class CouchDBBackend:
                 f"note {path!r} is corrupt: invalid children field"
             )
         if not children:
-            if doc_type == "plain":
+            if doc_type == "plain" or (
+                not doc.get("eden") and is_text_doc(doc_type, path)
+            ):
                 return NoteContent(
                     meta=meta, text="", data=None, is_text=True,
                     rev=meta["rev"],
