@@ -115,6 +115,7 @@ def create_app(cfg: Config) -> FastMCP:
     if mode == "bearer":
         kwargs["token_verifier"] = StaticBearerTokenVerifier(cfg.api_key)
         kwargs["auth"] = AuthSettings(
+            validate_token_resource=True,
             issuer_url=AnyHttpUrl(cfg.server_url),
             resource_server_url=AnyHttpUrl(f"{cfg.server_url}/mcp"),
             required_scopes=["obsidian"],
@@ -127,6 +128,7 @@ def create_app(cfg: Config) -> FastMCP:
             client_secret=cfg.oauth_client_secret,
         )
         kwargs["auth"] = AuthSettings(
+            validate_token_resource=True,
             issuer_url=AnyHttpUrl(cfg.server_url),
             resource_server_url=AnyHttpUrl(f"{cfg.server_url}/mcp"),
             client_registration_options=ClientRegistrationOptions(
