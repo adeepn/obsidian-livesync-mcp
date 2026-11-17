@@ -91,7 +91,7 @@ cp .env.example .env
 
 `run.py` loads `.env` via python-dotenv before the server reads the environment. If you start the server any other way (systemd uses `EnvironmentFile=`), the variables must already be in the environment.
 
-The server refuses to start when required variables are missing, an auth mode is not configured, or a secret still holds a placeholder value from `.env.example`.
+The server validates configuration when the application is constructed at import. Missing required variables, an absent auth mode, or placeholder secrets from `.env.example` fail immediately. `create_app(cfg)` accepts an injected validated `Config`; auth, URL, host, port, and backend startup all use that same configuration. Environment changes after construction require a new application or restart. OAuth still uses the preconfigured client registration and redirect URI rules below.
 
 | Variable | Description | Default |
 |---|---|---|

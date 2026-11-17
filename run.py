@@ -2,8 +2,7 @@
 
 from dotenv import load_dotenv
 
-# Load .env before importing server: server.py reads os.environ at import
-# time (audit A2), so environment expansion must happen first.
+# Load .env before server constructs its application from validated config.
 load_dotenv()
 
 from server import mcp  # noqa: E402

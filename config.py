@@ -8,6 +8,7 @@ copied from ``.env.example`` are rejected at startup (spec section 6).
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import Literal, Mapping
 from urllib.parse import parse_qs
@@ -192,13 +193,15 @@ def _load_port(env: Mapping[str, str]) -> int:
     return port
 
 
-def load_config(env: Mapping[str, str]) -> Config:
+def load_config(env: Mapping[str, str] | None = None) -> Config:
     """Validate the environment once and build a Config.
 
     Validation order: backend selection, credentials of the chosen backend,
     then client auth. Raises ConfigError on the first problem; messages
     mention variable names but never secret values.
     """
+    if env is None:
+        env = os.environ
     from scan_budget import limits
     try:
         limits(env)

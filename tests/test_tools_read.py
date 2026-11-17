@@ -249,59 +249,40 @@ def test_import_quiets_httpx_request_logging():
     assert result.returncode == 0, result.stderr
 
 
-async def test_lifespan_reconstructs_backend_from_startup_config(monkeypatch):
-    # A backend built from import-time config must never survive into
-    # startup: the lifespan re-runs load_config and hands THAT cfg to the
-    # factory, replacing any stale backend.
-    stale, fresh = FakeBackend(), FakeBackend()
-    monkeypatch.setattr(server, "backend", stale, raising=False)
-    startup_cfg = SimpleNamespace(backend="couchdb")
+async def test_lifespan_uses_factory_config(monkeypatch):
+    cfg = server.load_config()
+    fresh = FakeBackend()
     received = []
 
-    def fake_get_backend(cfg):
-        received.append(cfg)
+    def fake_get_backend(config):
+        received.append(config)
         return fresh
 
-    monkeypatch.setattr(server, "load_config", lambda env: startup_cfg)
+    app = server.create_app(cfg)
     monkeypatch.setattr(server, "get_backend", fake_get_backend)
-    monkeypatch.setattr(server, "AUTH_MODE", "bearer")
-    async with server._lifespan(server.mcp):
-        assert received == [startup_cfg]
-        assert server.backend is fresh
-        assert stale.calls == []
-    assert server.backend is None
+    # Mutation after construction must affect neither auth nor backend config.
+    monkeypatch.setenv("COUCHDB_DATABASE", "different-vault")
+    monkeypatch.setenv("MCP_API_KEY", "different-key")
+    async with app.settings.lifespan(app):
+        assert received == [cfg]
+        assert fresh.calls == [("startup_check", ())]
     assert fresh.calls[-1] == ("close", ())
 
 
-def test_import_without_configuration_and_startup_fails_closed():
+def test_import_without_configuration_fails_closed():
     env = {key: value for key, value in os.environ.items()
            if not key.startswith(("COUCHDB_", "MCP_", "OAUTH_", "LIVESYNC_"))}
-    code = """
-import asyncio
-import server
-from config import ConfigError
-assert server.backend is None
-async def check():
-    assert 'not started' in await server.obsidian_fetch('note.md')
-    try:
-        async with server._lifespan(server.mcp):
-            raise AssertionError('served without configuration')
-    except ConfigError:
-        pass
-asyncio.run(check())
-"""
-    result = subprocess.run([sys.executable, "-c", code], env=env,
+    result = subprocess.run([sys.executable, "-c", "import server"], env=env,
                             capture_output=True, text=True)
-    assert result.returncode == 0, result.stderr
+    assert result.returncode != 0
+    assert "ConfigError" in result.stderr and "LIVESYNC_BACKEND" in result.stderr
 
 
 async def test_lifespan_checks_and_closes_backend(tools, monkeypatch):
     module, fake = tools
-    monkeypatch.setattr(module, "load_config", lambda env: object())
+    app = module.create_app(module.load_config())
     monkeypatch.setattr(module, "get_backend", lambda cfg: fake)
-    monkeypatch.setattr(module, "AUTH_MODE", "bearer")
-    async with module._lifespan(module.mcp):
-        assert module.backend is fake
+    async with app.settings.lifespan(app):
         assert fake.calls == [("startup_check", ())]
     assert fake.calls[-1] == ("close", ())
 
@@ -324,30 +305,16 @@ async def test_legacy_canvas_add_can_update_existing_file(tools):
     assert json.loads(fake.notes["Board.canvas"]["text"])["nodes"][0]["text"] == "hello"
 
 
-def test_startup_rejects_auth_added_after_import():
-    env = {key: value for key, value in os.environ.items()
-           if not key.startswith(("COUCHDB_", "MCP_", "OAUTH_", "LIVESYNC_"))}
-    code = """
-import asyncio
-import os
-import server
-from config import ConfigError
-from tests.fake_backend import FakeBackend
-os.environ.update(LIVESYNC_BACKEND='couchdb', COUCHDB_URL='http://localhost:5984',
-                  COUCHDB_USER='test', COUCHDB_PASSWORD='test',
-                  COUCHDB_DATABASE='vault', MCP_API_KEY='test')
-server.backend = FakeBackend()
-async def check():
-    try:
-        async with server._lifespan(server.mcp):
-            raise AssertionError('served with authentication unconfigured')
-    except ConfigError:
-        pass
-asyncio.run(check())
-"""
-    result = subprocess.run([sys.executable, "-c", code], env=env,
-                            capture_output=True, text=True)
-    assert result.returncode == 0, result.stderr
+async def test_default_lifespan_closes_on_startup_failure(monkeypatch):
+    fake = FakeBackend()
+    fake.errors["startup_check"] = StorageUnavailable()
+    monkeypatch.setattr(server, "get_backend", lambda cfg: fake)
+    with pytest.raises(StorageUnavailable):
+        async with server.mcp.settings.lifespan(server.mcp):
+            pytest.fail("served after startup failure")
+    assert server.backend is None
+    assert fake.calls[-1] == ("close", ())
+
 
 async def test_regex_worker_tool_timeout_and_normal(tools, monkeypatch):
     import regex_runner
@@ -445,3 +412,57 @@ async def test_truncated_graph_does_not_label_unread_bodies_orphaned(tools, monk
     assert result['truncated'] is True
     assert result['orphans'] == []
     assert set(result['skipped']) == {'a.md', 'b.md'}
+
+
+def test_app_factory_uses_injected_config_and_isolates_backends():
+    env = _smoke_env({'MCP_API_KEY': 'import-key-for-test'})
+    code = """
+import asyncio
+from dataclasses import replace
+import server
+from config import load_config
+from tests.fake_backend import FakeBackend
+cfg = load_config()
+bearer_cfg = replace(cfg, api_key='injected-bearer', host='127.0.0.2', port=9191)
+oauth_cfg = replace(cfg, api_key='', oauth_password='injected-password',
+                    oauth_client_id='injected-client', oauth_client_secret='injected-secret',
+                    server_url='https://factory.test')
+a = server.create_app(bearer_cfg)
+b = server.create_app(oauth_cfg)
+assert a.settings.host == '127.0.0.2' and a.settings.port == 9191
+assert a._auth_server_provider is None
+assert b._auth_server_provider is not None
+assert str(b.settings.auth.issuer_url).startswith('https://factory.test')
+async def check():
+    assert await a._token_verifier.verify_token('injected-bearer') is not None
+    assert await a._token_verifier.verify_token(cfg.api_key) is None
+    stores = [FakeBackend(), FakeBackend()]
+    stores[0].add('n.md', 'first')
+    stores[1].add('n.md', 'second')
+    stores[1].index_truncated = True
+    received = []
+    def get_backend(config):
+        received.append(config)
+        return stores[len(received)-1]
+    server.get_backend = get_backend
+    async with a.settings.lifespan(a), b.settings.lifespan(b):
+        assert received == [bearer_cfg, oauth_cfg]
+        for app, expected in ((a, 'first'), (b, 'second')):
+            tools = await app.list_tools()
+            assert any(t.name == 'obsidian_fetch' for t in tools)
+            result = await app.call_tool('obsidian_fetch', {'path': 'n.md'})
+            assert expected in str(result), result
+        result = await b.call_tool('obsidian_get_link_graph', {})
+        assert 'truncated' in str(result), result
+    assert all(s.calls[-1] == ('close', ()) for s in stores)
+asyncio.run(check())
+"""
+    result = subprocess.run([sys.executable, '-c', code], env=env,
+                            capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+
+
+def test_server_has_no_direct_environment_reads():
+    from pathlib import Path
+    assert 'os.environ' not in Path(server.__file__).read_text()
+    assert 'os.getenv' not in Path(server.__file__).read_text()

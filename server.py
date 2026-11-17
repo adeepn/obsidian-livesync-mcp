@@ -41,25 +41,6 @@ from links import GraphBuilder, extract_links, resolve_link
 from auth_config import StaticBearerTokenVerifier, select_auth_mode
 from oauth_provider import SimpleOAuthProvider
 
-# --- Configuration ---
-MCP_API_KEY = os.environ.get("MCP_API_KEY", "")
-OAUTH_PASSWORD = os.environ.get("OAUTH_PASSWORD", "")
-OAUTH_CLIENT_ID = os.environ.get("OAUTH_CLIENT_ID", "")
-OAUTH_CLIENT_SECRET = os.environ.get("OAUTH_CLIENT_SECRET", "")
-SERVER_URL = os.environ.get("MCP_SERVER_URL", "https://localhost:8484")
-
-# --- Initialize MCP ---
-MCP_HOST = os.environ.get("MCP_HOST", "0.0.0.0")
-try:
-    MCP_PORT = int(os.environ.get("MCP_PORT", "8484"))
-except ValueError:
-    MCP_PORT = 8484  # load_config rejects the invalid value at startup.
-try:
-    AUTH_MODE = select_auth_mode(MCP_API_KEY, OAUTH_PASSWORD)
-except RuntimeError:
-    AUTH_MODE = None  # Import is safe; lifespan still fails closed.
-
-
 def get_backend(cfg: Config) -> StorageBackend:
     """Construct the selected storage implementation."""
     if cfg.backend == "s3":
@@ -74,68 +55,99 @@ def get_backend(cfg: Config) -> StorageBackend:
     )
 
 
-# The backend is deliberately NOT constructed at import: only the lifespan
-# builds it, from the configuration validated at startup, so config changes
-# between import and startup are honored for the connection actually used.
-# Tools invoked before startup report "server not started".
+# Direct Python callers use the module backend; registered tools bind their
+# app's backend per call, so separate factory instances cannot cross vaults.
 backend: StorageBackend | None = None
+_active_backend: ContextVar[StorageBackend | None] = ContextVar("active_backend")
+_tool_handlers = []
 
 
-@asynccontextmanager
-async def _lifespan(app):
-    global backend
-    cfg = load_config(os.environ)
-    if AUTH_MODE is None:
-        raise ConfigError(
-            "Authentication was absent at import; restart with configuration set."
-        )
-    startup_backend = get_backend(cfg)
-    backend = startup_backend
-    try:
-        await startup_backend.startup_check()
-        yield
-    finally:
-        await startup_backend.close()
-        backend = None
+def _backend() -> StorageBackend | None:
+    return _active_backend.get(backend)
 
 
-mcp_kwargs: dict[str, Any] = {
-    "name": "Obsidian MCP Server",
-    "instructions": "MCP server for Obsidian vault via CouchDB/LiveSync",
-    "host": MCP_HOST,
-    "lifespan": _lifespan,
-    "port": MCP_PORT,
-    "transport_security": TransportSecuritySettings(
-        enable_dns_rebinding_protection=False,
-    ),
-}
+def _tool(handler):
+    _tool_handlers.append(handler)
+    return handler
 
-if AUTH_MODE == "bearer":
-    mcp_kwargs["token_verifier"] = StaticBearerTokenVerifier(MCP_API_KEY)
-    mcp_kwargs["auth"] = AuthSettings(
-        issuer_url=AnyHttpUrl(SERVER_URL),
-        resource_server_url=AnyHttpUrl(f"{SERVER_URL}/mcp"),
-        required_scopes=["obsidian"],
-    )
-elif AUTH_MODE == "oauth":
-    oauth_provider = SimpleOAuthProvider(
-        server_url=SERVER_URL,
-        access_password=OAUTH_PASSWORD,
-        client_id=OAUTH_CLIENT_ID,
-        client_secret=OAUTH_CLIENT_SECRET,
-    )
-    mcp_kwargs["auth_server_provider"] = oauth_provider
-    mcp_kwargs["auth"] = AuthSettings(
-        issuer_url=AnyHttpUrl(SERVER_URL),
-        resource_server_url=AnyHttpUrl(f"{SERVER_URL}/mcp"),
-        client_registration_options=ClientRegistrationOptions(
-            enabled=False,
-            valid_scopes=["claudeai"],
-            default_scopes=["claudeai"],
+
+def create_app(cfg: Config) -> FastMCP:
+    """Build auth, transport and backend startup from one validated config.
+
+    Configuration is immutable for the lifetime of this application. Build
+    another application to consume changed configuration.
+    """
+    state = {"backend": None}
+
+    @asynccontextmanager
+    async def lifespan(app):
+        global backend
+        startup_backend = get_backend(cfg)
+        state["backend"] = startup_backend
+        is_default = app is globals().get("mcp")
+        if is_default:
+            backend = startup_backend
+        try:
+            await startup_backend.startup_check()
+            yield
+        finally:
+            try:
+                await startup_backend.close()
+            finally:
+                state["backend"] = None
+                if is_default:
+                    backend = None
+
+    kwargs: dict[str, Any] = {
+        "name": "Obsidian MCP Server",
+        "instructions": "MCP server for Obsidian vault via CouchDB/LiveSync",
+        "host": cfg.host,
+        "port": cfg.port,
+        "lifespan": lifespan,
+        "transport_security": TransportSecuritySettings(
+            enable_dns_rebinding_protection=False,
         ),
-    )
+    }
+    mode = select_auth_mode(cfg.api_key, cfg.oauth_password)
+    if mode == "bearer":
+        kwargs["token_verifier"] = StaticBearerTokenVerifier(cfg.api_key)
+        kwargs["auth"] = AuthSettings(
+            issuer_url=AnyHttpUrl(cfg.server_url),
+            resource_server_url=AnyHttpUrl(f"{cfg.server_url}/mcp"),
+            required_scopes=["obsidian"],
+        )
+    else:
+        kwargs["auth_server_provider"] = SimpleOAuthProvider(
+            server_url=cfg.server_url,
+            access_password=cfg.oauth_password,
+            client_id=cfg.oauth_client_id,
+            client_secret=cfg.oauth_client_secret,
+        )
+        kwargs["auth"] = AuthSettings(
+            issuer_url=AnyHttpUrl(cfg.server_url),
+            resource_server_url=AnyHttpUrl(f"{cfg.server_url}/mcp"),
+            client_registration_options=ClientRegistrationOptions(
+                enabled=False,
+                valid_scopes=["claudeai"],
+                default_scopes=["claudeai"],
+            ),
+        )
+    app = FastMCP(**kwargs)
 
-mcp = FastMCP(**mcp_kwargs)
+    def bind(handler):
+        @wraps(handler)
+        async def bound(*args, **kwargs):
+            token = _active_backend.set(state["backend"])
+            try:
+                return await handler(*args, **kwargs)
+            finally:
+                _active_backend.reset(token)
+        return bound
+
+    for handler in _tool_handlers:
+        app.add_tool(bind(handler))
+    return app
+
 
 # --- Helper functions ---
 
@@ -171,7 +183,7 @@ def _storage_message(error: StorageError) -> str:
 def _tool_errors(handler):
     @wraps(handler)
     async def guarded(*args, **kwargs):
-        if backend is None:
+        if _backend() is None:
             return "Error: server not started; storage backend is unavailable."
         try:
             return await handler(*args, **kwargs)
@@ -195,7 +207,7 @@ async def _read_text_note(path: str) -> NoteContent | None:
     device edit landing between the tool's read and write surfaces as a
     ConcurrentModification error instead of being silently overwritten.
     """
-    note = await backend.read_note(path)
+    note = await _backend().read_note(path)
     if note is None:
         return None
     if not note["is_text"]:
@@ -252,7 +264,7 @@ def _vault_scan(handler):
             token = _scan_budget.set(budget)
             try:
                 response = await handler(*args, **kwargs)
-                if getattr(backend, "index_truncated", False):
+                if getattr(_backend(), "index_truncated", False):
                     budget.truncated = True
                 if budget.truncated:
                     try:
@@ -272,7 +284,7 @@ def _vault_scan(handler):
 async def _scan_notes():
     result = []
     budget = _scan_budget.get()
-    for meta in await backend.list_notes():
+    for meta in await _backend().list_notes():
         if budget and not budget.admit(meta["path"], len(json.dumps(meta).encode())):
             break
         result.append(meta)
@@ -281,7 +293,7 @@ async def _scan_notes():
 
 async def _scan_texts():
     budget = _scan_budget.get()
-    async with aclosing(backend.iterate_texts()) as texts:
+    async with aclosing(_backend().iterate_texts()) as texts:
         async for meta, text in texts:
             size = len(meta["path"].encode()) + (len(text.encode()) if text else 0)
             if budget and not budget.admit(meta["path"], size):
@@ -344,7 +356,7 @@ async def _tags() -> dict:
 # === TOOLS ===
 
 # 1. obsidian-search
-@mcp.tool()
+@_tool
 @_tool_errors
 @_vault_scan
 async def obsidian_search(query: str, regex: bool = False) -> str:
@@ -386,7 +398,7 @@ async def obsidian_search(query: str, regex: bool = False) -> str:
 
 
 # 2. obsidian-fetch
-@mcp.tool()
+@_tool
 @_tool_errors
 async def obsidian_fetch(path: str, include_properties: bool = True, include_stats: bool = False) -> str:
     """Fetch the content and metadata of a note, base, or canvas file.
@@ -396,7 +408,7 @@ async def obsidian_fetch(path: str, include_properties: bool = True, include_sta
         include_properties: Include frontmatter properties in response
         include_stats: Include word/character count statistics
     """
-    note = await backend.read_note(path)
+    note = await _backend().read_note(path)
     if note is None:
         return f"Note '{path}' not found."
     meta = note["meta"]
@@ -431,7 +443,7 @@ async def obsidian_fetch(path: str, include_properties: bool = True, include_sta
 
 
 # 3. obsidian-create-note
-@mcp.tool()
+@_tool
 @_tool_errors
 async def obsidian_create_note(
     path: str,
@@ -456,12 +468,12 @@ async def obsidian_create_note(
         if not isinstance(props, dict):
             return "Error: properties must be a JSON object."
         full_content = set_properties(content, props)
-    await backend.write_note(path, full_content, create=True)
+    await _backend().write_note(path, full_content, create=True)
     return f"Created '{path}'."
 
 
 # 4. obsidian-update-note
-@mcp.tool()
+@_tool
 @_tool_errors
 async def obsidian_update_note(
     path: str,
@@ -559,14 +571,14 @@ async def obsidian_update_note(
         if not matches:
             return "No matches found for search string."
     if new_content != existing:
-        await backend.write_note(path, new_content, expected_rev=note["rev"])
+        await _backend().write_note(path, new_content, expected_rev=note["rev"])
     if matches is not None:
         return f"Updated '{path}': {matches} matches replaced."
     return f"Updated '{path}' ({mode})."
 
 
 # 5. obsidian-delete-note
-@mcp.tool()
+@_tool
 @_tool_errors
 async def obsidian_delete_note(path: str) -> str:
     """Delete a note from the vault.
@@ -575,14 +587,14 @@ async def obsidian_delete_note(path: str) -> str:
         path: Path to the note to delete
     """
     doc_id = path
-    success = await backend.delete_note(doc_id)
+    success = await _backend().delete_note(doc_id)
     if success:
         return f"Deleted '{path}'."
     return f"Note '{path}' not found."
 
 
 # 6. obsidian-move-note
-@mcp.tool()
+@_tool
 @_tool_errors
 async def obsidian_move_note(path: str, new_path: str) -> str:
     """Move or rename a note.
@@ -591,12 +603,12 @@ async def obsidian_move_note(path: str, new_path: str) -> str:
         path: Current path of the note
         new_path: New path for the note
     """
-    await backend.rename_note(path, new_path)
+    await _backend().rename_note(path, new_path)
     return f"Moved '{path}' -> '{new_path}'."
 
 
 # 7. obsidian-duplicate-note
-@mcp.tool()
+@_tool
 @_tool_errors
 async def obsidian_duplicate_note(path: str, new_path: str = "") -> str:
     """Duplicate a note.
@@ -608,12 +620,12 @@ async def obsidian_duplicate_note(path: str, new_path: str = "") -> str:
     if not new_path:
         base, ext = os.path.splitext(path)
         new_path = f"{base} copy{ext}"
-    await backend.copy_note(path, new_path)
+    await _backend().copy_note(path, new_path)
     return f"Duplicated '{path}' -> '{new_path}'."
 
 
 # 8. obsidian-list-notes
-@mcp.tool()
+@_tool
 @_tool_errors
 async def obsidian_list_notes(
     folder: str = "",
@@ -626,7 +638,7 @@ async def obsidian_list_notes(
             Empty lists the entire vault.
         extension: Filter by extension (e.g. ".md", ".base", ".canvas")
     """
-    notes = await backend.list_notes(
+    notes = await _backend().list_notes(
         folder=folder, extension=extension or None, recursive=True
     )
     if not notes:
@@ -638,7 +650,7 @@ async def obsidian_list_notes(
 
 
 # 9. obsidian-manage-properties
-@mcp.tool()
+@_tool
 @_tool_errors
 async def obsidian_manage_properties(
     path: str,
@@ -680,12 +692,12 @@ async def obsidian_manage_properties(
         return f"Error: unknown action: {action}. Use: get, set, delete"
     if new_content == content:
         return f"No property changes in '{path}'."
-    await backend.write_note(path, new_content, expected_rev=note["rev"])
+    await _backend().write_note(path, new_content, expected_rev=note["rev"])
     return f"Updated properties of '{path}'."
 
 
 # 10. obsidian-manage-tags
-@mcp.tool()
+@_tool
 @_tool_errors
 async def obsidian_manage_tags(
     path: str,
@@ -727,12 +739,12 @@ async def obsidian_manage_tags(
     new_content = (add_tags if action == "add" else remove_tags)(content, tag_list)
     if new_content == content:
         return f"No frontmatter tag changes in '{path}'; inline tags untouched."
-    await backend.write_note(path, new_content, expected_rev=note["rev"])
+    await _backend().write_note(path, new_content, expected_rev=note["rev"])
     return f"Updated frontmatter tags in '{path}'; inline tags untouched."
 
 
 # 11. obsidian-get-all-tags
-@mcp.tool()
+@_tool
 @_tool_errors
 @_vault_scan
 async def obsidian_get_all_tags() -> str:
@@ -741,7 +753,7 @@ async def obsidian_get_all_tags() -> str:
 
 
 # 12. obsidian-get-links
-@mcp.tool()
+@_tool
 @_tool_errors
 @_vault_scan
 async def obsidian_get_links(
@@ -771,7 +783,7 @@ async def obsidian_get_links(
 
 
 # 13. obsidian-get-link-graph
-@mcp.tool()
+@_tool
 @_tool_errors
 @_vault_scan
 async def obsidian_get_link_graph() -> str:
@@ -780,7 +792,7 @@ async def obsidian_get_link_graph() -> str:
 
 
 # 14. obsidian-find-orphaned-notes
-@mcp.tool()
+@_tool
 @_tool_errors
 @_vault_scan
 async def obsidian_find_orphaned_notes() -> str:
@@ -804,7 +816,7 @@ async def obsidian_find_orphaned_notes() -> str:
 
 
 # 15. obsidian-find-hub-notes
-@mcp.tool()
+@_tool
 @_tool_errors
 @_vault_scan
 async def obsidian_find_hub_notes(min_links: int = 3) -> str:
@@ -841,7 +853,7 @@ async def obsidian_find_hub_notes(min_links: int = 3) -> str:
 
 
 # 16. obsidian-canvas-node
-@mcp.tool()
+@_tool
 @_tool_errors
 async def obsidian_canvas_node(
     path: str,
@@ -903,7 +915,7 @@ async def obsidian_canvas_node(
         # Task 10: retain add-to-existing behavior under the new create contract.
         # An existing canvas is an update guarded by the read revision; a
         # brand-new one is a plain create (no precondition).
-        await backend.write_note(
+        await _backend().write_note(
             path, json.dumps(canvas, ensure_ascii=False),
             create=content is None, expected_rev=rev,
         )
@@ -921,7 +933,7 @@ async def obsidian_canvas_node(
             if not (isinstance(e, dict)
                     and node_id in (e.get("fromNode"), e.get("toNode")))
         ]
-        await backend.write_note(
+        await _backend().write_note(
             path, json.dumps(canvas, ensure_ascii=False), expected_rev=rev
         )
         return f"Removed node '{node_id}' from '{path}'."
@@ -930,7 +942,7 @@ async def obsidian_canvas_node(
 
 
 # 17. obsidian-canvas-edge
-@mcp.tool()
+@_tool
 @_tool_errors
 async def obsidian_canvas_edge(
     path: str,
@@ -977,7 +989,7 @@ async def obsidian_canvas_edge(
         if label:
             edge["label"] = label
         canvas["edges"].append(edge)
-        await backend.write_note(
+        await _backend().write_note(
             path, json.dumps(canvas, ensure_ascii=False),
             expected_rev=note["rev"],
         )
@@ -990,7 +1002,7 @@ async def obsidian_canvas_edge(
         if len(kept_edges) == len(canvas["edges"]):
             return f"Edge '{edge_id}' not found in '{path}'."
         canvas["edges"] = kept_edges
-        await backend.write_note(
+        await _backend().write_note(
             path, json.dumps(canvas, ensure_ascii=False),
             expected_rev=note["rev"],
         )
@@ -1000,7 +1012,7 @@ async def obsidian_canvas_edge(
 
 
 # 18. obsidian-vault-stats
-@mcp.tool()
+@_tool
 @_tool_errors
 @_vault_scan
 async def obsidian_vault_stats() -> str:
@@ -1012,7 +1024,7 @@ async def obsidian_vault_stats() -> str:
         ext = path.rsplit(".", 1)[-1] if "." in path else "unknown"
         by_ext[ext] = by_ext.get(ext, 0) + 1
     tags = await _tags()
-    info = await backend.backend_info()
+    info = await _backend().backend_info()
     return json.dumps({
         "total_notes": len(notes), "by_extension": by_ext,
         "total_size_bytes": sum(n.get("size") or 0 for n in notes),
@@ -1023,7 +1035,7 @@ async def obsidian_vault_stats() -> str:
 
 
 # 19. obsidian-create-from-template
-@mcp.tool()
+@_tool
 @_tool_errors
 async def obsidian_create_from_template(
     template_path: str,
@@ -1055,12 +1067,12 @@ async def obsidian_create_from_template(
             lambda match: json.dumps(replacements[match[1]], ensure_ascii=False)
             if match[1] in replacements else match[0], content,
         )
-    await backend.write_note(new_path, content, create=True)
+    await _backend().write_note(new_path, content, create=True)
     return f"Created '{new_path}' from template '{template_path}'."
 
 
 # 20. obsidian-list-templates
-@mcp.tool()
+@_tool
 @_tool_errors
 async def obsidian_list_templates(folder: str = "templates") -> str:
     """List available templates in the templates folder.
@@ -1068,7 +1080,7 @@ async def obsidian_list_templates(folder: str = "templates") -> str:
     Args:
         folder: Templates folder path (default: "templates")
     """
-    notes = await backend.list_notes(folder=folder)
+    notes = await _backend().list_notes(folder=folder)
     if not notes:
         return f"No templates found in '{folder}/'."
     return json.dumps(
@@ -1077,12 +1089,16 @@ async def obsidian_list_templates(folder: str = "templates") -> str:
     )
 
 
-@mcp.tool()
+@_tool
 @_tool_errors
 async def obsidian_refresh() -> str:
     """Refresh the backend's local vault representation."""
-    await backend.refresh()
+    await _backend().refresh()
     return "Vault refreshed."
+
+
+# run.py loads dotenv before this single environment-consumption point.
+mcp = create_app(load_config())
 
 
 # --- Main ---
