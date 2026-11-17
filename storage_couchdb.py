@@ -899,6 +899,7 @@ class CouchDBBackend:
             body = dict(doc)
             body.pop("_conflicts", None)
             body.pop("deleted", None)
+            body["eden"] = {}
             body["children"] = children
             body["mtime"] = new_mtime
             body["size"] = size

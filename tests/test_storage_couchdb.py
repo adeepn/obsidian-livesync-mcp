@@ -1347,3 +1347,14 @@ async def test_forbidden_writes_issue_no_requests(path, operation):
             else:
                 await backend.copy_note('ok.md', path)
         assert log == []
+
+
+async def test_body_replacement_clears_colliding_eden():
+    new = 'NEW content'
+    chunk = chunk_id_for(new)
+    docs = {'a.md': plain_note('a.md', 'a.md', [],
+                              eden={chunk: {'data': 'OLD SHADOW'}})}
+    async with fake_vault(docs) as (backend, raw, log):
+        await backend.write_note('a.md', new)
+        assert (await backend.read_note('a.md'))['text'] == new
+        assert (await stored_doc(raw, 'a.md'))['eden'] == {}
