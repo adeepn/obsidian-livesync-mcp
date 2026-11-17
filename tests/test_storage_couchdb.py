@@ -1084,3 +1084,45 @@ async def test_delete_matching_expected_rev_succeeds():
         gone = await backend.read_note("note.md")
     assert deleted is True
     assert gone is None
+
+
+# --- durable write acknowledgement (202 is not success) ---------------------
+
+
+async def test_put_202_on_metadata_is_not_durable():
+    # Spec §7.6 / CouchDB semantics: a document PUT is durable only on
+    # HTTP 201. A 2xx "ok:true" answer that is not 201 must fail the
+    # write — the store above never committed it.
+    docs = {"note.md": plain_note("note.md", "note.md", ["h:old"])}
+    async with fake_vault(docs, put_202_ids=("note.md",)) as (
+        backend, raw, _log,
+    ):
+        with pytest.raises(StorageUnavailable, match="durable"):
+            await backend.write_note("note.md", "fresh", overwrite=True)
+        stored = await stored_doc(raw, "note.md")
+    assert stored["children"] == ["h:old"]  # nothing was committed
+
+
+async def test_put_202_on_chunk_is_not_durable():
+    async with fake_vault({}, put_202_ids=(chunk_id_for("fresh"),)) as (
+        backend, raw, _log,
+    ):
+        with pytest.raises(StorageUnavailable, match="durable"):
+            await backend.write_note("note.md", "fresh", create=True)
+        meta_response = await raw.get(
+            f"{DATABASE}/{urllib.parse.quote('note.md', safe='')}"
+        )
+    assert meta_response.status_code == 404  # metadata never published
+
+
+async def test_rename_non_201_target_keeps_source():
+    # The source is retired only after the target write is confirmed
+    # durable; a 202 target must leave the source note live.
+    docs = {"a.md": plain_note("a.md", "a.md", [])}
+    async with fake_vault(docs, put_202_ids=("b.md",)) as (
+        backend, raw, _log,
+    ):
+        with pytest.raises(StorageUnavailable, match="durable"):
+            await backend.rename_note("a.md", "b.md")
+        source = await stored_doc(raw, "a.md")
+    assert "deleted" not in source  # still live, retirement skipped

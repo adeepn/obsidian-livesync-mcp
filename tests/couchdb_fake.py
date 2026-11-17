@@ -30,7 +30,10 @@ requests succeed and kills the database from request N+1 on;
 our GET and our PUT; ``bump_rev_on_get`` serves the requested revision
 of the listed ids but commits a newer revision to the store right
 after the read, so a subsequent PUT carrying the seen rev fails as a
-genuine stale-revision 409 (a real rev race, not a forced status).
+genuine stale-revision 409 (a real rev race, not a forced status);
+``put_202_ids`` makes every PUT to the listed document ids answer
+202 ``ok:true`` without committing — a write the caller must not
+treat as durable.
 
 Like CouchDB, a stored ``_conflicts`` field is only served when the
 request carries ``conflicts=true`` (query parameter); every other
@@ -65,6 +68,7 @@ def make_fake_couchdb(
     force_status: int | None = None,
     put_conflict_ids: tuple[str, ...] = (),
     bump_rev_on_get: tuple[str, ...] = (),
+    put_202_ids: tuple[str, ...] = (),
 ) -> tuple[httpx.MockTransport, list[httpx.Request]]:
     """Build a fake CouchDB over ``docs`` (id -> document body).
 
@@ -220,6 +224,13 @@ def make_fake_couchdb(
         if request.method == "PUT":
             if doc_id in put_conflict_ids:
                 return httpx.Response(409, json={"error": "conflict"})
+            if doc_id in put_202_ids:
+                # "Accepted", not durable: CouchDB never does this for
+                # document PUTs, but a misbehaving proxy might. Nothing
+                # is committed to the store.
+                return httpx.Response(
+                    202, json={"ok": True, "id": doc_id, "rev": "0-none"}
+                )
             body = json.loads(request.content)
             existing = store.get(doc_id)
             if existing is not None:

@@ -678,18 +678,27 @@ class CouchDBBackend:
     async def _put_doc(self, doc_id: str, body: dict) -> str:
         """PUT a document and return its new revision.
 
-        Success is a 2xx response whose body confirms the write; the
-        caller may report success only once this returns (spec §7.6).
-        Stale ``_rev`` bodies surface as CouchDB 409s, which ``_request``
-        maps to ``ConcurrentModification``.
+        Durability requires CouchDB's explicit acknowledgement: HTTP 201
+        with an ``ok``/``rev`` body (spec §7.6). Any other status — 202
+        "Accepted" included — means the write is not confirmed on disk
+        and is treated as a failure, so no caller ever reports success
+        on an undurable write. Stale ``_rev`` bodies surface as CouchDB
+        409s, which ``_request`` maps to ``ConcurrentModification``.
         """
         response = await self._request(
             "PUT", self._doc_path(doc_id), json_body=body
         )
         if response.status_code == 404:
             # A present database never 404s a document PUT.
-            logger.warning("CouchDB PUT %s -> 404 %s", doc_id, response.text[:200])
+            logger.warning("CouchDB PUT %s -> 404 (database gone)", doc_id)
             raise StorageUnavailable("CouchDB database not found")
+        if response.status_code != 201:
+            logger.warning(
+                "CouchDB PUT %s -> %s (not 201: not confirmed durable)",
+                doc_id,
+                response.status_code,
+            )
+            raise StorageUnavailable("CouchDB did not confirm durable write")
         try:
             result = response.json()
         except ValueError:
@@ -700,7 +709,7 @@ class CouchDBBackend:
             or "rev" not in result
         ):
             logger.warning(
-                "CouchDB PUT %s -> unexpected body %s", doc_id, response.text[:200]
+                "CouchDB PUT %s -> unexpected acknowledgement body", doc_id
             )
             raise StorageError("CouchDB rejected the document write")
         return str(result["rev"])
