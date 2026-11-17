@@ -362,6 +362,9 @@ async def _tags() -> dict:
 async def obsidian_search(query: str, regex: bool = False) -> str:
     """Search notes in the vault by content.
 
+    Best-effort scan in backend iteration order; snapshot consistency is
+    not guaranteed. Concurrent changes may be interleaved during the scan.
+
     Args:
         query: Search query (text or regex pattern)
         regex: If true, treat query as regex pattern
@@ -633,6 +636,9 @@ async def obsidian_list_notes(
 ) -> str:
     """List notes in the vault, optionally filtered by folder and extension.
 
+    Best-effort scan in backend iteration order; snapshot consistency is
+    not guaranteed. Concurrent changes may be interleaved during the scan.
+
     Args:
         folder: Folder prefix (e.g. "projects/"); includes descendants recursively.
             Empty lists the entire vault.
@@ -748,7 +754,11 @@ async def obsidian_manage_tags(
 @_tool_errors
 @_vault_scan
 async def obsidian_get_all_tags() -> str:
-    """Get all tags across the vault with usage counts."""
+    """Get all tags across the vault with usage counts.
+
+    Best-effort scan in backend iteration order; snapshot consistency is
+    not guaranteed. Concurrent changes may be interleaved during the scan.
+    """
     return json.dumps(await _tags(), ensure_ascii=False, indent=2)
 
 
@@ -761,6 +771,9 @@ async def obsidian_get_links(
     direction: str = "both",
 ) -> str:
     """Get links for a note.
+
+    Best-effort scan in backend iteration order; snapshot consistency is
+    not guaranteed. Concurrent changes may be interleaved during the scan.
 
     Args:
         path: Path to the note
@@ -787,7 +800,11 @@ async def obsidian_get_links(
 @_tool_errors
 @_vault_scan
 async def obsidian_get_link_graph() -> str:
-    """Get the full link graph of the vault (all nodes and edges)."""
+    """Get the full link graph of the vault (all nodes and edges).
+
+    Best-effort scan in backend iteration order; snapshot consistency is
+    not guaranteed. Concurrent changes may be interleaved during the scan.
+    """
     return json.dumps(await _graph(), ensure_ascii=False, indent=2)
 
 
@@ -796,7 +813,11 @@ async def obsidian_get_link_graph() -> str:
 @_tool_errors
 @_vault_scan
 async def obsidian_find_orphaned_notes() -> str:
-    """Find notes that have no incoming or outgoing links."""
+    """Find notes that have no incoming or outgoing links.
+
+    Best-effort scan in backend iteration order; snapshot consistency is
+    not guaranteed. Concurrent changes may be interleaved during the scan.
+    """
     graph = await _graph()
     connected = set()
     for edge in graph["edges"]:
@@ -821,6 +842,9 @@ async def obsidian_find_orphaned_notes() -> str:
 @_vault_scan
 async def obsidian_find_hub_notes(min_links: int = 3) -> str:
     """Find the most connected notes in the vault.
+
+    Best-effort scan in backend iteration order; snapshot consistency is
+    not guaranteed. Concurrent changes may be interleaved during the scan.
 
     Args:
         min_links: Minimum total links (in + out) to be considered a hub
@@ -1016,7 +1040,11 @@ async def obsidian_canvas_edge(
 @_tool_errors
 @_vault_scan
 async def obsidian_vault_stats() -> str:
-    """Get aggregate statistics for the entire vault."""
+    """Get aggregate statistics for the entire vault.
+
+    Best-effort scan in backend iteration order; snapshot consistency is
+    not guaranteed. Concurrent changes may be interleaved during the scan.
+    """
     notes = await _scan_notes()
     by_ext = {}
     for note in notes:
@@ -1076,6 +1104,9 @@ async def obsidian_create_from_template(
 @_tool_errors
 async def obsidian_list_templates(folder: str = "templates") -> str:
     """List available templates in the templates folder.
+
+    Best-effort scan in backend iteration order; snapshot consistency is
+    not guaranteed. Concurrent changes may be interleaved during the scan.
 
     Args:
         folder: Templates folder path (default: "templates")

@@ -192,6 +192,12 @@ class StorageBackend(Protocol):
     ) -> AsyncIterator[tuple[NoteMeta, str | None]]:
         """Stream ``(meta, text)`` for every note with the extension.
 
+        Scans are best-effort in the backend's iteration order; snapshot
+        consistency is not guaranteed across a scan. CouchDB may observe
+        interleaved changes. The Plan B journal backend must document its
+        own ordering/consistency and protect referenced chunks from
+        reclamation for the duration of active scans.
+
         Corrupt or unreadable notes yield ``(meta, None)`` after logging,
         so one broken note never fails a vault-wide tool (audit C4).
         """

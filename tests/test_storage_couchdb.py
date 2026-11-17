@@ -1468,3 +1468,42 @@ async def test_iteration_batches_chunks_by_bounded_windows():
                    and any(k.startswith('h:') for k in json.loads(r.content)['keys'])]
     assert len(chunk_calls) <= math.ceil((count + 1) / 50) * 2
     assert all(len(keys) == len(set(keys)) and len(keys) <= 500 for keys in chunk_calls)
+
+
+async def test_scan_retains_only_one_window_of_legacy_bodies(monkeypatch):
+    import weakref
+    from storage_couchdb import _TEXT_WINDOW_SIZE
+    class Body(str):
+        pass
+    count = _TEXT_WINDOW_SIZE * 3 + 1
+    docs = {f'n{i:03}.md': plain_note(f'n{i:03}.md', f'n{i:03}.md', [],
+                                    type='notes', data='body ' + str(i))
+            for i in range(count)}
+    refs = []
+    peak = 0
+    async with fake_backend(docs) as (backend, _):
+        await backend.refresh()  # index contains no bodies
+        original = backend._post_all_docs
+        async def tracked(*args, **kwargs):
+            nonlocal peak
+            rows = await original(*args, **kwargs)
+            result = []
+            for row in rows:
+                doc = dict(row['doc'])
+                body = Body(doc['data'])
+                refs.append(weakref.ref(body))
+                doc['data'] = body
+                result.append({**row, 'doc': doc})
+                peak = max(peak, sum(ref() is not None for ref in refs))
+                assert peak <= _TEXT_WINDOW_SIZE * 2
+            return result
+        monkeypatch.setattr(backend, '_post_all_docs', tracked)
+        seen = 0
+        async for meta, text in backend.iterate_texts():
+            assert text == 'body ' + str(seen)
+            assert meta['rev']
+            seen += 1
+            del text
+        assert seen == count
+    assert peak <= _TEXT_WINDOW_SIZE + 2
+    assert all(ref() is None for ref in refs)

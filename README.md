@@ -200,3 +200,14 @@ New and replaced metadata persist canonical, case-preserving paths: separators
 are `/`, leading `./` and trailing slashes are removed, and internal parent
 segments resolve (`folder/../b.md` becomes `b.md`). Parent traversal above the
 vault root remains forbidden. Existing records are not migrated automatically.
+
+
+## Vault-wide scan consistency
+
+Search, tags, graph, listings, and statistics are best-effort scans in backend
+iteration order. They do not guarantee a snapshot across the scan: CouchDB
+changes can be interleaved between metadata windows and chunk fetches. Results
+can therefore combine observations from different times; a successful mutation
+means durable publication, not a promise that it remains the eventual winner.
+The future Plan B journal backend must document its own scan semantics and
+protect chunks referenced by active scans from reclamation.
