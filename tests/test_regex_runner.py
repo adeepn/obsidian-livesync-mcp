@@ -17,3 +17,9 @@ def test_operations_and_output_limit():
     assert regex_runner.apply('a', 'aa', 'subn', 2, replacement='x')['result'] == 'xx'
     with pytest.raises(ValueError, match='large'):
         regex_runner.apply('', 'a' * 100, 'subn', 2, replacement='x' * 200000)
+
+
+def test_findall_unmatched_groups_match_python_contract():
+    import regex_runner
+    assert regex_runner.apply('(a)|(b)', 'ab', 'findall', 2)['matches'] == [
+        ('a', ''), ('', 'b')]

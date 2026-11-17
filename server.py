@@ -340,6 +340,11 @@ async def obsidian_search(query: str, regex: bool = False) -> str:
         regex: If true, treat query as regex pattern
     """
     pattern = query if regex else None
+    if regex:
+        try:
+            await asyncio.to_thread(regex_runner.apply, query, "", "findall")
+        except re.error:
+            return "Invalid regular expression."
     results, skipped = [], []
     async with aclosing(_scan_texts()) as texts:
         async for meta, text in texts:

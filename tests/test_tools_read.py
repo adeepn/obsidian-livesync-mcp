@@ -429,3 +429,8 @@ async def test_graph_drops_bodies_before_reading_next(tools, monkeypatch):
     result = json.loads(await server.obsidian_get_link_graph())
     assert len(result['nodes']) == 30
     assert len(result['edges']) == 30
+
+
+async def test_regex_invalid_on_empty_vault(tools):
+    server, _ = tools
+    assert 'Invalid regular expression' in await server.obsidian_search('[', True)

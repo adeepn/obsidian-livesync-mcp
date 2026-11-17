@@ -16,7 +16,7 @@ def _worker(connection, pattern, text, op, replacement, flags):
         if op == 'findall':
             matches = []
             for match in regex.finditer(text):
-                groups = match.groups()
+                groups = match.groups(default="")
                 matches.append(match.group() if not groups else
                                groups[0] if len(groups) == 1 else groups)
                 if len(matches) == 10:
