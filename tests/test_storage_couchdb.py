@@ -1532,3 +1532,15 @@ async def test_rename_lost_retirement_ack_requires_state_verification(monkeypatc
         assert not (await stored_doc(raw, 'b.md')).get('deleted')
         assert caught.value.source_state == 'unknown'
         assert 'verify' in caught.value.hint.lower()
+
+
+@pytest.mark.parametrize('destination, canonical', [('./a.md', 'a.md'),
+                                                    ('folder/../b.md', 'b.md')])
+async def test_rename_canonical_destination(destination, canonical):
+    async with fake_vault() as (backend, raw, _):
+        await backend.write_note('a.md', 'body', create=True)
+        await backend.rename_note('a.md', destination)
+        assert [m['path'] for m in await backend.list_notes()] == [canonical]
+        assert (await stored_doc(raw, canonical))['path'] == canonical
+        for path in (destination, canonical):
+            assert (await backend.read_note(path))['text'] == 'body'

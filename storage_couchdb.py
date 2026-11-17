@@ -967,6 +967,7 @@ class CouchDBBackend:
         """
         validate_vault_path(path)
         validate_vault_path(new_path)
+        new_path = canonical_path(new_path)
         if path == new_path:
             return await self.get_meta(path)
 
