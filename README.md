@@ -74,8 +74,8 @@ cp .env.example .env
 | `COUCHDB_USER` | CouchDB admin username |
 | `COUCHDB_PASSWORD` | CouchDB admin password |
 | `COUCHDB_DATABASE` | Database name (default: `obsidian`) |
-| `MCP_API_KEY` | Shared bearer token for MCP clients such as Codex |
-| `OAUTH_PASSWORD` | Password for OAuth consent (leave empty to disable OAuth) |
+| `MCP_API_KEY` | Shared bearer token for MCP clients such as Codex (bearer mode) |
+| `OAUTH_PASSWORD` | Password enforced at the `/authorize` form in OAuth mode (leave empty to disable OAuth) |
 | `OAUTH_CLIENT_ID` | OAuth client ID for pre-registered client |
 | `OAUTH_CLIENT_SECRET` | OAuth client secret |
 | `MCP_SERVER_URL` | Public HTTPS URL of this server |
@@ -128,12 +128,14 @@ Replace `your_api_key` with the exact value configured on the server as `MCP_API
 
 ## Authentication
 
-The server supports two authentication modes:
+The server supports two authentication modes, which are mutually exclusive:
 
-1. **Bearer API key** - set `MCP_API_KEY` and clients must send `Authorization: Bearer <MCP_API_KEY>`. This mode takes precedence if both bearer and OAuth settings are present.
-2. **OAuth 2.1** - set `OAUTH_PASSWORD` and the OAuth client settings to use the existing authorization code flow + PKCE.
+1. **Bearer API key** - set `MCP_API_KEY` and clients must send `Authorization: Bearer <MCP_API_KEY>`.
+2. **OAuth 2.1** - set `OAUTH_PASSWORD` plus the OAuth client settings to use the authorization code flow + PKCE.
 
-If neither `MCP_API_KEY` nor `OAUTH_PASSWORD` is set, the server fails at startup instead of running open.
+Configure exactly one mode. If both `MCP_API_KEY` and the OAuth variables are present, the server runs in bearer mode only and the OAuth endpoints stay disabled. If neither mode is configured, the server fails at startup instead of running open.
+
+In OAuth mode `OAUTH_PASSWORD` is enforced: `GET /authorize` first returns a password form, and an authorization code is issued only after the correct password is submitted (compared in constant time). The code still cannot be exchanged without `OAUTH_CLIENT_SECRET`, which must have high entropy.
 
 ### Current limitations
 
@@ -141,11 +143,9 @@ Out of the box, OAuth only supports **Claude** (Claude.ai and Claude Code) as a 
 
 ### Adding other MCP clients
 
-To support other clients you can either:
+To support other clients, **pre-register additional clients** — add more clients in `oauth_provider.py` `__init__` with the appropriate `redirect_uris` for your client.
 
-1. **Pre-register additional clients** — add more clients in `oauth_provider.py` `__init__` with the appropriate `redirect_uris` for your client.
-
-2. **Enable Dynamic Client Registration (DCR)** — in `server.py`, change `ClientRegistrationOptions(enabled=False, ...)` to `enabled=True`. This allows any MCP-compatible client to register itself automatically. Note: this means anyone who knows your server URL can register a client.
+Dynamic Client Registration (DCR) is disabled and should stay disabled: with it enabled, anyone who knows your server URL can register a client, and every registration grows the in-memory client store without bound.
 
 ## License
 
