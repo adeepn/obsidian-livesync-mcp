@@ -1,6 +1,8 @@
 """Obsidian MCP Server — remote MCP server for Obsidian via CouchDB/LiveSync."""
 
 import json
+import asyncio
+import regex_runner
 import logging
 import os
 import re
@@ -159,6 +161,8 @@ def _tool_errors(handler):
             return "Error: server not started; storage backend is unavailable."
         try:
             return await handler(*args, **kwargs)
+        except regex_runner.RegexTimeoutError:
+            return "Error: regex pattern too complex or input too large."
         except StorageError as error:
             return _storage_message(error)
         except ForbiddenPathError:
@@ -278,7 +282,7 @@ async def obsidian_search(query: str, regex: bool = False) -> str:
         regex: If true, treat query as regex pattern
     """
     try:
-        pattern = re.compile(query, re.IGNORECASE) if regex else None
+        pattern = query if regex else None
     except re.error:
         return "Invalid regular expression."
     results, skipped = [], []
@@ -287,7 +291,11 @@ async def obsidian_search(query: str, regex: bool = False) -> str:
             skipped.append(meta["path"])
             continue
         if pattern is not None:
-            matches = pattern.findall(text)
+            try:
+                matches = (await asyncio.to_thread(
+                    regex_runner.apply, pattern, text, "findall"))["matches"]
+            except re.error:
+                return "Invalid regular expression."
             if matches:
                 results.append({"path": meta["path"], "matches": matches[:10]})
         elif query.lower() in text.lower():
@@ -459,9 +467,19 @@ async def obsidian_update_note(
             return "Error: search parameter required for search-replace mode."
         try:
             pattern = search if regex else re.escape(search)
-            new_content, matches = re.subn(pattern, lambda match: replace, existing)
+            if regex:
+                result = await asyncio.to_thread(
+                    regex_runner.apply, pattern, existing, "subn",
+                    replacement=replace, flags=0)
+                new_content, matches = result["result"], result["count"]
+            else:
+                new_content, matches = re.subn(pattern, lambda match: replace, existing)
         except re.error:
             return "Error: invalid regex search pattern."
+        except regex_runner.RegexTimeoutError:
+            raise
+        except ValueError:
+            return "Error: regex replacement output too large."
         if not matches:
             return "No matches found for search string."
     if new_content != existing:

@@ -348,3 +348,20 @@ asyncio.run(check())
     result = subprocess.run([sys.executable, "-c", code], env=env,
                             capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
+
+async def test_regex_worker_tool_timeout_and_normal(tools, monkeypatch):
+    import regex_runner
+    import time
+    server, fake = tools
+    fake.add('a.md', 'a' * 1024 + '!')
+    monkeypatch.setattr(regex_runner, 'DEFAULT_TIMEOUT', .2)
+    start = time.monotonic()
+    assert 'regex pattern too complex' in await server.obsidian_search('(a+)+$', True)
+    assert 'regex pattern too complex' in await server.obsidian_update_note(
+        'a.md', 'search-replace', search='(a+)+$', replace='x', regex=True)
+    assert time.monotonic() - start < 5
+    monkeypatch.setattr(regex_runner, 'DEFAULT_TIMEOUT', 2)
+    assert json.loads(await server.obsidian_search('a+', True))['results']
+    assert '1 matches replaced' in await server.obsidian_update_note(
+        'a.md', 'search-replace', search='a+', replace='x', regex=True)
+    assert fake.notes['a.md']['text'] == 'x!'
