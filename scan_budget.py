@@ -1,25 +1,7 @@
 """Shared limits for vault scans and the compact CouchDB metadata index."""
-import os
-
-
-def limits(env=None):
-    env = os.environ if env is None else env
-    values = []
-    for key, default in [('LIVESYNC_SCAN_MAX_NOTES', 10000),
-                         ('LIVESYNC_SCAN_MAX_BYTES', 64 * 1024 * 1024)]:
-        try:
-            value = int(env.get(key, default))
-        except (ValueError, TypeError):
-            raise ValueError(f'{key} must be a positive integer') from None
-        if value <= 0:
-            raise ValueError(f'{key} must be a positive integer')
-        values.append(value)
-    return tuple(values)
-
-
 class ScanBudget:
-    def __init__(self):
-        self.max_notes, self.max_bytes = limits()
+    def __init__(self, max_notes=10000, max_bytes=64 * 1024 * 1024):
+        self.max_notes, self.max_bytes = max_notes, max_bytes
         self.paths = set()
         self.bytes = 0
         self.truncated = False

@@ -52,6 +52,8 @@ def get_backend(cfg: Config) -> StorageBackend:
         username=cfg.couchdb.user,
         password=cfg.couchdb.password,
         database=cfg.couchdb.database,
+        scan_max_notes=cfg.scan_max_notes,
+        scan_max_bytes=cfg.scan_max_bytes,
     )
 
 
@@ -60,6 +62,7 @@ def get_backend(cfg: Config) -> StorageBackend:
 backend: StorageBackend | None = None
 _active_backend: ContextVar[StorageBackend | None] = ContextVar("active_backend")
 _tool_handlers = []
+_active_scan_limits = ContextVar("active_scan_limits", default=(10000, 64 * 1024 * 1024))
 
 
 def _backend() -> StorageBackend | None:
@@ -138,10 +141,12 @@ def create_app(cfg: Config) -> FastMCP:
         @wraps(handler)
         async def bound(*args, **kwargs):
             token = _active_backend.set(state["backend"])
+            limits_token = _active_scan_limits.set((cfg.scan_max_notes, cfg.scan_max_bytes))
             try:
                 return await handler(*args, **kwargs)
             finally:
                 _active_backend.reset(token)
+                _active_scan_limits.reset(limits_token)
         return bound
 
     for handler in _tool_handlers:
@@ -267,7 +272,7 @@ def _vault_scan(handler):
     @wraps(handler)
     async def scanned(*args, **kwargs):
         async with _scan_semaphore:
-            budget = ScanBudget()
+            budget = ScanBudget(*_active_scan_limits.get())
             token = _scan_budget.set(budget)
             try:
                 response = await handler(*args, **kwargs)

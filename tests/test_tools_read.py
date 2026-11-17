@@ -179,7 +179,7 @@ async def test_get_backend_couchdb():
     from config import CouchDBConfig
     from storage_couchdb import CouchDBBackend
     cfg = SimpleNamespace(backend="couchdb", couchdb=CouchDBConfig(
-        url="http://localhost:5984", user="test", password="test", database="vault"))
+        url="http://localhost:5984", user="test", password="test", database="vault"), scan_max_notes=10000, scan_max_bytes=67108864)
     backend = server.get_backend(cfg)
     assert isinstance(backend, CouchDBBackend)
     await backend.close()
@@ -339,8 +339,8 @@ async def test_regex_worker_tool_timeout_and_normal(tools, monkeypatch):
                                   'obsidian_find_orphaned_notes'])
 async def test_scan_budget_reports_partial_result(tools, monkeypatch, tool):
     server, fake = tools
-    monkeypatch.setenv('LIVESYNC_SCAN_MAX_NOTES', '2')
-    monkeypatch.setenv('LIVESYNC_SCAN_MAX_BYTES', '4096')
+    monkeypatch.setattr(server, '_active_scan_limits',
+                        server.ContextVar('test_limits', default=(2, 4096)))
     for i in range(8):
         fake.add(f'{i}.md', '#tag [[0]] needle')
     args = {'obsidian_search': ('needle',), 'obsidian_get_links': ('0.md',)}
@@ -353,7 +353,8 @@ async def test_scan_budget_reports_partial_result(tools, monkeypatch, tool):
 async def test_scan_byte_budget_and_concurrency(tools, monkeypatch):
     import asyncio
     server, fake = tools
-    monkeypatch.setenv('LIVESYNC_SCAN_MAX_BYTES', '1000')
+    monkeypatch.setattr(server, '_active_scan_limits',
+                        server.ContextVar('test_limits', default=(10000, 1000)))
     fake.add('large.md', 'x' * 2000)
     result = json.loads(await server.obsidian_search('x'))
     assert result['truncated'] is True
@@ -407,7 +408,8 @@ async def test_truncated_graph_does_not_label_unread_bodies_orphaned(tools, monk
     server, fake = tools
     fake.add('a.md', 'x' * 2000)
     fake.add('b.md', '[[a]]')
-    monkeypatch.setenv('LIVESYNC_SCAN_MAX_BYTES', '1000')
+    monkeypatch.setattr(server, '_active_scan_limits',
+                        server.ContextVar('test_limits', default=(10000, 1000)))
     result = json.loads(await server.obsidian_find_orphaned_notes())
     assert result['truncated'] is True
     assert result['orphans'] == []
@@ -474,7 +476,8 @@ async def test_capped_listings_report_counts(tools, monkeypatch, name):
     module, fake = tools
     for i in range(3):
         fake.add(f'templates/{i}.md', 'body')
-    monkeypatch.setenv('LIVESYNC_SCAN_MAX_NOTES', '2')
+    monkeypatch.setattr(module, '_active_scan_limits',
+                        module.ContextVar('test_limits', default=(2, 4096)))
     result = json.loads(await getattr(module, name)())
     assert result['truncated'] is True
     assert result['returned'] == 2
@@ -486,3 +489,27 @@ async def test_uncapped_listings_keep_list_shape(tools, name):
     module, fake = tools
     fake.add('templates/a.md', 'body')
     assert isinstance(json.loads(await getattr(module, name)()), list)
+
+
+async def test_factory_scan_limits_are_frozen_and_reach_backend(monkeypatch):
+    from dataclasses import replace
+    from config import load_config
+    cfg = replace(load_config(), scan_max_notes=2, scan_max_bytes=4096)
+    real = server.get_backend(cfg)
+    assert real._scan_limits == (2, 4096)
+    await real.close()
+    fake = FakeBackend()
+    for i in range(3):
+        fake.add(f'{i}.md', 'body')
+    monkeypatch.setattr(server, 'get_backend', lambda config: fake)
+    app = server.create_app(cfg)
+    async with app.settings.lifespan(app):
+        for value in ('10000', 'invalid'):
+            monkeypatch.setenv('LIVESYNC_SCAN_MAX_NOTES', value)
+            result = await app.call_tool('obsidian_list_notes', {})
+            # FastMCP returns content blocks for this string-valued tool.
+            payload = json.loads(result[1]["result"])
+            assert payload['truncated'] is True
+            assert payload['returned'] == 2
+            assert payload['scan']['max_notes'] == 2
+            assert payload['scan']['max_bytes'] == 4096

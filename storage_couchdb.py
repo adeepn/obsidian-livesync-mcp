@@ -149,7 +149,10 @@ class CouchDBBackend:
         database: str,
         *,
         transport: httpx.AsyncBaseTransport | None = None,
+        scan_max_notes: int = 10000,
+        scan_max_bytes: int = 64 * 1024 * 1024,
     ) -> None:
+        self._scan_limits = (scan_max_notes, scan_max_bytes)
         self._database = database
         self._client = httpx.AsyncClient(
             base_url=url if url.endswith("/") else url + "/",
@@ -268,7 +271,7 @@ class CouchDBBackend:
         ids outside that range are filtered here.
         """
         ids: list[str] = []
-        budget = ScanBudget()
+        budget = ScanBudget(*self._scan_limits)
         range_params = (
             {"endkey": json.dumps("h:")},
             {"startkey": json.dumps("h;")},
@@ -305,7 +308,7 @@ class CouchDBBackend:
     async def _load_index(self) -> dict[str, dict]:
         self.index_truncated = False
         ids = await self._note_doc_ids()
-        budget = ScanBudget()
+        budget = ScanBudget(*self._scan_limits)
         index: dict[str, dict] = {}
         for start in range(0, len(ids), _PAGE_SIZE):
             batch = ids[start : start + _PAGE_SIZE]

@@ -75,6 +75,8 @@ class Config:
     oauth_password: str
     oauth_client_id: str
     oauth_client_secret: str
+    scan_max_notes: int = 10000
+    scan_max_bytes: int = 64 * 1024 * 1024
 
 
 def parse_s3_uri(uri: str) -> S3Config:
@@ -202,11 +204,16 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
     """
     if env is None:
         env = os.environ
-    from scan_budget import limits
-    try:
-        limits(env)
-    except ValueError as error:
-        raise ConfigError(str(error)) from None
+    scan_limits = []
+    for key, default in (("LIVESYNC_SCAN_MAX_NOTES", 10000),
+                         ("LIVESYNC_SCAN_MAX_BYTES", 64 * 1024 * 1024)):
+        try:
+            value = int(env.get(key, default))
+            if value <= 0:
+                raise ValueError
+        except (ValueError, TypeError):
+            raise ConfigError(f"{key} must be a positive integer") from None
+        scan_limits.append(value)
     backend = env.get("LIVESYNC_BACKEND", "")
     if not backend:
         raise ConfigError(
@@ -227,6 +234,8 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
     api_key, oauth_password, oauth_client_id, oauth_client_secret = _load_auth(env)
 
     return Config(
+        scan_max_notes=scan_limits[0],
+        scan_max_bytes=scan_limits[1],
         backend=backend,
         couchdb=couchdb,
         s3=s3,

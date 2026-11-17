@@ -1385,9 +1385,9 @@ async def test_index_drops_body_payloads_but_reads_eden():
 
 
 async def test_index_budget_is_bounded(monkeypatch):
-    monkeypatch.setenv('LIVESYNC_SCAN_MAX_NOTES', '2')
     docs = {f'{i}.md': plain_note(f'{i}.md', f'{i}.md', []) for i in range(8)}
     async with fake_backend(docs) as (backend, _):
+        backend._scan_limits = (2, 67108864)
         assert len(await backend.list_notes()) == 2
         assert backend.index_truncated is True
 
