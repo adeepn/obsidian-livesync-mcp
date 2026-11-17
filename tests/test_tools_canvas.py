@@ -223,3 +223,17 @@ async def test_canvas_edge_endpoints_validated(vault):
     assert vault.notes["F.canvas"]["text"] == \
         '{"nodes": [{"id": "n1"}], "edges": []}'
     assert_no_mutations(vault)
+
+
+async def test_canvas_edge_roundtrip_unknown_keys_and_generated_id(vault):
+    original = {'nodes': [{'id': 'n'}], 'edges': [],
+                'metadata': {'unknown': [1, {'x': True}]}, 'version': 'future'}
+    vault.add('RT.canvas', json.dumps(original))
+    await server.obsidian_canvas_edge('RT.canvas', from_node='n', to_node='n')
+    added = json.loads(vault.notes['RT.canvas']['text'])
+    edge_id = added['edges'][0]['id']
+    assert isinstance(edge_id, str) and edge_id
+    assert added['metadata'] == original['metadata']
+    assert added['version'] == original['version']
+    await server.obsidian_canvas_edge('RT.canvas', action='remove', edge_id=edge_id)
+    assert json.loads(vault.notes['RT.canvas']['text']) == original

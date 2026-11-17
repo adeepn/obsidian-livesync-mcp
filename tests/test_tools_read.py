@@ -90,10 +90,11 @@ async def test_hub_incoming(tools):
     assert orphans == ["alone.md"]
 
 
-async def test_backlinks_finds_anchor_links(tools):
+@pytest.mark.parametrize("link", ["[[Hub#Heading|alias]]", "[link](Hub.md#heading)"])
+async def test_backlinks_finds_anchor_links(tools, link):
     server, fake = tools
     fake.add("Hub.md", "")
-    fake.add("source.md", "[[Hub#Heading|alias]] [link](Hub.md#heading)")
+    fake.add("source.md", link)
     result = json.loads(await server.obsidian_get_links("Hub.md"))
     assert result["backlinks"] == [{"path": "source.md"}]
     assert result["outgoing"] == []
@@ -115,6 +116,8 @@ async def test_tags_and_graph_isolate_unreadable_notes(tools):
     graph = json.loads(await server.obsidian_get_link_graph())
     assert graph["skipped"] == ["bad.md"]
     assert graph["edges"] == [{"from": "good.md", "to": "target.md"}]
+    assert json.loads(await server.obsidian_get_links("target.md"))["skipped"] == ["bad.md"]
+    assert json.loads(await server.obsidian_vault_stats())["skipped"] == ["bad.md"]
 
 
 async def test_graph_resolves_unreadable_target(tools):

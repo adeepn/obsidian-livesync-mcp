@@ -94,3 +94,31 @@ def test_s3_backend_rejected():
     env = {**COUCHDB_ENV, "LIVESYNC_BACKEND": "s3"}
     with pytest.raises(ConfigError, match="S3 backend"):
         load_config(env)
+
+
+OAUTH_ENV = {**COUCHDB_ENV, 'MCP_API_KEY': '', 'OAUTH_PASSWORD': 'password',
+             'OAUTH_CLIENT_ID': 'client', 'OAUTH_CLIENT_SECRET': 'secret'}
+
+
+def test_oauth_complete_group():
+    cfg = load_config(OAUTH_ENV)
+    assert (cfg.api_key, cfg.oauth_password, cfg.oauth_client_id,
+            cfg.oauth_client_secret) == ('', 'password', 'client', 'secret')
+
+
+@pytest.mark.parametrize('missing', ['OAUTH_PASSWORD', 'OAUTH_CLIENT_ID',
+                                     'OAUTH_CLIENT_SECRET'])
+def test_oauth_partial_group_names_missing_variable(missing):
+    with pytest.raises(ConfigError, match=missing):
+        load_config({k: v for k, v in OAUTH_ENV.items() if k != missing})
+
+
+@pytest.mark.parametrize('port', ['0', '-1', '65536', '100000', 'bad'])
+def test_port_rejects_invalid_values(port):
+    with pytest.raises(ConfigError, match='MCP_PORT'):
+        load_config({**COUCHDB_ENV, 'MCP_PORT': port})
+
+
+@pytest.mark.parametrize('port', [1, 65535])
+def test_port_accepts_boundaries(port):
+    assert load_config({**COUCHDB_ENV, 'MCP_PORT': str(port)}).port == port

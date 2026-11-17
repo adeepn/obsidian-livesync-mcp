@@ -183,9 +183,13 @@ def _load_auth(env: Mapping[str, str]) -> tuple[str, str, str, str]:
 def _load_port(env: Mapping[str, str]) -> int:
     raw = env.get("MCP_PORT", "8484")
     try:
-        return int(raw)
+        port = int(raw)
     except ValueError:
         raise ConfigError(f"MCP_PORT must be an integer (got {raw!r}).") from None
+
+    if not 1 <= port <= 65535:
+        raise ConfigError("MCP_PORT must be in 1..65535.")
+    return port
 
 
 def load_config(env: Mapping[str, str]) -> Config:

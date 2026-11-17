@@ -230,9 +230,12 @@ def test_soft_delete_keeps_body():
         ctime_ms=1730000000000,
         mtime_ms=1730000005000,
     )
+    original.update(_rev="4-old", arbitrary={"nested": [1, 2]})
     revision = soft_delete_revision(original, mtime_ms=1730000009000)
 
     assert revision is not original
+    for field in ("size", "ctime", "_rev", "arbitrary"):
+        assert revision[field] == original[field]
     assert revision["deleted"] is True
     assert revision["children"] == ["h:abc123"]
     assert revision["type"] == "plain"
@@ -264,3 +267,35 @@ def test_normalized_binary_paths_refuse_text_writes(name, suffix):
 def test_text_doc_classification_uses_normalized_path(path, expected):
     assert is_text_doc('newnote', path) is expected
     assert is_text_doc('plain', path)
+
+
+@pytest.mark.parametrize('path,expected', [
+    ('a/../B.md', 'a/../b.md'), ('../Note.md', '../note.md'),
+    ('Ä/İΣ.md', 'ä/i̇σ.md'), ('//Inbox///Note.md///', 'inbox/note.md'),
+])
+def test_explicit_path_vectors(path, expected):
+    assert path2id(path) == expected
+    if '..' in path.split('/'):
+        with pytest.raises(ForbiddenPathError):
+            validate_vault_path(path)
+
+
+def test_text_extension_contract():
+    assert TEXT_EXTENSIONS == {'.md', '.txt', '.svg', '.html', '.csv',
+                               '.css', '.js', '.xml', '.canvas'}
+    assert not is_text_doc('newnote', 'Note.MD')
+
+
+def test_invalid_padding_identifies_chunk():
+    with pytest.raises(ValueError, match='chunk 1'):
+        assemble_binary(['YQ==', 'YQ'])
+
+
+def test_non_ascii_binary_chunk_rejected():
+    with pytest.raises(ValueError):
+        assemble_binary(['é'])
+
+
+def test_empty_chunks():
+    assert assemble_binary([]) == b''
+    assert assemble_text([]) == ''

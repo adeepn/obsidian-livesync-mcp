@@ -11,7 +11,7 @@ import urllib.parse
 import httpx
 import pytest
 
-from livesync_format import chunk_id_for
+from livesync_format import ForbiddenPathError, chunk_id_for
 from storage_base import (
     BinaryNoteError,
     ConcurrentModification,
@@ -787,11 +787,14 @@ async def test_delete_soft():
         "h:body": {"data": "hello", "type": "leaf"},
     }
     async with fake_vault(docs) as (backend, raw, log):
+        before = await stored_doc(raw, "note.md")
         deleted = await backend.delete_note("note.md")
         ops_end = len(log)
         stored = await stored_doc(raw, "note.md")
         chunk = await stored_doc(raw, "h:body")
         gone = await backend.read_note("note.md")
+    assert stored["_rev"] != before["_rev"]
+    assert stored["mtime"] != before["mtime"]
     assert deleted is True
     assert not any(r.method == "DELETE" for r in log[:ops_end])
     assert stored["deleted"] is True
@@ -1311,3 +1314,36 @@ async def test_empty_newnote_classification(extension, is_text):
             assert [text async for _, text in backend.iterate_texts()] == ['']
             await backend.write_note(path, 'edited')
             assert (await backend.read_note(path))['text'] == 'edited'
+
+
+async def test_listing_pagination_boundary():
+    paths = [f'notes/n{i:04}.md' for i in range(1103)]
+    docs = {p: plain_note(p, p, []) for p in paths}
+    async with fake_backend(docs) as (backend, log):
+        listed = [m['path'] for m in await backend.list_notes()]
+    assert listed == paths
+    assert len(set(listed)) == 1103
+    pages = [r for r in log if r.url.path.endswith('/_all_docs')]
+    assert len(pages) >= 3
+
+
+@pytest.mark.parametrize('path', ['.obsidian/config.md', 'h:abc',
+                                  'folder/../note.md', 'syncinfo'])
+@pytest.mark.parametrize('operation', ['write', 'delete', 'rename_source',
+                                      'rename_target', 'copy_source', 'copy_target'])
+async def test_forbidden_writes_issue_no_requests(path, operation):
+    async with fake_backend() as (backend, log):
+        with pytest.raises(ForbiddenPathError):
+            if operation == 'write':
+                await backend.write_note(path, 'x', create=True)
+            elif operation == 'delete':
+                await backend.delete_note(path)
+            elif operation == 'rename_source':
+                await backend.rename_note(path, 'ok.md')
+            elif operation == 'rename_target':
+                await backend.rename_note('ok.md', path)
+            elif operation == 'copy_source':
+                await backend.copy_note(path, 'ok.md')
+            else:
+                await backend.copy_note('ok.md', path)
+        assert log == []

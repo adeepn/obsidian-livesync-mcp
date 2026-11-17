@@ -10,7 +10,7 @@ from links import Link, build_graph, extract_links, resolve_link
     "[x](Note.md)", "[[Note^block]]",
 ])
 def test_extract_strips_anchors(text):
-    assert extract_links(text)[0].target == "Note"
+    assert extract_links(text) == [Link("Note", "markdown" if text.startswith("[x]") else "wikilink")]
 
 
 def test_embed_kind():
