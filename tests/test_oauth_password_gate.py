@@ -3,14 +3,19 @@
 Uses the stubbing approach of test_auth.py: the ``mcp.*`` modules are
 replaced with minimal fakes before importing ``oauth_provider``, and the
 gate is exercised as a plain ASGI application with hand-rolled scopes.
+The real-SDK subprocess test at the bottom verifies the same wiring
+against the installed mcp package without stubs.
 """
 
 import asyncio
 import importlib
+import importlib.metadata
+import subprocess
 import sys
 import types
 import unittest
 import urllib.parse
+from pathlib import Path
 
 from starlette.requests import Request
 from starlette.responses import RedirectResponse
@@ -242,6 +247,75 @@ class PasswordGateTests(unittest.TestCase):
         self.assertIn("code=", headers["location"])
         self.assertNotIn("<form", body)
 
+    def test_head_and_other_methods_rejected_before_handler(self):
+        # Starlette auto-permits HEAD on GET routes and the SDK parses
+        # form data for every non-GET method, so a HEAD carrying valid
+        # OAuth fields would otherwise obtain a code without the password.
+        body_bytes = urllib.parse.urlencode(
+            {"password": "gate-pass-7", **AUTHORIZE_PARAMS, "state": "s5"}
+        ).encode()
+
+        for method in ("HEAD", "PUT", "DELETE"):
+            with self.subTest(method=method):
+                status, headers, _ = asyncio.run(
+                    drive(
+                        self.gate,
+                        make_scope(method, body=body_bytes),
+                        body=body_bytes,
+                    )
+                )
+
+                self.assertEqual(status, 405)
+                self.assertEqual(headers.get("allow"), "GET, POST")
+                self.assertEqual(self.provider.auth_codes, {})
+        self.assertEqual(self.calls, [])
+
+    def test_oversized_body_rejected_before_password_check(self):
+        self.gate.max_body_bytes = 32
+        filler = "x" * 100
+        body_bytes = urllib.parse.urlencode(
+            {"password": "gate-pass-7", "state": filler}
+        ).encode()
+
+        status, _, _ = asyncio.run(
+            drive(self.gate, make_scope("POST", body=body_bytes), body=body_bytes)
+        )
+        self.assertEqual(status, 413)
+
+        # Without a declared Content-Length the limit must still hold
+        # while the body streams in.
+        scope = make_scope("POST", body=body_bytes)
+        scope["headers"] = [
+            (k, v)
+            for k, v in scope["headers"]
+            if k != b"content-length"
+        ]
+        status, _, _ = asyncio.run(drive(self.gate, scope, body=body_bytes))
+        self.assertEqual(status, 413)
+        self.assertEqual(self.provider.auth_codes, {})
+        self.assertEqual(self.calls, [])
+
+    def test_repeated_query_params_preserved(self):
+        query = urllib.parse.urlencode(
+            [
+                *AUTHORIZE_PARAMS.items(),
+                ("state", "s6"),
+                ("resource", "https://a.example/mcp"),
+                ("resource", "https://b.example/mcp"),
+            ]
+        )
+
+        status, _, body = asyncio.run(
+            drive(self.gate, make_scope("GET", query.encode()))
+        )
+
+        self.assertEqual(status, 200)
+        # One resource param in AUTHORIZE_PARAMS plus the two repeats.
+        self.assertEqual(body.count('name="resource"'), 3)
+        self.assertIn('name="resource" value="https://a.example/mcp"', body)
+        self.assertIn('name="resource" value="https://b.example/mcp"', body)
+        self.assertIn('name="resource" value="https://example.com/mcp"', body)
+
 
 class FakeRoute:
     def __init__(self, path, app):
@@ -260,7 +334,11 @@ class PasswordGateInstallTests(unittest.TestCase):
 
     def install_stub_routes(self, routes):
         module = types.ModuleType("mcp.server.auth.routes")
-        module.create_auth_routes = lambda **kwargs: list(routes)
+
+        # Fresh route objects per invocation, like the real SDK builder.
+        module.create_auth_routes = lambda **kwargs: [
+            FakeRoute(route.path, route.app) for route in routes
+        ]
         sys.modules["mcp.server.auth.routes"] = module
         return module
 
@@ -273,13 +351,34 @@ class PasswordGateInstallTests(unittest.TestCase):
             FakeRoute("/token", token_inner),
         ])
 
-        make_provider()
-        routes = module.create_auth_routes()
+        provider = make_provider()
+
+        routes = module.create_auth_routes(provider=provider)
         self.assertIsInstance(
             routes[0].app, self.oauth_provider.AuthorizePasswordGate
         )
+        self.assertIs(routes[0].app.provider, provider)
         self.assertIs(routes[0].app.inner, authorize_inner)
         self.assertIs(routes[1].app, token_inner)
+
+    def test_gate_binds_to_provider_passed_at_build(self):
+        # The wrapper must bind per create_auth_routes invocation, not to
+        # whichever provider happened to install the patch first.
+        module = self.install_stub_routes([FakeRoute("/authorize", object())])
+
+        provider_a = make_provider("pass-a")
+        provider_b = make_provider("pass-b")
+        empty_provider = make_provider("")
+
+        routes_a = module.create_auth_routes(provider=provider_a)
+        routes_b = module.create_auth_routes(provider=provider_b)
+        routes_empty = module.create_auth_routes(provider=empty_provider)
+
+        self.assertIs(routes_a[0].app.provider, provider_a)
+        self.assertIs(routes_b[0].app.provider, provider_b)
+        self.assertNotIsInstance(
+            routes_empty[0].app, self.oauth_provider.AuthorizePasswordGate
+        )
 
     def test_install_is_idempotent(self):
         module = self.install_stub_routes([FakeRoute("/authorize", object())])
@@ -294,7 +393,132 @@ class PasswordGateInstallTests(unittest.TestCase):
         # missing /authorize route must abort the build, not pass silently.
         module = self.install_stub_routes([FakeRoute("/token", object())])
 
-        make_provider()
+        provider = make_provider()
 
         with self.assertRaisesRegex(RuntimeError, "authorize"):
-            module.create_auth_routes()
+            module.create_auth_routes(provider=provider)
+
+
+REAL_STACK_SCRIPT = r"""
+import asyncio
+import sys
+import urllib.parse
+
+sys.path.insert(0, ".")
+
+from pydantic import AnyHttpUrl
+
+from oauth_provider import AUTHORIZE_PATH, SimpleOAuthProvider
+
+provider = SimpleOAuthProvider(
+    server_url="https://example.com",
+    access_password="real-stack-pw",
+    client_id="claude-client",
+    client_secret="client-secret",
+)
+
+from mcp.server.auth.routes import create_auth_routes
+from mcp.server.auth.settings import (
+    ClientRegistrationOptions,
+    RevocationOptions,
+)
+
+routes = create_auth_routes(
+    provider=provider,
+    issuer_url=AnyHttpUrl("https://example.com"),
+    client_registration_options=ClientRegistrationOptions(enabled=False),
+    revocation_options=RevocationOptions(enabled=False),
+)
+route = next(r for r in routes if r.path == AUTHORIZE_PATH)
+assert type(route.app).__name__ == "AuthorizePasswordGate", route.app
+
+QUERY = urllib.parse.urlencode({
+    "client_id": "claude-client",
+    "redirect_uri": "https://claude.ai/api/mcp/auth_callback",
+    "response_type": "code",
+    "code_challenge": "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
+    "code_challenge_method": "S256",
+    "state": "s",
+    "scope": "claudeai",
+})
+
+
+async def drive(method, query=b"", body=b""):
+    sent = []
+    pending = [{"type": "http.request", "body": body, "more_body": False}]
+
+    async def receive():
+        return pending.pop(0) if pending else {"type": "http.disconnect"}
+
+    async def send(message):
+        sent.append(message)
+
+    headers = [(b"host", b"example.com")]
+    if body:
+        headers.append((b"content-type", b"application/x-www-form-urlencoded"))
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "method": method,
+        "scheme": "https",
+        "path": AUTHORIZE_PATH,
+        "raw_path": AUTHORIZE_PATH.encode(),
+        "query_string": query,
+        "root_path": "",
+        "server": ("example.com", 443),
+        "client": ("203.0.113.4", 54321),
+        "headers": headers,
+    }
+    await route(scope, receive, send)
+    status = sent[0]["status"]
+    payload = b"".join(
+        m.get("body", b"")
+        for m in sent
+        if m["type"] == "http.response.body"
+    )
+    return status, payload.decode("utf-8", "replace")
+
+
+async def main():
+    status, body = await drive("GET", QUERY.encode())
+    assert status == 200 and 'action="/authorize"' in body, (status, body)
+
+    head_body = ("password=real-stack-pw&" + QUERY).encode()
+    status, _ = await drive("HEAD", QUERY.encode(), head_body)
+    assert status == 405, status
+    assert not provider.auth_codes, provider.auth_codes
+
+    print("REAL-STACK-GATE-OK")
+
+
+asyncio.run(main())
+"""
+
+
+def mcp_distribution_available() -> bool:
+    try:
+        importlib.metadata.version("mcp")
+    except importlib.metadata.PackageNotFoundError:
+        return False
+    return True
+
+
+@unittest.skipUnless(
+    mcp_distribution_available(), "MCP SDK distribution not installed"
+)
+class PasswordGateRealStackTests(unittest.TestCase):
+    def test_real_stack_authorize_route_is_gated(self):
+        # Runs in a subprocess so the stubbed sys.modules entries used by
+        # the other tests cannot leak into the real SDK import.
+        result = subprocess.run(
+            [sys.executable, "-c", REAL_STACK_SCRIPT],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            cwd=str(Path(__file__).resolve().parent.parent),
+        )
+        self.assertEqual(
+            result.returncode, 0, f"stderr: {result.stderr}\nstdout: {result.stdout}"
+        )
+        self.assertIn("REAL-STACK-GATE-OK", result.stdout)
