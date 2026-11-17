@@ -222,6 +222,40 @@ def test_import_server_smoke_oauth_mode_real_mcp():
     assert result.returncode == 0, result.stderr
 
 
+def test_import_does_not_construct_backend():
+    # Import must leave the backend unconstructed even with a fully valid
+    # environment: only the lifespan builds it, from startup-time config.
+    env = _smoke_env({"MCP_API_KEY": secrets.token_hex(32)})
+    code = "import server\nassert server.backend is None, type(server.backend)"
+    result = subprocess.run([sys.executable, "-c", code], env=env,
+                            capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+
+
+async def test_lifespan_reconstructs_backend_from_startup_config(monkeypatch):
+    # A backend built from import-time config must never survive into
+    # startup: the lifespan re-runs load_config and hands THAT cfg to the
+    # factory, replacing any stale backend.
+    stale, fresh = FakeBackend(), FakeBackend()
+    monkeypatch.setattr(server, "backend", stale, raising=False)
+    startup_cfg = SimpleNamespace(backend="couchdb")
+    received = []
+
+    def fake_get_backend(cfg):
+        received.append(cfg)
+        return fresh
+
+    monkeypatch.setattr(server, "load_config", lambda env: startup_cfg)
+    monkeypatch.setattr(server, "get_backend", fake_get_backend)
+    monkeypatch.setattr(server, "AUTH_MODE", "bearer")
+    async with server._lifespan(server.mcp):
+        assert received == [startup_cfg]
+        assert server.backend is fresh
+        assert stale.calls == []
+    assert server.backend is None
+    assert fresh.calls[-1] == ("close", ())
+
+
 def test_import_without_configuration_and_startup_fails_closed():
     env = {key: value for key, value in os.environ.items()
            if not key.startswith(("COUCHDB_", "MCP_", "OAUTH_", "LIVESYNC_"))}
@@ -231,7 +265,7 @@ import server
 from config import ConfigError
 assert server.backend is None
 async def check():
-    assert 'configuration' in await server.obsidian_fetch('note.md')
+    assert 'not started' in await server.obsidian_fetch('note.md')
     try:
         async with server._lifespan(server.mcp):
             raise AssertionError('served without configuration')
@@ -247,8 +281,10 @@ asyncio.run(check())
 async def test_lifespan_checks_and_closes_backend(tools, monkeypatch):
     module, fake = tools
     monkeypatch.setattr(module, "load_config", lambda env: object())
+    monkeypatch.setattr(module, "get_backend", lambda cfg: fake)
     monkeypatch.setattr(module, "AUTH_MODE", "bearer")
     async with module._lifespan(module.mcp):
+        assert module.backend is fake
         assert fake.calls == [("startup_check", ())]
     assert fake.calls[-1] == ("close", ())
 

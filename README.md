@@ -63,7 +63,7 @@ All tools work through a storage-agnostic backend interface, so switching backen
 ### 1. Install
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/obsidian-livesync-mcp.git
+git clone https://github.com/adeepn/obsidian-livesync-mcp
 cd obsidian-livesync-mcp
 python3 -m venv venv
 source venv/bin/activate

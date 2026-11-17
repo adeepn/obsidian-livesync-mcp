@@ -63,13 +63,11 @@ def get_backend(cfg: Config) -> StorageBackend:
     )
 
 
-# Guard configuration at import so tools can be tested without credentials.
-# Lifespan validates again before serving any requests.
-backend: StorageBackend
-try:
-    backend = get_backend(load_config(os.environ))
-except (ConfigError, RuntimeError):
-    backend = None  # type: ignore[assignment]
+# The backend is deliberately NOT constructed at import: only the lifespan
+# builds it, from the configuration validated at startup, so config changes
+# between import and startup are honored for the connection actually used.
+# Tools invoked before startup report "server not started".
+backend: StorageBackend | None = None
 
 
 @asynccontextmanager
@@ -80,13 +78,14 @@ async def _lifespan(app):
         raise ConfigError(
             "Authentication was absent at import; restart with configuration set."
         )
-    if backend is None:
-        backend = get_backend(cfg)
+    startup_backend = get_backend(cfg)
+    backend = startup_backend
     try:
-        await backend.startup_check()
+        await startup_backend.startup_check()
         yield
     finally:
-        await backend.close()
+        await startup_backend.close()
+        backend = None
 
 
 mcp_kwargs: dict[str, Any] = {
@@ -151,7 +150,7 @@ def _tool_errors(handler):
     @wraps(handler)
     async def guarded(*args, **kwargs):
         if backend is None:
-            return "Error: server storage configuration is missing or invalid."
+            return "Error: server not started; storage backend is unavailable."
         try:
             return await handler(*args, **kwargs)
         except StorageError as error:
