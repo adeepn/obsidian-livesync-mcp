@@ -64,15 +64,24 @@ def _normalize_path(path: str) -> str:
     Backslashes become forward slashes, empty segments (duplicated or
     leading/trailing slashes) and exact ``.`` segments are dropped, so
     ``Inbox/x.md``, ``/Inbox//x.md``, ``./Inbox/x.md`` and ``Inbox\\x.md``
-    are one path (audit B9). ``..`` segments are *not* resolved; they are
-    rejected by validate_vault_path.
+    are one path (audit B9). Internal ``..`` segments resolve to the parent;
+    paths escaping the vault root remain invalid.
     """
-    segments = [
-        segment
-        for segment in path.replace("\\", "/").split("/")
-        if segment not in ("", ".")
-    ]
+    segments = []
+    for segment in path.replace("\\", "/").split("/"):
+        if segment in ("", "."):
+            continue
+        if segment == ".." and segments and segments[-1] != "..":
+            segments.pop()
+        else:
+            segments.append(segment)
     return "/".join(segments)
+
+
+def canonical_path(path: str) -> str:
+    """Return the validated, case-preserving display path persisted by writes."""
+    validate_vault_path(path)
+    return _normalize_path(path)
 
 
 def path2id(path: str) -> str:
@@ -221,7 +230,7 @@ def new_metadata_doc(
     """
     return {
         "_id": path2id(path),
-        "path": path,
+        "path": canonical_path(path),
         "children": children,
         "ctime": ctime_ms,
         "mtime": mtime_ms,

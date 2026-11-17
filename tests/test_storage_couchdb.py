@@ -1329,7 +1329,7 @@ async def test_listing_pagination_boundary():
 
 
 @pytest.mark.parametrize('path', ['.obsidian/config.md', 'h:abc',
-                                  'folder/../note.md', 'syncinfo'])
+                                  'folder/../../note.md', 'syncinfo'])
 @pytest.mark.parametrize('operation', ['write', 'delete', 'rename_source',
                                       'rename_target', 'copy_source', 'copy_target'])
 async def test_forbidden_writes_issue_no_requests(path, operation):
@@ -1389,3 +1389,19 @@ async def test_index_budget_is_bounded(monkeypatch):
     async with fake_backend(docs) as (backend, _):
         assert len(await backend.list_notes()) == 2
         assert backend.index_truncated is True
+
+
+async def test_canonical_paths_persist_and_list():
+    async with fake_vault() as (backend, raw, _):
+        await backend.write_note('./a.md', 'body', create=True)
+        assert [m['path'] for m in await backend.list_notes()] == ['a.md']
+        assert (await stored_doc(raw, 'a.md'))['path'] == 'a.md'
+        assert (await backend.read_note('./a.md'))['text'] == 'body'
+        assert (await backend.read_note('a.md'))['text'] == 'body'
+        await backend.rename_note('a.md', 'folder/../b.md')
+        assert [m['path'] for m in await backend.list_notes()] == ['b.md']
+        assert (await backend.read_note('folder/../b.md'))['text'] == 'body'
+        await backend.copy_note('b.md', './dir\\c.md/')
+        assert (await stored_doc(raw, 'dir/c.md'))['path'] == 'dir/c.md'
+        await backend.write_note('./b.md', 'new')
+        assert (await stored_doc(raw, 'b.md'))['path'] == 'b.md'

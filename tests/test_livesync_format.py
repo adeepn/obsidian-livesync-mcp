@@ -270,12 +270,12 @@ def test_text_doc_classification_uses_normalized_path(path, expected):
 
 
 @pytest.mark.parametrize('path,expected', [
-    ('a/../B.md', 'a/../b.md'), ('../Note.md', '../note.md'),
+    ('a/../B.md', 'b.md'), ('../Note.md', '../note.md'),
     ('Ä/İΣ.md', 'ä/i̇σ.md'), ('//Inbox///Note.md///', 'inbox/note.md'),
 ])
 def test_explicit_path_vectors(path, expected):
     assert path2id(path) == expected
-    if '..' in path.split('/'):
+    if path.startswith('../'):
         with pytest.raises(ForbiddenPathError):
             validate_vault_path(path)
 

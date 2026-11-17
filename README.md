@@ -195,3 +195,8 @@ propagates truncation to these tools. Direct note reads remain available.
 These are aggregate scan limits: an individual HTTP response or note is still
 loaded before its actual size can be checked. Regex replacements have a separate
 10 MiB UTF-8 output cap and a two-second disposable-process deadline.
+
+New and replaced metadata persist canonical, case-preserving paths: separators
+are `/`, leading `./` and trailing slashes are removed, and internal parent
+segments resolve (`folder/../b.md` becomes `b.md`). Parent traversal above the
+vault root remains forbidden. Existing records are not migrated automatically.

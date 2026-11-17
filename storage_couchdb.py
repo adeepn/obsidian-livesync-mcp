@@ -49,6 +49,7 @@ from livesync_format import (
     ForbiddenPathError,
     assemble_binary,
     assemble_text,
+    canonical_path,
     chunk_id_for,
     doc_type_for,
     is_text_doc,
@@ -923,6 +924,7 @@ class CouchDBBackend:
             body["mtime"] = new_mtime
             body["size"] = size
             body["type"] = doc_type_for(path)
+        body["path"] = canonical_path(path)
         body["_rev"] = await self._put_doc(doc_id, body)
         return self._meta_from_doc(body)
 
