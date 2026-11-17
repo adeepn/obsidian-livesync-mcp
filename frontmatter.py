@@ -21,6 +21,10 @@ from ruamel.yaml.comments import CommentedMap, CommentedSeq
 from ruamel.yaml.error import YAMLError
 
 _DELIMITER = "---"
+# Sentinel key used to make ruamel attach comments of a comments-only
+# block to a real mapping (a bare load of such a block returns None and
+# drops the comments).
+_SENTINEL_KEY = "__frontmatter_placeholder__"
 
 
 class FrontmatterError(ValueError):
@@ -72,16 +76,38 @@ def _rt_yaml() -> YAML:
     return yaml
 
 
-def _parse(fm_raw: str) -> CommentedMap | None:
-    """Parse frontmatter YAML; ``None`` for an empty/comments-only block."""
+def _parse(fm_raw: str) -> CommentedMap:
+    """Parse frontmatter YAML into a round-trip mapping.
+
+    An empty or comments-only block yields an empty mapping; comments are
+    kept attached to it so that adding the first property preserves them.
+    """
     try:
         data = _rt_yaml().load(fm_raw)
     except YAMLError as exc:
         raise FrontmatterError(f"invalid frontmatter YAML: {exc}") from exc
     if data is None:
-        return None
+        return _empty_with_comments(fm_raw)
     if not isinstance(data, CommentedMap):
         raise FrontmatterError("frontmatter is not a property mapping")
+    return data
+
+
+def _empty_with_comments(fm_raw: str) -> CommentedMap:
+    """Empty mapping carrying the comments of a comments-only block.
+
+    ruamel drops the comments when such a block is loaded on its own, so
+    the block is re-loaded with a sentinel key and the key is deleted
+    again; the comments stay attached to the mapping.
+    """
+    if "#" not in fm_raw:
+        return CommentedMap()
+    source = fm_raw if fm_raw.endswith("\n") else fm_raw + "\n"
+    try:
+        data = _rt_yaml().load(f"{source}{_SENTINEL_KEY}: null\n")
+        del data[_SENTINEL_KEY]
+    except (YAMLError, KeyError, TypeError):
+        return CommentedMap()  # pathological block: comments not retrievable
     return data
 
 
@@ -112,6 +138,25 @@ def _new_block(fm_yaml: str, body: str) -> str:
     return f"{_DELIMITER}\n{fm_yaml}{_DELIMITER}\n{body}"
 
 
+def _plain_equal(left, right) -> bool:
+    """Type-sensitive equality for plain property trees.
+
+    Python equality conflates ``True == 1`` and ``1 == 1.0``; a no-op
+    detection built on it would swallow real bool/int/float type changes.
+    """
+    if type(left) is not type(right):
+        return False
+    if isinstance(left, dict):
+        return left.keys() == right.keys() and all(
+            _plain_equal(left[key], right[key]) for key in left
+        )
+    if isinstance(left, list):
+        return len(left) == len(right) and all(
+            _plain_equal(a, b) for a, b in zip(left, right)
+        )
+    return left == right
+
+
 def _apply(text: str, editor: Callable[[CommentedMap], None]) -> str:
     """Edit the frontmatter mapping in place and re-serialize.
 
@@ -122,11 +167,9 @@ def _apply(text: str, editor: Callable[[CommentedMap], None]) -> str:
     if not has_block:
         return text
     data = _parse(fm_raw)
-    if data is None:
-        data = CommentedMap()
     before = _to_plain(data)
     editor(data)
-    if _to_plain(data) == before:
+    if _plain_equal(_to_plain(data), before):
         return text
     result = _new_block(_dump(data), body)
     return text if result == text else result
@@ -137,8 +180,7 @@ def get_properties(text: str) -> dict:
     fm_raw, _, has_block = _split_block(text)
     if not has_block or not fm_raw.strip():
         return {}
-    data = _parse(fm_raw)
-    return {} if data is None else _to_plain(data)
+    return _to_plain(_parse(fm_raw))
 
 
 def set_properties(text: str, props: dict) -> str:
@@ -173,6 +215,17 @@ def delete_properties(text: str, keys: list[str]) -> str:
     return _apply(text, editor) if keys else text
 
 
+def _coerce_tags(seq: CommentedSeq) -> None:
+    """Coerce non-string tag entries to str in place (audit D12).
+
+    String nodes (quoted or plain) keep their ruamel node so quoting
+    style survives; only genuinely non-string scalars are replaced.
+    """
+    for i, item in enumerate(seq):
+        if not isinstance(item, str):
+            seq[i] = str(item)
+
+
 def _current_tags(data: CommentedMap) -> CommentedSeq | None:
     """Existing tags as a list; a scalar value wraps into one (audit D12)."""
     value = data.get("tags")
@@ -181,7 +234,7 @@ def _current_tags(data: CommentedMap) -> CommentedSeq | None:
     if isinstance(value, (list, tuple)):
         return value
     seq = CommentedSeq()
-    seq.append(value)
+    seq.append(value if isinstance(value, str) else str(value))
     return seq
 
 
@@ -193,20 +246,23 @@ def add_tags(text: str, tags: list[str]) -> str:
     if not has_block:
         data = CommentedMap()
         seq = CommentedSeq()
-        seq.extend(tags)
+        seq.extend(str(tag) for tag in tags)
         data["tags"] = seq
         return _new_block(_dump(data), body)
 
     def editor(data: CommentedMap) -> None:
+        value = data.get("tags")
         current = _current_tags(data)
         if current is None:
             current = CommentedSeq()
         existing = {str(item) for item in current}
         added = [tag for tag in dict.fromkeys(tags) if str(tag) not in existing]
         if not added:
-            return  # keep a scalar spelling when all tags already exist
-        current.extend(added)
-        data["tags"] = current
+            return  # all present: keep the original spelling untouched
+        _coerce_tags(current)  # audit D12: the tags property is list[str]
+        current.extend(str(tag) for tag in added)
+        if value is not current:  # scalar wrapped into a fresh list
+            data["tags"] = current
 
     return _apply(text, editor)
 
@@ -231,6 +287,7 @@ def remove_tags(text: str, tags: list[str]) -> str:
             return  # nothing matched; keep the original spelling
         for i in reversed(drop):  # in place: flow/block style survives
             del current[i]
+        _coerce_tags(current)  # audit D12: the tags property is list[str]
         if value is not current:  # scalar wrapped into a fresh list
             data["tags"] = current
 
@@ -248,4 +305,6 @@ def insert_after_frontmatter(text: str, insertion: str) -> str:
     if not has_block:
         return insertion + text
     head = text[: len(text) - len(body)]
+    if not head.endswith("\n"):  # closing '---' at EOF: keep it a whole line
+        head += "\n"
     return head + insertion + body

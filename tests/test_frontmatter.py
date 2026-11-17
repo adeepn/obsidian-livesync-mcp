@@ -97,10 +97,63 @@ def test_remove_missing_is_noop():
 
 
 def test_tags_scalar_to_list():
-    # Audit D12: a scalar tags value becomes a list when tags are added.
+    # Audit D12: a scalar tags value becomes a list when tags are added,
+    # with values coerced to strings (tags property is list[str]).
     text = "---\ntags: 2024\n---\nbody"
     out = add_tags(text, ["journal"])
-    assert get_properties(out)["tags"] == [2024, "journal"]
+    assert get_properties(out)["tags"] == ["2024", "journal"]
+
+
+def test_tags_coerced_to_strings_on_edit():
+    text = "---\ntags:\n- 2024\n- b\n---\nbody"
+    out = add_tags(text, ["c"])
+    assert get_properties(out)["tags"] == ["2024", "b", "c"]
+    out = remove_tags(text, ["b"])
+    assert get_properties(out)["tags"] == ["2024"]
+
+
+def test_equal_value_edit_is_noop():
+    # Non-empty props that already match must return the original object.
+    text = "---\nx: true\nnum: 42\ntitle: keep\n---\nbody"
+    assert set_properties(text, {"x": True}) is text
+    assert set_properties(text, {"num": 42}) is text
+    assert set_properties(text, {"title": "keep"}) is text
+
+
+def test_type_change_is_real_edit():
+    # True == 1 in Python, but a bool->int change must rewrite the value.
+    text = "---\nx: true\nnum: 42\n---\nbody"
+    out = set_properties(text, {"x": 1})
+    assert out != text
+    assert get_properties(out) == {"x": 1, "num": 42}
+    # int -> float is a real change as well
+    out2 = set_properties(text, {"num": 42.0})
+    assert out2 != text
+    assert get_properties(out2) == {"x": True, "num": 42.0}
+
+
+def test_comments_only_block_keeps_comments():
+    text = "---\n# retain me\n---\nbody"
+    out = set_properties(text, {"x": 1})
+    assert "# retain me" in out
+    assert get_properties(out) == {"x": 1}
+    # multiple comments, and untouched block stays as-is
+    text2 = "---\n# one\n# two\n---\nbody"
+    out2 = set_properties(text2, {"x": 1})
+    assert "# one\n# two" in out2
+    assert set_properties(text, {}) is text
+    assert get_properties(text) == {}
+
+
+def test_insert_after_frontmatter_at_eof_delimiter():
+    # Note ending in '---' without a newline must not glue the insertion
+    # onto the delimiter line.
+    text = "---\nx: 1\n---"
+    out = insert_after_frontmatter(text, "Inserted.\n")
+    assert out == "---\nx: 1\n---\nInserted.\n"
+    # the normal case is unaffected
+    text2 = "---\nx: 1\n---\nBody."
+    assert insert_after_frontmatter(text2, "I.\n") == "---\nx: 1\n---\nI.\nBody."
 
 
 def test_insert_after_frontmatter():
