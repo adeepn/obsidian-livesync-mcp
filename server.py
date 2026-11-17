@@ -409,7 +409,8 @@ async def obsidian_update_note(
             return "Error: invalid regex search pattern."
         if not matches:
             return "No matches found for search string."
-    await backend.write_note(path, new_content)
+    if new_content != existing:
+        await backend.write_note(path, new_content)
     if matches is not None:
         return f"Updated '{path}': {matches} matches replaced."
     return f"Updated '{path}' ({mode})."

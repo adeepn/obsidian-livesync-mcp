@@ -22,6 +22,11 @@ def assert_error(result):
     assert "error" in result.lower(), result
 
 
+def assert_no_mutations(vault):
+    mutations = {"write_note", "rename_note", "copy_note", "delete_note"}
+    assert not any(method in mutations for method, _ in vault.calls)
+
+
 async def test_update_requires_mode(vault):
     with pytest.raises(TypeError):
         await server.obsidian_update_note("N.md")
@@ -34,6 +39,7 @@ async def test_update_requires_mode(vault):
 async def test_update_empty_overwrite_refused(vault):
     assert_error(await server.obsidian_update_note("N.md", "overwrite"))
     assert vault.notes["N.md"]["text"] == "original"
+    assert_no_mutations(vault)
 
 
 @pytest.mark.parametrize(
@@ -44,6 +50,7 @@ async def test_update_search_args_with_overwrite_refused(vault, args):
         await server.obsidian_update_note("N.md", "overwrite", content="new", **args)
     )
     assert vault.notes["N.md"]["text"] == "original"
+    assert_no_mutations(vault)
 
 
 @pytest.mark.parametrize("regex", [False, True])
@@ -59,6 +66,15 @@ async def test_search_replace_counts_matches(vault):
         "N.md", "search-replace", search="i", replace="i"
     )
     assert "2 matches replaced" in result
+    assert vault.notes["N.md"]["text"] == "original"
+    assert_no_mutations(vault)
+
+
+async def test_identical_overwrite_never_writes(vault):
+    result = await server.obsidian_update_note("N.md", "overwrite", content="original")
+    assert "Updated" in result
+    assert vault.notes["N.md"]["text"] == "original"
+    assert_no_mutations(vault)
 
 
 async def test_invalid_regex_handled(vault):
@@ -67,6 +83,7 @@ async def test_invalid_regex_handled(vault):
     )
     assert "invalid" in result.lower() and "regex" in result.lower()
     assert vault.notes["N.md"]["text"] == "original"
+    assert_no_mutations(vault)
 
 
 async def test_fetch_edit_overwrite_keeps_frontmatter(vault):
@@ -87,6 +104,7 @@ async def test_properties_set_on_canvas_refused(vault):
     vault.add("N.canvas", "{}")
     assert_error(await server.obsidian_manage_properties("N.canvas", "set", '{"x": 1}'))
     assert vault.notes["N.canvas"]["text"] == "{}"
+    assert_no_mutations(vault)
 
 
 @pytest.mark.parametrize("properties", ["[]", "1", "null", '"str"'])
@@ -94,17 +112,25 @@ async def test_properties_json_type_checked(vault, properties):
     result = await server.obsidian_manage_properties("N.md", "set", properties)
     assert_error(result)
     assert "object" in result.lower()
+    assert vault.notes["N.md"]["text"] == "original"
+    assert_no_mutations(vault)
 
 
 async def test_tags_add_on_binary_refused(vault):
     vault.add("photo.png", data=b"photo")
     assert_error(await server.obsidian_manage_tags("photo.png", "add", "one"))
     assert vault.notes["photo.png"]["data"] == b"photo"
+    assert_no_mutations(vault)
 
 
 async def test_after_heading_real_headings(vault):
     raw = "---\n# Tasks\n---\n#project\n```md\n## Tasks\n```\n~~~\n## Tasks\n~~~\n## Tasks\nBody"
     vault.add("N.md", raw)
+    assert_error(await server.obsidian_update_note(
+        "N.md", "after-heading", heading="project", content="INSERT"
+    ))
+    assert vault.notes["N.md"]["text"] == raw
+    assert_no_mutations(vault)
     await server.obsidian_update_note(
         "N.md", "after-heading", heading="## Tasks", content="INSERT"
     )
@@ -130,6 +156,7 @@ async def test_duplicate_onto_existing_refused(vault, target):
     vault.add(name, "target")
     assert_error(await server.obsidian_duplicate_note("N.md", target))
     assert vault.notes[name]["text"] == "target"
+    assert vault.notes["N.md"]["text"] == "original"
 
 
 async def test_binary_move_allowed(vault):
@@ -270,6 +297,7 @@ async def test_text_edit_binary_refused(vault, tool, args):
     assert "text note" in result.lower()
     assert vault.notes["photo.png"]["data"] == b"photo"
     assert "new.md" not in vault.notes
+    assert_no_mutations(vault)
 
 
 async def test_append_and_no_matches(vault):
@@ -287,3 +315,21 @@ async def test_same_path_move(vault):
     await server.obsidian_move_note("N.md", "N.md")
     assert vault.notes["N.md"]["text"] == "original"
     assert not any(method in ("copy_note", "delete_note") for method, _ in vault.calls)
+
+
+@pytest.mark.parametrize("properties", ["{", "[]", "1", "null", '"str"'])
+@pytest.mark.parametrize("path", ["N.md", "N.canvas"])
+async def test_invalid_properties_never_mutate(vault, properties, path):
+    vault.add(path, "original")
+    assert_error(await server.obsidian_manage_properties(path, "set", properties))
+    assert vault.notes[path]["text"] == "original"
+    assert_no_mutations(vault)
+
+
+@pytest.mark.parametrize("path,properties", [("N.md", "{"), ("N.md", "[]"),
+                                            ("N.canvas", "{")])
+async def test_create_invalid_properties_never_mutate(vault, path, properties):
+    assert_error(await server.obsidian_create_note(path, "replacement", properties))
+    assert vault.notes["N.md"]["text"] == "original"
+    assert "N.canvas" not in vault.notes
+    assert_no_mutations(vault)
