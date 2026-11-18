@@ -1,0 +1,399 @@
+diff --git a/config.py b/config.py
+index 41021ea..73fe4a5 100644
+--- a/config.py
++++ b/config.py
+@@ -199,6 +199,11 @@ def load_config(env: Mapping[str, str]) -> Config:
+     then client auth. Raises ConfigError on the first problem; messages
+     mention variable names but never secret values.
+     """
++    from scan_budget import limits
++    try:
++        limits(env)
++    except ValueError as error:
++        raise ConfigError(str(error)) from None
+     backend = env.get("LIVESYNC_BACKEND", "")
+     if not backend:
+         raise ConfigError(
+diff --git a/links.py b/links.py
+index 9f4e02e..26e7e64 100644
+--- a/links.py
++++ b/links.py
+@@ -230,18 +230,39 @@ def build_graph(
+     Optional all_paths supplies the complete node and resolution namespace,
+     including notes whose bodies could not be read.
+     """
+-    notes = list(texts)
+-    paths = list(dict.fromkeys(
+-        all_paths if all_paths is not None else (path for path, _ in notes)
+-    ))
+-    index = _PathIndex(paths)
+-    edges = []
+-    seen = set()
+-    for source, text in notes:
+-        for link in _extract_links(text, distinguish_embeds=True):
+-            target = index.resolve(
++    if all_paths is not None:
++        graph = GraphBuilder(all_paths)
++        for path, text in texts:
++            graph.add(path, text)
++        return graph.result()
++    # Forward references require the namespace first. Retain extracted links,
++    # never the bodies supplied by a one-shot iterable.
++    extracted = [(path, _extract_links(text, distinguish_embeds=True))
++                 for path, text in texts]
++    graph = GraphBuilder(path for path, _ in extracted)
++    for path, links in extracted:
++        graph.add_links(path, links)
++    return graph.result()
++
++
++class GraphBuilder:
++    """Incrementally extract and resolve edges without retaining bodies."""
++    def __init__(self, paths):
++        self.paths = list(dict.fromkeys(paths))
++        self.index = _PathIndex(self.paths)
++        self.edges = []
++        self.seen = set()
++
++    def add(self, source, text):
++        self.add_links(source, _extract_links(text, distinguish_embeds=True))
++
++    def add_links(self, source, links):
++        for link in links:
++            target = self.index.resolve(
+                 link.target, source if link.kind != "wikilink" else None)
+-            if target is not None and (source, target) not in seen:
+-                seen.add((source, target))
+-                edges.append({"from": source, "to": target})
+-    return {"nodes": paths, "edges": edges}
++            if target is not None and (source, target) not in self.seen:
++                self.seen.add((source, target))
++                self.edges.append({"from": source, "to": target})
++
++    def result(self):
++        return {"nodes": self.paths, "edges": self.edges}
+diff --git a/server.py b/server.py
+index 5cb683e..b07b36b 100644
+--- a/server.py
++++ b/server.py
+@@ -10,7 +10,9 @@ import secrets
+ import time
+ import copy
+ import hashlib
+-from contextlib import asynccontextmanager
++from contextlib import aclosing, asynccontextmanager
++from contextvars import ContextVar
++from scan_budget import ScanBudget
+ from functools import wraps
+ from typing import Any
+ 
+@@ -34,7 +36,7 @@ from frontmatter import (
+     delete_properties, add_tags, remove_tags, insert_after_frontmatter,
+ )
+ from livesync_format import ForbiddenPathError
+-from links import build_graph, extract_links, resolve_link
++from links import GraphBuilder, extract_links, resolve_link
+ from auth_config import StaticBearerTokenVerifier, select_auth_mode
+ from oauth_provider import SimpleOAuthProvider
+ 
+@@ -226,39 +228,94 @@ def _entry_id(entry: Any) -> Any:
+     return entry.get("id") if isinstance(entry, dict) else None
+ 
+ 
++_scan_semaphore = asyncio.Semaphore(2)
++_scan_budget = ContextVar("scan_budget", default=None)
++
++
++def _vault_scan(handler):
++    @wraps(handler)
++    async def scanned(*args, **kwargs):
++        async with _scan_semaphore:
++            budget = ScanBudget()
++            token = _scan_budget.set(budget)
++            try:
++                response = await handler(*args, **kwargs)
++                if getattr(backend, "index_truncated", False):
++                    budget.truncated = True
++                if budget.truncated:
++                    try:
++                        result = json.loads(response)
++                    except (ValueError, TypeError):
++                        result = {"message": response}
++                    if not isinstance(result, dict):
++                        result = {"results": result}
++                    result.update(truncated=True, scan=budget.report())
++                    return json.dumps(result, ensure_ascii=False, indent=2)
++                return response
++            finally:
++                _scan_budget.reset(token)
++    return scanned
++
++
++async def _scan_notes():
++    result = []
++    budget = _scan_budget.get()
++    for meta in await backend.list_notes():
++        if budget and not budget.admit(meta["path"], len(json.dumps(meta).encode())):
++            break
++        result.append(meta)
++    return result
++
++
++async def _scan_texts():
++    budget = _scan_budget.get()
++    async with aclosing(backend.iterate_texts()) as texts:
++        async for meta, text in texts:
++            size = len(meta["path"].encode()) + (len(text.encode()) if text else 0)
++            if budget and not budget.admit(meta["path"], size):
++                break
++            yield meta, text
++            del text
++
++
++
+ async def _graph() -> dict:
+-    paths = [meta["path"] for meta in await backend.list_notes()]
+-    texts, skipped = [], []
+-    async for meta, text in backend.iterate_texts():
+-        if text is None:
+-            skipped.append(meta["path"])
+-        else:
+-            texts.append((meta["path"], text))
+-    return {**build_graph(texts, all_paths=paths), "skipped": skipped}
++    paths = [meta["path"] for meta in await _scan_notes()]
++    graph = GraphBuilder(paths)
++    skipped = []
++    async with aclosing(_scan_texts()) as texts:
++        async for meta, text in texts:
++            if text is None:
++                skipped.append(meta["path"])
++            else:
++                graph.add(meta["path"], text)
++            del text
++    return {**graph.result(), "skipped": skipped}
+ 
+ 
+ async def _tags() -> dict:
+     counts, skipped, errors = {}, [], {}
+-    async for meta, text in backend.iterate_texts():
+-        path = meta["path"]
+-        if text is None:
+-            skipped.append(path)
+-            continue
+-        try:
+-            props = get_properties(text)
+-            _, body = split_frontmatter(text)
+-        except FrontmatterError:
+-            skipped.append(path)
+-            errors[path] = "Error: invalid YAML frontmatter."
+-            continue
+-        tags = props.get("tags", [])
+-        if isinstance(tags, str):
+-            tags = [tags]
+-        elif not isinstance(tags, list):
+-            tags = []
+-        for tag in tags + re.findall(r'(?<!\w)#([\w/\-]+)', body):
+-            if isinstance(tag, str) and tag:
+-                counts[tag] = counts.get(tag, 0) + 1
++    async with aclosing(_scan_texts()) as texts:
++        async for meta, text in texts:
++            path = meta["path"]
++            if text is None:
++                skipped.append(path)
++                continue
++            try:
++                props = get_properties(text)
++                _, body = split_frontmatter(text)
++            except FrontmatterError:
++                skipped.append(path)
++                errors[path] = "Error: invalid YAML frontmatter."
++                continue
++            tags = props.get("tags", [])
++            if isinstance(tags, str):
++                tags = [tags]
++            elif not isinstance(tags, list):
++                tags = []
++            for tag in tags + re.findall(r'(?<!\w)#([\w/\-]+)', body):
++                if isinstance(tag, str) and tag:
++                    counts[tag] = counts.get(tag, 0) + 1
+     result = {
+         "tags": dict(sorted(counts.items(), key=lambda item: item[1],
+                             reverse=True)),
+@@ -274,6 +331,7 @@ async def _tags() -> dict:
+ # 1. obsidian-search
+ @mcp.tool()
+ @_tool_errors
++@_vault_scan
+ async def obsidian_search(query: str, regex: bool = False) -> str:
+     """Search notes in the vault by content.
+ 
+@@ -281,29 +339,27 @@ async def obsidian_search(query: str, regex: bool = False) -> str:
+         query: Search query (text or regex pattern)
+         regex: If true, treat query as regex pattern
+     """
+-    try:
+-        pattern = query if regex else None
+-    except re.error:
+-        return "Invalid regular expression."
++    pattern = query if regex else None
+     results, skipped = [], []
+-    async for meta, text in backend.iterate_texts():
+-        if text is None:
+-            skipped.append(meta["path"])
+-            continue
+-        if pattern is not None:
+-            try:
+-                matches = (await asyncio.to_thread(
+-                    regex_runner.apply, pattern, text, "findall"))["matches"]
+-            except re.error:
+-                return "Invalid regular expression."
+-            if matches:
+-                results.append({"path": meta["path"], "matches": matches[:10]})
+-        elif query.lower() in text.lower():
+-            index = text.lower().index(query.lower())
+-            results.append({
+-                "path": meta["path"],
+-                "context": text[max(0, index - 50):index + len(query) + 50],
+-            })
++    async with aclosing(_scan_texts()) as texts:
++        async for meta, text in texts:
++            if text is None:
++                skipped.append(meta["path"])
++                continue
++            if pattern is not None:
++                try:
++                    matches = (await asyncio.to_thread(
++                        regex_runner.apply, pattern, text, "findall"))["matches"]
++                except re.error:
++                    return "Invalid regular expression."
++                if matches:
++                    results.append({"path": meta["path"], "matches": matches[:10]})
++            elif query.lower() in text.lower():
++                index = text.lower().index(query.lower())
++                results.append({
++                    "path": meta["path"],
++                    "context": text[max(0, index - 50):index + len(query) + 50],
++                })
+     return json.dumps(
+         {"results": results, "skipped": skipped}, ensure_ascii=False, indent=2
+     )
+@@ -658,6 +714,7 @@ async def obsidian_manage_tags(
+ # 11. obsidian-get-all-tags
+ @mcp.tool()
+ @_tool_errors
++@_vault_scan
+ async def obsidian_get_all_tags() -> str:
+     """Get all tags across the vault with usage counts."""
+     return json.dumps(await _tags(), ensure_ascii=False, indent=2)
+@@ -666,6 +723,7 @@ async def obsidian_get_all_tags() -> str:
+ # 12. obsidian-get-links
+ @mcp.tool()
+ @_tool_errors
++@_vault_scan
+ async def obsidian_get_links(
+     path: str,
+     direction: str = "both",
+@@ -695,6 +753,7 @@ async def obsidian_get_links(
+ # 13. obsidian-get-link-graph
+ @mcp.tool()
+ @_tool_errors
++@_vault_scan
+ async def obsidian_get_link_graph() -> str:
+     """Get the full link graph of the vault (all nodes and edges)."""
+     return json.dumps(await _graph(), ensure_ascii=False, indent=2)
+@@ -703,6 +762,7 @@ async def obsidian_get_link_graph() -> str:
+ # 14. obsidian-find-orphaned-notes
+ @mcp.tool()
+ @_tool_errors
++@_vault_scan
+ async def obsidian_find_orphaned_notes() -> str:
+     """Find notes that have no incoming or outgoing links."""
+     graph = await _graph()
+@@ -726,6 +786,7 @@ async def obsidian_find_orphaned_notes() -> str:
+ # 15. obsidian-find-hub-notes
+ @mcp.tool()
+ @_tool_errors
++@_vault_scan
+ async def obsidian_find_hub_notes(min_links: int = 3) -> str:
+     """Find the most connected notes in the vault.
+ 
+@@ -921,9 +982,10 @@ async def obsidian_canvas_edge(
+ # 18. obsidian-vault-stats
+ @mcp.tool()
+ @_tool_errors
++@_vault_scan
+ async def obsidian_vault_stats() -> str:
+     """Get aggregate statistics for the entire vault."""
+-    notes = await backend.list_notes()
++    notes = await _scan_notes()
+     by_ext = {}
+     for note in notes:
+         path = note["path"]
+diff --git a/storage_couchdb.py b/storage_couchdb.py
+index 4106d73..261af6f 100644
+--- a/storage_couchdb.py
++++ b/storage_couchdb.py
+@@ -41,6 +41,8 @@ import time
+ import urllib.parse
+ from typing import AsyncIterator
+ 
++from scan_budget import ScanBudget
++
+ import httpx
+ 
+ from livesync_format import (
+@@ -286,6 +288,7 @@ class CouchDBBackend:
+         ids outside that range are filtered here.
+         """
+         ids: list[str] = []
++        budget = ScanBudget()
+         range_params = (
+             {"endkey": json.dumps("h:")},
+             {"startkey": json.dumps("h;")},
+@@ -310,6 +313,9 @@ class CouchDBBackend:
+                         continue  # hard CouchDB tombstone
+                     doc_id = row.get("id") or row.get("key")
+                     if isinstance(doc_id, str) and not _is_service_id(doc_id):
++                        if not budget.admit(doc_id, len(doc_id.encode())):
++                            self.index_truncated = True
++                            return ids
+                         ids.append(doc_id)
+                 if len(rows) < _PAGE_SIZE:
+                     break
+@@ -317,7 +323,9 @@ class CouchDBBackend:
+         return ids
+ 
+     async def _load_index(self) -> dict[str, dict]:
++        self.index_truncated = False
+         ids = await self._note_doc_ids()
++        budget = ScanBudget()
+         index: dict[str, dict] = {}
+         for start in range(0, len(ids), _PAGE_SIZE):
+             batch = ids[start : start + _PAGE_SIZE]
+@@ -333,7 +341,16 @@ class CouchDBBackend:
+                     )
+                     if _has_hidden_segment(path):
+                         continue  # hidden files never surface as notes
+-                    index[str(doc["_id"])] = doc
++                    # Body/chunk/eden payloads must never live in the index.
++                    meta = self._meta_from_doc(doc)
++                    compact = {key: doc[key] for key in
++                               ("_id", "_rev", "path", "type", "ctime", "mtime")
++                               if key in doc}
++                    compact["size"] = meta["size"]
++                    if not budget.admit(path, len(json.dumps(compact).encode())):
++                        self.index_truncated = True
++                        return index
++                    index[str(doc["_id"])] = compact
+         return index
+ 
+     async def _current_index(self) -> dict[str, dict]:
+@@ -500,7 +517,7 @@ class CouchDBBackend:
+                 yield meta, None
+                 continue
+             try:
+-                content = await self._content_from_doc(doc)
++                content = await self.read_note(meta["path"])
+             except StorageError as exc:
+                 logger.error("skipping note %s: %s", meta["path"], exc)
+                 yield meta, None

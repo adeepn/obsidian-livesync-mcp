@@ -1,3 +1,7 @@
-mcp[cli]>=1.0.0
-httpx>=0.27.0
-uvicorn>=0.30.0
+# Runtime dependencies: exact pins / bounded ranges (audit A1).
+# Fully frozen environment: requirements.lock (pip freeze of the working venv).
+mcp[cli]==1.30.0
+pydantic>=2,<3
+python-dotenv>=1,<2
+ruamel.yaml>=0.18,<0.19
+httpx==0.28.1

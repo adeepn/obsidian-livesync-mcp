@@ -20,10 +20,11 @@ def select_auth_mode(mcp_api_key: str, oauth_password: str) -> str:
 class StaticBearerTokenVerifier(TokenVerifier):
     """Validate a single shared bearer token from MCP_API_KEY."""
 
-    def __init__(self, expected_token: str):
+    def __init__(self, expected_token: str, resource_server_url: str):
         if not expected_token:
             raise ValueError("expected_token must not be empty")
         self.expected_token = expected_token
+        self.resource_server_url = resource_server_url
 
     async def verify_token(self, token: str) -> AccessToken | None:
         if not token or not hmac.compare_digest(token, self.expected_token):
@@ -33,4 +34,5 @@ class StaticBearerTokenVerifier(TokenVerifier):
             client_id="obsidian-mcp",
             scopes=["obsidian"],
             expires_at=None,
+            resource=self.resource_server_url,
         )

@@ -1,0 +1,62 @@
+....F.F                                                                  [100%]
+=================================== FAILURES ===================================
+_______________ test_chunk_creation_409_rereads_winner[winner4] ________________
+
+winner = {'data': 'same', 'type': 'leaf', 'e_': True}
+
+    @pytest.mark.parametrize('winner', [
+        {'data': 'same', 'type': 'leaf'},
+        {'data': 'different', 'type': 'leaf'},
+        {'data': 'same', 'type': 'plain'},
+        {'data': 'same', 'type': 'leaf', 'deleted': True},
+        {'data': 'same', 'type': 'leaf', 'e_': True},
+        None,
+    ])
+    async def test_chunk_creation_409_rereads_winner(winner):
+        inner, log = make_fake_couchdb({})
+        chunk_id = chunk_id_for('same')
+        raced = False
+    
+        async def handle(request):
+            nonlocal raced
+            if request.method == 'PUT' and urllib.parse.unquote(request.url.path).endswith(chunk_id):
+                assert not raced, 'chunk must not be overwritten after a conflict'
+                raced = True
+                if winner is not None:
+                    rival = httpx.Request('PUT', request.url, json=winner)
+                    response = await inner.handle_async_request(rival)
+                    assert response.status_code == 201
+                return httpx.Response(409, json={'error': 'conflict'})
+            return await inner.handle_async_request(request)
+    
+        transport = httpx.MockTransport(handle)
+        backend = CouchDBBackend(URL, USER, PASSWORD, DATABASE, transport=transport)
+        try:
+            if winner == {'data': 'same', 'type': 'leaf'}:
+                await backend.write_note('new.md', 'same', create=True)
+                assert (await backend.read_note('new.md'))['text'] == 'same'
+            else:
+>               with pytest.raises(ConcurrentModification):
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E               Failed: DID NOT RAISE ConcurrentModification
+
+tests/test_storage_couchdb.py:1283: Failed
+------------------------------ Captured log call -------------------------------
+WARNING  storage_couchdb:storage_couchdb.py:227 CouchDB PUT obsidian/h%3A0967115f2813a354 -> 409 conflict
+_________ test_encrypted_existing_chunk_refused_without_metadata_write _________
+
+    async def test_encrypted_existing_chunk_refused_without_metadata_write():
+        chunk = chunk_id_for('same')
+        docs = {chunk: {'_id': chunk, 'type': 'leaf', 'data': 'same', 'e_': True},
+                'a.md': plain_note('a.md', 'a.md', [])}
+        async with fake_vault(docs) as (backend, raw, log):
+            before = await stored_doc(raw, 'a.md')
+>           with pytest.raises(StorageError):
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           Failed: DID NOT RAISE StorageError
+
+tests/test_storage_couchdb.py:1370: Failed
+=========================== short test summary info ============================
+FAILED tests/test_storage_couchdb.py::test_chunk_creation_409_rereads_winner[winner4]
+FAILED tests/test_storage_couchdb.py::test_encrypted_existing_chunk_refused_without_metadata_write
+2 failed, 5 passed, 120 deselected in 0.18s

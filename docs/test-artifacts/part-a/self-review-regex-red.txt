@@ -1,0 +1,28 @@
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+_____________ test_findall_unmatched_groups_match_python_contract ______________
+
+    def test_findall_unmatched_groups_match_python_contract():
+        import regex_runner
+>       assert regex_runner.apply('(a)|(b)', 'ab', 'findall', 2)['matches'] == [
+            ('a', ''), ('', 'b')]
+E       AssertionError: assert [('a', None), (None, 'b')] == [('a', ''), ('', 'b')]
+E         
+E         At index 0 diff: ('a', None) != ('a', '')
+E         Use -v to get more diff
+
+tests/test_regex_runner.py:24: AssertionError
+______________________ test_regex_invalid_on_empty_vault _______________________
+
+tools = (<module 'server' from '/Volumes/Devel/jHOME/obsidian-livesync-mcp/.worktrees/plan-a/server.py'>, <tests.fake_backend.FakeBackend object at 0x110a32f90>)
+
+    async def test_regex_invalid_on_empty_vault(tools):
+        server, _ = tools
+>       assert 'Invalid regular expression' in await server.obsidian_search('[', True)
+E       assert 'Invalid regular expression' in '{\n  "results": [],\n  "skipped": []\n}'
+
+tests/test_tools_read.py:436: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_regex_runner.py::test_findall_unmatched_groups_match_python_contract
+FAILED tests/test_tools_read.py::test_regex_invalid_on_empty_vault - assert '...
+2 failed, 46 deselected in 0.38s
