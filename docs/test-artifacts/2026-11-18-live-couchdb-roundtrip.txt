@@ -1,0 +1,60 @@
+# Live CouchDB roundtrip 2026-11-18 15:01 — backend vs real Obsidian LiveSync client (CouchDB 3.5.3 docker, plugin 1.0.50, legacy path identity)
+
+== PHASE 1: client writes -> server reads ==
+list_notes:
+  Welcome.md  size=206  type=plain
+  test-image.png  size=10362  type=newnote
+  Картинка.md  size=197  type=plain
+  Связанная заметка.md  size=353  type=plain
+  Тестовая заметка.md  size=491  type=plain
+per-file check (backend vs disk):
+  Welcome.md: text 206ch match=True is_text=True meta_size=206
+  test-image.png: binary 10362B match=True is_text=False meta_size=10362
+  Картинка.md: text 123ch match=True is_text=True meta_size=197
+  Связанная заметка.md: text 207ch match=True is_text=True meta_size=353
+  Тестовая заметка.md: text 312ch match=True is_text=True meta_size=491
+PHASE1: PASS
+
+== PHASE 2: server writes (create/update/move/soft-delete) ==
+create: Серверная заметка.md rev-gen 1-89ac00
+create: На удаление.md
+update: Тестовая заметка.md -> 2-ce07e70e18b39d
+move: Серверная заметка.md -> Папка/Переехавшая.md
+soft delete: На удаление.md -> True
+Traceback (most recent call last):
+  File "/tmp/live_check_phase2.py", line 52, in <module>
+    asyncio.run(main())
+    ~~~~~~~~~~~^^^^^^^^
+  File "/opt/homebrew/Caskroom/miniconda/base/lib/python3.13/asyncio/runners.py", line 195, in run
+    return runner.run(main)
+           ~~~~~~~~~~^^^^^^
+  File "/opt/homebrew/Caskroom/miniconda/base/lib/python3.13/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/opt/homebrew/Caskroom/miniconda/base/lib/python3.13/asyncio/base_events.py", line 725, in run_until_complete
+    return future.result()
+           ~~~~~~~~~~~~~^^
+  File "/tmp/live_check_phase2.py", line 39, in main
+    meta = await b.get_meta("На удаление.md")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Volumes/Devel/jHOME/obsidian-livesync-mcp/storage_couchdb.py", line 477, in get_meta
+    raise NoteNotFound(f"note not found: {path}")
+storage_base.NoteNotFound: note not found: На удаление.md
+
+== PHASE 3: final state verification (post server writes) ==
+read-back Тестовая заметка.md: appended-present = True | rev 2-ce07e70e18
+read-back Папка/Переехавшая.md: content-ok = True
+deleted note На удаление.md: absent (NoteNotFound) — correct soft-delete semantics
+old path Серверная заметка.md after move: absent — correct
+chunk docs in db: 10 | tombstones/deleted chunks: 0
+PHASE3: PASS
+soft-deleted: True
+tombstone in db: deleted = True | type = plain | children kept = True
+
+== PHASE 4: client applied server writes ==
+user confirmed in Obsidian after Replicate: folder Папка/Переехавшая.md appeared; Тестовая заметка.md appended; LiveSync log clean (no size-mismatch / writing-prevented).
+
+== PHASE 5: live deletion roundtrip ==
+server created Временная 2.md -> client replicated it (user confirmed); server soft-deleted (tombstone: deleted=true, type=plain, children kept); after Replicate the file disappeared from the Obsidian file tree (user confirmed).
+
+OVERALL: PASS (5/5 phases, real Obsidian 1.12.7 + Self-hosted LiveSync 1.0.50 client, legacy path identity)
