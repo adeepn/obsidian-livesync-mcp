@@ -1,0 +1,421 @@
+"""Tests for the journal local store: SQLite revision trees + chunk files.
+
+Covers the Task 3 interface consumed by Tasks 5-7: ``pick_winner`` (the
+deterministic winner rule for CouchDB-style ``<gen>-<hash>`` revisions),
+``JournalStore.apply_journal`` (idempotent journal replay with per-file
+transactions), epoch resets that wipe both tables and chunk files, path
+identity enforcement on reopen, and note reads (children order, eden inline
+chunks, legacy ``notes`` bodies, binary ``newnote`` bodies, E2EE refusal,
+per-note corruption isolation in ``iterate_notes``).
+"""
+
+import base64
+import sqlite3
+import unicodedata
+
+import pytest
+
+from journal_store import JournalStore, pick_winner
+from livesync_format import PATH_IDENTITY_LEGACY, PATH_IDENTITY_NFC
+
+JOURNAL_1 = "1700000000000-docs.jsonl.gz"
+JOURNAL_2 = "1700000001000-docs.jsonl.gz"
+JOURNAL_3 = "1700000002000-docs.jsonl.gz"
+
+DB_PATH = "journal.sqlite3"
+
+
+def meta_doc(doc_id, rev, *, path=None, children=(), doc_type="plain", **extra):
+    """Minimal LiveSync metadata document as journal records carry it."""
+    doc = {
+        "_id": doc_id,
+        "_rev": rev,
+        "type": doc_type,
+        "path": doc_id if path is None else path,
+        "children": list(children),
+        "eden": {},
+    }
+    doc.update(extra)
+    return doc
+
+
+@pytest.fixture()
+def store(tmp_path):
+    instance = JournalStore(tmp_path / "state", PATH_IDENTITY_LEGACY)
+    yield instance
+    instance.close()
+
+
+class TestPickWinner:
+    def test_higher_generation_beats_lower(self):
+        leaves = [{"_rev": "2-zzz"}, {"_rev": "3-aaa"}]
+        assert pick_winner(leaves)["_rev"] == "3-aaa"
+
+    def test_generation_tie_breaks_on_largest_hash(self):
+        leaves = [{"_rev": "3-bbb"}, {"_rev": "3-aaa"}, {"_rev": "2-zzz"}]
+        assert pick_winner(leaves)["_rev"] == "3-bbb"
+
+    def test_single_leaf_is_returned_verbatim(self):
+        only = {"_rev": "1-x", "path": "a.md"}
+        assert pick_winner([only]) is only
+
+    def test_empty_leaf_list_raises(self):
+        with pytest.raises(ValueError, match="at least one leaf"):
+            pick_winner([])
+
+    def test_malformed_revision_raises(self):
+        with pytest.raises(ValueError, match="revision"):
+            pick_winner([{"_rev": "bogus"}])
+
+
+class TestApplyJournal:
+    def test_note_and_chunk_file_stored(self, tmp_path):
+        store = JournalStore(tmp_path / "state", PATH_IDENTITY_LEGACY)
+        store.apply_journal(
+            JOURNAL_1,
+            {"h:0123456789abcdef": "hi"},
+            [meta_doc("note.md", "1-x", children=["h:0123456789abcdef"])],
+        )
+        assert store.note_ids() == ["note.md"]
+        assert store.winner("note.md")["_rev"] == "1-x"
+        assert store.processed(JOURNAL_1) is True
+        store.close()
+
+    def test_chunk_files_are_hex_sharded_under_state_dir(self, tmp_path):
+        state = tmp_path / "state"
+        store = JournalStore(state, PATH_IDENTITY_LEGACY)
+        store.apply_journal(JOURNAL_1, {"h:0123456789abcdef": "привет"}, [])
+        chunk_file = state / "chunks" / "01" / "23456789abcdef"
+        assert chunk_file.read_bytes() == "привет".encode("utf-8")
+        store.close()
+
+    def test_reapplying_same_file_changes_nothing(self, tmp_path):
+        state = tmp_path / "state"
+        store = JournalStore(state, PATH_IDENTITY_LEGACY)
+        chunks = {"h:0123456789abcdef": "body"}
+        docs = [meta_doc("note.md", "1-x", children=["h:0123456789abcdef"])]
+        store.apply_journal(JOURNAL_1, chunks, docs)
+        files_before = sorted(
+            p for p in (state / "chunks").rglob("*") if p.is_file()
+        )
+        store.apply_journal(JOURNAL_1, chunks, docs)
+        assert store.files_processed_count() == 1
+        assert store.note_ids() == ["note.md"]
+        assert len(store.leaves("note.md")) == 1
+        files_after = sorted(
+            p for p in (state / "chunks").rglob("*") if p.is_file()
+        )
+        assert files_after == files_before
+        store.close()
+
+    def test_merge_sibling_leaf_keeps_both_leaves_single_winner(self, tmp_path):
+        store = JournalStore(tmp_path / "state", PATH_IDENTITY_LEGACY)
+        store.apply_journal(
+            JOURNAL_1,
+            {"h:a": "first "},
+            [meta_doc("note.md", "2-aaa", children=["h:a"])],
+        )
+        store.apply_journal(
+            JOURNAL_2,
+            {"h:b": "second"},
+            [meta_doc("note.md", "2-bbb", children=["h:b"])],
+        )
+        assert sorted(d["_rev"] for d in store.leaves("note.md")) == [
+            "2-aaa",
+            "2-bbb",
+        ]
+        assert store.winner("note.md")["_rev"] == "2-bbb"
+        assert store.note_ids() == ["note.md"]
+        doc, text, data, is_text = store.read_note("note.md")
+        assert doc["_rev"] == "2-bbb"
+        assert (text, data, is_text) == ("second", None, True)
+        store.close()
+
+    def test_identical_chunk_in_two_journals_is_written_once(self, tmp_path):
+        state = tmp_path / "state"
+        store = JournalStore(state, PATH_IDENTITY_LEGACY)
+        store.apply_journal(JOURNAL_1, {"h:same": "data"}, [])
+        store.apply_journal(JOURNAL_2, {"h:same": "data"}, [])
+        files = [p for p in (state / "chunks").rglob("*") if p.is_file()]
+        assert len(files) == 1
+        store.close()
+
+    def test_tombstone_winner_hides_note_but_keeps_leaf(self, tmp_path):
+        store = JournalStore(tmp_path / "state", PATH_IDENTITY_LEGACY)
+        store.apply_journal(
+            JOURNAL_1, {"h:a": "body"}, [meta_doc("note.md", "1-a", children=["h:a"])]
+        )
+        store.apply_journal(
+            JOURNAL_2,
+            {},
+            [meta_doc("note.md", "2-x", children=["h:a"], deleted=True)],
+        )
+        assert store.winner("note.md")["_rev"] == "2-x"
+        assert store.note_ids() == []
+        assert store.read_note("note.md") is None
+        assert sorted(d["_rev"] for d in store.leaves("note.md")) == ["1-a", "2-x"]
+        store.close()
+
+    def test_full_json_chunk_record_serves_children(self, store):
+        chunk_doc = {"_id": "h:full", "_rev": "1-q", "data": "from json record"}
+        note = meta_doc("viajson.md", "1-x", children=["h:full"])
+        store.apply_journal(JOURNAL_1, {}, [chunk_doc, note])
+        doc, text, data, is_text = store.read_note("viajson.md")
+        assert (text, data, is_text) == ("from json record", None, True)
+
+    def test_malformed_rev_rejects_whole_file_atomically(self, store):
+        with pytest.raises(ValueError, match=JOURNAL_1):
+            store.apply_journal(
+                JOURNAL_1,
+                {"h:ok": "x"},
+                [meta_doc("a.md", "1-x"), {"_id": "b.md", "_rev": "bogus"}],
+            )
+        assert store.processed(JOURNAL_1) is False
+        assert store.note_ids() == []
+
+    def test_foreign_chunk_identifier_rejected(self, store):
+        with pytest.raises(ValueError, match="chunk identifier"):
+            store.apply_journal(JOURNAL_1, {"f:notachunk": "x"}, [])
+
+
+class TestProcessedAndMeta:
+    def test_defaults_on_fresh_store(self, store):
+        assert store.last_sent_key == ""
+        assert store.epoch == ""
+        assert store.files_processed_count() == 0
+        assert store.note_ids() == []
+
+    def test_mark_processed_lifecycle(self, store):
+        assert store.processed("some-file") is False
+        store.mark_processed("some-file")
+        assert store.processed("some-file") is True
+        assert store.files_processed_count() == 1
+
+    def test_last_sent_key_roundtrip(self, store):
+        store.last_sent_key = JOURNAL_2
+        assert store.last_sent_key == JOURNAL_2
+
+    def test_state_persists_across_reopen(self, tmp_path):
+        state = tmp_path / "state"
+        first = JournalStore(state, PATH_IDENTITY_LEGACY)
+        # Realistic order (Task 5): epoch is known from sync parameters
+        # before any journal is replayed; the first epoch set on a fresh
+        # store differs from the "" default and resets nothing.
+        first.epoch = "1:salt"
+        first.apply_journal(
+            JOURNAL_1, {"h:a": "body"}, [meta_doc("note.md", "1-a", children=["h:a"])]
+        )
+        first.last_sent_key = JOURNAL_1
+        first.close()
+
+        second = JournalStore(state, PATH_IDENTITY_LEGACY)
+        assert second.processed(JOURNAL_1) is True
+        assert second.note_ids() == ["note.md"]
+        assert second.last_sent_key == JOURNAL_1
+        assert second.epoch == "1:salt"
+        second.close()
+
+    def test_epoch_change_wipes_tables_and_chunk_files(self, tmp_path):
+        state = tmp_path / "state"
+        store = JournalStore(state, PATH_IDENTITY_LEGACY)
+        store.epoch = "1:salt"
+        store.apply_journal(
+            JOURNAL_1,
+            {"h:0123456789abcdef": "body"},
+            [meta_doc("note.md", "1-x", children=["h:0123456789abcdef"])],
+        )
+        store.last_sent_key = JOURNAL_1
+        assert store.note_ids() == ["note.md"]
+        chunks_root = state / "chunks"
+        assert any(p.is_file() for p in chunks_root.rglob("*"))
+
+        store.epoch = "2:othersalt"
+
+        assert store.epoch == "2:othersalt"
+        assert store.note_ids() == []
+        assert store.files_processed_count() == 0
+        assert store.last_sent_key == ""
+        assert [p for p in chunks_root.rglob("*") if p.is_file()] == []
+        store.close()
+
+    def test_setting_same_epoch_does_not_reset(self, store):
+        store.epoch = "1:salt"
+        store.apply_journal(
+            JOURNAL_1, {"h:a": "body"}, [meta_doc("note.md", "1-a", children=["h:a"])]
+        )
+        store.epoch = "1:salt"
+        assert store.note_ids() == ["note.md"]
+        assert store.files_processed_count() == 1
+
+
+class TestPathIdentity:
+    def test_unknown_identity_value_rejected(self, tmp_path):
+        with pytest.raises(ValueError, match="path identity"):
+            JournalStore(tmp_path / "state", "weird")
+
+    def test_identity_mismatch_on_reopen_raises(self, tmp_path):
+        state = tmp_path / "state"
+        JournalStore(state, PATH_IDENTITY_LEGACY).close()
+        with pytest.raises(ValueError, match="path identity"):
+            JournalStore(state, PATH_IDENTITY_NFC)
+        # The stored identity survives the refused reopen.
+        reopened = JournalStore(state, PATH_IDENTITY_LEGACY)
+        reopened.close()
+
+    def test_unicode_doc_id_untouched_in_nfc_mode(self, tmp_path):
+        nfd_id = unicodedata.normalize("NFD", "café.md")
+        store = JournalStore(tmp_path / "state", PATH_IDENTITY_NFC)
+        store.apply_journal(JOURNAL_1, {}, [meta_doc(nfd_id, "1-x")])
+        # The store never derives or rewrites ids: whatever the journal
+        # delivered is preserved byte-for-byte.
+        assert store.note_ids() == [nfd_id]
+        assert store.winner(nfd_id)["_id"] == nfd_id
+        store.close()
+
+
+class TestReadNote:
+    def test_unknown_doc_returns_none(self, store):
+        assert store.read_note("nope.md") is None
+        assert store.winner("nope.md") is None
+
+    def test_plain_children_concatenate_in_order(self, store):
+        doc = meta_doc("a.md", "1-x", children=["h:one", "h:two"])
+        store.apply_journal(
+            JOURNAL_1, {"h:one": "Hello, ", "h:two": "мир"}, [doc]
+        )
+        winner, text, data, is_text = store.read_note("a.md")
+        assert winner["_rev"] == "1-x"
+        assert (text, data, is_text) == ("Hello, мир", None, True)
+
+    def test_eden_inline_chunk_resolves_without_store_file(self, store):
+        doc = meta_doc(
+            "inline.md",
+            "1-x",
+            children=["h:inline"],
+            eden={"h:inline": "inline body"},
+        )
+        store.apply_journal(JOURNAL_1, {}, [doc])
+        _, text, data, is_text = store.read_note("inline.md")
+        assert (text, data, is_text) == ("inline body", None, True)
+
+    def test_newnote_binary_decodes_base64_per_chunk(self, store):
+        payload = b"\x89PNG\r\n\x1a\nbinary"
+        doc = meta_doc("image.png", "1-x", children=["h:bin"], doc_type="newnote")
+        store.apply_journal(
+            JOURNAL_1,
+            {"h:bin": base64.b64encode(payload).decode("ascii")},
+            [doc],
+        )
+        _, text, data, is_text = store.read_note("image.png")
+        assert data == payload
+        assert text is None
+        assert is_text is False
+
+    def test_newnote_with_text_extension_decodes_utf8(self, store):
+        payload = "кириллица".encode("utf-8")
+        doc = meta_doc("x.md", "1-x", children=["h:bin"], doc_type="newnote")
+        store.apply_journal(
+            JOURNAL_1,
+            {"h:bin": base64.b64encode(payload).decode("ascii")},
+            [doc],
+        )
+        _, text, data, is_text = store.read_note("x.md")
+        assert (text, data, is_text) == ("кириллица", payload, True)
+
+    def test_legacy_notes_body(self, store):
+        doc = meta_doc("old.md", "1-x", doc_type="notes", data="legacy body")
+        store.apply_journal(JOURNAL_1, {}, [doc])
+        winner, text, data, is_text = store.read_note("old.md")
+        assert (text, data, is_text) == ("legacy body", None, True)
+
+    def test_encrypted_winner_marker_refused(self, store):
+        doc = meta_doc("enc.md", "1-x", children=["h:a"], e_=True)
+        store.apply_journal(JOURNAL_1, {"h:a": "x"}, [doc])
+        with pytest.raises(ValueError, match="end-to-end encryption"):
+            store.read_note("enc.md")
+
+    def test_legacy_percent_prefix_refused(self, store):
+        doc = meta_doc("enc.md", "1-x", doc_type="notes", data="%gibberish")
+        store.apply_journal(JOURNAL_1, {}, [doc])
+        with pytest.raises(ValueError, match="end-to-end encryption"):
+            store.read_note("enc.md")
+
+    def test_encrypted_eden_inline_chunk_refused(self, store):
+        doc = meta_doc(
+            "enc.md",
+            "1-x",
+            children=["h:e1"],
+            eden={"h:e1": {"e_": True, "data": "secret"}},
+        )
+        store.apply_journal(JOURNAL_1, {}, [doc])
+        with pytest.raises(ValueError, match="end-to-end encryption"):
+            store.read_note("enc.md")
+
+    def test_missing_chunk_raises_corrupt(self, store):
+        doc = meta_doc("broken.md", "1-x", children=["h:gone"])
+        store.apply_journal(JOURNAL_1, {}, [doc])
+        with pytest.raises(ValueError, match="corrupt"):
+            store.read_note("broken.md")
+
+    def test_invalid_children_field_raises_corrupt(self, store):
+        doc = meta_doc("bad.md", "1-x")
+        doc["children"] = "not-a-list"
+        store.apply_journal(JOURNAL_1, {}, [doc])
+        with pytest.raises(ValueError, match="corrupt"):
+            store.read_note("bad.md")
+
+
+class TestIterateNotes:
+    def test_yields_texts_sorted_and_filters_extension(self, store):
+        docs = [
+            meta_doc("b.md", "1-x", children=["h:b"]),
+            meta_doc("a.md", "1-y", children=["h:a"]),
+            meta_doc("c.png", "1-z", children=["h:c"], doc_type="newnote"),
+        ]
+        store.apply_journal(
+            JOURNAL_1, {"h:a": "alpha", "h:b": "beta", "h:c": "aGVsbG8="}, docs
+        )
+        pairs = [(d["_id"], text) for d, text in store.iterate_notes()]
+        assert pairs == [("a.md", "alpha"), ("b.md", "beta")]
+
+    def test_custom_extension_parameter(self, store):
+        doc = meta_doc("draw.canvas", "1-x", children=["h:x"])
+        store.apply_journal(JOURNAL_1, {"h:x": "shapes"}, [doc])
+        pairs = [(d["_id"], text) for d, text in store.iterate_notes(".canvas")]
+        assert pairs == [("draw.canvas", "shapes")]
+
+    def test_corrupt_note_isolated_others_read_fine(self, store):
+        good = meta_doc("good.md", "1-x", children=["h:good"])
+        bad = meta_doc("bad.md", "1-y", children=["h:missing"])
+        store.apply_journal(JOURNAL_1, {"h:good": "fine"}, [good, bad])
+        pairs = dict((d["_id"], text) for d, text in store.iterate_notes())
+        assert pairs == {"good.md": "fine", "bad.md": None}
+
+
+class TestSqliteLayout:
+    def test_wal_journal_mode_is_persistent(self, tmp_path):
+        state = tmp_path / "state"
+        store = JournalStore(state, PATH_IDENTITY_LEGACY)
+        store.apply_journal(JOURNAL_1, {}, [meta_doc("a.md", "1-x")])
+        store.close()
+        conn = sqlite3.connect(state / DB_PATH)
+        assert conn.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
+        conn.close()
+
+    def test_schema_v1_tables_exist(self, tmp_path):
+        state = tmp_path / "state"
+        JournalStore(state, PATH_IDENTITY_LEGACY).close()
+        conn = sqlite3.connect(state / DB_PATH)
+        names = {
+            row[0]
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            )
+        }
+        conn.close()
+        assert {"docs", "processed", "meta"} <= names
+
+    def test_second_journal_name_increments_count(self, store):
+        store.apply_journal(JOURNAL_1, {}, [meta_doc("a.md", "1-x")])
+        store.apply_journal(JOURNAL_2, {}, [meta_doc("b.md", "1-x")])
+        assert store.files_processed_count() == 2
