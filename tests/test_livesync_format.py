@@ -2,6 +2,7 @@
 
 import base64
 import hashlib
+import unicodedata
 
 import pytest
 
@@ -367,6 +368,18 @@ def test_path2id_legacy_keeps_nfd():
     assert path2id("cafe\u0301.md", nfc=False) == path2id("cafe\u0301.md")
 
 
+def test_path2id_nfc_normalizes_before_lowercase():
+    # W + U+030A (combining ring above): NFC leaves the sequence alone
+    # (no precomposed capital exists), and the lowercase afterwards
+    # yields "w" + U+030A — exactly upstream's normalize-then-lowercase
+    # composition. Lowercasing FIRST would let NFC compose the result to
+    # the precomposed U+1E98, a different id string entirely.
+    assert path2id("W\u030a.md", nfc=True) == "w\u030a.md"
+    wrong_order = unicodedata.normalize("NFC", "W\u030a.md".lower())
+    assert wrong_order == "\u1e98.md"
+    assert path2id("W\u030a.md", nfc=True) != wrong_order
+
+
 def test_resolve_identity_preferred_nfc():
     milestone = {"tweak_values": {"PREFERRED": {"pathNormalizationVersion": 1}}}
     assert resolve_path_identity(milestone) == PATH_IDENTITY_NFC == "nfc"
@@ -377,8 +390,11 @@ def test_resolve_identity_preferred_nfc():
     # Older milestones store settings at the top level; same resolution.
     assert resolve_path_identity({"pathNormalizationVersion": 1}) == "nfc"
     assert resolve_path_identity({"pathNormalizationVersion": 0}) == "legacy"
-    # An absent version is legacy (upstream treats undefined as version 0).
-    assert resolve_path_identity({"tweak_values": {"PREFERRED": {}}}) == "legacy"
+    # An absent version is legacy (upstream treats undefined as version 0);
+    # the map still needs a recognized tweak key to count as settings.
+    assert resolve_path_identity(
+        {"tweak_values": {"PREFERRED": {"encrypt": False}}}
+    ) == "legacy"
 
 
 def test_resolve_identity_device_fallback():
@@ -431,14 +447,78 @@ def test_resolve_identity_refuses_case_sensitive():
 
 
 def test_resolve_identity_no_settings_fails_closed():
-    # livesync_format never imports storage_base; the refusal type is a
-    # ValueError subclass that backends map to UnsupportedVault.
-    assert issubclass(UnsupportedVaultSettings, ValueError)
     for milestone in (
         {"tweak_values": {}},                      # no readable settings
         {"tweak_values": {"device-a": None}},      # values are not maps
         {"tweak_values": {"PREFERRED": "bad"}},    # preferred is not a map
         {"tweak_values": []},                      # tweak_values unreadable
     ):
-        with pytest.raises(UnsupportedVaultSettings, match="readable"):
+        with pytest.raises(UnsupportedVaultSettings, match="missing or unreadable"):
             resolve_path_identity(milestone)
+
+
+def test_resolve_identity_settings_must_be_recognized():
+    # A map only counts as readable settings when it holds at least one
+    # recognized tweak key; anything else fails closed instead of
+    # silently resolving to legacy.
+    with pytest.raises(UnsupportedVaultSettings, match="missing or unreadable"):
+        resolve_path_identity({})              # empty flat milestone
+    metadata_only = {                          # milestone fields, no tweaks
+        "_rev": "1-abc",
+        "tweakModified": 5,
+        "node_chunk_info": {},
+    }
+    with pytest.raises(UnsupportedVaultSettings, match="missing or unreadable"):
+        resolve_path_identity(metadata_only)
+    with pytest.raises(UnsupportedVaultSettings, match="missing or unreadable"):
+        resolve_path_identity({"tweak_values": {"PREFERRED": {}}})
+
+    # A flat map with a recognized key resolves normally...
+    assert resolve_path_identity({"pathNormalizationVersion": 0}) == "legacy"
+    # ...and the device fallback skips unrecognized maps.
+    mixed = {"tweak_values": {
+        "device-a": {"tweakModified": 5},       # not settings
+        "device-b": {"pathNormalizationVersion": 1},
+    }}
+    assert resolve_path_identity(mixed) == "nfc"
+
+
+def test_resolve_identity_refuses_unknown_version():
+    # Upstream pathNormalization.ts accepts only absent, 0, or 1; every
+    # other value must be refused with the offending value named.
+    for version in (2, 7, -1, "1", "x", None, True, 1.5):
+        milestone = {"tweak_values": {"PREFERRED": {
+            "pathNormalizationVersion": version,
+        }}}
+        with pytest.raises(
+            UnsupportedVaultSettings, match="pathNormalizationVersion"
+        ):
+            resolve_path_identity(milestone)
+    # The refusal names the offending value (not a secret: a version).
+    with pytest.raises(UnsupportedVaultSettings, match="pathNormalizationVersion 2"):
+        resolve_path_identity(
+            {"tweak_values": {"PREFERRED": {"pathNormalizationVersion": 2}}}
+        )
+    # Explicit 0 and 1 stay valid, as does a device map disagreeing on 1.
+    assert resolve_path_identity(
+        {"tweak_values": {"PREFERRED": {"pathNormalizationVersion": 1}}}
+    ) == "nfc"
+    assert resolve_path_identity(
+        {"tweak_values": {"PREFERRED": {"pathNormalizationVersion": 0}}}
+    ) == "legacy"
+
+
+def test_unsupported_vault_settings_contract():
+    # Purity contract, pinned: livesync_format never imports
+    # storage_base, so the refusal crosses the storage boundary as this
+    # ValueError subclass and backends re-raise it as their
+    # UnsupportedVault with str(exc) as the message.
+    import inspect
+
+    import livesync_format as module
+
+    assert "storage_base" not in inspect.getsource(module)
+    assert issubclass(UnsupportedVaultSettings, ValueError)
+    with pytest.raises(UnsupportedVaultSettings) as excinfo:
+        resolve_path_identity({})
+    assert str(excinfo.value) == "vault settings missing or unreadable"

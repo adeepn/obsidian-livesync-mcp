@@ -76,9 +76,12 @@ class UnsupportedVaultSettings(ValueError):
 
     Raised by ``resolve_path_identity`` with the reason in the message.
     This module must stay dependency-free (storage layers import it, not
-    the other way round), so the exception is a plain ``ValueError``;
-    backends catch it and re-raise their storage-layer ``UnsupportedVault``
-    with the same reason text.
+    the other way round), so the exception is a plain ``ValueError``.
+
+    Mapping rule for backends: catch and re-raise as the storage-layer
+    ``UnsupportedVault`` preserving the text, e.g.
+    ``except UnsupportedVaultSettings as exc:
+    raise UnsupportedVault(str(exc)) from exc``.
     """
 
 
@@ -135,6 +138,21 @@ def path2id(path: str, *, nfc: bool = False) -> str:
 # LiveSyncJournalReplicator.ts:135: tweak_values is keyed by device id).
 _PREFERRED_DEVICE_ID = "PREFERRED"
 
+# Tweak keys this server knows how to read. A settings map counts as
+# readable only when it holds at least one of them; anything else is
+# metadata or an empty map, and resolution fails closed instead of
+# silently selecting legacy.
+_RECOGNIZED_TWEAK_KEYS = frozenset(
+    {
+        "pathNormalizationVersion",
+        "encrypt",
+        "usePathObfuscation",
+        "handleFilenameCaseSensitive",
+    }
+)
+
+_UNREADABLE_SETTINGS_REASON = "vault settings missing or unreadable"
+
 # Settings this server cannot serve, with the human-readable refusal for
 # each. The reason is reported for the first matching setting found.
 _UNSUPPORTED_SETTINGS = (
@@ -164,51 +182,70 @@ def _milestone_setting_maps(milestone_settings: dict) -> list[dict]:
     Same resolution as the CouchDB backend startup check: without a
     ``tweak_values`` key the settings sit at the top level (older
     milestone shapes); otherwise the ``PREFERRED`` entry wins and, when
-    absent, every per-device map is read. Milestones without readable
-    settings fail closed.
+    absent, every per-device map is read. A map only counts as settings
+    when it holds at least one recognized tweak key, and resolution fails
+    closed (``UnsupportedVaultSettings``) when no readable settings exist.
     """
     if not isinstance(milestone_settings, dict):
-        raise UnsupportedVaultSettings(
-            "the vault milestone has no readable device settings"
-        )
+        raise UnsupportedVaultSettings(_UNREADABLE_SETTINGS_REASON)
     if "tweak_values" not in milestone_settings:
-        return [milestone_settings]
-    entries = milestone_settings["tweak_values"]
-    if isinstance(entries, dict):
+        candidates = [milestone_settings]
+    else:
+        entries = milestone_settings["tweak_values"]
+        if not isinstance(entries, dict):
+            raise UnsupportedVaultSettings(_UNREADABLE_SETTINGS_REASON)
         preferred = entries.get(_PREFERRED_DEVICE_ID)
         if isinstance(preferred, dict):
-            return [preferred]
-        devices = [value for value in entries.values() if isinstance(value, dict)]
-        if devices:
-            return devices
-    raise UnsupportedVaultSettings(
-        "the vault milestone has no readable device settings"
-    )
+            candidates = [preferred]
+        else:
+            candidates = [
+                value for value in entries.values() if isinstance(value, dict)
+            ]
+    maps = [
+        settings
+        for settings in candidates
+        if _RECOGNIZED_TWEAK_KEYS & settings.keys()
+    ]
+    if not maps:
+        raise UnsupportedVaultSettings(_UNREADABLE_SETTINGS_REASON)
+    return maps
 
 
 def resolve_path_identity(milestone_settings: dict) -> str:
     """Derive the vault's path identity mode from milestone settings.
 
     Returns ``PATH_IDENTITY_NFC`` when any resolved settings map sets
-    ``pathNormalizationVersion >= 1`` (upstream v1 compares NFC forms when
+    ``pathNormalizationVersion`` to 1 (upstream v1 compares NFC forms when
     deriving document ids) and ``PATH_IDENTITY_LEGACY`` for 0 or absent
-    (upstream treats an undefined version as 0). Refuses with
-    ``UnsupportedVaultSettings`` — reason in the message — when a resolved
-    map turns on ``encrypt``, ``usePathObfuscation``, or
-    ``handleFilenameCaseSensitive``, or when no readable settings exist;
-    backends re-raise that as their storage-layer ``UnsupportedVault``.
+    (upstream treats an undefined version as 0). Like upstream
+    ``assertSupportedPathNormalizationVersion``, every other value — other
+    numbers, non-numbers, explicit null — is refused.
+
+    Refuses with ``UnsupportedVaultSettings`` — reason in the message —
+    when a resolved map turns on ``encrypt``, ``usePathObfuscation``, or
+    ``handleFilenameCaseSensitive``, when the version is not 0/1/absent,
+    or when no readable settings exist; backends re-raise that as their
+    storage-layer ``UnsupportedVault`` (see the mapping rule on
+    ``UnsupportedVaultSettings``).
     """
     nfc = False
     for settings in _milestone_setting_maps(milestone_settings):
         for key, reason in _UNSUPPORTED_SETTINGS:
             if settings.get(key):
                 raise UnsupportedVaultSettings(reason)
-        version = settings.get("pathNormalizationVersion")
+        if "pathNormalizationVersion" not in settings:
+            continue  # absent means legacy (upstream: undefined -> 0)
+        version = settings["pathNormalizationVersion"]
         if (
-            isinstance(version, (int, float))
-            and not isinstance(version, bool)
-            and version >= 1
+            isinstance(version, bool)
+            or not isinstance(version, (int, float))
+            or version not in (0, 1)
         ):
+            raise UnsupportedVaultSettings(
+                f"unsupported pathNormalizationVersion {version!r}; "
+                "this server supports 0 (legacy) and 1 (NFC)"
+            )
+        if version == 1:
             nfc = True
     return PATH_IDENTITY_NFC if nfc else PATH_IDENTITY_LEGACY
 
