@@ -5,7 +5,10 @@ Byte-exact vectors mirror obsidian-livesync commonlib: record framing from
 ``src/common/utils.ts`` (escapeNewLineFromString), and raw-DEFLATE blobs from
 ``fflate.deflate(data, {level: 8})`` (what ``wrappedDeflate`` wraps in
 ``src/pouchdb/compress.ts``). The fflate hex blobs below were produced by
-fflate 0.8.2, the version pinned in commonlib's package.json.
+fflate 0.8.2, the version pinned in commonlib's package.json; they are used
+as inflate inputs — DEFLATE output is not canonical across implementations,
+so only the record layer and mutual decompressibility are pinned, never
+zlib-versus-fflate byte equality.
 """
 
 import zlib
@@ -94,6 +97,20 @@ class TestSerializeExactBytes:
         with pytest.raises(ValueError, match="_rev"):
             serialize_journal([], [{"_id": "m", "_rev": 3}])
 
+    def test_metadata_with_nan_raises(self):
+        # JSON.stringify cannot emit NaN; Python's permissive default must
+        # not leak it into a file devices will refuse to parse.
+        with pytest.raises(ValueError, match="non-finite"):
+            serialize_journal(
+                [], [{"_id": "m", "_rev": "1-x", "score": float("nan")}]
+            )
+
+    def test_metadata_with_infinity_raises(self):
+        with pytest.raises(ValueError, match="non-finite"):
+            serialize_journal(
+                [], [{"_id": "m", "_rev": "1-x", "score": float("inf")}]
+            )
+
     def test_chunk_id_outside_chunk_namespace_raises(self):
         with pytest.raises(ValueError, match="chunk"):
             serialize_journal([("f:test.md", "data")], [])
@@ -114,78 +131,95 @@ class TestParse:
             {"_id": "obsydian_livesync_version", "_rev": "1-0", "version": 5},
         ]
         blob = deflate_journal(serialize_journal(chunks, docs))
-        parsed = parse_journal("1700000000000-docs.jsonl.gz", inflate_journal(blob))
+        parsed = parse_journal(
+            inflate_journal(blob), name="1700000000000-docs.jsonl.gz"
+        )
         assert isinstance(parsed, JournalFile)
         assert parsed.name == "1700000000000-docs.jsonl.gz"
         assert parsed.chunks == dict(chunks)
         assert parsed.docs == docs
 
     def test_first_unit_separator_splits_compact_record(self):
-        parsed = parse_journal("j", b"~h:x\x1fpre\x1fpost\n")
+        parsed = parse_journal(b"~h:x\x1fpre\x1fpost\n", name="j")
         assert parsed.chunks == {"h:x": "pre\x1fpost"}
 
     def test_escaped_backslash_then_n_is_not_newline(self):
         # dataPart "\fa\\nb" must decode to "a\\nb" (backslash + letter n),
         # which naive chained str.replace implementations get wrong.
-        parsed = parse_journal("j", b"~h:x\x1f\\fa\\\\nb\n")
+        parsed = parse_journal(b"~h:x\x1f\\fa\\\\nb\n", name="j")
         assert parsed.chunks == {"h:x": "a\\nb"}
 
     def test_verbatim_backslash_chunk_parses(self):
-        parsed = parse_journal("j", b"~h:x\x1fa\\b\n")
+        parsed = parse_journal(b"~h:x\x1fa\\b\n", name="j")
         assert parsed.chunks == {"h:x": "a\\b"}
 
     def test_empty_input_gives_empty_journal(self):
-        parsed = parse_journal("j", b"")
+        parsed = parse_journal(b"")
+        assert parsed.name == ""
         assert parsed.chunks == {}
         assert parsed.docs == []
 
-    def test_missing_trailing_newline_raises(self):
-        with pytest.raises(ValueError, match="j"):
-            parse_journal("j", b"~h:abc\x1fdata")
+    def test_missing_trailing_newline_raises_with_line_number(self):
+        with pytest.raises(ValueError, match=r"j: line 1"):
+            parse_journal(b"~h:abc\x1fdata", name="j")
+
+    def test_missing_trailing_newline_after_records_raises_with_line_number(self):
+        with pytest.raises(ValueError, match=r"j: line 2"):
+            parse_journal(b"~h:abc\x1fdata\n~h:x\x1fy", name="j")
 
     def test_blank_line_raises(self):
         with pytest.raises(ValueError, match="line 2"):
-            parse_journal("j", b"~h:abc\x1fdata\n\n")
+            parse_journal(b"~h:abc\x1fdata\n\n", name="j")
 
     def test_compact_record_without_separator_raises(self):
         with pytest.raises(ValueError, match="line 1"):
-            parse_journal("j", b"~h:abc\n")
+            parse_journal(b"~h:abc\n", name="j")
 
     def test_compact_record_with_non_chunk_id_raises(self):
         with pytest.raises(ValueError, match="line 1"):
-            parse_journal("j", b"~x\x1fdata\n")
+            parse_journal(b"~x\x1fdata\n", name="j")
 
     def test_invalid_utf8_line_raises(self):
         with pytest.raises(ValueError, match="line 1"):
-            parse_journal("j", b"~h:x\x1f\xff\xfe\n")
+            parse_journal(b"~h:x\x1f\xff\xfe\n", name="j")
 
     def test_json_array_line_raises(self):
         with pytest.raises(ValueError, match="line 1"):
-            parse_journal("j", b"[1, 2]\n")
+            parse_journal(b"[1, 2]\n", name="j")
 
     def test_json_metadata_without_id_raises(self):
         with pytest.raises(ValueError, match="line 1"):
-            parse_journal("j", b'{"_rev": "1-x"}\n')
+            parse_journal(b'{"_rev": "1-x"}\n', name="j")
 
     def test_full_json_chunk_record_lands_in_docs(self):
         # Upstream accepts full-JSON chunk (leaf) records; they keep their
         # revision, so they belong with the metadata documents.
         line = b'{"_id":"h:abc","_rev":"3-q","data":"chunk body"}\n'
-        parsed = parse_journal("j", line)
+        parsed = parse_journal(line, name="j")
         assert parsed.docs == [{"_id": "h:abc", "_rev": "3-q", "data": "chunk body"}]
         assert parsed.chunks == {}
 
     def test_full_json_chunk_record_without_string_data_raises(self):
         with pytest.raises(ValueError, match="line 1"):
-            parse_journal("j", b'{"_id":"h:abc","_rev":"3-q","data":5}\n')
+            parse_journal(b'{"_id":"h:abc","_rev":"3-q","data":5}\n', name="j")
 
     def test_parse_rejects_missing_rev(self):
         with pytest.raises(ValueError, match="line 1"):
-            parse_journal("j", b'{"_id":"f:test.md"}\n')
+            parse_journal(b'{"_id":"f:test.md"}\n', name="j")
 
     def test_parse_rejects_empty_rev(self):
         with pytest.raises(ValueError, match="line 1"):
-            parse_journal("j", b'{"_id":"f:test.md","_rev":""}\n')
+            parse_journal(b'{"_id":"f:test.md","_rev":""}\n', name="j")
+
+    def test_parse_rejects_nan_token_with_line_number(self):
+        # JSON.parse rejects NaN; so must we, with file and line context.
+        line = b'{"_id":"m","_rev":"1-x"}\n{"_id":"n","_rev":"1-x","score":NaN}\n'
+        with pytest.raises(ValueError, match=r"j: line 2.*NaN"):
+            parse_journal(line, name="j")
+
+    def test_parse_rejects_infinity_token_with_line_number(self):
+        with pytest.raises(ValueError, match=r"j: line 1.*Infinity"):
+            parse_journal(b'{"_id":"m","_rev":"1-x","score":Infinity}\n', name="j")
 
     def test_parse_line_number_in_error(self):
         payload = (
@@ -194,22 +228,26 @@ class TestParse:
             b"this is not json\n"
         )
         with pytest.raises(ValueError, match=r"j: line 3"):
-            parse_journal("j", payload)
+            parse_journal(payload, name="j")
 
 
 class TestDeflateInflate:
-    def test_matches_fflate_bytes_simple(self):
-        assert deflate_journal(FFLATE_PAYLOAD_SIMPLE) == FFLATE_BLOB_SIMPLE
+    def test_deflate_output_is_raw_deflate(self):
+        blob = deflate_journal(FFLATE_PAYLOAD_SIMPLE)
+        # Pin our parameters: raw (RFC 1951) stream, no zlib/gzip wrapper.
+        assert not blob.startswith((b"\x78", b"\x1f\x8b"))
+        assert zlib.decompress(blob, -15) == FFLATE_PAYLOAD_SIMPLE
 
-    def test_matches_fflate_bytes_escaped_and_cyrillic(self):
+    def test_inflate_fflate_blob(self):
+        assert inflate_journal(FFLATE_BLOB_SIMPLE) == FFLATE_PAYLOAD_SIMPLE
+
+    def test_inflate_fflate_blob_escaped_and_cyrillic(self):
         payload = serialize_journal(
             [("h:abc", "кириллица line1\nline2\x1fkeep")],
             [{"_id": "f:test.md", "_rev": "1-abc", "title": "Заметка"}],
         )
-        assert deflate_journal(payload) == FFLATE_BLOB_FULL
-
-    def test_inflate_fflate_blob(self):
-        assert inflate_journal(FFLATE_BLOB_SIMPLE) == FFLATE_PAYLOAD_SIMPLE
+        # A blob devices compressed must decode to exactly our records.
+        assert inflate_journal(FFLATE_BLOB_FULL) == payload
 
     def test_deflate_inflate_roundtrip(self):
         payload = serialize_journal(

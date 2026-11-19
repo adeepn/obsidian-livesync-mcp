@@ -7,7 +7,9 @@ Wire format mirrors upstream commonlib exactly:
   are compact lines ``~<id>\\x1f<escaped data>`` where ``<id>`` starts with
   ``h:``; every other record is a full-JSON metadata document that must carry
   a string ``_rev``. Parsing splits compact records on the *first*
-  ``\\x1f`` only, so ``\\x1f`` is legal inside chunk data.
+  ``\\x1f`` only, so ``\\x1f`` is legal inside chunk data. JSON is strict in
+  both directions, like ``JSON.stringify``/``JSON.parse``: NaN/Infinity are
+  neither emitted nor accepted.
 - Chunk-data escaping (``src/common/utils.ts``:
   ``escapeNewLineFromString``/``unescapeNewLineFromString``): strings that
   contain ``\\n`` or ``\\r`` are prefixed with ``\\f`` and have ``\\n``,
@@ -123,7 +125,22 @@ def serialize_journal(chunks: list[tuple[str, str]], docs: list[dict]) -> bytes:
     for doc in docs:
         if not isinstance(doc, dict) or not isinstance(doc.get("_rev"), str):
             raise ValueError("Journal metadata document requires a string _rev")
-        lines.append(json.dumps(doc, ensure_ascii=False, separators=(",", ":")))
+        try:
+            lines.append(
+                json.dumps(
+                    doc,
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                    allow_nan=False,
+                )
+            )
+        except ValueError as exc:
+            # JSON.stringify cannot emit NaN/Infinity; Python's permissive
+            # default must not leak them into a file devices refuse to parse.
+            raise ValueError(
+                f"Journal metadata document {doc.get('_id')!r}"
+                " contains non-finite numbers"
+            ) from exc
     if not lines:
         return b""
     return (_RECORD_SPLIT.join(lines) + _RECORD_SPLIT).encode("utf-8")
@@ -153,17 +170,23 @@ def inflate_journal(blob: bytes) -> bytes:
     return out
 
 
-def parse_journal(name: str, data: bytes) -> JournalFile:
+def parse_journal(data: bytes, *, name: str = "") -> JournalFile:
     """Parse inflated journal bytes into a :class:`JournalFile`.
 
-    Any invalid record raises ``ValueError`` naming the file and the 1-based
-    line number, mirroring upstream's per-frame decode/parse failures.
+    ``name`` is optional error context (the journal file name) carried onto
+    the result. Any invalid record raises ``ValueError`` naming the file and
+    the 1-based line number, mirroring upstream's per-frame decode/parse
+    failures. JSON is strict, like ``JSON.parse``: the NaN/Infinity literals
+    Python's ``json`` module accepts by default are rejected.
     """
     result = JournalFile(name=name)
     if not data:
         return result
     if data[-1:] != _RECORD_SPLIT.encode("utf-8"):
-        raise ValueError(f"{name}: journal records must end with {_RECORD_SPLIT!r}")
+        lineno = data.count(b"\n") + 1
+        raise ValueError(
+            f"{name}: line {lineno}: journal record must end with {_RECORD_SPLIT!r}"
+        )
     for lineno, raw_line in enumerate(data[:-1].split(b"\n"), start=1):
         if not raw_line:
             raise ValueError(f"{name}: line {lineno}: empty journal record")
@@ -188,11 +211,19 @@ def _parse_compact_line(
     target.chunks[chunk_id] = _unescape_chunk_data(line[separator + 1 :])
 
 
+def _reject_json_constant(name: str, lineno: int, token: str) -> None:
+    """Reject NaN/Infinity/-Infinity like JSON.parse (callers get context)."""
+    raise ValueError(f"{name}: line {lineno}: invalid JSON constant {token}")
+
+
 def _parse_metadata_line(
     target: JournalFile, name: str, lineno: int, line: str
 ) -> None:
     try:
-        doc = json.loads(line)
+        doc = json.loads(
+            line,
+            parse_constant=lambda token: _reject_json_constant(name, lineno, token),
+        )
     except json.JSONDecodeError as exc:
         raise ValueError(f"{name}: line {lineno}: invalid journal record") from exc
     if not isinstance(doc, dict):
