@@ -25,8 +25,8 @@ tags B8/B12/C4/C5/C7 apply unchanged): display paths come from the doc's
 service documents never surface, folder filtering is case-insensitive, and
 scans isolate corrupt notes instead of failing. Path-to-id resolution uses
 the vault's path identity, because journal doc ids were derived by clients
-with that same identity. Note writes arrive in Task 7 and raise
-``NotImplementedError``.
+with that same identity. Writes append a journal and verify its contents
+before applying it locally; rename publishes both revisions in one file.
 """
 
 from __future__ import annotations
@@ -34,27 +34,44 @@ from __future__ import annotations
 import json
 import logging
 import re
+import secrets
 import sqlite3
 import time
 from collections.abc import AsyncIterator
 from datetime import datetime, timezone
 from pathlib import Path
 
-from journal_codec import inflate_journal, parse_journal
-from journal_store import EncryptedNoteError, JournalStore
+from journal_codec import (
+    deflate_journal,
+    inflate_journal,
+    journal_filename,
+    parse_journal,
+    serialize_journal,
+)
+from journal_store import EncryptedNoteError, JournalStore, parse_rev
 from livesync_format import (
     PATH_IDENTITY_LEGACY,
     PATH_IDENTITY_NFC,
     ForbiddenPathError,
     UnsupportedVaultSettings,
+    canonical_path,
+    chunk_id_for,
+    clone_metadata,
+    doc_type_for,
     is_note_document,
+    is_writable_text_path,
+    new_metadata_doc,
     path2id,
     resolve_path_identity,
+    soft_delete_revision,
     validate_vault_path,
 )
 from object_storage import JournalObjectStorage
 from storage_base import (
+    BinaryNoteError,
+    ConcurrentModification,
     NoteContent,
+    NoteExists,
     NoteMeta,
     NoteNotFound,
     StorageError,
@@ -145,6 +162,8 @@ class JournalBackend:
         # Throttle clock (monotonic) and the wall-clock stamp for diagnostics.
         self._last_refresh: float | None = None
         self._last_refresh_at: datetime | None = None
+        self._max_seen_ms = 0
+        self._journal_counter = 0
 
     # -- StorageBackend: lifecycle -------------------------------------------
 
@@ -374,6 +393,10 @@ class JournalBackend:
         refresh, and the processed-set filter keeps replay idempotent.
         """
         keys = self._object_storage.list("")
+        for key in keys:
+            match = _MS_PREFIX_RE.match(key)
+            if match is not None:
+                self._max_seen_ms = max(self._max_seen_ms, int(match.group(1)))
         candidates = [
             key
             for key in keys
@@ -653,6 +676,124 @@ class JournalBackend:
             rev=rev,
         )
 
+    # -- Append-only publication ------------------------------------------------
+
+    def _doc_id(self, path: str) -> str:
+        store = self._require_store("write")
+        return path2id(path, nfc=store.path_identity == PATH_IDENTITY_NFC)
+
+    @staticmethod
+    def _check_expected_rev(doc: dict | None, expected_rev: str | None) -> None:
+        if expected_rev is not None and (
+            doc is None or doc.get("_rev") != expected_rev
+        ):
+            raise ConcurrentModification(
+                "note changed concurrently; re-read and retry"
+            )
+
+    @staticmethod
+    def _next_revision(body: dict, parent: dict | None) -> dict:
+        """Extend the destination's lineage, never a copied source's lineage.
+
+        Older imported documents may lack parentage; in that case only the
+        known winner hash can be carried forward. Never invent ancestors.
+        """
+        generation, ids = 0, []
+        if parent is not None:
+            try:
+                generation, parent_hash = parse_rev(parent.get("_rev"))
+            except ValueError as exc:
+                raise StorageError("existing note has an invalid revision") from exc
+            chain = parent.get("_revisions")
+            if chain is None:
+                ids = [parent_hash]
+            elif (
+                not isinstance(chain, dict)
+                or type(chain.get("start")) is not int
+                or chain["start"] != generation
+                or not isinstance(chain.get("ids"), list)
+                or not chain["ids"]
+                or len(chain["ids"]) > generation
+                or chain["ids"][0] != parent_hash
+                or not all(isinstance(item, str) and item for item in chain["ids"])
+            ):
+                raise StorageError("existing note has invalid revision ancestry")
+            else:
+                ids = chain["ids"]
+        result = clone_metadata(body)
+        result.pop("_conflicts", None)
+        result.pop("_deleted_conflicts", None)
+        rev_hash = secrets.token_hex(16)
+        result["_rev"] = f"{generation + 1}-{rev_hash}"
+        result["_revisions"] = {"start": generation + 1, "ids": [rev_hash, *ids]}
+        return result
+
+    def _validate_chunk_reuse(self, chunk_id: str, content: str) -> None:
+        """Refuse collisions rather than overwrite a shared immutable chunk.
+
+        Compact chunks live in files; full-JSON leaf records live in SQLite.
+        Check both representations, including when both are present.
+        """
+        store = self._require_store("write_note")
+        try:
+            chunk_file = store._chunk_path(chunk_id)
+            if (
+                chunk_file.exists()
+                and chunk_file.read_bytes() != content.encode("utf-8")
+            ):
+                raise StorageError(
+                    "existing shared content chunk holds different data"
+                )
+            doc = store.winner(chunk_id)
+            if doc is not None and (
+                doc.get("e_") or doc.get("deleted")
+                or doc.get("type") != "leaf" or doc.get("data") != content
+            ):
+                raise StorageError(
+                    "existing shared content chunk is encrypted or holds different data"
+                )
+        except (OSError, ValueError, sqlite3.Error) as exc:
+            raise StorageError(
+                "existing shared content chunk could not be validated"
+            ) from exc
+
+    def _publish(self, chunks: list[tuple[str, str]], docs: list[dict]) -> None:
+        """Confirm the exact journal before any local mutation.
+
+        No await separates the precondition, put, verification and apply:
+        synchronous object/store operations serialize mutations on the server
+        event loop. Success confirms publication, not eventual winner status.
+        A failed verification leaves local state untouched. The remote object
+        is never deleted; a later refresh may replay a published orphan.
+        """
+        store = self._require_store("publish")
+        try:
+            payload = serialize_journal(chunks, docs)
+            blob = deflate_journal(payload)
+            ms = max(int(time.time() * 1000), self._max_seen_ms + 1)
+            self._journal_counter += 1
+            name = journal_filename(ms, self._journal_counter)
+            # Reserve even failed attempts so a retry cannot reuse their key.
+            self._max_seen_ms = ms
+            self._object_storage.put(name, blob)
+            readback = self._object_storage.get(name)
+            if readback is None:
+                raise StorageError("journal read-back verification failed")
+            decoded = inflate_journal(readback)
+            journal = parse_journal(decoded, name=name)
+            if (
+                decoded != payload
+                or journal.chunks != dict(chunks)
+                or journal.docs != docs
+            ):
+                raise StorageError("journal read-back verification failed")
+            store.apply_journal(name, journal.chunks, journal.docs)
+            store.last_sent_key = name
+        except StorageError:
+            raise
+        except (ValueError, OSError, sqlite3.Error) as exc:
+            raise StorageError("journal publication or verification failed") from exc
+
     async def write_note(
         self,
         path: str,
@@ -663,19 +804,115 @@ class JournalBackend:
         mtime: int | None = None,
         expected_rev: str | None = None,
     ) -> NoteMeta:
-        raise NotImplementedError("journal note writes arrive in Task 7")
+        """Replace a text body; only explicit create resurrects a tombstone."""
+        validate_vault_path(path)
+        if not is_writable_text_path(path):
+            raise BinaryNoteError(
+                f"note {path!r} has a binary extension; "
+                "this server writes textual notes only"
+            )
+        store = self._require_store("write_note")
+        doc_id = self._doc_id(path)
+        parent = store.winner(doc_id)
+        self._check_expected_rev(parent, expected_rev)
+        live = parent is not None and not parent.get("deleted")
+        if live and create and not overwrite:
+            raise NoteExists(f"note already exists: {path}")
+        if not live and not create:
+            raise NoteNotFound(f"note not found: {path}")
+        chunk_id = chunk_id_for(content)
+        self._validate_chunk_reuse(chunk_id, content)
+        stamp = int(time.time() * 1000) if mtime is None else mtime
+        if parent is None:
+            body = new_metadata_doc(
+                path, [chunk_id], len(content.encode("utf-8")),
+                doc_type_for(path), stamp, stamp,
+            )
+        else:
+            body = clone_metadata(parent)
+            body.pop("deleted", None)
+            body.update(
+                children=[chunk_id], eden={}, mtime=stamp,
+                size=len(content.encode("utf-8")), type=doc_type_for(path),
+            )
+        body.update(_id=doc_id, path=canonical_path(path))
+        body = self._next_revision(body, parent)
+        self._publish([(chunk_id, content)], [body])
+        return self._meta_from_doc(body)
 
     async def delete_note(
         self, path: str, expected_rev: str | None = None
     ) -> bool:
-        raise NotImplementedError("journal note writes arrive in Task 7")
+        """Append a soft deletion, preserving all body references."""
+        validate_vault_path(path)
+        store = self._require_store("delete_note")
+        parent = store.winner(self._doc_id(path))
+        self._check_expected_rev(parent, expected_rev)
+        if parent is None or parent.get("deleted"):
+            return False
+        body = self._next_revision(
+            soft_delete_revision(parent, int(time.time() * 1000)), parent
+        )
+        self._publish([], [body])
+        return True
+
+    def _source_doc(self, path: str) -> dict:
+        doc = self._require_store("move/copy").winner(self._doc_id(path))
+        if doc is None or not is_note_document(doc):
+            raise NoteNotFound(f"note not found: {path}")
+        return doc
+
+    def _copy_revision(self, source: dict, new_path: str, overwrite: bool) -> dict:
+        doc_id = self._doc_id(new_path)
+        target = self._require_store("move/copy").winner(doc_id)
+        if target is not None and not target.get("deleted") and not overwrite:
+            raise NoteExists(f"note already exists: {new_path}")
+        body = clone_metadata(
+            source, _id=doc_id, path=canonical_path(new_path),
+            mtime=int(time.time() * 1000),
+        )
+        return self._next_revision(body, target)
 
     async def rename_note(
         self, path: str, new_path: str, *, overwrite: bool = False
     ) -> NoteMeta:
-        raise NotImplementedError("journal note writes arrive in Task 7")
+        """Publish destination and source soft deletion in ONE journal.
+
+        Same-path is a no-op; identity-preserving renames update only the
+        display path and mtime. Single-file publication has no partial phases,
+        so RenamePartialError (mapped by the tool layer for contract parity)
+        is never raised by this backend. Failed verification reports
+        StorageError.
+        """
+        validate_vault_path(path)
+        validate_vault_path(new_path)
+        new_path = canonical_path(new_path)
+        if path == new_path:
+            return await self.get_meta(path)
+        source = self._source_doc(path)
+        if self._doc_id(path) == self._doc_id(new_path):
+            body = self._next_revision(
+                clone_metadata(
+                    source, path=new_path, mtime=int(time.time() * 1000),
+                ),
+                source,
+            )
+            self._publish([], [body])
+        else:
+            body = self._copy_revision(source, new_path, overwrite)
+            retired = self._next_revision(
+                soft_delete_revision(source, int(time.time() * 1000)), source
+            )
+            self._publish([], [body, retired])
+        return self._meta_from_doc(body)
 
     async def copy_note(
         self, path: str, new_path: str, *, overwrite: bool = False
     ) -> NoteMeta:
-        raise NotImplementedError("journal note writes arrive in Task 7")
+        """Copy references (including eden), preserving body and ctime."""
+        validate_vault_path(path)
+        validate_vault_path(new_path)
+        source = self._source_doc(path)
+        body = self._copy_revision(source, new_path, overwrite)
+        self._publish([], [body])
+        return self._meta_from_doc(body)

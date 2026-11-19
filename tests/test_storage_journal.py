@@ -21,9 +21,15 @@ from datetime import datetime
 import pytest
 
 import storage_journal
-from journal_codec import deflate_journal, serialize_journal
-from livesync_format import chunk_id_for, path2id
+from journal_codec import (
+    deflate_journal, inflate_journal, parse_journal, serialize_journal,
+)
+from journal_store import pick_winner
+from livesync_format import ForbiddenPathError, chunk_id_for, path2id
 from storage_base import (
+    BinaryNoteError,
+    ConcurrentModification,
+    NoteExists,
     NoteNotFound,
     StorageError,
     StorageUnavailable,
@@ -517,15 +523,15 @@ class TestLifecycle:
         await backend.close()
         await backend.close()
 
-    async def test_write_methods_raise_until_task_7(self, tmp_path):
+    async def test_write_methods_refuse_before_startup(self, tmp_path):
         backend, _ = make_backend(tmp_path, healthy_bucket())
-        with pytest.raises(NotImplementedError):
+        with pytest.raises(StorageError, match="startup_check"):
             await backend.write_note("a.md", "body")
-        with pytest.raises(NotImplementedError):
+        with pytest.raises(StorageError, match="startup_check"):
             await backend.delete_note("a.md")
-        with pytest.raises(NotImplementedError):
+        with pytest.raises(StorageError, match="startup_check"):
             await backend.rename_note("a.md", "b.md")
-        with pytest.raises(NotImplementedError):
+        with pytest.raises(StorageError, match="startup_check"):
             await backend.copy_note("a.md", "b.md")
 
 
@@ -1054,3 +1060,338 @@ class TestIterateTexts:
         with pytest.raises(StorageUnavailable):
             async for _ in backend.iterate_texts():
                 pass
+
+
+# Task 7: exercise publication at the object boundary and replay with real stores.
+
+
+async def write_backend(tmp_path, *, objects=None):
+    backend, storage = make_backend(tmp_path, objects or {
+        MILESTONE_KEY: milestone_blob(path_version=1),
+        SYNC_PARAMETERS_KEY: params_blob(),
+    })
+    await backend.startup_check()
+    await backend.refresh()
+    storage.get_calls.clear()
+    storage.list_calls.clear()
+    return backend, storage
+
+
+class TestJournalWrites:
+    async def test_create_revision_chain_replace_and_delete(self, tmp_path):
+        backend, storage = await write_backend(tmp_path)
+        first = await backend.write_note('A.md', 'привет\n', create=True, mtime=123)
+        assert first['ctime'] == first['mtime'] == 123
+        assert first['size'] == 13
+        doc = backend._store.winner('a.md')
+        assert doc['_revisions'] == {'start': 1, 'ids': [first['rev'].split('-', 1)[1]]}
+        assert storage.get_calls == [storage.put_calls[0][0]]
+        second = await backend.write_note('A.md', 'new', expected_rev=first['rev'])
+        doc = backend._store.winner('a.md')
+        assert doc['_revisions']['start'] == 2
+        assert doc['_revisions']['ids'] == [second['rev'].split('-', 1)[1], first['rev'].split('-', 1)[1]]
+        assert (await backend.read_note('A.md'))['text'] == 'new'
+        before = doc.copy()
+        assert await backend.delete_note('A.md', expected_rev=second['rev'])
+        deleted = backend._store.winner('a.md')
+        assert deleted['deleted'] is True
+        for field in ('children', 'eden', 'type', 'path', 'ctime'):
+            assert deleted[field] == before[field]
+        assert deleted['_revisions']['start'] == 3
+        assert await backend.read_note('A.md') is None
+        assert not await backend.delete_note('A.md')
+        with pytest.raises(NoteNotFound):
+            await backend.write_note('A.md', 'no', overwrite=True)
+        restored = await backend.write_note('A.md', 'restored', create=True)
+        assert restored['rev'].startswith('4-')
+        assert (await backend.read_note('a.md'))['text'] == 'restored'
+        assert not hasattr(storage, 'delete')
+
+    async def test_create_and_missing_rules_no_publication(self, tmp_path):
+        backend, storage = await write_backend(tmp_path)
+        await backend.write_note('a.md', 'original', create=True)
+        count = len(storage.put_calls)
+        with pytest.raises(NoteExists):
+            await backend.write_note('a.md', 'bad', create=True)
+        with pytest.raises(NoteNotFound):
+            await backend.write_note('absent.md', 'bad', overwrite=True)
+        assert len(storage.put_calls) == count
+        await backend.write_note('a.md', 'replace', create=True, overwrite=True)
+        assert (await backend.read_note('a.md'))['text'] == 'replace'
+
+    @pytest.mark.parametrize('operation', ['write', 'delete'])
+    @pytest.mark.parametrize('path', ['a.md', 'missing.md'])
+    async def test_stale_revision_never_puts(self, tmp_path, operation, path):
+        backend, storage = await write_backend(tmp_path)
+        await backend.write_note('a.md', 'original', create=True)
+        storage.put_calls.clear()
+        with pytest.raises(ConcurrentModification, match='changed concurrently; re-read and retry'):
+            if operation == 'write':
+                await backend.write_note(path, 'bad', expected_rev='1-stale')
+            else:
+                await backend.delete_note(path, expected_rev='1-stale')
+        assert storage.put_calls == []
+        assert (await backend.read_note('a.md'))['text'] == 'original'
+
+    @pytest.mark.parametrize('kind', ['missing', 'corrupt', 'other-records', 'extra-record'])
+    async def test_readback_failure_does_not_change_store(self, tmp_path, monkeypatch, kind):
+        backend, storage = await write_backend(tmp_path)
+        old = await backend.write_note('a.md', 'original', create=True)
+        checkpoint = backend._store.last_sent_key
+        count = backend._store.files_processed_count()
+        original_get = storage.get
+
+        def wrong_get(key):
+            blob = original_get(key)
+            if kind == 'missing':
+                return None
+            if kind == 'corrupt':
+                return b'not deflate'
+            journal = parse_journal(inflate_journal(blob))
+            if kind == 'other-records':
+                journal.docs[0]['path'] = 'wrong.md'
+            else:
+                journal.docs.append(meta_doc('extra.md', '1-extra'))
+            return deflate_journal(serialize_journal(list(journal.chunks.items()), journal.docs))
+
+        monkeypatch.setattr(storage, 'get', wrong_get)
+        with pytest.raises(StorageError):
+            await backend.write_note('a.md', 'replacement')
+        assert backend._store.last_sent_key == checkpoint
+        assert backend._store.files_processed_count() == count
+        assert (await backend.get_meta('a.md')) == old
+        assert (await backend.read_note('a.md'))['text'] == 'original'
+        assert not backend._store._chunk_path(chunk_id_for('replacement')).exists()
+
+    async def test_fresh_peer_roundtrip_three_notes(self, tmp_path):
+        writer, storage = await write_backend(tmp_path / 'writer')
+        texts = {'a.md': 'one\n', 'Заметки/Приём.md': 'два', 'c.canvas': '{"nodes":[]}'}
+        for path, text in texts.items():
+            await writer.write_note(path, text, create=True)
+        reader = JournalBackend(storage, tmp_path / 'reader')
+        await reader.startup_check()
+        await reader.refresh()
+        for path, text in texts.items():
+            assert (await reader.read_note(path))['text'] == text
+            assert await reader.get_meta(path) == await writer.get_meta(path)
+        assert len(await reader.list_notes()) == 3
+        await reader.close()
+        await writer.close()
+
+    async def test_monotonic_names_include_processed_keys_and_clock_rollback(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(storage_journal.time, 'time', lambda: 10)
+        objects = {MILESTONE_KEY: milestone_blob(), SYNC_PARAMETERS_KEY: params_blob(),
+                   '10000-docs.jsonl.gz': journal_blob([meta_doc('old.md', '1-old')])}
+        backend, storage = await write_backend(tmp_path, objects=objects)
+        await backend.refresh(force=True)  # processed keys must still contribute
+        await backend.write_note('a.md', 'one', create=True)
+        await backend.write_note('a.md', 'two')
+        monkeypatch.setattr(storage_journal.time, 'time', lambda: 1)
+        await backend.write_note('a.md', 'three')
+        names = [key for key, _ in storage.put_calls]
+        numbers = [int(key.split('-')[0]) for key in names]
+        assert numbers[0] > 10000
+        assert numbers[0] < numbers[1] < numbers[2]
+        assert len(set(names)) == 3
+
+    async def test_device_sibling_kept_and_listing_unique(self, tmp_path):
+        backend, storage = await write_backend(tmp_path)
+        await backend.write_note('a.md', 'ours', create=True)
+        ours = backend._store.winner('a.md')
+        device = {**ours, '_rev': '1-ffffffffffffffffffffffffffffffff',
+                  '_revisions': {'start': 1, 'ids': ['ffffffffffffffffffffffffffffffff']}}
+        storage.put('9999999999999-docs.jsonl.gz', journal_blob([device]))
+        await backend.refresh(force=True)
+        leaves = backend._store.leaves('a.md')
+        assert {doc['_rev'] for doc in leaves} == {ours['_rev'], device['_rev']}
+        assert backend._store.winner('a.md') == pick_winner(leaves)
+        assert backend._store.note_ids() == ['a.md']
+        assert len(await backend.list_notes()) == 1
+
+    @pytest.mark.parametrize('operation', ['write', 'delete', 'rename-source', 'rename-target', 'copy-source', 'copy-target'])
+    async def test_forbidden_before_any_storage_call(self, tmp_path, operation):
+        backend, storage = await write_backend(tmp_path)
+        with pytest.raises(ForbiddenPathError):
+            if operation == 'write':
+                await backend.write_note('.obsidian/x.md', 'bad', create=True)
+            elif operation == 'delete':
+                await backend.delete_note('.obsidian/x.md')
+            else:
+                method = backend.rename_note if operation.startswith('rename') else backend.copy_note
+                args = ('.obsidian/x.md', 'ok.md') if operation.endswith('source') else ('ok.md', '.obsidian/x.md')
+                await method(*args)
+        assert storage.put_calls == storage.get_calls == storage.list_calls == []
+
+    async def test_binary_write_refused_before_storage(self, tmp_path):
+        backend, storage = await write_backend(tmp_path)
+        with pytest.raises(BinaryNoteError):
+            await backend.write_note('a.png', 'text', create=True)
+        assert storage.put_calls == storage.get_calls == storage.list_calls == []
+
+    @pytest.mark.parametrize('full_json', [False, True])
+    async def test_shared_chunk_collision_refused(self, tmp_path, full_json):
+        backend, storage = await write_backend(tmp_path)
+        chunk = chunk_id_for('wanted')
+        backend._store.apply_journal('collision', {} if full_json else {chunk: 'different'},
+                                    [{'_id': chunk, '_rev': '1-bad', 'type': 'leaf', 'data': 'different'}] if full_json else [])
+        with pytest.raises(StorageError):
+            await backend.write_note('a.md', 'wanted', create=True)
+        assert storage.put_calls == []
+        assert await backend.read_note('a.md') is None
+
+
+class TestJournalMoves:
+    async def test_same_path_and_case_only_rename(self, tmp_path):
+        backend, storage = await write_backend(tmp_path)
+        first = await backend.write_note('A.md', 'body', create=True)
+        storage.put_calls.clear()
+        assert await backend.rename_note('A.md', 'A.md') == first
+        assert storage.put_calls == []
+        renamed = await backend.rename_note('A.md', 'a.MD')
+        assert renamed['path'] == 'a.MD'
+        assert renamed['rev'].startswith('2-')
+        journal = parse_journal(inflate_journal(storage.put_calls[0][1]))
+        assert len(journal.docs) == 1
+        assert not journal.docs[0].get('deleted')
+        assert journal.chunks == {}
+        assert (await backend.read_note('A.md'))['text'] == 'body'
+
+    @pytest.mark.parametrize('operation', ['rename_note', 'copy_note'])
+    async def test_target_rules_and_missing_source(self, tmp_path, operation):
+        backend, storage = await write_backend(tmp_path)
+        method = getattr(backend, operation)
+        await backend.write_note('a.md', 'source', create=True)
+        target = await backend.write_note('b.md', 'target', create=True)
+        count = len(storage.put_calls)
+        with pytest.raises(NoteExists):
+            await method('a.md', 'b.md')
+        with pytest.raises(NoteNotFound):
+            await method('missing.md', 'c.md')
+        assert len(storage.put_calls) == count
+        result = await method('a.md', 'b.md', overwrite=True)
+        doc = backend._store.winner('b.md')
+        assert result['rev'].startswith('2-')
+        assert doc['_revisions']['ids'][1] == target['rev'].split('-', 1)[1]
+        assert (await backend.read_note('b.md'))['text'] == 'source'
+        assert (await backend.read_note('a.md') is None) == (operation == 'rename_note')
+
+    @pytest.mark.parametrize('operation', ['rename_note', 'copy_note'])
+    async def test_eden_only_body_and_ctime_preserved(self, tmp_path, operation):
+        backend, storage = await write_backend(tmp_path)
+        chunk = chunk_id_for('inline')
+        source = {'_id': 'a.md', '_rev': '3-source', '_revisions': {'start': 3, 'ids': ['source', 'parent', 'root']},
+                  'path': 'a.md', 'type': 'plain', 'children': [chunk],
+                  'eden': {chunk: {'data': 'inline'}}, 'ctime': 12, 'mtime': 34, 'size': 6}
+        storage.put('1-docs.jsonl.gz', journal_blob([source]))
+        await backend.refresh(force=True)
+        storage.put_calls.clear()
+        await getattr(backend, operation)('a.md', 'b.md')
+        doc = backend._store.winner('b.md')
+        assert doc['children'] == source['children']
+        assert doc['eden'] == source['eden']
+        assert doc['ctime'] == 12
+        assert doc['_revisions']['start'] == 1
+        assert (await backend.read_note('b.md'))['text'] == 'inline'
+        assert len(storage.put_calls) == 1
+        journal = parse_journal(inflate_journal(storage.put_calls[0][1]))
+        assert journal.chunks == {}
+        assert len(journal.docs) == (2 if operation == 'rename_note' else 1)
+        if operation == 'rename_note':
+            assert journal.docs[1]['deleted'] is True
+            assert journal.docs[1]['_revisions']['ids'][1:] == ['source', 'parent', 'root']
+        reader = JournalBackend(storage, tmp_path / 'fresh')
+        await reader.startup_check()
+        await reader.refresh()
+        assert (await reader.read_note('b.md'))['text'] == 'inline'
+        await reader.close()
+
+    @pytest.mark.parametrize('operation', ['rename_note', 'copy_note'])
+    async def test_failed_publication_preserves_source_and_target(self, tmp_path, operation, monkeypatch):
+        backend, storage = await write_backend(tmp_path)
+        await backend.write_note('a.md', 'source', create=True)
+        await backend.write_note('b.md', 'target', create=True)
+        monkeypatch.setattr(storage, 'get', lambda key: None)
+        with pytest.raises(StorageError):
+            await getattr(backend, operation)('a.md', 'b.md', overwrite=True)
+        assert (await backend.read_note('a.md'))['text'] == 'source'
+        assert (await backend.read_note('b.md'))['text'] == 'target'
+
+
+class TestJournalWriteEdges:
+    @pytest.mark.parametrize('failure', ['put', 'get'])
+    async def test_transport_failure_no_local_success(self, tmp_path, failure):
+        backend, storage = await write_backend(tmp_path)
+        if failure == 'put':
+            storage.fail_next_put()
+        else:
+            storage.fail_next_get()
+        with pytest.raises(StorageUnavailable):
+            await backend.write_note('a.md', 'body', create=True)
+        assert backend._store.note_ids() == []
+        assert backend._store.last_sent_key == ''
+        assert backend._store.files_processed_count() == 0
+
+    async def test_reuse_identical_chunk_reset_eden_and_preserve_ctime(self, tmp_path):
+        backend, storage = await write_backend(tmp_path)
+        chunk = chunk_id_for('body')
+        source = nfc_note_doc('a.md', '1-source', children=[chunk],
+                              eden={chunk: {'data': 'inline'}}, ctime=12)
+        backend._store.apply_journal('seed', {chunk: 'body'}, [source])
+        await backend.write_note('a.md', 'body')
+        doc = backend._store.winner('a.md')
+        assert doc['eden'] == {}
+        assert doc['ctime'] == 12
+        await backend.write_note('b.md', 'body', create=True)
+        assert (await backend.read_note('a.md'))['text'] == 'body'
+        assert (await backend.read_note('b.md'))['text'] == 'body'
+        assert backend._store._chunk_path(chunk).read_bytes() == b'body'
+
+    @pytest.mark.parametrize('operation', ['rename_note', 'copy_note'])
+    async def test_binary_reference_copy_and_tombstoned_target(self, tmp_path, operation):
+        backend, storage = await write_backend(tmp_path, objects=read_vault_objects())
+        await backend.write_note('target.md', 'old', create=True)
+        await backend.delete_note('target.md')
+        tombstone = backend._store.winner('target.md')
+        await getattr(backend, operation)(LOGO_PATH, 'target.md')
+        copied = backend._store.winner('target.md')
+        original = backend._store.winner(path2id(LOGO_PATH, nfc=True))
+        assert copied['children'] == original['children']
+        assert copied['type'] == 'newnote'
+        assert copied['ctime'] == original['ctime']
+        assert not copied.get('deleted')
+        assert copied['_revisions']['ids'][1] == tombstone['_rev'].split('-', 1)[1]
+        assert (await backend.read_note('target.md'))['data'] == LOGO_BYTES
+
+    @pytest.mark.parametrize('operation', ['rename_note', 'copy_note'])
+    async def test_deleted_source_cannot_move_or_copy(self, tmp_path, operation):
+        backend, storage = await write_backend(tmp_path)
+        await backend.write_note('a.md', 'body', create=True)
+        await backend.delete_note('a.md')
+        storage.put_calls.clear()
+        with pytest.raises(NoteNotFound):
+            await getattr(backend, operation)('a.md', 'b.md')
+        assert storage.put_calls == []
+
+    async def test_copy_same_identity_requires_overwrite(self, tmp_path):
+        backend, storage = await write_backend(tmp_path)
+        await backend.write_note('A.md', 'body', create=True)
+        with pytest.raises(NoteExists):
+            await backend.copy_note('A.md', 'a.md')
+        copied = await backend.copy_note('A.md', 'a.md', overwrite=True)
+        assert copied['rev'].startswith('2-')
+        assert (await backend.read_note('a.md'))['text'] == 'body'
+
+    async def test_nfc_and_nfd_write_share_identity(self, tmp_path):
+        backend, storage = await write_backend(tmp_path)
+        await backend.write_note(PRIEM_PATH_NFD, 'first', create=True)
+        await backend.write_note(PRIEM_PATH, 'second')
+        assert backend._store.note_ids() == [path2id(PRIEM_PATH, nfc=True)]
+        assert (await backend.read_note(PRIEM_PATH_NFD))['text'] == 'second'
+
+    @pytest.mark.parametrize('chain', [ {'start': 4, 'ids': ['parent']}, {'start': 1, 'ids': ['wrong']}, {'start': 1, 'ids': []} ])
+    async def test_bad_parent_ancestry_refused_before_put(self, tmp_path, chain):
+        backend, storage = await write_backend(tmp_path)
+        backend._store.apply_journal('seed', {}, [nfc_note_doc('a.md', '1-parent', _revisions=chain)])
+        with pytest.raises(StorageError, match='ancestry'):
+            await backend.write_note('a.md', 'body')
+        assert storage.put_calls == []
