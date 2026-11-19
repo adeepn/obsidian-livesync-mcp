@@ -41,7 +41,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from journal_codec import inflate_journal, parse_journal
-from journal_store import JournalStore
+from journal_store import EncryptedNoteError, JournalStore
 from livesync_format import (
     PATH_IDENTITY_LEGACY,
     PATH_IDENTITY_NFC,
@@ -58,6 +58,7 @@ from storage_base import (
     NoteMeta,
     NoteNotFound,
     StorageError,
+    StorageUnavailable,
     UnsupportedVault,
 )
 
@@ -118,11 +119,6 @@ def _as_ms(value: object) -> int:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return 0
     return int(value)
-
-
-# The store signals E2EE refusals and corruption as ValueError; its E2EE
-# message text is the discriminator (kept identical to the CouchDB peer's).
-_E2EE_MARKER = "end-to-end encryption"
 
 
 class JournalBackend:
@@ -566,22 +562,25 @@ class JournalBackend:
     async def _scan_one_note(
         self, store: JournalStore, meta: NoteMeta
     ) -> tuple[NoteMeta, str | None]:
-        """Read one note for a scan, isolating every failure (audit C4)."""
+        """Read one note for a scan, isolating every failure (audit C4).
+
+        Any per-note failure — corrupt bodies, encrypted bodies, or an
+        unexpected store error (OSError, sqlite) — yields ``(meta, None)``
+        with the details logged, so one broken note never ends a
+        vault-wide scan. Only backend-wide storage unavailability aborts.
+        """
         try:
             content = store.read_note(meta["doc_id"])
-        except ValueError as exc:
-            logger.warning("%s", exc)
-            return meta, None
-        if content is None:
-            return meta, None
-        try:
-            fresh = self._meta_from_doc(content[0])
-        except StorageError:
+            if content is not None:
+                return self._meta_from_doc(content[0]), content[1]
+        except StorageUnavailable:
+            raise  # backend-wide condition, not a per-note failure
+        except Exception:
             logger.exception(
-                "skipping note %s: invalid metadata", meta["path"]
+                "skipping note %s: scan read failed", meta["path"]
             )
             return meta, None
-        return fresh, content[1]
+        return meta, None
 
     # -- Read helpers ----------------------------------------------------------
 
@@ -613,11 +612,14 @@ class JournalBackend:
     def _translate_decode_error(exc: ValueError) -> StorageError:
         """Map the store's ValueError to the public storage exception.
 
-        E2EE refusals keep their UnsupportedVault semantics; corrupt-body
-        messages already match the CouchDB peer's phrasing and pass
-        through unchanged (they name the note path only — audit C7).
+        Classification is structural — the store's
+        :class:`~journal_store.EncryptedNoteError` keeps its
+        UnsupportedVault semantics — never by message text, which embeds
+        the user-controlled note path. Corrupt-body messages already match
+        the CouchDB peer's phrasing and pass through unchanged (they name
+        the note path only — audit C7).
         """
-        if _E2EE_MARKER in str(exc):
+        if isinstance(exc, EncryptedNoteError):
             return UnsupportedVault(str(exc))
         return StorageError(str(exc))
 

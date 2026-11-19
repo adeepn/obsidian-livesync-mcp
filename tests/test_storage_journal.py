@@ -900,6 +900,54 @@ class TestReadNote:
         with pytest.raises(StorageError, match="startup_check"):
             await backend.read_note(OBOZOR_PATH)
 
+    async def test_note_named_like_the_e2ee_message_is_still_corrupt(
+        self, tmp_path
+    ):
+        # Classification must be structural, not substring-based: a note
+        # *named* "end-to-end encryption.md" with a missing chunk is a
+        # corrupt note, not an UnsupportedVault refusal.
+        trap_path = "end-to-end encryption.md"
+        objects = {
+            MILESTONE_KEY: milestone_blob(path_version=1),
+            SYNC_PARAMETERS_KEY: params_blob(),
+            JOURNAL_1: deflate_journal(
+                serialize_journal(
+                    [],
+                    [
+                        nfc_note_doc(
+                            trap_path,
+                            "1-trap000000000000000000000000000005",
+                            children=["h:missing0000000000000000"],
+                        )
+                    ],
+                )
+            ),
+        }
+        backend, _ = await read_backend(tmp_path, objects)
+        with pytest.raises(StorageError, match="corrupt") as exc_info:
+            await backend.read_note(trap_path)
+        assert not isinstance(exc_info.value, UnsupportedVault)
+        results = [item async for item in backend.iterate_texts()]
+        assert len(results) == 1
+        assert results[0][0]["path"] == trap_path
+        assert results[0][1] is None
+
+    async def test_encrypted_note_refused_as_unsupported(self, tmp_path):
+        doc = nfc_note_doc(
+            "secret.md",
+            "1-enc0000000000000000000000000000005f",
+            children=["h:whatever0000000000000000"],
+            e_=True,
+        )
+        objects = {
+            MILESTONE_KEY: milestone_blob(path_version=1),
+            SYNC_PARAMETERS_KEY: params_blob(),
+            JOURNAL_1: deflate_journal(serialize_journal([], [doc])),
+        }
+        backend, _ = await read_backend(tmp_path, objects)
+        with pytest.raises(UnsupportedVault, match="end-to-end encryption"):
+            await backend.read_note("secret.md")
+
 
 class TestIterateTexts:
     async def collect(self, backend, extension=".md"):
@@ -964,5 +1012,45 @@ class TestIterateTexts:
     async def test_iterate_before_startup_refused(self, tmp_path):
         backend, _ = make_backend(tmp_path, read_vault_objects())
         with pytest.raises(StorageError, match="startup_check"):
+            async for _ in backend.iterate_texts():
+                pass
+
+    async def test_unexpected_store_error_is_isolated(
+        self, tmp_path, monkeypatch, caplog
+    ):
+        # Ruling 1: an unexpected per-note failure (here OSError from the
+        # store) must yield (meta, None) and never end the scan — the same
+        # per-note boundary the CouchDB peer has.
+        backend, _ = await read_backend(tmp_path)
+        store = backend._store
+        original = store.read_note
+
+        def raising_read(doc_id):
+            if doc_id == path2id(README_PATH, nfc=True):
+                raise OSError("simulated per-note I/O failure")
+            return original(doc_id)
+
+        monkeypatch.setattr(store, "read_note", raising_read)
+        with caplog.at_level(logging.ERROR, logger="storage_journal"):
+            results = await self.collect(backend)
+        assert list(results) == MD_PATHS  # iteration ran to completion
+        assert results[README_PATH] is None
+        assert any(
+            README_PATH in record.message for record in caplog.records
+        )
+
+    async def test_storage_unavailability_still_aborts_iteration(
+        self, tmp_path, monkeypatch
+    ):
+        # Backend-wide storage unavailability is not a per-note failure:
+        # the scan must abort instead of reporting the whole vault empty.
+        backend, _ = await read_backend(tmp_path)
+        store = backend._store
+
+        def unavailable(doc_id):
+            raise StorageUnavailable("scripted backend-wide failure")
+
+        monkeypatch.setattr(store, "read_note", unavailable)
+        with pytest.raises(StorageUnavailable):
             async for _ in backend.iterate_texts():
                 pass

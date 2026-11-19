@@ -80,6 +80,15 @@ _ENCRYPTED_MESSAGE = (
     "which this server does not support"
 )
 
+
+class EncryptedNoteError(ValueError):
+    """The note body requires unsupported end-to-end decryption.
+
+    A distinct class (still a :class:`ValueError` for existing callers) so
+    backends can classify E2EE refusals structurally — never by scanning
+    the human-readable message, which embeds the user-controlled note path.
+    """
+
 _SCHEMA_V1 = """
 CREATE TABLE IF NOT EXISTS docs (
     doc_id TEXT NOT NULL,
@@ -380,9 +389,10 @@ class JournalStore:
         """Read a note: ``(winner_doc, text, data, is_text)``.
 
         ``None`` when the document is unknown, not a note, or tombstoned.
-        Raises ``ValueError`` for E2EE refusals and for corrupt bodies
-        (missing chunk, invalid fields); use :meth:`iterate_notes` for
-        per-note isolation.
+        Raises :class:`EncryptedNoteError` (a ``ValueError``) for E2EE
+        refusals and plain ``ValueError`` for corrupt bodies (missing
+        chunk, invalid fields); use :meth:`iterate_notes` for per-note
+        isolation.
         """
         winner = self.winner(doc_id)
         if winner is None or not is_note_document(winner):
@@ -390,13 +400,13 @@ class JournalStore:
         path = _display_path(winner, doc_id)
 
         if winner.get("e_"):
-            raise ValueError(_ENCRYPTED_MESSAGE.format(path=path))
+            raise EncryptedNoteError(_ENCRYPTED_MESSAGE.format(path=path))
 
         doc_type = winner.get("type")
         if doc_type == "notes":
             raw = winner.get("data")
             if isinstance(raw, str) and raw.startswith("%"):
-                raise ValueError(_ENCRYPTED_MESSAGE.format(path=path))
+                raise EncryptedNoteError(_ENCRYPTED_MESSAGE.format(path=path))
             try:
                 text = legacy_body(winner)
             except ValueError:
@@ -416,7 +426,9 @@ class JournalStore:
         try:
             inline = extract_inline_chunks(winner)
         except EncryptedInlineChunk:
-            raise ValueError(_ENCRYPTED_MESSAGE.format(path=path)) from None
+            raise EncryptedNoteError(
+                _ENCRYPTED_MESSAGE.format(path=path)
+            ) from None
         except ValueError:
             raise ValueError(
                 f"note {path!r} is corrupt: invalid eden field"
@@ -474,7 +486,9 @@ class JournalStore:
             chunk_doc = self.winner(child)
             if chunk_doc is not None:
                 if chunk_doc.get("e_"):
-                    raise ValueError(_ENCRYPTED_MESSAGE.format(path=path))
+                    raise EncryptedNoteError(
+                        _ENCRYPTED_MESSAGE.format(path=path)
+                    )
                 data = chunk_doc.get("data")
                 if not chunk_doc.get("deleted") and isinstance(data, str):
                     datas.append(data)
