@@ -1359,19 +1359,24 @@ class TestJournalWriteEdges:
     ):
         backend, storage = await write_backend(tmp_path)
         monkeypatch.setattr(storage_journal.time, 'time', lambda: 10)
-        occupied = '10000-aaaaaaaaaaaaaaaa-docs.jsonl.gz'
+        occupied = '10000-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-docs.jsonl.gz'
         original = journal_blob([meta_doc('existing.md', '1-existing')])
         storage.put(occupied, original)
         storage.put_calls.clear()
         real_token_hex = storage_journal.secrets.token_hex
         attempts = []
 
+        revision_generated = False
+
         def token_hex(length):
-            if length != 8:
+            nonlocal revision_generated
+            assert length == 16
+            if not revision_generated:
+                revision_generated = True
                 return real_token_hex(length)
             attempts.append(length)
-            return ('aaaaaaaaaaaaaaaa' if exhausted or len(attempts) == 1
-                    else 'bbbbbbbbbbbbbbbb')
+            return ('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' if exhausted or len(attempts) == 1
+                    else 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb')
 
         monkeypatch.setattr(storage_journal.secrets, 'token_hex', token_hex)
         try:
@@ -1384,7 +1389,7 @@ class TestJournalWriteEdges:
             else:
                 await backend.write_note('a.md', 'body', create=True)
                 assert [key for key, _ in storage.put_calls] == [
-                    '10000-bbbbbbbbbbbbbbbb-docs.jsonl.gz',
+                    '10000-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-docs.jsonl.gz',
                 ]
                 assert (await backend.read_note('a.md'))['text'] == 'body'
             assert storage.get(occupied) == original

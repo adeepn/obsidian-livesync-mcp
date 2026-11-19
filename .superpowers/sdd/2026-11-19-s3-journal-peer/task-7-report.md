@@ -182,3 +182,5 @@ Verification artifacts:
 
 Read the source/test diff before committing. No network or production resources
 were used.
+
+Fix round 2: use `secrets.token_hex(16)` for B-10's 128-bit journal key component; update collision-test lengths; full suite: 813 passed, 3 skipped, 3 subtests passed (log: `/private/tmp/plan-b-fix-round-2-tests.txt`).

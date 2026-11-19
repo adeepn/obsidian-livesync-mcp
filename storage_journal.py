@@ -774,7 +774,7 @@ class JournalBackend:
             # Reserve even failed attempts so a retry cannot reuse their key.
             self._max_seen_ms = ms
             for _ in range(10):
-                name = journal_filename(ms, suffix=secrets.token_hex(8))
+                name = journal_filename(ms, suffix=secrets.token_hex(16))
                 if not self._object_storage.exists(name):
                     break
             else:
