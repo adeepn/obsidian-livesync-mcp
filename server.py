@@ -14,6 +14,7 @@ from contextlib import aclosing, asynccontextmanager
 from contextvars import ContextVar
 from scan_budget import ScanBudget
 from functools import wraps
+from pathlib import Path
 from typing import Any
 
 # httpx/httpcore log every request line — full internal CouchDB URLs —
@@ -32,6 +33,8 @@ from storage_base import (
     ConcurrentModification, UnsupportedVault, StorageUnavailable, NoteContent,
 )
 from storage_couchdb import CouchDBBackend
+from storage_journal import JournalBackend
+from object_storage import Boto3ObjectStorage
 from frontmatter import (
     FrontmatterError, get_properties, split_frontmatter, set_properties,
     delete_properties, add_tags, remove_tags, insert_after_frontmatter,
@@ -44,7 +47,13 @@ from oauth_provider import SimpleOAuthProvider
 def get_backend(cfg: Config) -> StorageBackend:
     """Construct the selected storage implementation."""
     if cfg.backend == "s3":
-        raise RuntimeError("S3 backend arrives in Plan B")
+        if cfg.s3 is None:
+            raise ConfigError("S3 configuration is required.")
+        return JournalBackend(
+            Boto3ObjectStorage(cfg.s3),
+            Path(cfg.s3.state_dir),
+            cfg.s3.refresh_min_interval_sec,
+        )
     if cfg.couchdb is None:
         raise ConfigError("CouchDB configuration is required.")
     return CouchDBBackend(

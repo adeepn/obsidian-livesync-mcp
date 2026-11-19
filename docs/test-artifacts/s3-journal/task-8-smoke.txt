@@ -1,0 +1,4 @@
+PASS: import-time configuration fails closed (ConfigError caught by smoke harness)
+ConfigError: LIVESYNC_BACKEND is required: set it to 'couchdb' or 's3'.
+PASS: obsolete backend-unavailable string absent from tracked repository files
+PASS: default state directory ignored

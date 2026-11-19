@@ -33,6 +33,8 @@ COUCHDB_URL_DEFAULT = "http://localhost:5984"
 PLACEHOLDER_SECRET_VALUES = frozenset(
     {
         "your_api_key",
+        "your_access_key",
+        "your_secret_key",
         "your_password",
         "your_oauth_password",
         "your_client_id",
@@ -57,12 +59,12 @@ class CouchDBConfig:
 
 @dataclass(frozen=True)
 class S3Config:
-    """Settings for the S3 journal peer: a LiveSync setup URI plus local state.
+    """Settings for the S3 journal peer: connection fields plus local state.
 
-    Connection fields come from ``LIVESYNC_S3_URI`` (see ``parse_s3_uri``).
+    Connection fields come from ``LIVESYNC_S3_URI`` or individual S3 variables.
     ``state_dir`` (env ``S3_STATE_DIR``) is where the peer keeps its cached
     journal state; ``refresh_min_interval_sec`` (env
-    ``S3_REFRESH_MIN_INTERVAL_SEC``) throttles automatic refreshes.
+    ``S3_REFRESH_MIN_INTERVAL_SEC``) throttles refresh calls.
     """
 
     endpoint: str
@@ -192,16 +194,43 @@ def _load_s3_state(env: Mapping[str, str]) -> tuple[str, float]:
 
 
 def _load_s3(env: Mapping[str, str]) -> S3Config:
-    """Validate the S3 backend group: setup URI plus local state settings."""
+    """Validate exactly one connection form, plus shared local state settings."""
     uri = env.get("LIVESYNC_S3_URI", "")
-    if not uri:
+    fields = (
+        "S3_ENDPOINT_URL", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY",
+        "S3_BUCKET", "S3_REGION", "S3_PREFIX",
+    )
+    mixed = [name for name in fields if name in env]
+    if uri and mixed:
         raise ConfigError(
-            "the S3 backend requires LIVESYNC_S3_URI "
-            "(sls://access_key:secret_key@endpoint?bucket=...)."
+            "LIVESYNC_S3_URI conflicts with individual S3 variables: "
+            + ", ".join(mixed) + "; choose exactly one connection form."
         )
+    if uri:
+        connection = parse_s3_uri(uri)
+    else:
+        if not mixed:
+            raise ConfigError(
+                "the S3 backend requires LIVESYNC_S3_URI or individual "
+                "S3_ENDPOINT_URL / S3_ACCESS_KEY_ID / S3_SECRET_ACCESS_KEY / S3_BUCKET."
+            )
+        for name in fields[:4]:
+            if not env.get(name, "").strip():
+                raise ConfigError(f"{name} is required when LIVESYNC_BACKEND=s3.")
+        connection = S3Config(
+            endpoint=env["S3_ENDPOINT_URL"],
+            access_key=env["S3_ACCESS_KEY_ID"],
+            secret_key=env["S3_SECRET_ACCESS_KEY"],
+            bucket=env["S3_BUCKET"],
+            region=env.get("S3_REGION", "").strip() or "auto",
+            prefix=env.get("S3_PREFIX", ""),
+            uri="",
+        )
+    _reject_placeholder(connection.access_key, "S3_ACCESS_KEY_ID")
+    _reject_placeholder(connection.secret_key, "S3_SECRET_ACCESS_KEY")
     state_dir, refresh_sec = _load_s3_state(env)
     return replace(
-        parse_s3_uri(uri),
+        connection,
         state_dir=state_dir,
         refresh_min_interval_sec=refresh_sec,
     )

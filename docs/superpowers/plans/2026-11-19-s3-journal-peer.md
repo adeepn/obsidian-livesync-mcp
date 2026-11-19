@@ -142,7 +142,7 @@
 - Consumes: всё; `config.load_config` уже валидирует s3-группу (Task 1).
 - Produces: `get_backend(cfg)` строит `Boto3ObjectStorage(cfg.s3) + JournalStore(Path(cfg.s3.state_dir), path_identity)`; path_identity не известен до startup_check → JournalBackend создаёт store лениво внутри startup_check (выбрасывает UnsupportedVault из factory-вызова startup); README: раздел S3 (URI или переменные, state dir, первый полный replay, обновление перед операциями, конфликт-семантика журнала), CHANGELOG unreleased, AGENTS.md — новые модули.
 
-- [ ] **Step 1: failing tests** — `test_get_backend_s3` возвращает JournalBackend (с тестовым state_dir); env-пример валиден `load_config`; grep-assert: в репо не осталось строк «Plan B»/«arrives in Plan B».
+- [ ] **Step 1: failing tests** — `test_get_backend_s3` возвращает JournalBackend (с тестовым state_dir); env-пример валиден `load_config`; grep-assert: в коде и пользовательской документации не осталось заглушки недоступного S3 backend.
 - [ ] **Step 2: FAIL → Step 3: implement → Step 4: PASS + полная suite + smoke `python -c "import server"` без env (fail-closed по конфигу, не traceback).**
 - [ ] **Step 5: Commit** — `feat: wire s3 journal backend into factory and docs`
 

@@ -185,9 +185,26 @@ async def test_get_backend_couchdb():
     await backend.close()
 
 
-def test_get_backend_s3_pending():
-    with pytest.raises(RuntimeError, match="^S3 backend arrives in Plan B$"):
-        server.get_backend(SimpleNamespace(backend="s3"))
+async def test_get_backend_s3(tmp_path):
+    from config import load_config
+    from storage_journal import JournalBackend
+    from object_storage import Boto3ObjectStorage
+
+    cfg = load_config({
+        "LIVESYNC_BACKEND": "s3",
+        "LIVESYNC_S3_URI": "sls://AK:SK@https://minio.local?bucket=vault&region=auto",
+        "S3_STATE_DIR": str(tmp_path / "state"),
+        "S3_REFRESH_MIN_INTERVAL_SEC": "2.5",
+        "MCP_API_KEY": "test-token",
+    })
+    backend = server.get_backend(cfg)
+    assert isinstance(backend, JournalBackend)
+    assert isinstance(backend._object_storage, Boto3ObjectStorage)
+    assert backend._state_dir == tmp_path / "state"
+    assert backend.refresh_min_interval == 2.5
+    assert backend._store is None
+    assert not (tmp_path / "state").exists()
+    await backend.close()
 
 
 async def test_vault_stats_reports_backend(tools):

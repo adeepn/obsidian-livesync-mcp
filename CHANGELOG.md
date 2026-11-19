@@ -9,7 +9,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 - Added shared bearer API key authentication via `MCP_API_KEY` for MCP clients that use `Authorization: Bearer <token>`
-- Added `LIVESYNC_BACKEND` configuration that selects the storage backend at startup; `couchdb` is fully supported, `s3` fails with an explicit "Plan B" message
+- Added the S3 journal backend with append-only publication, local SQLite/chunk state, URI or individual-variable configuration, and legacy/NFC path identity support
+- Added `LIVESYNC_BACKEND` configuration to select CouchDB or S3 journal storage at startup
 - Added strict startup configuration validation (`config.load_config`): missing variables, incomplete auth, and placeholder secrets from `.env.example` abort startup with a clear message
 - Added a `backend` field to `vault_stats` output identifying the active storage backend
 
@@ -36,7 +37,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Documented verified Codex streamable HTTP MCP configuration using `bearer_token_env_var = "MCP_API_KEY"`
 - Added explicit custom header key/value guidance for MCP clients that configure headers manually
-- README: added a "Backends" section (CouchDB today, S3 = Plan B), a defaults column in the environment table, and honest install/run steps
+- README: added a "Backends" section (CouchDB and S3 journal storage), a defaults column in the environment table, and honest install/run steps
 
 ## [1.0.1] - 2026-04-10
 
