@@ -1,21 +1,34 @@
-"""Tests for the journal storage backend startup and replay (Plan B, Task 5).
+"""Tests for the journal storage backend (Plan B, Tasks 5-6).
 
 Covers ``JournalBackend.startup_check`` (milestone locked/missing, settings
 refusals, path-identity state mismatch, sync-parameter epoch change, remote
 wipe probe), ``refresh`` (ordered replay with numeric ms ordering, corrupt
 file stops without advancing the checkpoint, control objects never parsed,
-throttling with ``force`` bypass) and ``backend_info``/``close``. All object
-storage goes through ``FakeObjectStorage`` — no network.
+throttling with ``force`` bypass) and ``backend_info``/``close``. Task 6
+adds the read paths — ``list_notes``/``get_meta``/``read_note``/
+``iterate_texts`` — against an NFC-identity vault fixture with Cyrillic
+names, a binary ``newnote``, a tombstone, a service doc and a hidden
+dotfile, mirroring the CouchDB backend's contracts. All object storage goes
+through ``FakeObjectStorage`` — no network.
 """
 
+import base64
 import json
 import logging
+import unicodedata
 from datetime import datetime
 
 import pytest
 
+import storage_journal
 from journal_codec import deflate_journal, serialize_journal
-from storage_base import StorageError, StorageUnavailable, UnsupportedVault
+from livesync_format import chunk_id_for, path2id
+from storage_base import (
+    NoteNotFound,
+    StorageError,
+    StorageUnavailable,
+    UnsupportedVault,
+)
 from storage_journal import (
     MILESTONE_KEY,
     SYNC_PARAMETERS_KEY,
@@ -504,14 +517,8 @@ class TestLifecycle:
         await backend.close()
         await backend.close()
 
-    async def test_read_and_write_methods_raise_until_tasks_6_7(self, tmp_path):
+    async def test_write_methods_raise_until_task_7(self, tmp_path):
         backend, _ = make_backend(tmp_path, healthy_bucket())
-        with pytest.raises(NotImplementedError):
-            await backend.list_notes()
-        with pytest.raises(NotImplementedError):
-            await backend.get_meta("a.md")
-        with pytest.raises(NotImplementedError):
-            await backend.read_note("a.md")
         with pytest.raises(NotImplementedError):
             await backend.write_note("a.md", "body")
         with pytest.raises(NotImplementedError):
@@ -520,5 +527,442 @@ class TestLifecycle:
             await backend.rename_note("a.md", "b.md")
         with pytest.raises(NotImplementedError):
             await backend.copy_note("a.md", "b.md")
-        with pytest.raises(NotImplementedError):
-            backend.iterate_texts()
+
+
+# -- Read paths (Task 6) -------------------------------------------------------
+#
+# An NFC-identity vault (milestone pathNormalizationVersion=1) with notes in
+# two folders, one NFC-relevant Cyrillic path (precomposed ё vs decomposed
+# е+U+0308), a binary newnote, a legacy ``notes`` body, a note with a missing
+# chunk (corrupt), a tombstone, a service document and a hidden dotfile note.
+# Journal doc ids are derived the way an NFC-identity client derives them
+# (path2id(path, nfc=True)); the backend must resolve path->id with the same
+# identity.
+
+OBOZOR_PATH = "Заметки/Обзор.md"
+OBOZOR_TEXT = "Текст обзора"
+OBOZOR_REV = "3-aaaa1111bbbb2222cccc3333dddd4444e5"
+
+# NFC-relevant: ё precomposed (U+0451) vs NFD е + combining diaeresis.
+PRIEM_PATH = "Заметки/Приём.md"
+PRIEM_PATH_NFD = unicodedata.normalize("NFD", PRIEM_PATH)
+assert PRIEM_PATH != PRIEM_PATH_NFD  # the two spellings must differ
+PRIEM_TEXT = "Записи приёма"
+PRIEM_REV = "2-eeee1111ffff2222aaaa3333bbbb4444c5"
+
+README_PATH = "docs/readme.md"
+README_PART_A = "first "
+README_PART_B = "second"
+README_REV = "4-1234567890abcdef1234567890abcdef12"
+
+LOGO_PATH = "docs/logo.png"
+LOGO_BYTES = b"\x89PNG\r\n\x1a\n" + bytes(range(64))
+LOGO_CHUNK_DATA = base64.b64encode(LOGO_BYTES).decode("ascii")
+LOGO_REV = "1-fedcba0987654321fedcba0987654321f0"
+
+BROKEN_PATH = "docs/broken.md"  # references a chunk no journal ever carried
+BROKEN_REV = "1-0000000000000000000000000000000090"
+
+NESTED_PATH = "docs/sub/Заметка.MD"  # nested + uppercase extension
+NESTED_TEXT = "вложенная"
+NESTED_REV = "2-9999888877776666555544443333222211"
+
+LEGACY_PATH = "docs/legacy.md"  # type "notes": body in the doc itself
+LEGACY_TEXT = "старая заметка"
+LEGACY_REV = "5-abcabcabcabcabcabcabcabcabcabcabca"
+
+TOMBSTONE_PATH = "docs/old.md"
+HIDDEN_PATH = ".obsidian/app.json"
+
+OBOZOR_CTIME, OBOZOR_MTIME, OBOZOR_SIZE = 1731000001000, 1731000002000, 24
+
+LISTED_PATHS = sorted(
+    [
+        OBOZOR_PATH,
+        PRIEM_PATH,
+        README_PATH,
+        LOGO_PATH,
+        BROKEN_PATH,
+        NESTED_PATH,
+        LEGACY_PATH,
+    ]
+)
+MD_PATHS = sorted([p for p in LISTED_PATHS if p.lower().endswith(".md")])
+
+
+def nfc_note_doc(path: str, rev: str, *, doc_type="plain", children=(), **extra):
+    """A metadata doc the way an NFC-identity client would publish it."""
+    doc = {
+        "_id": path2id(path, nfc=True),
+        "_rev": rev,
+        "path": path,
+        "type": doc_type,
+        "children": list(children),
+        "eden": {},
+        "ctime": 1731000000000,
+        "mtime": 1731000000000,
+        "size": 10,
+    }
+    doc.update(extra)
+    return doc
+
+
+def read_vault_objects() -> dict[str, bytes]:
+    """The Task 6 fixture bucket: milestone(NFC) + params + two journals."""
+    chunks = [
+        (chunk_id_for(OBOZOR_TEXT), OBOZOR_TEXT),
+        (chunk_id_for(PRIEM_TEXT), PRIEM_TEXT),
+        (chunk_id_for(README_PART_A), README_PART_A),
+        (chunk_id_for(README_PART_B), README_PART_B),
+        (chunk_id_for(LOGO_CHUNK_DATA), LOGO_CHUNK_DATA),
+        (chunk_id_for(NESTED_TEXT), NESTED_TEXT),
+    ]
+    docs = [
+        nfc_note_doc(
+            OBOZOR_PATH,
+            OBOZOR_REV,
+            children=[chunk_id_for(OBOZOR_TEXT)],
+            ctime=OBOZOR_CTIME,
+            mtime=OBOZOR_MTIME,
+            size=OBOZOR_SIZE,
+        ),
+        nfc_note_doc(
+            PRIEM_PATH, PRIEM_REV, children=[chunk_id_for(PRIEM_TEXT)]
+        ),
+        nfc_note_doc(
+            README_PATH,
+            README_REV,
+            children=[
+                chunk_id_for(README_PART_A),
+                chunk_id_for(README_PART_B),
+            ],
+        ),
+        nfc_note_doc(
+            LOGO_PATH,
+            LOGO_REV,
+            doc_type="newnote",
+            children=[chunk_id_for(LOGO_CHUNK_DATA)],
+        ),
+        nfc_note_doc(
+            BROKEN_PATH, BROKEN_REV, children=["h:missing0000000000000000"]
+        ),
+        nfc_note_doc(
+            NESTED_PATH, NESTED_REV, children=[chunk_id_for(NESTED_TEXT)]
+        ),
+        # Legacy "notes" doc: body inline in `data`, no children/size/ctime.
+        {
+            "_id": path2id(LEGACY_PATH, nfc=True),
+            "_rev": LEGACY_REV,
+            "path": LEGACY_PATH,
+            "type": "notes",
+            "data": LEGACY_TEXT,
+            "children": [],
+        },
+    ]
+    later_docs = [
+        # Tombstone: a live revision superseded by a deleted winner.
+        nfc_note_doc(TOMBSTONE_PATH, "1-oldlive000000000000000000000000ff"),
+        nfc_note_doc(
+            TOMBSTONE_PATH,
+            "2-deaddead0000000000000000000000000e",
+            deleted=True,
+        ),
+        # Service document: never a note (is_service_document_id).
+        nfc_note_doc("syncinfo", "1-svc000000000000000000000000000005c"),
+        # Hidden dotfile note: a note doc that must never surface.
+        nfc_note_doc(HIDDEN_PATH, "1-hid000000000000000000000000000000dd"),
+    ]
+    return {
+        MILESTONE_KEY: milestone_blob(path_version=1),
+        SYNC_PARAMETERS_KEY: params_blob(),
+        JOURNAL_1: deflate_journal(serialize_journal(chunks, docs)),
+        JOURNAL_2: deflate_journal(serialize_journal([], later_docs)),
+    }
+
+
+async def read_backend(tmp_path, objects=None, **kwargs):
+    """A backend over the Task 6 fixture, started and refreshed."""
+    backend, storage = make_backend(
+        tmp_path, objects or read_vault_objects(), **kwargs
+    )
+    await backend.startup_check()
+    await backend.refresh()
+    storage.get_calls.clear()
+    storage.list_calls.clear()
+    return backend, storage
+
+
+class TestListNotes:
+    async def test_lists_live_notes_with_display_paths_sorted(self, tmp_path):
+        backend, _ = await read_backend(tmp_path)
+        metas = await backend.list_notes()
+        # Display path is the doc's canonical `path` field (original
+        # spelling), not the lowercased doc id; service doc, tombstone and
+        # hidden dotfile never surface.
+        assert [meta["path"] for meta in metas] == LISTED_PATHS
+
+    async def test_meta_fields_come_from_the_winner_doc(self, tmp_path):
+        backend, _ = await read_backend(tmp_path)
+        metas = {meta["path"]: meta for meta in await backend.list_notes()}
+        obzor = metas[OBOZOR_PATH]
+        assert obzor["doc_id"] == path2id(OBOZOR_PATH, nfc=True)
+        assert obzor["rev"] == OBOZOR_REV
+        assert obzor["type"] == "plain"
+        assert obzor["ctime"] == OBOZOR_CTIME
+        assert obzor["mtime"] == OBOZOR_MTIME
+        assert obzor["size"] == OBOZOR_SIZE
+        # Legacy "notes" doc: no size field -> computed from the data body.
+        legacy = metas[LEGACY_PATH]
+        assert legacy["size"] == len(LEGACY_TEXT.encode("utf-8"))
+        assert legacy["type"] == "notes"
+        assert legacy["ctime"] == 0  # absent -> 0, like the CouchDB backend
+
+    async def test_every_rev_is_a_nonempty_string(self, tmp_path):
+        backend, _ = await read_backend(tmp_path)
+        for meta in await backend.list_notes():
+            assert isinstance(meta["rev"], str) and meta["rev"]
+
+    @pytest.mark.parametrize(
+        "folder", ["docs", "DOCS", "Docs"], ids=["lower", "upper", "mixed"]
+    )
+    async def test_folder_filter_is_case_insensitive(self, tmp_path, folder):
+        backend, _ = await read_backend(tmp_path)
+        metas = await backend.list_notes(folder=folder)
+        assert [meta["path"] for meta in metas] == [
+            p for p in LISTED_PATHS if p.startswith("docs/")
+        ]
+
+    @pytest.mark.parametrize(
+        "folder", ["Заметки", "заметки", "ЗАМЕТКИ"],
+        ids=["nfc-mixed", "lower", "upper"],
+    )
+    async def test_cyrillic_folder_filter_both_directions(self, tmp_path, folder):
+        backend, _ = await read_backend(tmp_path)
+        metas = await backend.list_notes(folder=folder)
+        assert [meta["path"] for meta in metas] == sorted(
+            [OBOZOR_PATH, PRIEM_PATH]
+        )
+
+    async def test_folder_dot_and_backslash_spellings_normalize(self, tmp_path):
+        backend, _ = await read_backend(tmp_path)
+        for folder in ("./docs", "docs/", "docs\\"):
+            metas = await backend.list_notes(folder=folder)
+            assert all(meta["path"].startswith("docs/") for meta in metas)
+            assert len(metas) == 5
+
+    async def test_recursive_false_lists_direct_children_only(self, tmp_path):
+        backend, _ = await read_backend(tmp_path)
+        metas = await backend.list_notes(folder="docs", recursive=False)
+        assert [meta["path"] for meta in metas] == sorted(
+            [BROKEN_PATH, LEGACY_PATH, LOGO_PATH, README_PATH]
+        )
+        # The nested note still appears under its own folder filter.
+        nested = await backend.list_notes(folder="docs/sub")
+        assert [meta["path"] for meta in nested] == [NESTED_PATH]
+
+    async def test_recursive_false_at_vault_root(self, tmp_path):
+        backend, _ = await read_backend(tmp_path)
+        # Every fixture note lives in a folder, so the root has no children.
+        assert await backend.list_notes(recursive=False) == []
+
+    async def test_extension_filter_case_insensitive_with_or_without_dot(
+        self, tmp_path
+    ):
+        backend, _ = await read_backend(tmp_path)
+        for extension in (".md", "md", "MD", ".MD"):
+            metas = await backend.list_notes(extension=extension)
+            assert [meta["path"] for meta in metas] == MD_PATHS
+        png = await backend.list_notes(extension="png")
+        assert [meta["path"] for meta in png] == [LOGO_PATH]
+
+    async def test_folder_and_extension_combine(self, tmp_path):
+        backend, _ = await read_backend(tmp_path)
+        metas = await backend.list_notes(folder="Docs", extension="MD")
+        # recursive=True by default, so the nested .MD note is included.
+        assert [meta["path"] for meta in metas] == sorted(
+            [BROKEN_PATH, LEGACY_PATH, README_PATH, NESTED_PATH]
+        )
+
+    async def test_tombstone_service_and_hidden_never_listed(self, tmp_path):
+        backend, _ = await read_backend(tmp_path)
+        listed = {meta["path"] for meta in await backend.list_notes()}
+        assert TOMBSTONE_PATH not in listed
+        assert HIDDEN_PATH not in listed
+        assert "syncinfo" not in listed
+
+    async def test_list_before_startup_refused(self, tmp_path):
+        backend, _ = make_backend(tmp_path, read_vault_objects())
+        with pytest.raises(StorageError, match="startup_check"):
+            await backend.list_notes()
+
+    async def test_backend_info_gains_note_count(self, tmp_path):
+        backend, _ = await read_backend(tmp_path)
+        info = await backend.backend_info()
+        # Live note documents in the store: the 7 listed notes plus the
+        # hidden dotfile doc (a note doc that listing filters out).
+        assert info["notes"] == 8
+
+
+class TestGetMeta:
+    async def test_returns_winner_meta(self, tmp_path):
+        backend, _ = await read_backend(tmp_path)
+        meta = await backend.get_meta(OBOZOR_PATH)
+        assert meta["path"] == OBOZOR_PATH
+        assert meta["doc_id"] == path2id(OBOZOR_PATH, nfc=True)
+        assert meta["rev"] == OBOZOR_REV
+
+    async def test_resolves_nfc_and_nfd_spellings_via_identity(self, tmp_path):
+        backend, _ = await read_backend(tmp_path)
+        nfc_meta = await backend.get_meta(PRIEM_PATH)
+        nfd_meta = await backend.get_meta(PRIEM_PATH_NFD)
+        # The client derived ids with NFC identity; both spellings of the
+        # same path must hit the same document.
+        assert nfc_meta["doc_id"] == path2id(PRIEM_PATH, nfc=True)
+        assert nfd_meta["doc_id"] == nfc_meta["doc_id"]
+        assert nfd_meta["rev"] == nfc_meta["rev"] == PRIEM_REV
+
+    async def test_case_only_respelling_resolves_to_same_doc(self, tmp_path):
+        backend, _ = await read_backend(tmp_path)
+        meta = await backend.get_meta("DOCS/README.MD")
+        assert meta["doc_id"] == path2id(README_PATH, nfc=True)
+        assert meta["rev"] == README_REV
+
+    async def test_missing_raises_note_not_found(self, tmp_path):
+        backend, _ = await read_backend(tmp_path)
+        with pytest.raises(NoteNotFound):
+            await backend.get_meta("nope/missing.md")
+
+    async def test_tombstone_raises_note_not_found(self, tmp_path):
+        backend, _ = await read_backend(tmp_path)
+        with pytest.raises(NoteNotFound):
+            await backend.get_meta(TOMBSTONE_PATH)
+
+    async def test_hidden_path_refused_as_not_found(self, tmp_path):
+        backend, _ = await read_backend(tmp_path)
+        with pytest.raises(NoteNotFound):
+            await backend.get_meta(HIDDEN_PATH)
+
+
+class TestReadNote:
+    async def test_text_note_round_trips_with_rev(self, tmp_path):
+        backend, _ = await read_backend(tmp_path)
+        content = await backend.read_note(OBOZOR_PATH)
+        assert content["text"] == OBOZOR_TEXT
+        assert content["data"] is None
+        assert content["is_text"] is True
+        assert content["rev"] == OBOZOR_REV
+        assert content["meta"]["path"] == OBOZOR_PATH
+
+    async def test_multi_chunk_note_assembles_in_children_order(self, tmp_path):
+        backend, _ = await read_backend(tmp_path)
+        content = await backend.read_note(README_PATH)
+        assert content["text"] == README_PART_A + README_PART_B
+
+    async def test_nfd_spelling_reads_the_same_note(self, tmp_path):
+        backend, _ = await read_backend(tmp_path)
+        content = await backend.read_note(PRIEM_PATH_NFD)
+        assert content["text"] == PRIEM_TEXT
+        assert content["meta"]["path"] == PRIEM_PATH  # display path as stored
+
+    async def test_binary_newnote_returns_exact_bytes(self, tmp_path):
+        backend, _ = await read_backend(tmp_path)
+        content = await backend.read_note(LOGO_PATH)
+        assert content["data"] == LOGO_BYTES
+        assert content["text"] is None
+        assert content["is_text"] is False
+        assert content["rev"] == LOGO_REV
+
+    async def test_legacy_notes_doc_body(self, tmp_path):
+        backend, _ = await read_backend(tmp_path)
+        content = await backend.read_note(LEGACY_PATH)
+        assert content["text"] == LEGACY_TEXT
+        assert content["is_text"] is True
+
+    async def test_missing_returns_none(self, tmp_path):
+        backend, _ = await read_backend(tmp_path)
+        assert await backend.read_note("nope/missing.md") is None
+
+    async def test_tombstone_returns_none(self, tmp_path):
+        backend, _ = await read_backend(tmp_path)
+        assert await backend.read_note(TOMBSTONE_PATH) is None
+
+    async def test_hidden_path_returns_none(self, tmp_path):
+        backend, _ = await read_backend(tmp_path)
+        assert await backend.read_note(HIDDEN_PATH) is None
+
+    async def test_corrupt_note_raises_storage_error(self, tmp_path):
+        backend, _ = await read_backend(tmp_path)
+        with pytest.raises(StorageError, match="corrupt"):
+            await backend.read_note(BROKEN_PATH)
+
+    async def test_read_before_startup_refused(self, tmp_path):
+        backend, _ = make_backend(tmp_path, read_vault_objects())
+        with pytest.raises(StorageError, match="startup_check"):
+            await backend.read_note(OBOZOR_PATH)
+
+
+class TestIterateTexts:
+    async def collect(self, backend, extension=".md"):
+        return {
+            meta["path"]: text
+            async for meta, text in backend.iterate_texts(extension)
+        }
+
+    async def test_iterates_md_notes_in_path_order(self, tmp_path):
+        backend, _ = await read_backend(tmp_path)
+        results = await self.collect(backend)
+        assert list(results) == MD_PATHS
+        assert results[README_PATH] == README_PART_A + README_PART_B
+        assert results[LEGACY_PATH] == LEGACY_TEXT
+        assert results[NESTED_PATH] == NESTED_TEXT  # .MD matches case-lessly
+
+    async def test_corrupt_note_is_isolated_not_fatal(self, tmp_path, caplog):
+        backend, _ = await read_backend(tmp_path)
+        with caplog.at_level(logging.WARNING, logger="storage_journal"):
+            results = await self.collect(backend)
+        assert results[BROKEN_PATH] is None
+        # The rest of the vault still scanned to completion.
+        assert len(results) == len(MD_PATHS)
+        assert any(BROKEN_PATH in record.message for record in caplog.records)
+
+    async def test_binary_png_never_surfaces_in_md_scan(self, tmp_path):
+        backend, _ = await read_backend(tmp_path)
+        results = await self.collect(backend)
+        assert LOGO_PATH not in results
+        png_only = await self.collect(backend, extension=".png")
+        assert list(png_only) == [LOGO_PATH]
+        assert png_only[LOGO_PATH] is None  # binary body: no text
+
+    async def test_hidden_and_tombstone_never_surface(self, tmp_path):
+        backend, _ = await read_backend(tmp_path)
+        results = await self.collect(backend)
+        assert HIDDEN_PATH not in results
+        assert TOMBSTONE_PATH not in results
+
+    async def test_metas_carry_winner_rev(self, tmp_path):
+        backend, _ = await read_backend(tmp_path)
+        revs = {
+            meta["path"]: meta["rev"]
+            async for meta, _ in backend.iterate_texts()
+        }
+        assert revs[BROKEN_PATH] == BROKEN_REV
+        assert revs[README_PATH] == README_REV
+
+    async def test_no_refresh_inside_iteration(self, tmp_path):
+        backend, storage = await read_backend(tmp_path)
+        # Tools own refresh: iterating must not trigger a journal listing.
+        assert await self.collect(backend) is not None
+        assert storage.list_calls == []
+        assert storage.get_calls == []
+
+    async def test_windowed_iteration_covers_every_note(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(storage_journal, "_TEXT_WINDOW_SIZE", 2)
+        backend, _ = await read_backend(tmp_path)
+        results = await self.collect(backend)
+        assert list(results) == MD_PATHS  # several windows, all yielded
+
+    async def test_iterate_before_startup_refused(self, tmp_path):
+        backend, _ = make_backend(tmp_path, read_vault_objects())
+        with pytest.raises(StorageError, match="startup_check"):
+            async for _ in backend.iterate_texts():
+                pass
