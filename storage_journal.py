@@ -167,18 +167,22 @@ class JournalBackend:
                 epoch,
             )
             self._store.epoch = epoch
+            self._clear_refresh_clock()
         else:
             self._probe_remote_wipe(epoch)
 
     async def refresh(self, force: bool = False) -> None:
-        """Replay journal files that arrived after the processed ledger.
+        """Replay journal files missing from the processed ledger.
 
-        Refreshes closer than ``refresh_min_interval`` together are skipped
-        unless ``force`` is set; a skipped refresh is a no-op. Candidates
-        are ordered by their numeric ms prefix and applied one by one; the
-        first failing file stops the replay without advancing the
-        checkpoint (its predecessors stay processed), so the next refresh
-        retries from the same file.
+        One complete listing per refresh (no StartAfter cursor — Plan B
+        Ruling B-8, since lexicographic ordering hides numerically later
+        journals); already-processed files are skipped idempotently.
+        Refreshes closer than ``refresh_min_interval`` together are
+        skipped unless ``force`` is set; a skipped refresh is a no-op.
+        Candidates are ordered by their numeric ms prefix and applied one
+        by one; the first failing file stops the replay without advancing
+        the checkpoint (its predecessors stay processed), so the next
+        refresh retries from the same file.
         """
         store = self._require_store("refresh")
         now = time.monotonic()
@@ -304,26 +308,27 @@ class JournalBackend:
         store.reset()
         if epoch is not None:
             store.epoch = epoch
+        self._clear_refresh_clock()
+
+    def _clear_refresh_clock(self) -> None:
+        """After a state reset, the next refresh must not be throttled."""
+        self._last_refresh = None
+        self._last_refresh_at = None
 
     # -- Replay helpers ----------------------------------------------------------
 
     def _list_unprocessed_journals(self, store: JournalStore) -> list[str]:
-        """Journal names to replay: listed after the greatest processed
-        name, control keys and already-processed files dropped, ordered by
-        numeric ms prefix.
+        """Journal names to replay: one complete listing, control keys and
+        already-processed files dropped, ordered by numeric ms prefix.
 
-        The listing cursor uses the *numerically* greatest processed name
-        (upstream ``_getRemoteJournals``, JournalSyncCore.ts:758-764), and
-        the already-processed filter guards candidates that sort between
-        the lexicographic cursor and the numeric maximum.
+        Deliberately no StartAfter cursor (Plan B Ruling B-8): S3 lists in
+        lexicographic order, where ``"10-..."`` sorts *before* ``"9-..."``,
+        so a cursor at the greatest processed name would permanently hide
+        numerically later journals that sort lexicographically earlier. A
+        full listing is one API call on a throttled (>= refresh_min_interval)
+        refresh, and the processed-set filter keeps replay idempotent.
         """
-        processed_names = store.processed_names()
-        start_after = (
-            max(processed_names, key=journal_sort_key)
-            if processed_names
-            else ""
-        )
-        keys = self._object_storage.list(start_after)
+        keys = self._object_storage.list("")
         candidates = [
             key
             for key in keys
@@ -351,8 +356,18 @@ class JournalBackend:
         except StorageError:
             raise
         except (ValueError, OSError, sqlite3.Error) as exc:
+            # The public message carries the file name and the error class
+            # only; details (document ids, paths, revisions) stay in the
+            # server log (audit C7).
+            logger.warning(
+                "journal file %r could not be replayed: %s: %s",
+                name,
+                type(exc).__name__,
+                exc,
+            )
             raise StorageError(
-                f"journal file {name!r} could not be replayed: {exc}"
+                f"journal file {name!r} could not be replayed: "
+                f"{type(exc).__name__}"
             ) from exc
 
     def _require_store(self, operation: str) -> JournalStore:

@@ -264,21 +264,6 @@ class JournalStore:
             self._conn.execute("SELECT COUNT(*) FROM processed").fetchone()[0]
         )
 
-    def processed_names(self) -> list[str]:
-        """All processed journal names, sorted lexicographically.
-
-        The receive-side checkpoint, mirroring upstream CheckPointInfo's
-        ``receivedFiles`` set: replay (JournalSyncCore._getRemoteJournals)
-        derives its list cursor and the numeric processing order from this
-        ledger, so the ordering policy stays with the backend.
-        """
-        return [
-            row[0]
-            for row in self._conn.execute(
-                "SELECT name FROM processed ORDER BY name"
-            )
-        ]
-
     @property
     def last_sent_key(self) -> str:
         return self._meta_get(_META_LAST_SENT_KEY) or ""

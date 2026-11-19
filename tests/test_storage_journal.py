@@ -274,8 +274,9 @@ class TestReplay:
         storage.list_calls.clear()
 
         await backend.refresh(force=True)
-        # Lists after the greatest processed journal and fetches nothing new.
-        assert storage.list_calls == [JOURNAL_3]
+        # One complete listing (Ruling B-8: no StartAfter cursor); every
+        # listed journal is already processed, so nothing is fetched.
+        assert storage.list_calls == [""]
         assert storage.get_calls == []
         assert await files_processed(backend) == 3
 
@@ -297,6 +298,73 @@ class TestReplay:
         ten = storage.get_calls.index(JOURNAL_10)
         assert nine < ten
         assert await files_processed(backend) == 5
+
+    async def test_later_mixed_width_journal_is_not_hidden(self, tmp_path):
+        # Ruling B-8: after "9-..." is processed, a lexicographic StartAfter
+        # cursor at "9-..." would hide the later-arriving "10-..." (which
+        # sorts before it) forever; the complete listing must see it.
+        objects = healthy_bucket(
+            **{
+                JOURNAL_1: None,
+                JOURNAL_2: None,
+                JOURNAL_3: None,
+                JOURNAL_9: journal_blob([meta_doc("i.md", "1-i")]),
+            }
+        )
+        backend, storage = make_backend(tmp_path, objects)
+        await backend.startup_check()
+        await backend.refresh()
+        assert await files_processed(backend) == 1
+
+        storage._objects[JOURNAL_10] = journal_blob([meta_doc("j.md", "1-j")])
+        storage.get_calls.clear()
+        await backend.refresh(force=True)
+        assert storage.get_calls == [JOURNAL_10]
+        assert await files_processed(backend) == 2
+
+    async def test_mixed_width_failure_and_repair_converges(self, tmp_path):
+        # Ruling B-8: a lexicographic StartAfter cursor at "9-..." would
+        # permanently hide the numerically later "10-..."/"11-..."; the
+        # complete listing must not.
+        journal_11 = "11-docs.jsonl.gz"
+        objects = healthy_bucket(
+            **{
+                JOURNAL_1: None,
+                JOURNAL_2: None,
+                JOURNAL_3: None,
+                JOURNAL_9: b"corrupt",
+                JOURNAL_10: journal_blob([meta_doc("j.md", "1-j")]),
+                journal_11: journal_blob([meta_doc("k.md", "1-k")]),
+            }
+        )
+        backend, storage = make_backend(tmp_path, objects)
+        await backend.startup_check()
+        with pytest.raises(StorageError, match=JOURNAL_9):
+            await backend.refresh()
+        assert await files_processed(backend) == 0
+
+        # Repair the broken file: the retry sees the whole bucket again.
+        storage._objects[JOURNAL_9] = journal_blob([meta_doc("i.md", "1-i")])
+        storage.get_calls.clear()
+        await backend.refresh()
+        assert storage.get_calls == [JOURNAL_9, JOURNAL_10, journal_11]
+        assert await files_processed(backend) == 3
+
+    async def test_replay_error_message_sanitized(self, tmp_path):
+        backend, storage = make_backend(tmp_path, healthy_bucket())
+        await backend.startup_check()
+        storage.get_calls.clear()
+        storage.fail_next_get(
+            1, error=ValueError("/abs/state/path note.md 3-x secret")
+        )
+        with pytest.raises(StorageError, match=JOURNAL_1) as exc_info:
+            await backend.refresh()
+        message = str(exc_info.value)
+        # Public text: the file name and the error class only — no paths,
+        # document ids or other internals (audit C7).
+        assert "ValueError" in message
+        assert "/abs/state/path" not in message
+        assert "note.md" not in message
 
     async def test_corrupt_second_file_stops_replay_at_checkpoint(self, tmp_path):
         backend, storage = make_backend(
@@ -366,7 +434,24 @@ class TestThrottle:
         await backend.refresh()
         await backend.refresh(force=True)
         assert len(storage.list_calls) == 2
-        assert storage.list_calls == ["", JOURNAL_3]
+        assert storage.list_calls == ["", ""]
+
+    async def test_state_reset_clears_the_throttle(self, tmp_path):
+        backend, storage = make_backend(
+            tmp_path, healthy_bucket(), refresh_min_interval=60.0
+        )
+        await backend.startup_check()
+        await backend.refresh()  # arms the throttle
+        assert (await backend.backend_info())["last_refresh"] is not None
+
+        storage._objects[SYNC_PARAMETERS_KEY] = params_blob(salt="salt-b")
+        await backend.startup_check()  # epoch change: state reset
+        assert (await backend.backend_info())["last_refresh"] is None
+
+        storage.list_calls.clear()
+        await backend.refresh()  # unforced: must run, not throttle
+        assert storage.list_calls == [""]
+        assert await files_processed(backend) == 3
 
     async def test_failed_refresh_is_not_throttled(self, tmp_path):
         backend, storage = make_backend(
