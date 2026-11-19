@@ -6,9 +6,12 @@ import hashlib
 import pytest
 
 from livesync_format import (
+    PATH_IDENTITY_LEGACY,
+    PATH_IDENTITY_NFC,
     WRITABLE_BINARY_EXTENSIONS,
     ForbiddenPathError,
     TEXT_EXTENSIONS,
+    UnsupportedVaultSettings,
     assemble_binary,
     assemble_text,
     chunk_id_for,
@@ -18,6 +21,7 @@ from livesync_format import (
     is_writable_text_path,
     new_metadata_doc,
     path2id,
+    resolve_path_identity,
     soft_delete_revision,
     validate_vault_path,
 )
@@ -334,3 +338,107 @@ def test_clone_metadata_preserves_all_content_fields():
     cloned['eden']['h:a']['data'] = 'different'
     assert original['custom'] == {'future': [1]}
     assert original['eden']['h:a']['data'] == 'body'
+
+
+# --- NFC path identity (Plan B; upstream pathNormalizationVersion v1) ---
+
+def test_path2id_nfc_composes():
+    # Upstream v1 (pathNormalization.ts normalisePathForIdentity): the raw
+    # path is normalized to Unicode NFC before the existing normalization
+    # and lowercase, so decomposed and precomposed spellings share one id.
+    assert path2id("cafe\u0301.md", nfc=True) == path2id("café.md", nfc=True)
+    assert path2id("cafe\u0301.md", nfc=True) == "café.md"
+    # NFC applies per segment through the whole path, like upstream.
+    assert path2id("No\u0308te/Bo\u0308ok.md", nfc=True) == "nöte/böok.md"
+
+
+def test_path2id_nfc_ascii_unchanged():
+    # ASCII paths have no decomposed forms; NFC mode must be a no-op.
+    assert path2id("Inbox/Note.md", nfc=True) == "inbox/note.md"
+    assert path2id("Inbox/Note.md", nfc=True) == path2id("Inbox/Note.md")
+    assert path2id("_private/x.md", nfc=True) == "/_private/x.md"
+
+
+def test_path2id_legacy_keeps_nfd():
+    # Legacy mode (v0) must not collapse decomposed forms: the bytes of
+    # the path reach the id unchanged apart from the existing rules.
+    assert path2id("cafe\u0301.md") == "cafe\u0301.md"
+    assert path2id("cafe\u0301.md") != path2id("café.md")
+    assert path2id("cafe\u0301.md", nfc=False) == path2id("cafe\u0301.md")
+
+
+def test_resolve_identity_preferred_nfc():
+    milestone = {"tweak_values": {"PREFERRED": {"pathNormalizationVersion": 1}}}
+    assert resolve_path_identity(milestone) == PATH_IDENTITY_NFC == "nfc"
+
+    legacy = {"tweak_values": {"PREFERRED": {"pathNormalizationVersion": 0}}}
+    assert resolve_path_identity(legacy) == PATH_IDENTITY_LEGACY == "legacy"
+
+    # Older milestones store settings at the top level; same resolution.
+    assert resolve_path_identity({"pathNormalizationVersion": 1}) == "nfc"
+    assert resolve_path_identity({"pathNormalizationVersion": 0}) == "legacy"
+    # An absent version is legacy (upstream treats undefined as version 0).
+    assert resolve_path_identity({"tweak_values": {"PREFERRED": {}}}) == "legacy"
+
+
+def test_resolve_identity_device_fallback():
+    # Without PREFERRED, every device map is read; any device on v1 makes
+    # the vault NFC (mirrors the CouchDB startup check semantics).
+    devices = {"tweak_values": {
+        "device-a": {"pathNormalizationVersion": 0},
+        "device-b": {"pathNormalizationVersion": 1},
+    }}
+    assert resolve_path_identity(devices) == "nfc"
+    legacy_devices = {"tweak_values": {
+        "device-a": {"pathNormalizationVersion": 0},
+    }}
+    assert resolve_path_identity(legacy_devices) == "legacy"
+    # PREFERRED is authoritative when present and overrides device maps.
+    preferred = {"tweak_values": {
+        "PREFERRED": {"pathNormalizationVersion": 0},
+        "device-a": {"pathNormalizationVersion": 1},
+    }}
+    assert resolve_path_identity(preferred) == "legacy"
+
+
+def test_resolve_identity_refuses_encrypt():
+    milestone = {"tweak_values": {"PREFERRED": {"encrypt": True}}}
+    with pytest.raises(UnsupportedVaultSettings, match="encryption"):
+        resolve_path_identity(milestone)
+    # Any device map encrypting also refuses when PREFERRED is absent
+    # (the device-fallback path; PREFERRED stays authoritative upstream).
+    with pytest.raises(UnsupportedVaultSettings, match="encryption"):
+        resolve_path_identity({"tweak_values": {
+            "device-a": {"encrypt": True},
+        }})
+
+
+def test_resolve_identity_refuses_obfuscation():
+    milestone = {"tweak_values": {"PREFERRED": {"usePathObfuscation": True}}}
+    with pytest.raises(UnsupportedVaultSettings, match="obfuscation"):
+        resolve_path_identity(milestone)
+
+
+def test_resolve_identity_refuses_case_sensitive():
+    milestone = {"tweak_values": {"PREFERRED": {
+        "handleFilenameCaseSensitive": True,
+    }}}
+    with pytest.raises(UnsupportedVaultSettings, match="case-sensitive"):
+        resolve_path_identity(milestone)
+    # The setting may sit at the top level in older milestone shapes.
+    with pytest.raises(UnsupportedVaultSettings, match="case-sensitive"):
+        resolve_path_identity({"handleFilenameCaseSensitive": True})
+
+
+def test_resolve_identity_no_settings_fails_closed():
+    # livesync_format never imports storage_base; the refusal type is a
+    # ValueError subclass that backends map to UnsupportedVault.
+    assert issubclass(UnsupportedVaultSettings, ValueError)
+    for milestone in (
+        {"tweak_values": {}},                      # no readable settings
+        {"tweak_values": {"device-a": None}},      # values are not maps
+        {"tweak_values": {"PREFERRED": "bad"}},    # preferred is not a map
+        {"tweak_values": []},                      # tweak_values unreadable
+    ):
+        with pytest.raises(UnsupportedVaultSettings, match="readable"):
+            resolve_path_identity(milestone)

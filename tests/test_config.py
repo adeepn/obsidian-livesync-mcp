@@ -129,3 +129,49 @@ def test_port_accepts_boundaries(port):
 def test_invalid_scan_limits_fail_config_validation(key, value):
     with pytest.raises(ConfigError, match=key):
         load_config({**COUCHDB_ENV, key: value})
+
+
+S3_ENV = {
+    "LIVESYNC_BACKEND": "s3",
+    "LIVESYNC_S3_URI": "sls://AK:SK@https://minio.local?bucket=vault&region=auto&prefix=",
+    "MCP_API_KEY": "real-api-key",
+}
+
+
+def test_s3_state_dir_default_and_env():
+    config = load_config(S3_ENV)
+
+    assert config.backend == "s3"
+    assert config.s3 is not None
+    assert config.s3.state_dir == "./data"
+    assert config.s3.refresh_min_interval_sec == 5.0
+
+    env = {
+        **S3_ENV,
+        "S3_STATE_DIR": "/var/lib/mcp/livesync-state",
+        "S3_REFRESH_MIN_INTERVAL_SEC": "2.5",
+    }
+    s3 = load_config(env).s3
+    assert s3.state_dir == "/var/lib/mcp/livesync-state"
+    assert s3.refresh_min_interval_sec == 2.5
+
+    # Blank values fall back to the defaults, like COUCHDB_URL does.
+    blank = load_config({
+        **S3_ENV, "S3_STATE_DIR": "", "S3_REFRESH_MIN_INTERVAL_SEC": "",
+    }).s3
+    assert blank.state_dir == "./data"
+    assert blank.refresh_min_interval_sec == 5.0
+
+    # parse_s3_uri alone carries the documented defaults too.
+    bare = parse_s3_uri("sls://AK:SK@https://minio.local?bucket=vault")
+    assert bare.state_dir == "./data"
+    assert bare.refresh_min_interval_sec == 5.0
+
+
+@pytest.mark.parametrize('value', ['0', '-1', '-0.5', 'bad', 'nan', 'inf'])
+def test_s3_refresh_interval_validation(value):
+    # The throttle interval must be a positive, finite number; the error
+    # names the variable and never echoes credential values.
+    env = {**S3_ENV, 'S3_REFRESH_MIN_INTERVAL_SEC': value}
+    with pytest.raises(ConfigError, match='S3_REFRESH_MIN_INTERVAL_SEC'):
+        load_config(env)

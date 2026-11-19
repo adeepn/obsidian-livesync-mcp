@@ -8,14 +8,21 @@ copied from ``.env.example`` are rejected at startup (spec section 6).
 
 from __future__ import annotations
 
+import math
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Literal, Mapping
 from urllib.parse import parse_qs
 
 S3_URI_SCHEME = "sls://"
 
 BACKENDS = ("couchdb", "s3")
+
+# S3 journal-peer local state (spec section 6): directory holding the
+# cached journal state, and the minimum spacing between automatic
+# refreshes of that state.
+S3_STATE_DIR_DEFAULT = "./data"
+S3_REFRESH_MIN_INTERVAL_DEFAULT = 5.0
 
 # Audit A4: the URL default is the standard CouchDB port, matching README
 # and .env.example. Credentials and database stay required (no defaults).
@@ -50,7 +57,13 @@ class CouchDBConfig:
 
 @dataclass(frozen=True)
 class S3Config:
-    """Settings parsed from a LiveSync setup URI (stub; full backend in Plan B)."""
+    """Settings for the S3 journal peer: a LiveSync setup URI plus local state.
+
+    Connection fields come from ``LIVESYNC_S3_URI`` (see ``parse_s3_uri``).
+    ``state_dir`` (env ``S3_STATE_DIR``) is where the peer keeps its cached
+    journal state; ``refresh_min_interval_sec`` (env
+    ``S3_REFRESH_MIN_INTERVAL_SEC``) throttles automatic refreshes.
+    """
 
     endpoint: str
     access_key: str
@@ -59,6 +72,8 @@ class S3Config:
     region: str
     prefix: str
     uri: str
+    state_dir: str = S3_STATE_DIR_DEFAULT
+    refresh_min_interval_sec: float = S3_REFRESH_MIN_INTERVAL_DEFAULT
 
 
 @dataclass(frozen=True)
@@ -151,6 +166,47 @@ def _load_couchdb(env: Mapping[str, str]) -> CouchDBConfig:
     )
 
 
+def _load_s3_state(env: Mapping[str, str]) -> tuple[str, float]:
+    """Read S3_STATE_DIR / S3_REFRESH_MIN_INTERVAL_SEC with their defaults.
+
+    Blank values fall back to the defaults (same convention as
+    ``COUCHDB_URL``). The refresh interval must be a positive, finite
+    number; the error names the variable and echoes only the offending
+    non-secret value.
+    """
+    state_dir = env.get("S3_STATE_DIR", "").strip() or S3_STATE_DIR_DEFAULT
+
+    raw = env.get("S3_REFRESH_MIN_INTERVAL_SEC", "").strip()
+    if not raw:
+        return state_dir, S3_REFRESH_MIN_INTERVAL_DEFAULT
+    try:
+        interval = float(raw)
+        if not math.isfinite(interval) or interval <= 0:
+            raise ValueError
+    except ValueError:
+        raise ConfigError(
+            f"S3_REFRESH_MIN_INTERVAL_SEC must be a positive number "
+            f"(got {raw!r})."
+        ) from None
+    return state_dir, interval
+
+
+def _load_s3(env: Mapping[str, str]) -> S3Config:
+    """Validate the S3 backend group: setup URI plus local state settings."""
+    uri = env.get("LIVESYNC_S3_URI", "")
+    if not uri:
+        raise ConfigError(
+            "the S3 backend requires LIVESYNC_S3_URI "
+            "(sls://access_key:secret_key@endpoint?bucket=...)."
+        )
+    state_dir, refresh_sec = _load_s3_state(env)
+    return replace(
+        parse_s3_uri(uri),
+        state_dir=state_dir,
+        refresh_min_interval_sec=refresh_sec,
+    )
+
+
 def _load_auth(env: Mapping[str, str]) -> tuple[str, str, str, str]:
     """Validate client auth: bearer (MCP_API_KEY) or the OAUTH_* group."""
     api_key = env.get("MCP_API_KEY", "")
@@ -229,7 +285,7 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
     if backend == "couchdb":
         couchdb = _load_couchdb(env)
     else:
-        raise ConfigError("S3 backend появится в Плане B")
+        s3 = _load_s3(env)
 
     api_key, oauth_password, oauth_client_id, oauth_client_secret = _load_auth(env)
 
