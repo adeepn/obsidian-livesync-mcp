@@ -173,11 +173,11 @@ class JournalStore:
     ) -> None:
         """Replay one parsed journal file; idempotent per ``name``.
 
-        Chunks are staged in unique temporary files. Docs and the processed
-        marker commit together before chunks are atomically published. Failed
-        transactions remove their staging without publishing any new chunks.
-        SQLite and the filesystem are not a single crash-atomic transaction:
-        a crash after commit can require rebuilding local state from journals.
+        Chunks are staged in unique temporary files. Docs commit before chunks
+        are atomically published; only then is the journal marked processed in
+        a separate transaction. Failed transactions remove their staging
+        without publishing any new chunks. Publication failures leave the
+        journal unprocessed so replay can complete it idempotently.
         """
         if self.processed(name):
             return
@@ -201,11 +201,9 @@ class JournalStore:
             with self._conn:
                 for doc in docs or []:
                     self._insert_doc(name, doc)
-                self._conn.execute(
-                    "INSERT OR IGNORE INTO processed(name) VALUES (?)", (name,)
-                )
             for tmp_file, chunk_file in staged:
                 os.replace(tmp_file, chunk_file)
+            self.mark_processed(name)
         finally:
             for tmp_file, _ in staged:
                 tmp_file.unlink(missing_ok=True)

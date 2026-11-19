@@ -193,6 +193,40 @@ class TestApplyJournal:
         assert files == ["23456789abcdef"]
         store.close()
 
+    def test_publication_failure_leaves_journal_replayable(self, store, monkeypatch):
+        chunks = {"h:first": "first body", "h:second": "second body"}
+        docs = [meta_doc("retry.md", "1-x", children=list(chunks))]
+        real_replace = os.replace
+        calls = 0
+
+        def fail_second_publish(src, dst):
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                raise OSError("injected publication failure")
+            real_replace(src, dst)
+
+        with monkeypatch.context() as patch:
+            patch.setattr(journal_store.os, "replace", fail_second_publish)
+            with pytest.raises(OSError, match="injected publication failure"):
+                store.apply_journal(JOURNAL_1, chunks, docs)
+
+        assert store.processed(JOURNAL_1) is False
+        assert store.leaves("retry.md") == docs
+        assert store._chunk_path("h:first").read_bytes() == b"first body"
+        assert not store._chunk_path("h:second").exists()
+        assert not list(store._chunks_dir.rglob(".staged-*"))
+
+        store.apply_journal(JOURNAL_1, chunks, docs)
+
+        assert store.processed(JOURNAL_1) is True
+        assert store.files_processed_count() == 1
+        assert store.leaves("retry.md") == docs
+        assert store.read_note("retry.md")[1] == "first bodysecond body"
+        for chunk_id, data in chunks.items():
+            assert store._chunk_path(chunk_id).read_bytes() == data.encode("utf-8")
+        assert not list(store._chunks_dir.rglob(".staged-*"))
+
     @pytest.mark.parametrize("same_journal", [False, True])
     def test_concurrent_apply_same_chunk_both_succeed(
         self, tmp_path, monkeypatch, same_journal

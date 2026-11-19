@@ -81,3 +81,12 @@ chunks/<hh>/<rest>        -- chunk data, UTF-8 bytes, dedup by existence
 ### Concerns / [DEFER]
 
 SQLite and filesystem publication are not one crash-atomic resource. A crash or rename I/O error after SQLite commit can leave committed metadata/processed marker with missing chunks; a local-state rebuild/replay is required. This round follows the requested commit-before-publication ordering and guarantees cleanup/no new publication for failures before commit. Protection against a hostile local actor changing symlinks between validation and access would require directory-descriptor-based operations; local state is assumed trusted.
+
+## Fix round 2 — 2026-11-20
+
+- [DECISION] Commit idempotent document inserts without the processed marker, publish all staged chunks, then call `mark_processed` in its own transaction. A publication failure leaves the journal replayable; the next apply preserves existing documents/chunks and publishes missing chunks. This supersedes round 1's rebuild requirement for publication failures.
+- Added a regression that fails the second `os.replace`, checks committed documents, an absent processed marker, partial publication and staging cleanup, then replays successfully with no duplicate revisions and complete note content.
+- RED: the new regression failed against round 1 because `processed(JOURNAL_1)` was already true.
+- GREEN: `./venv/bin/python -m pytest tests/ -q` → **653 passed, 1 skipped, 3 subtests passed in 7.11s**.
+- Durable output: `docs/test-artifacts/s3-journal/task-3-fix-round-2.txt`.
+- Reviewed the code/test diff; `git diff --check` passed. Scope is limited to the processed-marker ordering and its regression.
