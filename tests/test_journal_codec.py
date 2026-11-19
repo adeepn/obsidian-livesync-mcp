@@ -11,6 +11,7 @@ so only the record layer and mutual decompressibility are pinned, never
 zlib-versus-fflate byte equality.
 """
 
+from pathlib import Path
 import zlib
 
 import pytest
@@ -303,3 +304,15 @@ class TestJournalFilename:
         names = [journal_filename(123, i) for i in range(1, 13)]
         assert names == sorted(names)
         assert journal_filename(123, 9998) < journal_filename(123, 9999)
+
+
+# Captured by scripts/live_check_s3.py from the real LiveSync client.
+LIVE_CLIENT_SAMPLE = Path(__file__).parent / "fixtures/live_client_journal_sample.bin"
+
+
+@pytest.mark.skipif(
+    not LIVE_CLIENT_SAMPLE.exists(), reason="live client sample not captured yet"
+)
+def test_live_client_golden_decode():
+    journal = parse_journal(inflate_journal(LIVE_CLIENT_SAMPLE.read_bytes()))
+    assert len(journal.docs) >= 1
