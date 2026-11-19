@@ -244,15 +244,21 @@ def _parse_metadata_line(
     target.docs.append(doc)
 
 
-def journal_filename(ms: int, counter: int = 0) -> str:
-    """Journal file name: upstream base form, or the collision-avoiding one.
+def journal_filename(
+    ms: int, counter: int = 0, *, suffix: str | None = None,
+) -> str:
+    """Build a journal name with a numeric timestamp and optional suffix.
 
     Devices upload ``<ms>-docs.jsonl.gz`` (JournalSyncCore.ts:675,
-    ``Date.now()``-based). When a peer must write within the same
-    millisecond, this server disambiguates with
-    ``<ms>-<counter>-docs.jsonl.gz``, zero-padded to four digits so suffixed
-    names sort monotonically in counter order.
+    ``Date.now()``-based). Server publications use
+    ``<ms>-<random 16 hex>-docs.jsonl.gz`` (Plan B ruling B-10), checking
+    existence before upload and regenerating an occupied suffix. Replay
+    orders by numeric ms prefix, then full name for deterministic ties.
+    The zero-padded counter form remains available for legacy callers;
+    it does not provide uniqueness across independent writers.
     """
+    if suffix is not None:
+        return f"{ms}-{suffix}-docs.jsonl.gz"
     if counter == 0:
         return f"{ms}-docs.jsonl.gz"
     return f"{ms}-{counter:04d}-docs.jsonl.gz"

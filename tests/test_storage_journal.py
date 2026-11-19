@@ -12,6 +12,7 @@ dotfile, mirroring the CouchDB backend's contracts. All object storage goes
 through ``FakeObjectStorage`` — no network.
 """
 
+import asyncio
 import base64
 import json
 import logging
@@ -21,6 +22,7 @@ from datetime import datetime
 import pytest
 
 import storage_journal
+import journal_store
 from journal_codec import (
     deflate_journal, inflate_journal, parse_journal, serialize_journal,
 )
@@ -1318,6 +1320,130 @@ class TestJournalMoves:
 
 
 class TestJournalWriteEdges:
+    async def test_same_ms_independent_writers_replay_both_notes(
+        self, tmp_path, monkeypatch,
+    ):
+        monkeypatch.setattr(storage_journal.time, 'time', lambda: 10)
+        first, storage = await write_backend(tmp_path / 'first')
+        second = JournalBackend(storage, tmp_path / 'second')
+        await second.startup_check()
+        await second.refresh()
+        try:
+            results = await asyncio.gather(
+                first.write_note('a.md', 'first', create=True),
+                second.write_note('b.md', 'second', create=True),
+            )
+            keys = [key for key, _ in storage.put_calls]
+            assert len(keys) == len(set(keys)) == 2
+            assert all(storage.get(key) == blob
+                       for key, blob in storage.put_calls)
+            reader = JournalBackend(storage, tmp_path / 'reader')
+            await reader.startup_check()
+            await reader.refresh()
+            try:
+                assert len(await reader.list_notes()) == 2
+                for path, text, meta in zip(
+                    ['a.md', 'b.md'], ['first', 'second'], results,
+                ):
+                    assert (await reader.read_note(path))['text'] == text
+                    assert await reader.get_meta(path) == meta
+            finally:
+                await reader.close()
+        finally:
+            await first.close()
+            await second.close()
+
+    @pytest.mark.parametrize('exhausted', [False, True])
+    async def test_random_key_collision_retries_without_overwrite(
+        self, tmp_path, monkeypatch, exhausted,
+    ):
+        backend, storage = await write_backend(tmp_path)
+        monkeypatch.setattr(storage_journal.time, 'time', lambda: 10)
+        occupied = '10000-aaaaaaaaaaaaaaaa-docs.jsonl.gz'
+        original = journal_blob([meta_doc('existing.md', '1-existing')])
+        storage.put(occupied, original)
+        storage.put_calls.clear()
+        real_token_hex = storage_journal.secrets.token_hex
+        attempts = []
+
+        def token_hex(length):
+            if length != 8:
+                return real_token_hex(length)
+            attempts.append(length)
+            return ('aaaaaaaaaaaaaaaa' if exhausted or len(attempts) == 1
+                    else 'bbbbbbbbbbbbbbbb')
+
+        monkeypatch.setattr(storage_journal.secrets, 'token_hex', token_hex)
+        try:
+            if exhausted:
+                with pytest.raises(StorageError, match='journal key'):
+                    await backend.write_note('a.md', 'body', create=True)
+                assert storage.put_calls == []
+                assert backend._store.note_ids() == []
+                assert len(attempts) == 10
+            else:
+                await backend.write_note('a.md', 'body', create=True)
+                assert [key for key, _ in storage.put_calls] == [
+                    '10000-bbbbbbbbbbbbbbbb-docs.jsonl.gz',
+                ]
+                assert (await backend.read_note('a.md'))['text'] == 'body'
+            assert storage.get(occupied) == original
+        finally:
+            await backend.close()
+
+    @pytest.mark.parametrize('failure', [
+        'before-apply', 'before-chunk-replace', 'after-chunk-replace',
+    ])
+    async def test_verified_publication_recovers_after_apply_failure(
+        self, tmp_path, monkeypatch, failure,
+    ):
+        backend, storage = await write_backend(tmp_path)
+        store = backend._store
+        checkpoint = store.last_sent_key
+        real_replace = journal_store.os.replace
+
+        def fail_apply(name, chunks, docs):
+            assert storage.get_calls[-1] == name
+            assert storage.get(name) is not None
+            raise OSError('scripted local apply failure')
+
+        def fail_replace(source, target):
+            assert len(storage.put_calls) == 1
+            if failure == 'after-chunk-replace':
+                real_replace(source, target)
+            raise OSError('scripted chunk publication failure')
+
+        try:
+            with monkeypatch.context() as injection:
+                if failure == 'before-apply':
+                    injection.setattr(store, 'apply_journal', fail_apply)
+                else:
+                    injection.setattr(journal_store.os, 'replace', fail_replace)
+                with pytest.raises(StorageError):
+                    await backend.write_note('a.md', 'recover me', create=True)
+            assert len(storage.put_calls) == 1
+            key, blob = storage.put_calls[0]
+            published = parse_journal(inflate_journal(blob)).docs[0]
+            assert storage.get(key) == blob
+            assert not store.processed(key)
+            assert store.files_processed_count() == 0
+            assert store.last_sent_key == checkpoint
+            assert store._chunk_path(chunk_id_for('recover me')).exists() == (
+                failure == 'after-chunk-replace'
+            )
+            await backend.refresh(force=True)
+            assert (await backend.read_note('a.md'))['text'] == 'recover me'
+            assert (await backend.get_meta('a.md'))['rev'] == published['_rev']
+            assert store.winner('a.md') == published
+            assert store.leaves('a.md') == [published]
+            assert store.processed(key)
+            assert store.files_processed_count() == 1
+            await backend.refresh(force=True)
+            assert store.leaves('a.md') == [published]
+            assert store.files_processed_count() == 1
+        finally:
+            await backend.close()
+
     @pytest.mark.parametrize('failure', ['put', 'get'])
     async def test_transport_failure_no_local_success(self, tmp_path, failure):
         backend, storage = await write_backend(tmp_path)

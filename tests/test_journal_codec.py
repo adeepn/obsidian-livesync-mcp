@@ -286,6 +286,11 @@ class TestDeflateInflate:
 
 
 class TestJournalFilename:
+    def test_random_suffix_preserves_numeric_prefix(self):
+        assert journal_filename(123, suffix='abcdef0123456789') == (
+            '123-abcdef0123456789-docs.jsonl.gz'
+        )
+
     def test_filename_monotonic_suffix(self):
         assert journal_filename(1700000000000) == "1700000000000-docs.jsonl.gz"
         assert journal_filename(1700000000000, 1) == "1700000000000-0001-docs.jsonl.gz"

@@ -138,3 +138,47 @@ remain from self-review.
   An apply/checkpoint error after successful verification returns StorageError;
   replay can reconcile the durable journal. A failed read-back also leaves its
   remote object in place; the write path never deletes objects.
+
+## Fix round 1
+
+Status: implemented both review requests under controller ruling B-10.
+
+- [DECISION] Replace the instance-local counter in backend publications with
+  `<ms>-<secrets.token_hex(8)>-docs.jsonl.gz`. Preserve the numeric timestamp
+  floor and reserve it on failed attempts. Check each candidate with `exists`,
+  regenerate occupied suffixes, and raise StorageError after ten collisions
+  without issuing a put. This follows B-10's random allocation and precheck;
+  the existence check is not an atomic conditional put.
+- Extend `journal_filename` with a keyword-only `suffix` argument. Keep the
+  older counter form for compatibility, documenting that it does not ensure
+  cross-writer uniqueness. Existing numeric-prefix ordering already accepts
+  arbitrary suffixes and requires no parsing changes.
+- Add the reviewer regression with two independently initialized backends,
+  shared FakeObjectStorage, the same fixed clock, and writes scheduled with
+  `asyncio.gather`. Verify distinct keys, both original objects preserved, and
+  both acknowledged bodies and metadata replayed by a fresh third backend.
+- Add occupied-candidate regeneration and retry-exhaustion coverage. Existing
+  remote objects remain byte-identical; exhaustion produces zero puts.
+- Add local apply-failure injection before apply, before chunk replacement,
+  and immediately after chunk replacement. Each failure returns StorageError
+  after verified publication, leaves the remote object intact and its journal
+  unprocessed, and preserves the prior last-sent checkpoint. A subsequent
+  `refresh(force=True)` recovers body, metadata winner/leaves, and the processed
+  checkpoint. Repeated refresh remains idempotent. Existing replay behavior
+  passes these cases without a store implementation change.
+
+Verification artifacts:
+
+- `docs/test-artifacts/s3-journal/task-7-fix-round-1-red.txt`: the new focused
+  tests against the original implementation: **4 failed, 3 passed**. Failures
+  demonstrate cross-writer overwrite, absent allocation retry/exhaustion,
+  and the missing filename suffix API. All three recovery cases already pass.
+- `docs/test-artifacts/s3-journal/task-7-fix-round-1-full-suite.txt`:
+  `./venv/bin/python -m pytest tests/ -q` exits zero with **813 passed,
+  3 skipped, 3 subtests passed in 8.87s**, seven cases above the 806 baseline.
+  No warnings appear in the full-suite output. Captured WARNING-level log
+  records in the expected RED failures are the existing startup state-reset
+  diagnostic from JournalStore, not pytest warnings or an additional failure.
+
+Read the source/test diff before committing. No network or production resources
+were used.

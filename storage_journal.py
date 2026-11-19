@@ -87,7 +87,8 @@ logger = logging.getLogger(__name__)
 MILESTONE_KEY = "_00000000-milestone.json"
 SYNC_PARAMETERS_KEY = "_obsidian_livesync_journal_sync_parameters.json"
 
-# Journal file names: "<ms>-docs.jsonl.gz" (journal_codec.journal_filename).
+# Journal names have an optional suffix after ms (journal_codec.journal_filename).
+# Server publications use a random 16-hex suffix; devices use the base form.
 # Replay orders candidates by the integer ms prefix; S3 listing order is
 # lexicographic, where "10-..." sorts *before* "9-..." (Plan B Review
 # Focus 3). Names without a numeric prefix are foreign to the journal
@@ -163,7 +164,6 @@ class JournalBackend:
         self._last_refresh: float | None = None
         self._last_refresh_at: datetime | None = None
         self._max_seen_ms = 0
-        self._journal_counter = 0
 
     # -- StorageBackend: lifecycle -------------------------------------------
 
@@ -771,10 +771,14 @@ class JournalBackend:
             payload = serialize_journal(chunks, docs)
             blob = deflate_journal(payload)
             ms = max(int(time.time() * 1000), self._max_seen_ms + 1)
-            self._journal_counter += 1
-            name = journal_filename(ms, self._journal_counter)
             # Reserve even failed attempts so a retry cannot reuse their key.
             self._max_seen_ms = ms
+            for _ in range(10):
+                name = journal_filename(ms, suffix=secrets.token_hex(8))
+                if not self._object_storage.exists(name):
+                    break
+            else:
+                raise StorageError("could not allocate an unused journal key")
             self._object_storage.put(name, blob)
             readback = self._object_storage.get(name)
             if readback is None:
