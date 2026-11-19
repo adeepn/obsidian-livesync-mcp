@@ -58,3 +58,32 @@ user confirmed in Obsidian after Replicate: folder Папка/Переехавш
 server created Временная 2.md -> client replicated it (user confirmed); server soft-deleted (tombstone: deleted=true, type=plain, children kept); after Replicate the file disappeared from the Obsidian file tree (user confirmed).
 
 OVERALL: PASS (5/5 phases, real Obsidian 1.12.7 + Self-hosted LiveSync 1.0.50 client, legacy path identity)
+soft-deleted: True
+Traceback (most recent call last):
+  File "<string>", line 21, in <module>
+    asyncio.run(main())
+    ~~~~~~~~~~~^^^^^^^^
+  File "/opt/homebrew/Caskroom/miniconda/base/lib/python3.13/asyncio/runners.py", line 195, in run
+    return runner.run(main)
+           ~~~~~~~~~~^^^^^^
+  File "/opt/homebrew/Caskroom/miniconda/base/lib/python3.13/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/opt/homebrew/Caskroom/miniconda/base/lib/python3.13/asyncio/base_events.py", line 725, in run_until_complete
+    return future.result()
+           ~~~~~~~~~~~~~^^
+  File "<string>", line 11, in main
+    tail = nc['text'].strip().splitlines()[-3:]
+           ~~^^^^^^^^
+TypeError: 'NoneType' object is not subscriptable
+server view: alive, rev 6-f861a3f865a546819f2dbb6b475ebcd9 | size 611
+last lines: ['---', 'Дописано сервером в live-проверке (append через expected_rev).']
+server append kept: True
+winner deleted flag: None | open conflicts: []
+
+== PHASE 6: concurrent edit vs server delete (conflict scenario) ==
+user typed unsaved text in Obsidian; server soft-deleted the note (tombstone rev 3-7fd1dfe); user saved + replicated -> two leaf revisions; LiveSync surfaced the conflict to its resolution UI (no silent winner); user resolved keeping own text; result: note alive at rev 6-f861a3f8, deleted flag gone, zero open conflicts, server-side append preserved ('Дописано сервером' kept=True). Backend reads the resolved state cleanly.
+
+OVERALL (updated): PASS 6/6 phases. Audit failure modes validated against a live client: B1 zero chunk loss, B2 soft delete applied by client, B3/B4 no size-mismatch/corruption on server writes, conflicts visible and resolvable.
+
+NOTE for Plan B: fresh vaults on current plugin (1.0.50) may enable NFC path identity (our test vault did until switched to legacy; upstream setting knownDefault=0). Server refuses NFC vaults by design. Production S3 vault's Path identity mode must be checked; if NFC, Plan B must implement NFC path2id.
