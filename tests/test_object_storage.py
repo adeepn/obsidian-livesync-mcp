@@ -11,6 +11,7 @@ shared with the Task 9 integration suite.
 
 import os
 import time
+import traceback
 import uuid
 
 import pytest
@@ -20,18 +21,23 @@ from object_storage import Boto3ObjectStorage, JournalObjectStorage
 from storage_base import StorageUnavailable
 from tests.fake_object_storage import FakeObjectStorage
 
-# Env-gated MinIO smoke (same variables as tests/test_integration_minio.py,
-# Task 9): MINIO_TEST_ENDPOINT / MINIO_TEST_ACCESS_KEY /
-# MINIO_TEST_SECRET_KEY / MINIO_TEST_BUCKET.
+# Env-gated MinIO smoke: MINIO_TEST_ENDPOINT / MINIO_TEST_KEY /
+# MINIO_TEST_SECRET / MINIO_TEST_BUCKET. Legacy credential names are aliases.
 MINIO_ENV = {
     name: os.environ.get(name, "")
     for name in (
         "MINIO_TEST_ENDPOINT",
-        "MINIO_TEST_ACCESS_KEY",
-        "MINIO_TEST_SECRET_KEY",
+        "MINIO_TEST_KEY",
+        "MINIO_TEST_SECRET",
         "MINIO_TEST_BUCKET",
     )
 }
+MINIO_ENV["MINIO_TEST_KEY"] = MINIO_ENV["MINIO_TEST_KEY"] or os.environ.get(
+    "MINIO_TEST_ACCESS_KEY", ""
+)
+MINIO_ENV["MINIO_TEST_SECRET"] = MINIO_ENV["MINIO_TEST_SECRET"] or os.environ.get(
+    "MINIO_TEST_SECRET_KEY", ""
+)
 MINIO_CONFIGURED = all(MINIO_ENV.values())
 
 JOURNAL_2 = "2-docs.jsonl.gz"
@@ -112,7 +118,6 @@ class TestFakeSemantics:
     def test_list_limit(self):
         storage = FakeObjectStorage({k: b"" for k in ("a", "b", "c", "d", "e")})
         assert storage.list(limit=2) == ["a", "b"]
-        assert storage.list(limit=0) == []
         assert storage.list(limit=99) == ["a", "b", "c", "d", "e"]
         assert storage.list(limit=None) == ["a", "b", "c", "d", "e"]
 
@@ -189,6 +194,12 @@ class TestFakeSemantics:
 
 
 class TestProtocolContract:
+    @pytest.mark.parametrize("limit", [-1, 0])
+    def test_fake_list_rejects_nonpositive_limit(self, limit):
+        storage = FakeObjectStorage({"a": b"", "b": b""})
+        with pytest.raises(ValueError, match="limit"):
+            storage.list(limit=limit)
+
     def test_implementations_satisfy_protocol(self):
         assert isinstance(FakeObjectStorage(), JournalObjectStorage)
         # Boto3ObjectStorage construction is offline (no I/O until a call).
@@ -225,10 +236,10 @@ class TestBoto3AdapterConstruction:
         assert adapter._client.meta.endpoint_url == "http://minio.local:9000"
         assert adapter._client.meta.config.s3.get("addressing_style") == "path"
 
-    def test_no_endpoint_leaves_addressing_default(self):
+    def test_aws_without_endpoint_intentionally_keeps_default_addressing(self):
         adapter = Boto3ObjectStorage(make_cfg(endpoint=""))
-        # AWS proper: default (virtual-hosted) addressing, no override
-        # (botocore leaves config.s3 unset when no s3 options are given).
+        # Intended contract: custom endpoints use path-style; AWS without
+        # an endpoint retains boto3's default addressing configuration.
         assert not adapter._client.meta.config.s3
 
     def test_timeouts_and_retries_off(self):
@@ -270,10 +281,12 @@ class TestBoto3WireOperations:
         adapter, stub = wire
         params = {"Bucket": "test-bucket", "Key": "testprefix/k"}
         stub.add_response("put_object", {}, {**params, "Body": b"payload"})
-        stub.add_response("get_object", {"Body": io.BytesIO(b"payload")}, params)
+        body = io.BytesIO(b"payload")
+        stub.add_response("get_object", {"Body": body}, params)
         stub.add_response("head_object", {}, params)
         assert adapter.put("k", b"payload") is None
         assert adapter.get("k") == b"payload"
+        assert body.closed
         assert adapter.exists("k") is True
 
     def test_missing_get_and_head(self, wire):
@@ -298,16 +311,64 @@ class TestBoto3WireOperations:
         }, {**params, "ContinuationToken": "page2", "MaxKeys": 1})
         assert adapter.list(start_after="a", limit=2) == ["b", "c"]
 
-    def test_list_zero_limit_performs_no_request(self, wire):
+    @pytest.mark.parametrize("limit", [-1, 0])
+    def test_list_nonpositive_limit_performs_no_request(self, wire, limit):
         adapter, _ = wire
-        assert adapter.list(limit=0) == []
+        with pytest.raises(ValueError, match="limit"):
+            adapter.list(limit=limit)
+
+    def test_body_read_timeout_is_typed_and_closes_stream(self, wire):
+        import io
+
+        from botocore.exceptions import ReadTimeoutError
+
+        class FailingBody(io.BytesIO):
+            def read(self, *args, **kwargs):
+                raise ReadTimeoutError(endpoint_url="http://example.invalid")
+
+        adapter, stub = wire
+        body = FailingBody(b"payload")
+        stub.add_response("get_object", {"Body": body}, {
+            "Bucket": "test-bucket", "Key": "testprefix/k",
+        })
+        try:
+            with pytest.raises(StorageUnavailable):
+                adapter.get("k")
+        finally:
+            assert body.closed
+
+    @pytest.mark.parametrize("operation, method", [
+        ("GET", "get_object"), ("PUT", "put_object"),
+        ("HEAD", "head_object"), ("LIST", "list_objects_v2"),
+    ])
+    def test_errors_do_not_expose_credentials_in_logs_or_tracebacks(
+        self, wire, caplog, operation, method,
+    ):
+        adapter, stub = wire
+        stub.add_client_error(
+            method, service_error_code="AccessDenied", http_status_code=403,
+            service_message="request failed at http://ak:sk@host",
+        )
+        with pytest.raises(StorageUnavailable) as caught:
+            if operation == "GET":
+                adapter.get("k")
+            elif operation == "PUT":
+                adapter.put("k", b"payload")
+            elif operation == "HEAD":
+                adapter.exists("k")
+            else:
+                adapter.list(start_after="k")
+        assert operation in caplog.text
+        assert "AccessDenied" in caplog.text
+        assert "ak:sk" not in caplog.text
+        assert "ak:sk" not in "".join(traceback.format_exception(caught.value))
 
 
 @pytest.mark.skipif(
     not MINIO_CONFIGURED,
     reason="MinIO smoke is env-gated: set MINIO_TEST_ENDPOINT, "
-    "MINIO_TEST_ACCESS_KEY, MINIO_TEST_SECRET_KEY and MINIO_TEST_BUCKET "
-    "(shared with tests/test_integration_minio.py)",
+    "MINIO_TEST_KEY, MINIO_TEST_SECRET and MINIO_TEST_BUCKET "
+    "(legacy MINIO_TEST_ACCESS_KEY / MINIO_TEST_SECRET_KEY also accepted)",
 )
 class TestMinioSmokeRoundtrip:
     """Live roundtrip against a dev MinIO (same env as Task 9's suite).
@@ -322,8 +383,8 @@ class TestMinioSmokeRoundtrip:
         return Boto3ObjectStorage(
             make_cfg(
                 endpoint=MINIO_ENV["MINIO_TEST_ENDPOINT"],
-                access_key=MINIO_ENV["MINIO_TEST_ACCESS_KEY"],
-                secret_key=MINIO_ENV["MINIO_TEST_SECRET_KEY"],
+                access_key=MINIO_ENV["MINIO_TEST_KEY"],
+                secret_key=MINIO_ENV["MINIO_TEST_SECRET"],
                 bucket=MINIO_ENV["MINIO_TEST_BUCKET"],
                 prefix=prefix,
             )

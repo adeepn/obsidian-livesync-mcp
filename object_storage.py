@@ -26,6 +26,7 @@ Key semantics (both implementations):
 from __future__ import annotations
 
 import logging
+from contextlib import closing
 from typing import Protocol, runtime_checkable
 
 import boto3
@@ -56,7 +57,8 @@ class JournalObjectStorage(Protocol):
     (spec section 7.6) additionally requires the caller's read-back
     verification, which lives in the backend, not here. ``list`` returns
     prefix-relative keys in lexicographic order strictly after
-    ``start_after`` (at most ``limit`` when given); ``exists`` is a HEAD
+    ``start_after`` (at most ``limit`` when given, which must be at least
+    one or raises ``ValueError``); ``exists`` is a HEAD
     probe. There is intentionally no delete (spec section 7).
     """
 
@@ -93,7 +95,7 @@ class Boto3ObjectStorage:
     wire and strips it from listing results. Failures other than a
     missing key raise :class:`~storage_base.StorageUnavailable` whose
     message names only the bucket and key (never credentials or
-    endpoints); details go to the log.
+    endpoints); logs include only the operation, bucket, key and error class.
     """
 
     def __init__(self, cfg: S3Config):
@@ -140,13 +142,14 @@ class Boto3ObjectStorage:
             response = self._client.get_object(
                 Bucket=self._bucket, Key=self._wire_key(key)
             )
+            with closing(response["Body"]) as body:
+                return body.read()
         except ClientError as exc:
             if _is_missing(exc):
                 return None
-            raise self._unavailable("GET", key, exc) from exc
+            raise self._unavailable("GET", key, exc) from None
         except BotoCoreError as exc:
-            raise self._unavailable("GET", key, exc) from exc
-        return response["Body"].read()
+            raise self._unavailable("GET", key, exc) from None
 
     def put(self, key: str, data: bytes) -> None:
         try:
@@ -154,11 +157,11 @@ class Boto3ObjectStorage:
                 Bucket=self._bucket, Key=self._wire_key(key), Body=data
             )
         except (ClientError, BotoCoreError) as exc:
-            raise self._unavailable("PUT", key, exc) from exc
+            raise self._unavailable("PUT", key, exc) from None
 
     def list(self, start_after: str = "", limit: int | None = None) -> list[str]:
-        if limit == 0:
-            return []
+        if limit is not None and limit < 1:
+            raise ValueError("limit must be at least 1 or None")
         keys: list[str] = []
         kwargs: dict = {"Bucket": self._bucket, "Prefix": self._prefix}
         if start_after:
@@ -169,7 +172,7 @@ class Boto3ObjectStorage:
             try:
                 response = self._client.list_objects_v2(**kwargs)
             except (ClientError, BotoCoreError) as exc:
-                raise self._unavailable("LIST", start_after, exc) from exc
+                raise self._unavailable("LIST", start_after, exc) from None
             for obj in response.get("Contents") or []:
                 wire_key = obj.get("Key", "")
                 if not wire_key.startswith(self._prefix):
@@ -199,21 +202,20 @@ class Boto3ObjectStorage:
         except ClientError as exc:
             if _is_missing(exc):
                 return False
-            raise self._unavailable("HEAD", key, exc) from exc
+            raise self._unavailable("HEAD", key, exc) from None
         except BotoCoreError as exc:
-            raise self._unavailable("HEAD", key, exc) from exc
+            raise self._unavailable("HEAD", key, exc) from None
 
     # -- Error shaping -------------------------------------------------------
 
     def _unavailable(self, operation: str, key: str, exc: Exception) -> StorageUnavailable:
-        """StorageUnavailable naming only bucket/key; details go to the log."""
+        """Report safe context without exception text or traceback details."""
         logger.warning(
-            "object storage %s failed for bucket %r key %r: %s: %s",
+            "object storage %s failed for bucket %r key %r: %s",
             operation,
             self._bucket,
             key,
             type(exc).__name__,
-            exc,
         )
         return StorageUnavailable(
             f"object storage {operation} failed for bucket "

@@ -107,6 +107,8 @@ class FakeObjectStorage:
             self._objects[key] = data
 
     def list(self, start_after: str = "", limit: int | None = None) -> list[str]:
+        if limit is not None and limit < 1:
+            raise ValueError("limit must be at least 1 or None")
         self.list_calls.append(start_after)
         self._sleep()
         with self._lock:
