@@ -142,9 +142,9 @@ S3_REFRESH_MIN_INTERVAL_SEC=5
 Configure client authentication separately, as below. Placeholder credentials
 are rejected at startup.
 
-On first run, call `obsidian_refresh` before using vault tools: it replays the
-full journal history. This one-time replay can take a long time for a large
-vault. Startup validates settings and opens local state; it does not replay
+Before each tool operation, the backend refreshes its local state. On first
+use, this replays the full journal history. This one-time replay can take a
+long time for a large vault. Startup validates settings and opens local state; it does not replay
 journals. Subsequent refreshes use the processed-file ledger; epoch changes or a detected
 remote wipe reset the cache and require replay again. Use a dedicated writable
 state directory per vault/peer and persist it across restarts. It contains
@@ -154,9 +154,10 @@ state directory per vault/peer and persist it across restarts. It contains
 `obsidian_refresh` lists remote journals and replays unseen files.
 `S3_REFRESH_MIN_INTERVAL_SEC` is the minimum spacing between completed
 refreshes (positive seconds, default 5); calls within that interval are skipped.
-There is currently no background polling or automatic refresh before ordinary
-tool calls. Call `obsidian_refresh` to receive device changes, allowing the
-interval to elapse first.
+Ordinary tool calls refresh automatically using the same throttle. There is
+no background polling. `obsidian_refresh` also uses this throttle; allow the
+interval to elapse to receive subsequent device changes. Refresh failures
+return a tool error instead of serving stale data.
 
 Remote storage is append-only: updates publish new journal objects.
 The backend never deletes S3 objects, prunes history, or runs remote garbage

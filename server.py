@@ -7,6 +7,7 @@ import logging
 import os
 import re
 import secrets
+import sys
 import time
 import copy
 import hashlib
@@ -211,6 +212,7 @@ def _tool_errors(handler):
         if _backend() is None:
             return "Error: server not started; storage backend is unavailable."
         try:
+            await _backend().refresh()
             return await handler(*args, **kwargs)
         except regex_runner.RegexTimeoutError:
             return "Error: regex pattern too complex or input too large."
@@ -1166,12 +1168,18 @@ async def obsidian_list_templates(folder: str = "templates") -> str:
 @_tool_errors
 async def obsidian_refresh() -> str:
     """Refresh the backend's local vault representation."""
-    await _backend().refresh()
+    # The shared tool wrapper performs the refresh, including error mapping.
     return "Vault refreshed."
 
 
 # run.py loads dotenv before this single environment-consumption point.
-mcp = create_app(load_config())
+try:
+    mcp = create_app(load_config())
+except ConfigError as error:
+    if __name__ != "__main__":
+        raise
+    print(f"Configuration error: {error}", file=sys.stderr)
+    raise SystemExit(2) from None
 
 
 # --- Main ---
