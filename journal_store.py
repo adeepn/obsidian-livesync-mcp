@@ -44,6 +44,7 @@ import logging
 import os
 import re
 import sqlite3
+import tempfile
 from pathlib import Path
 
 from livesync_format import (
@@ -70,6 +71,9 @@ _META_LAST_SENT_KEY = "last_sent_key"
 
 # CouchDB/LiveSync revision strings: "<generation>-<hash>".
 _REV_RE = re.compile(r"^(\d+)-(.+)$")
+
+# Accept only bounded chunk identifiers without path separators or dots.
+_CHUNK_ID_RE = re.compile(r"^h:[A-Za-z0-9+_-]{1,64}$")
 
 _ENCRYPTED_MESSAGE = (
     "note {path!r} uses end-to-end encryption, "
@@ -106,15 +110,15 @@ def parse_rev(rev: object) -> tuple[int, str]:
     return int(match.group(1)), match.group(2)
 
 
-def pick_winner(leaves: list[dict]) -> dict:
+def pick_winner(leaves: list[dict]) -> dict | None:
     """Deterministic winner among leaf revisions.
 
     Highest generation wins; equal generations break on the
-    lexicographically *largest* hash. A malformed ``_rev`` or an empty list
-    raises ``ValueError``.
+    lexicographically *largest* hash. An empty list returns ``None``; a
+    malformed ``_rev`` raises ``ValueError``.
     """
     if not leaves:
-        raise ValueError("pick_winner requires at least one leaf")
+        return None
 
     def rank(doc: dict) -> tuple[int, str]:
         gen, rev_hash = parse_rev(doc.get("_rev"))
@@ -142,6 +146,8 @@ class JournalStore:
         self._chunks_dir = self.state_dir / _CHUNKS_DIRNAME
         self.state_dir.mkdir(parents=True, exist_ok=True)
         self._chunks_dir.mkdir(parents=True, exist_ok=True)
+        # Pin the chunk root for resolved-path containment checks.
+        self._chunks_root = self._chunks_dir.resolve()
 
         self._conn = sqlite3.connect(self.state_dir / _DB_FILENAME)
         self._conn.execute("PRAGMA journal_mode=WAL")
@@ -167,23 +173,42 @@ class JournalStore:
     ) -> None:
         """Replay one parsed journal file; idempotent per ``name``.
 
-        Chunk files are written first (content-addressed, skipped when the
-        file already exists, atomically via ``os.replace``); an aborted
-        apply can therefore leave orphan files, which are harmless because
-        their names derive from the data. The docs and the processed marker
-        then land in one SQLite transaction, so a failure rejects the whole
-        file without leaving partial revision trees behind.
+        Chunks are staged in unique temporary files. Docs and the processed
+        marker commit together before chunks are atomically published. Failed
+        transactions remove their staging without publishing any new chunks.
+        SQLite and the filesystem are not a single crash-atomic transaction:
+        a crash after commit can require rebuilding local state from journals.
         """
         if self.processed(name):
             return
-        for chunk_id, data in (chunks or {}).items():
-            self._upsert_chunk(chunk_id, data)
-        with self._conn:
-            for doc in docs or []:
-                self._insert_doc(name, doc)
-            self._conn.execute(
-                "INSERT OR IGNORE INTO processed(name) VALUES (?)", (name,)
-            )
+        staged: list[tuple[Path, Path]] = []
+        try:
+            for chunk_id, data in (chunks or {}).items():
+                try:
+                    chunk_file = self._chunk_path(chunk_id)
+                except ValueError:
+                    logger.warning("skipping invalid journal chunk identifier %r", chunk_id)
+                    continue
+                if chunk_file.exists():
+                    continue
+                chunk_file.parent.mkdir(parents=True, exist_ok=True)
+                with tempfile.NamedTemporaryFile(
+                    dir=chunk_file.parent, prefix=".staged-", delete=False
+                ) as stream:
+                    tmp_file = Path(stream.name)
+                    staged.append((tmp_file, chunk_file))
+                    stream.write(data.encode("utf-8"))
+            with self._conn:
+                for doc in docs or []:
+                    self._insert_doc(name, doc)
+                self._conn.execute(
+                    "INSERT OR IGNORE INTO processed(name) VALUES (?)", (name,)
+                )
+            for tmp_file, chunk_file in staged:
+                os.replace(tmp_file, chunk_file)
+        finally:
+            for tmp_file, _ in staged:
+                tmp_file.unlink(missing_ok=True)
 
     def _insert_doc(self, name: str, doc: object) -> None:
         if not isinstance(doc, dict):
@@ -210,22 +235,17 @@ class JournalStore:
             (doc_id, gen, rev_hash, _dump_doc(doc)),
         )
 
-    def _upsert_chunk(self, chunk_id: str, data: str) -> None:
-        if not chunk_id.startswith("h:") or len(chunk_id) <= 2:
-            raise ValueError(f"invalid journal chunk identifier {chunk_id!r}")
-        chunk_file = self._chunk_path(chunk_id)
-        if chunk_file.exists():
-            return  # content-addressed: same id means same data
-        chunk_file.parent.mkdir(parents=True, exist_ok=True)
-        tmp_file = chunk_file.with_name(chunk_file.name + ".tmp")
-        tmp_file.write_bytes(data.encode("utf-8"))
-        os.replace(tmp_file, chunk_file)
-
     def _chunk_path(self, chunk_id: str) -> Path:
+        if not isinstance(chunk_id, str) or _CHUNK_ID_RE.fullmatch(chunk_id) is None:
+            raise ValueError("invalid journal chunk identifier")
         digest = chunk_id[len("h:") :]
         if len(digest) < 3:
-            return self._chunks_dir / _SHORT_SHARD / digest
-        return self._chunks_dir / digest[:2] / digest[2:]
+            chunk_file = self._chunks_dir / _SHORT_SHARD / digest
+        else:
+            chunk_file = self._chunks_dir / digest[:2] / digest[2:]
+        if not chunk_file.resolve().is_relative_to(self._chunks_root):
+            raise ValueError("journal chunk path escapes chunk store")
+        return chunk_file
 
     # -- Processed ledger and meta ------------------------------------------
 
@@ -436,10 +456,15 @@ class JournalStore:
         chunk store, then full-JSON chunk records in the docs table."""
         datas: list[str] = []
         for child in children:
+            try:
+                chunk_file = self._chunk_path(child)
+            except ValueError:
+                raise ValueError(
+                    f"note {path!r} is corrupt: invalid chunk reference"
+                ) from None
             if child in inline:
                 datas.append(inline[child])
                 continue
-            chunk_file = self._chunk_path(child)
             if chunk_file.is_file():
                 try:
                     datas.append(chunk_file.read_bytes().decode("utf-8"))

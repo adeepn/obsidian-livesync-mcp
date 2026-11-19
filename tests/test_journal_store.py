@@ -10,11 +10,15 @@ per-note corruption isolation in ``iterate_notes``).
 """
 
 import base64
+import logging
+import os
 import sqlite3
+import threading
 import unicodedata
 
 import pytest
 
+import journal_store
 from journal_store import JournalStore, pick_winner
 from livesync_format import PATH_IDENTITY_LEGACY, PATH_IDENTITY_NFC
 
@@ -59,9 +63,10 @@ class TestPickWinner:
         only = {"_rev": "1-x", "path": "a.md"}
         assert pick_winner([only]) is only
 
-    def test_empty_leaf_list_raises(self):
-        with pytest.raises(ValueError, match="at least one leaf"):
-            pick_winner([])
+    def test_empty_leaf_list_returns_none(self):
+        # Brief contract: no leaves -> None (no exception); winner()
+        # surfaces that as None for unknown ids.
+        assert pick_winner([]) is None
 
     def test_malformed_revision_raises(self):
         with pytest.raises(ValueError, match="revision"):
@@ -163,19 +168,166 @@ class TestApplyJournal:
         doc, text, data, is_text = store.read_note("viajson.md")
         assert (text, data, is_text) == ("from json record", None, True)
 
-    def test_malformed_rev_rejects_whole_file_atomically(self, store):
-        with pytest.raises(ValueError, match=JOURNAL_1):
+    def test_malformed_rev_rejects_whole_file_atomically(self, tmp_path):
+        state = tmp_path / "state"
+        store = JournalStore(state, PATH_IDENTITY_LEGACY)
+        # Prior, successfully applied state must survive untouched.
+        store.apply_journal(
+            JOURNAL_1,
+            {"h:0123456789abcdef": "keep"},
+            [meta_doc("seed.md", "1-a", children=["h:0123456789abcdef"])],
+        )
+        with pytest.raises(ValueError, match=JOURNAL_2):
             store.apply_journal(
-                JOURNAL_1,
-                {"h:ok": "x"},
+                JOURNAL_2,
+                {"h:fedcba9876543210": "staged"},
                 [meta_doc("a.md", "1-x"), {"_id": "b.md", "_rev": "bogus"}],
             )
-        assert store.processed(JOURNAL_1) is False
-        assert store.note_ids() == []
+        assert store.processed(JOURNAL_2) is False
+        assert store.note_ids() == ["seed.md"]
+        # SQLite prior state kept AND zero new published chunk files (nor
+        # staged leftovers) from the failed application.
+        files = sorted(
+            p.name for p in (state / "chunks").rglob("*") if p.is_file()
+        )
+        assert files == ["23456789abcdef"]
+        store.close()
 
-    def test_foreign_chunk_identifier_rejected(self, store):
-        with pytest.raises(ValueError, match="chunk identifier"):
-            store.apply_journal(JOURNAL_1, {"f:notachunk": "x"}, [])
+    @pytest.mark.parametrize("same_journal", [False, True])
+    def test_concurrent_apply_same_chunk_both_succeed(
+        self, tmp_path, monkeypatch, same_journal
+    ):
+        # Two live store instances replaying journals that carry the same
+        # content-addressed chunk: publication must not collide on a shared
+        # temporary file name. The barrier forces both os.replace calls to
+        # run back-to-back, which the shared "<name>.tmp" scheme fails.
+        state = tmp_path / "state"
+        JournalStore(state, PATH_IDENTITY_LEGACY).close()  # establish WAL once
+        barrier = threading.Barrier(2)
+        real_replace = os.replace
+        checked = threading.Barrier(2)
+        real_processed = JournalStore.processed
+
+        def rendezvous_processed(instance, name):
+            result = real_processed(instance, name)
+            checked.wait(timeout=10)
+            return result
+
+        monkeypatch.setattr(JournalStore, "processed", rendezvous_processed)
+
+        def rendezvous_replace(src, dst):
+            barrier.wait(timeout=10)
+            real_replace(src, dst)
+
+        monkeypatch.setattr(journal_store.os, "replace", rendezvous_replace)
+
+        chunk = {"h:0123456789abcdef": "shared body"}
+        errors: list[BaseException] = []
+
+        def replay(name: str, doc_id: str) -> None:
+            store = JournalStore(state, PATH_IDENTITY_LEGACY)
+            try:
+                store.apply_journal(
+                    name, chunk, [meta_doc(doc_id, "1-x", children=["h:0123456789abcdef"])]
+                )
+            except BaseException as exc:  # noqa: BLE001 - reported below
+                errors.append(exc)
+            finally:
+                store.close()
+
+        threads = [
+            threading.Thread(target=replay, args=(JOURNAL_1, "a.md")),
+            threading.Thread(target=replay, args=(JOURNAL_1 if same_journal else JOURNAL_2,
+                                                         "a.md" if same_journal else "b.md")),
+        ]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=15)
+        assert not any(thread.is_alive() for thread in threads)
+        assert errors == []
+
+        files = [p for p in (state / "chunks").rglob("*") if p.is_file()]
+        assert len(files) == 1
+        assert files[0].read_bytes() == b"shared body"
+        check = JournalStore(state, PATH_IDENTITY_LEGACY)
+        assert check.files_processed_count() == (1 if same_journal else 2)
+        assert check.read_note("a.md")[1] == "shared body"
+        assert check.read_note("a.md" if same_journal else "b.md")[1] == "shared body"
+        check.close()
+
+    def test_invalid_chunk_ids_skipped_with_warning_not_crash(self, store, caplog):
+        # Bad chunk ids (wrong prefix, path traversal) must not abort the
+        # replay: the journal is still processed, the ids are skipped.
+        with caplog.at_level(logging.WARNING, logger="journal_store"):
+            store.apply_journal(
+                JOURNAL_1,
+                {"f:notachunk": "x", "h:aa../../../escaped": "evil"},
+                [meta_doc("a.md", "1-x")],
+            )
+        assert store.processed(JOURNAL_1) is True
+        files = [p for p in (store.state_dir / "chunks").rglob("*") if p.is_file()]
+        assert files == []
+        skipped = {rec.message for rec in caplog.records}
+        assert any("f:notachunk" in message for message in skipped)
+        assert any("h:aa../../../escaped" in message for message in skipped)
+
+    def test_traversal_chunk_write_never_escapes_state_dir(self, tmp_path):
+        state = tmp_path / "state"
+        store = JournalStore(state, PATH_IDENTITY_LEGACY)
+        # chunks/aa/../../../escaped resolves outside the state dir.
+        store.apply_journal(JOURNAL_1, {"h:aa../../../escaped": "evil"}, [])
+        assert not (tmp_path / "escaped").exists()
+        assert [
+            p for p in tmp_path.rglob("*") if p.is_file() and "escaped" in p.name
+        ] == []
+        store.close()
+
+    def test_traversal_child_is_isolated_not_an_escape(self, store, tmp_path):
+        # Reading must not exfiltrate files outside the chunk store through
+        # crafted child references. The valid "aa"-shard chunk makes the
+        # shard directory exist, which is exactly the state in which an
+        # unguarded path join would stat and read the outside file.
+        secret = tmp_path / "outside"
+        secret.write_text("SECRET")
+        doomed = meta_doc("doomed.md", "1-x", children=["h:aa../../../outside"])
+        good = meta_doc("good.md", "1-y", children=["h:g"])
+        store.apply_journal(
+            JOURNAL_1, {"h:g": "fine", "h:aabait": "shard exists"}, [doomed, good]
+        )
+        assert (store.state_dir / "chunks" / "aa").is_dir()
+        with pytest.raises(ValueError, match="corrupt"):
+            store.read_note("doomed.md")
+        pairs = dict((d["_id"], text) for d, text in store.iterate_notes())
+        assert pairs == {"doomed.md": None, "good.md": "fine"}
+
+    def test_full_valid_charset_chunk_ids_round_trip(self, store):
+        chunk_id = "h:Ab0-_9+zZ"
+        doc = meta_doc("charset.md", "1-x", children=[chunk_id])
+        store.apply_journal(JOURNAL_1, {chunk_id: "payload"}, [doc])
+        assert store.read_note("charset.md")[1] == "payload"
+
+    @pytest.mark.parametrize("chunk_id", ["h:", "h:" + "a" * 65, "h:abc\n", "h:a/b"])
+    def test_invalid_id_boundaries_rejected_for_write_and_inline_read(self, store, chunk_id):
+        doc = meta_doc(
+            "invalid.md", "1-x", children=[chunk_id],
+            eden={chunk_id: {"data": "must not read", "epoch": 1}},
+        )
+        store.apply_journal(JOURNAL_1, {chunk_id: "must not write"}, [doc])
+        assert not any(p.is_file() for p in store._chunks_dir.rglob("*"))
+        assert list(store.iterate_notes())[0][1] is None
+
+    def test_symlink_shard_cannot_escape_chunks_root(self, store, tmp_path):
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        (outside / "payload").write_bytes(b"private")
+        (store._chunks_dir / "aa").symlink_to(outside, target_is_directory=True)
+        store.apply_journal(
+            JOURNAL_1, {"h:aanew": "bad"},
+            [meta_doc("bad.md", "1-x", children=["h:aapayload"])],
+        )
+        assert not (outside / "new").exists()
+        assert list(store.iterate_notes())[0][1] is None
 
 
 class TestProcessedAndMeta:
