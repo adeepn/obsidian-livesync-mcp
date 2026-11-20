@@ -139,7 +139,7 @@ class TestControlObjectNames:
 
 
 class TestStartup:
-    async def test_locked_milestone_refused(self, tmp_path):
+    async def test_locked_milestone_accepted_with_warning(self, tmp_path, caplog):
         backend, _ = make_backend(
             tmp_path,
             {
@@ -147,8 +147,17 @@ class TestStartup:
                 SYNC_PARAMETERS_KEY: params_blob(),
             },
         )
-        with pytest.raises(UnsupportedVault, match="locked"):
+        with caplog.at_level(logging.WARNING, logger="storage_journal"):
             await backend.startup_check()
+        assert any(
+            record.name == "storage_journal"
+            and record.levelno == logging.WARNING
+            and "locked" in record.message
+            and "remote marked as rebuilt" in record.message
+            and "peer performs full replay" in record.message
+            for record in caplog.records
+        )
+        await backend.close()
 
     async def test_journals_without_milestone_refused(self, tmp_path):
         one_journal = {JOURNAL_1: journal_blob([meta_doc("a.md", "1-a")])}

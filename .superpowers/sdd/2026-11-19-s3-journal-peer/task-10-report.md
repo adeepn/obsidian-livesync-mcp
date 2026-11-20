@@ -38,3 +38,18 @@ Concerns / remaining acceptance:
   sweep captures it but fails explicitly if it contains only compact chunks.
 - Brief's old MinIO/date/execution steps were superseded by the explicit
   package-only request using existing SeaweedFS. No identity migration.
+
+## RULING B-11 — advisory locked milestone (2026-11-20)
+
+- [DECISION] Accept `locked: true` at startup: upstream treats the flag as
+  advisory and plugin 1.0.50 leaves it after a completed Rebuild. The joining
+  peer performs full replay (fetch-equivalent); log WARNING naming the flag
+  and stating "remote marked as rebuilt; peer performs full replay".
+- Replace the locked-refusal test with startup acceptance and caplog WARNING
+  assertions. All other refusal paths remain unchanged, including journals
+  without a milestone. Align design spec section 4.4; README has no
+  locked-refusal statement requiring an update.
+- Red check: the new acceptance test failed on the previous UnsupportedVault.
+- Verification: `./venv/bin/python -m pytest tests/ -q` returned exit 0:
+  **835 passed, 8 skipped, 3 subtests passed** (9.75s). No baseline regressions.
+  Full output: `docs/test-artifacts/2026-11-20-live-s3/b11-pytest.txt`.

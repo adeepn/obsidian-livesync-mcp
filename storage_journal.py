@@ -170,8 +170,9 @@ class JournalBackend:
     async def startup_check(self) -> None:
         """Verify bucket compatibility and reconcile local state.
 
-        Raises :class:`~storage_base.UnsupportedVault` for a locked
-        milestone, missing milestone with journals present, settings this
+        A locked milestone is advisory and logged as a warning.
+        Raises :class:`~storage_base.UnsupportedVault` for a
+        missing milestone with journals present, settings this
         server cannot serve, or missing sync parameters with journals
         present. A bucket without milestone and journals is treated as a
         fresh vault with legacy path identity (logged).
@@ -190,9 +191,9 @@ class JournalBackend:
             identity = PATH_IDENTITY_LEGACY
         else:
             if milestone.get("locked") is True:
-                raise UnsupportedVault(
-                    "vault milestone is locked; another client is "
-                    "rebuilding or maintaining the vault"
+                logger.warning(
+                    "vault milestone has advisory locked: true flag; "
+                    "remote marked as rebuilt; peer performs full replay"
                 )
             try:
                 identity = resolve_path_identity(milestone)
