@@ -126,8 +126,8 @@ class StorageBackend(Protocol):
         """
         ...
 
-    async def refresh(self) -> None:
-        """Bring the local representation (index/cache) up to date."""
+    async def refresh(self, force: bool = False) -> None:
+        """Refresh local state; force bypasses throttling or reloads the index."""
         ...
 
     async def list_notes(

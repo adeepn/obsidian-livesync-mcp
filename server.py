@@ -206,13 +206,19 @@ def _storage_message(error: StorageError) -> str:
     return "Error: unable to access vault storage."
 
 
-def _tool_errors(handler):
+def _tool_errors(handler=None, *, force_refresh: bool = False):
+    if handler is None:
+        return lambda fn: _tool_errors(fn, force_refresh=force_refresh)
+
     @wraps(handler)
     async def guarded(*args, **kwargs):
         if _backend() is None:
             return "Error: server not started; storage backend is unavailable."
         try:
-            await _backend().refresh()
+            if force_refresh:
+                await _backend().refresh(force=True)
+            else:
+                await _backend().refresh()
             return await handler(*args, **kwargs)
         except regex_runner.RegexTimeoutError:
             return "Error: regex pattern too complex or input too large."
@@ -1165,7 +1171,7 @@ async def obsidian_list_templates(folder: str = "templates") -> str:
 
 
 @_tool
-@_tool_errors
+@_tool_errors(force_refresh=True)
 async def obsidian_refresh() -> str:
     """Refresh the backend's local vault representation."""
     # The shared tool wrapper performs the refresh, including error mapping.

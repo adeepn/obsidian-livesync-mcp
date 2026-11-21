@@ -103,7 +103,7 @@ async def test_backlinks_finds_anchor_links(tools, link):
 async def test_refresh_calls_backend_refresh(tools):
     server, fake = tools
     await server.obsidian_refresh()
-    assert ("refresh", ()) in fake.calls
+    assert fake.calls == [("refresh", (True,))]
 
 
 async def test_tags_and_graph_isolate_unreadable_notes(tools):
@@ -557,3 +557,19 @@ async def test_capped_empty_listing_does_not_claim_absence(tools, monkeypatch, n
     assert 'narrow' in result['message'].lower()
     assert 'No notes found' not in response
     assert 'No templates found' not in response
+
+
+async def test_fetch_couchdb_does_not_scan_index_for_refresh(monkeypatch):
+    from tests.test_storage_couchdb import fake_backend
+
+    doc = {"_id": "note.md", "path": "Note.md", "type": "plain",
+           "children": ["h:inline"], "eden": {"h:inline": "hello"},
+           "ctime": 1, "mtime": 2, "size": 5}
+    async with fake_backend({"note.md": doc}) as (backend, log):
+        monkeypatch.setattr(server, "backend", backend)
+        result = json.loads(await server.obsidian_fetch("Note.md"))
+        assert result["content"] == "hello"
+        assert not any(r.url.path.endswith("/_all_docs") for r in log)
+        log.clear()
+        assert await server.obsidian_refresh() == "Vault refreshed."
+        assert any(r.method == "GET" and r.url.path.endswith("/_all_docs") for r in log)
