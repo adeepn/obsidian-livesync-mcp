@@ -14,8 +14,9 @@ Wire format mirrors upstream commonlib exactly:
   ``escapeNewLineFromString``/``unescapeNewLineFromString``): strings that
   contain ``\\n`` or ``\\r`` are prefixed with ``\\f`` and have ``\\n``,
   ``\\r`` and ``\\`` escaped to ``\\n``, ``\\r``, ``\\\\``; strings without
-  newlines are stored verbatim (a lone backslash is *not* doubled and no
-  prefix is added).
+  newlines are stored verbatim, except that this writer also escapes values
+  starting with literal ``\\f`` to prevent upstream readers stripping it.
+  The reader retains byte-exact upstream unescape semantics.
 - Compression (``src/replication/journal/JournalSyncCore.ts`` via
   ``src/pouchdb/compress.ts``): payloads are deflated with
   ``wrappedDeflate(..., {level: 8})``, which wraps ``fflate.deflate``.
@@ -74,8 +75,12 @@ class JournalFile:
 
 
 def _escape_chunk_data(value: str) -> str:
-    """Mirror upstream ``escapeNewLineFromString`` (common/utils.ts:371)."""
-    if "\n" not in value and "\r" not in value:
+    """Escape for upstream readers, including ambiguous literal ``\\f`` starts.
+
+    Upstream skips newline-free strings, but its reader always strips the
+    prefix. Conservatively escape these values too (Ruling B-14).
+    """
+    if "\n" not in value and "\r" not in value and not value.startswith(_ESCAPE_PREFIX):
         return value
     escaped = value.replace("\\", "\\\\").replace("\r", "\\r").replace("\n", "\\n")
     return _ESCAPE_PREFIX + escaped

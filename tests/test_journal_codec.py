@@ -12,12 +12,14 @@ zlib-versus-fflate byte equality.
 """
 
 from pathlib import Path
+import re
 import zlib
 
 import pytest
 
 from journal_codec import (
     JournalFile,
+    _escape_chunk_data,
     deflate_journal,
     inflate_journal,
     journal_filename,
@@ -316,3 +318,23 @@ LIVE_CLIENT_SAMPLE = Path(__file__).parent / "fixtures/live_client_journal_sampl
 def test_live_client_golden_decode():
     journal = parse_journal(inflate_journal(LIVE_CLIENT_SAMPLE.read_bytes()))
     assert len(journal.docs) >= 1
+
+
+# Independent translation of commonlib src/common/utils.ts:379-385.
+# Keep the regex substitution single-pass, exactly as in the upstream reader.
+def upstream_unescape(value: str) -> str:
+    if not value.startswith("\\f"):
+        return value
+    rev_map = {"\\n": "\n", "\\r": "\r", "\\\\": "\\"}
+    return re.sub(r"(\\n|\\r|\\\\)", lambda m: rev_map[m[0]], value[2:])
+
+
+@pytest.mark.parametrize("value", [
+    "normal text", r"\frac{1}{2}", r"\f", r"\f\n\r\\",
+    r"a\b\n", "line\nnext", "line\rnext", "line\r\nnext",
+    "\\frac{1}{2}\r\n\\n\\r\\\\", "", "\\", "\f",
+])
+def test_writer_escapes_for_upstream_reader_oracle(value):
+    assert upstream_unescape(_escape_chunk_data(value)) == value
+    parsed = parse_journal(serialize_journal([("h:x", value)], []), name="1-docs.jsonl.gz")
+    assert parsed.chunks == {"h:x": value}

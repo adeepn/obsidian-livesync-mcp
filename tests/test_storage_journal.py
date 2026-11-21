@@ -1714,3 +1714,17 @@ async def test_refresh_failure_recovers_after_retry(tmp_path, force):
     await backend.refresh(force=force)
     await backend.refresh()
     assert backend._store.winner("a.md")["_rev"] == "1-a"
+
+
+async def test_entire_latex_note_survives_publish_readback_and_parse(tmp_path):
+    backend, storage = await write_backend(tmp_path)
+    text = r"\frac{1}{2}"
+    try:
+        await backend.write_note("Math.md", text, create=True)
+        key, blob = storage.put_calls[-1]
+        assert key in storage.get_calls  # publication read-back was performed
+        parsed = parse_journal(inflate_journal(storage.get(key)), name=key)
+        assert list(parsed.chunks.values()) == [text]
+        assert (await backend.read_note("Math.md"))["text"] == text
+    finally:
+        await backend.close()
