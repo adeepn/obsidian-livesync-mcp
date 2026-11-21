@@ -22,7 +22,7 @@ from storage_journal import (
 from tests.test_object_storage import MINIO_CONFIGURED, MINIO_ENV
 from tests.test_storage_journal import milestone_blob, params_blob
 
-pytestmark = pytest.mark.skipif(
+requires_minio = pytest.mark.skipif(
     not MINIO_CONFIGURED,
     reason="MinIO integration requires MINIO_TEST_ENDPOINT, MINIO_TEST_KEY, "
     "MINIO_TEST_SECRET, MINIO_TEST_BUCKET (legacy credential aliases accepted)",
@@ -37,15 +37,19 @@ class StorageSpy:
         self.calls = []
         self.fail_key = None
 
-    def get(self, key):
+    def get(self, key, *, max_bytes=None):
         self.calls.append(("get", key))
         if key == self.fail_key:
             raise StorageUnavailable("injected replay interruption")
-        return self.adapter.get(key)
+        return self.adapter.get(key, max_bytes=max_bytes)
 
     def put(self, key, data):
         self.calls.append(("put", key))
         return self.adapter.put(key, data)
+
+    def put_if_absent(self, key, data):
+        self.calls.append(("put_if_absent", key))
+        return self.adapter.put_if_absent(key, data)
 
     def exists(self, key):
         self.calls.append(("exists", key))
@@ -129,6 +133,7 @@ async def minio(tmp_path):
         assert all(call[0] != "delete" for _, spy in peers for call in spy.calls)
 
 
+@requires_minio
 async def test_roundtrip(minio):
     peer, _, _, _, _ = minio
     writer, _ = await peer("writer")
@@ -154,6 +159,7 @@ async def test_roundtrip(minio):
         assert actual["rev"] == expected["rev"]
 
 
+@requires_minio
 async def test_wipe_epoch(minio):
     peer, _, wipe, seed, _ = minio
     writer, _ = await peer("writer")
@@ -178,6 +184,7 @@ async def test_wipe_epoch(minio):
     assert await reader.read_note("old.md") is None
 
 
+@requires_minio
 async def test_interrupted_replay(minio):
     peer, _, _, _, _ = minio
     writer, writer_spy = await peer("writer")
@@ -207,6 +214,7 @@ async def test_interrupted_replay(minio):
         assert (await reader.read_note(f"{index}.md"))["text"] == f"Body {index}"
 
 
+@requires_minio
 async def test_sibling_writers(minio, monkeypatch):
     peer, keys, _, _, prefix = minio
     first, first_spy = await peer("first")
@@ -248,3 +256,27 @@ async def test_sibling_writers(minio, monkeypatch):
     assert (await reader.read_note("first-only.md"))["text"] == "First survives"
     assert (await reader.read_note("second-only.md"))["text"] == "Second survives"
     assert (await reader.backend_info())["files_processed"] == 4
+
+
+def test_storage_spy_protocol_contract_offline():
+    from inspect import signature
+    from object_storage import JournalObjectStorage, ObjectSizeLimit
+    from tests.fake_object_storage import FakeObjectStorage
+
+    adapter = FakeObjectStorage()
+    spy = StorageSpy(adapter)
+    for name in ("get", "put", "put_if_absent", "list", "exists"):
+        expected = signature(getattr(JournalObjectStorage, name)).parameters
+        actual = signature(getattr(StorageSpy, name)).parameters
+        assert list(actual) == list(expected)
+        assert [p.kind for p in actual.values()] == [p.kind for p in expected.values()]
+    spy.put("a", b"abc")
+    assert spy.get("a", max_bytes=3) == b"abc"
+    with pytest.raises(ObjectSizeLimit):
+        spy.get("a", max_bytes=2)
+    assert spy.put_if_absent("a", b"changed") == "exists"
+    assert spy.put_if_absent("b", b"new") == "created"
+    assert spy.exists("b")
+    assert spy.list(start_after="a", limit=1) == ["b"]
+    assert spy.get("a") == b"abc"
+    assert ("put_if_absent", "b") in spy.calls
