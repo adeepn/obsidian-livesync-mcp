@@ -345,9 +345,14 @@ class JournalStore:
                 (_META_PATH_IDENTITY, self.path_identity),
             )
         removed = 0
-        if self._chunks_dir.is_dir():
+        if self._chunks_dir.is_symlink():
+            self._chunks_dir.unlink()
+        elif self._chunks_dir.is_dir():
             for shard in self._chunks_dir.iterdir():
-                if shard.is_dir():
+                if shard.is_symlink():
+                    shard.unlink()
+                    removed += 1
+                elif shard.is_dir():
                     for chunk_file in shard.iterdir():
                         if chunk_file.is_file():
                             chunk_file.unlink()

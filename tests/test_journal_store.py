@@ -365,6 +365,32 @@ class TestApplyJournal:
 
 
 class TestProcessedAndMeta:
+    @pytest.mark.parametrize("symlink_root", [False, True], ids=["shard", "root"])
+    def test_reset_unlinks_directory_symlinks_without_touching_targets(
+        self, store, tmp_path, symlink_root
+    ):
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        outside_shard = outside / "bb"
+        outside_shard.mkdir()
+        (outside / "payload").write_bytes(b"private")
+        (outside_shard / "nested").write_bytes(b"also private")
+        if symlink_root:
+            store._chunks_dir.rmdir()
+            link = store._chunks_dir
+        else:
+            link = store._chunks_dir / "aa"
+        link.symlink_to(outside, target_is_directory=True)
+        store.mark_processed(JOURNAL_1)
+
+        store.reset()
+
+        assert (outside / "payload").read_bytes() == b"private"
+        assert (outside_shard / "nested").read_bytes() == b"also private"
+        assert not link.is_symlink()
+        assert not link.exists()
+        assert store.files_processed_count() == 0
+
     def test_defaults_on_fresh_store(self, store):
         assert store.last_sent_key == ""
         assert store.epoch == ""
