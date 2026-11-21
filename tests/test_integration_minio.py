@@ -44,12 +44,15 @@ class StorageSpy:
         return self.adapter.get(key, max_bytes=max_bytes)
 
     def put(self, key, data):
-        self.calls.append(("put", key))
-        return self.adapter.put(key, data)
+        existed = self.adapter.exists(key)
+        result = self.adapter.put(key, data)
+        self.calls.append(("put", key, "overwritten" if existed else "created"))
+        return result
 
     def put_if_absent(self, key, data):
-        self.calls.append(("put_if_absent", key))
-        return self.adapter.put_if_absent(key, data)
+        result = self.adapter.put_if_absent(key, data)
+        self.calls.append(("put_if_absent", key, result))
+        return result
 
     def exists(self, key):
         self.calls.append(("exists", key))
@@ -62,6 +65,22 @@ class StorageSpy:
     def delete(self, *args, **kwargs):
         self.calls.append(("delete", None))
         raise AssertionError("backend must never delete remote objects")
+
+
+def published_keys(*spies):
+    """Count successful creations, rejecting duplicate keys and plain overwrites."""
+    publications = [
+        call for spy in spies for call in spy.calls
+        if call[0] in ("put_if_absent", "put")
+    ]
+    assert all(result == "created" for op, _, result in publications if op == "put")
+    assert all(
+        result in ("created", "exists", "unsupported")
+        for op, _, result in publications if op == "put_if_absent"
+    )
+    keys = [key for _, key, result in publications if result == "created"]
+    assert len(keys) == len(set(keys)), "journal key was created more than once"
+    return keys
 
 
 @pytest.fixture
@@ -191,7 +210,7 @@ async def test_interrupted_replay(minio):
     for index in range(3):
         await writer.write_note(f"{index}.md", f"Body {index}", create=True)
     journals = sorted(
-        [key for op, key in writer_spy.calls if op == "put"],
+        published_keys(writer_spy),
         key=journal_sort_key,
     )
     assert len(journals) == 3
@@ -229,15 +248,13 @@ async def test_sibling_writers(minio, monkeypatch):
         first.write_note("shared.md", "First sibling", create=True),
         second.write_note("shared.md", "Second sibling", create=True),
     )
-    shared_keys = [
-        key for spy in (first_spy, second_spy)
-        for op, key in spy.calls if op == "put"
-    ]
+    shared_keys = published_keys(first_spy, second_spy)
     assert len(set(shared_keys)) == 2
     assert len({key.split("-", 1)[0] for key in shared_keys}) == 1
     assert {prefix + key for key in shared_keys} <= set(keys())
     await first.write_note("first-only.md", "First survives", create=True)
     await second.write_note("second-only.md", "Second survives", create=True)
+    assert len(published_keys(first_spy, second_spy)) == 4
     reader, _ = await peer("reader")
     await reader.refresh(force=True)
     doc_id = path2id("shared.md", nfc=True)
@@ -279,4 +296,19 @@ def test_storage_spy_protocol_contract_offline():
     assert spy.exists("b")
     assert spy.list(start_after="a", limit=1) == ["b"]
     assert spy.get("a") == b"abc"
-    assert ("put_if_absent", "b") in spy.calls
+    assert ("put_if_absent", "a", "exists") in spy.calls
+    assert ("put_if_absent", "b", "created") in spy.calls
+    assert published_keys(spy) == ["a", "b"]
+    adapter.conditional_put_supported = False
+    assert spy.put_if_absent("c", b"fallback") == "unsupported"
+    spy.put("c", b"fallback")
+    assert published_keys(spy) == ["a", "b", "c"]
+    spy.put("a", b"overwrite")
+    with pytest.raises(AssertionError):
+        published_keys(spy)
+    duplicate = StorageSpy(FakeObjectStorage())
+    duplicate.put_if_absent("b", b"duplicate")
+    other = StorageSpy(FakeObjectStorage())
+    other.put_if_absent("b", b"another")
+    with pytest.raises(AssertionError, match="created more than once"):
+        published_keys(duplicate, other)
