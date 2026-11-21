@@ -56,3 +56,69 @@ tests/test_object_storage.py::TestMinioSmokeRoundtrip::test_get_missing_returns_
 ============================== 43 passed in 1.33s ==============================
 
 Result: 43/43 PASSED against real S3 endpoint (SeaweedFS docker, path-style, local). Scenarios: two-peer roundtrip; wipe/epoch state reset; interrupted replay convergence; concurrent sibling writers. Credentials are throwaway dummies (server local-only, 127.0.0.1).
+
+# Re-run after security/arch fix waves 2026-11-21 18:31 — repaired spy, put_if_absent path live
+..FF........................................                             [100%]
+=================================== FAILURES ===================================
+___________________________ test_interrupted_replay ____________________________
+
+minio = (<function minio.<locals>.peer at 0x107c2b1a0>, <function minio.<locals>.keys at 0x107c2b420>, <function minio.<locals>.wipe at 0x107c2b060>, <function minio.<locals>.seed at 0x107c2b240>, 'it/cdb4ee7a0835444790be6626301cf731/')
+
+    @requires_minio
+    async def test_interrupted_replay(minio):
+        peer, _, _, _, _ = minio
+        writer, writer_spy = await peer("writer")
+        for index in range(3):
+            await writer.write_note(f"{index}.md", f"Body {index}", create=True)
+        journals = sorted(
+            [key for op, key in writer_spy.calls if op == "put"],
+            key=journal_sort_key,
+        )
+>       assert len(journals) == 3
+E       assert 0 == 3
+E        +  where 0 = len([])
+
+tests/test_integration_minio.py:197: AssertionError
+------------------------------ Captured log call -------------------------------
+WARNING  journal_store:journal_store.py:362 journal store state reset: cleared docs/processed/meta tables and removed 0 chunk file(s)
+_____________________________ test_sibling_writers _____________________________
+
+minio = (<function minio.<locals>.peer at 0x107cfed40>, <function minio.<locals>.keys at 0x107cfef20>, <function minio.<locals>.wipe at 0x107cfee80>, <function minio.<locals>.seed at 0x107cfede0>, 'it/e0045e81358a47e89c51a902d461afdd/')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x107c4c7d0>
+
+    @requires_minio
+    async def test_sibling_writers(minio, monkeypatch):
+        peer, keys, _, _, prefix = minio
+        first, first_spy = await peer("first")
+        second, second_spy = await peer("second")
+        # Both peers start before either publishes and allocate at the same ms.
+        monkeypatch.setattr(
+            storage_journal, "time",
+            SimpleNamespace(time=lambda: 1700000000.0,
+                            monotonic=storage_journal.time.monotonic),
+        )
+        revisions = await asyncio.gather(
+            first.write_note("shared.md", "First sibling", create=True),
+            second.write_note("shared.md", "Second sibling", create=True),
+        )
+        shared_keys = [
+            key for spy in (first_spy, second_spy)
+            for op, key in spy.calls if op == "put"
+        ]
+>       assert len(set(shared_keys)) == 2
+E       assert 0 == 2
+E        +  where 0 = len(set())
+E        +    where set() = set([])
+
+tests/test_integration_minio.py:236: AssertionError
+------------------------------ Captured log call -------------------------------
+WARNING  journal_store:journal_store.py:362 journal store state reset: cleared docs/processed/meta tables and removed 0 chunk file(s)
+WARNING  journal_store:journal_store.py:362 journal store state reset: cleared docs/processed/meta tables and removed 0 chunk file(s)
+=========================== short test summary info ============================
+FAILED tests/test_integration_minio.py::test_interrupted_replay - assert 0 == 3
+FAILED tests/test_integration_minio.py::test_sibling_writers - assert 0 == 2
+2 failed, 42 passed in 0.97s
+............................................                             [100%]
+44 passed in 1.28s
+
+Re-run after spy filter fix: 44/44 PASSED (2026-11-21 18:33) — put_if_absent publications verified against real S3.
