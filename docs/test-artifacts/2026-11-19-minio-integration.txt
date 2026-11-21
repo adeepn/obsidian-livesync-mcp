@@ -1,0 +1,126 @@
+# MinIO-suite integration run 2026-11-20 02:18 — real S3 server (SeaweedFS, docker; MinIO images unavailable from Docker Hub/quay at run time)
+
+============================= test session starts ==============================
+platform darwin -- Python 3.13.13, pytest-9.2.0, pluggy-1.7.0 -- /Volumes/Devel/jHOME/obsidian-livesync-mcp/.worktrees/plan-b/venv/bin/python
+cachedir: .pytest_cache
+rootdir: /Volumes/Devel/jHOME/obsidian-livesync-mcp/.worktrees/plan-b
+configfile: pytest.ini
+plugins: anyio-4.16.0, asyncio-1.5.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=function, asyncio_default_test_loop_scope=function
+collecting ... collected 43 items
+
+tests/test_integration_minio.py::test_roundtrip PASSED                   [  2%]
+tests/test_integration_minio.py::test_wipe_epoch PASSED                  [  4%]
+tests/test_integration_minio.py::test_interrupted_replay PASSED          [  6%]
+tests/test_integration_minio.py::test_sibling_writers PASSED             [  9%]
+tests/test_object_storage.py::TestFakeSemantics::test_put_get_roundtrip PASSED [ 11%]
+tests/test_object_storage.py::TestFakeSemantics::test_get_missing_returns_none PASSED [ 13%]
+tests/test_object_storage.py::TestFakeSemantics::test_exists PASSED      [ 16%]
+tests/test_object_storage.py::TestFakeSemantics::test_initial_mapping_seeds_store PASSED [ 18%]
+tests/test_object_storage.py::TestFakeSemantics::test_list_sorted_lexicographically PASSED [ 20%]
+tests/test_object_storage.py::TestFakeSemantics::test_list_empty_store_returns_empty_list PASSED [ 23%]
+tests/test_object_storage.py::TestFakeSemantics::test_list_start_after_is_exclusive PASSED [ 25%]
+tests/test_object_storage.py::TestFakeSemantics::test_list_is_lexicographic_not_numeric_order PASSED [ 27%]
+tests/test_object_storage.py::TestFakeSemantics::test_list_limit PASSED  [ 30%]
+tests/test_object_storage.py::TestFakeSemantics::test_fail_next_get_n_then_recovers PASSED [ 32%]
+tests/test_object_storage.py::TestFakeSemantics::test_fail_next_get_custom_error PASSED [ 34%]
+tests/test_object_storage.py::TestFakeSemantics::test_fail_next_get_only_affects_get PASSED [ 37%]
+tests/test_object_storage.py::TestFakeSemantics::test_fail_next_put_once_then_recovers PASSED [ 39%]
+tests/test_object_storage.py::TestFakeSemantics::test_scripted_failures_still_record_calls PASSED [ 41%]
+tests/test_object_storage.py::TestFakeSemantics::test_call_recording PASSED [ 44%]
+tests/test_object_storage.py::TestFakeSemantics::test_latency_applies_per_operation PASSED [ 46%]
+tests/test_object_storage.py::TestFakeSemantics::test_key_validation_rejects_empty_and_non_string PASSED [ 48%]
+tests/test_object_storage.py::TestProtocolContract::test_fake_list_rejects_nonpositive_limit[-1] PASSED [ 51%]
+tests/test_object_storage.py::TestProtocolContract::test_fake_list_rejects_nonpositive_limit[0] PASSED [ 53%]
+tests/test_object_storage.py::TestProtocolContract::test_implementations_satisfy_protocol PASSED [ 55%]
+tests/test_object_storage.py::TestProtocolContract::test_no_delete_anywhere PASSED [ 58%]
+tests/test_object_storage.py::TestBoto3AdapterConstruction::test_endpoint_and_path_style_addressing PASSED [ 60%]
+tests/test_object_storage.py::TestBoto3AdapterConstruction::test_aws_without_endpoint_intentionally_keeps_default_addressing PASSED [ 62%]
+tests/test_object_storage.py::TestBoto3AdapterConstruction::test_timeouts_and_retries_off PASSED [ 65%]
+tests/test_object_storage.py::TestBoto3AdapterConstruction::test_wire_key_applies_prefix PASSED [ 67%]
+tests/test_object_storage.py::TestBoto3AdapterConstruction::test_relative_key_strips_prefix PASSED [ 69%]
+tests/test_object_storage.py::TestBoto3AdapterConstruction::test_region_passed_to_client PASSED [ 72%]
+tests/test_object_storage.py::TestBoto3WireOperations::test_put_get_exists_use_wire_prefix PASSED [ 74%]
+tests/test_object_storage.py::TestBoto3WireOperations::test_missing_get_and_head PASSED [ 76%]
+tests/test_object_storage.py::TestBoto3WireOperations::test_list_paginates_with_relative_start_after_and_results PASSED [ 79%]
+tests/test_object_storage.py::TestBoto3WireOperations::test_list_nonpositive_limit_performs_no_request[-1] PASSED [ 81%]
+tests/test_object_storage.py::TestBoto3WireOperations::test_list_nonpositive_limit_performs_no_request[0] PASSED [ 83%]
+tests/test_object_storage.py::TestBoto3WireOperations::test_body_read_timeout_is_typed_and_closes_stream PASSED [ 86%]
+tests/test_object_storage.py::TestBoto3WireOperations::test_errors_do_not_expose_credentials_in_logs_or_tracebacks[GET-get_object] PASSED [ 88%]
+tests/test_object_storage.py::TestBoto3WireOperations::test_errors_do_not_expose_credentials_in_logs_or_tracebacks[PUT-put_object] PASSED [ 90%]
+tests/test_object_storage.py::TestBoto3WireOperations::test_errors_do_not_expose_credentials_in_logs_or_tracebacks[HEAD-head_object] PASSED [ 93%]
+tests/test_object_storage.py::TestBoto3WireOperations::test_errors_do_not_expose_credentials_in_logs_or_tracebacks[LIST-list_objects_v2] PASSED [ 95%]
+tests/test_object_storage.py::TestMinioSmokeRoundtrip::test_put_list_get_roundtrip_with_prefix_stripping PASSED [ 97%]
+tests/test_object_storage.py::TestMinioSmokeRoundtrip::test_get_missing_returns_none_and_exists_false PASSED [100%]
+
+============================== 43 passed in 1.33s ==============================
+
+Result: 43/43 PASSED against real S3 endpoint (SeaweedFS docker, path-style, local). Scenarios: two-peer roundtrip; wipe/epoch state reset; interrupted replay convergence; concurrent sibling writers. Credentials are throwaway dummies (server local-only, 127.0.0.1).
+
+# Re-run after security/arch fix waves 2026-11-21 18:31 — repaired spy, put_if_absent path live
+..FF........................................                             [100%]
+=================================== FAILURES ===================================
+___________________________ test_interrupted_replay ____________________________
+
+minio = (<function minio.<locals>.peer at 0x107c2b1a0>, <function minio.<locals>.keys at 0x107c2b420>, <function minio.<locals>.wipe at 0x107c2b060>, <function minio.<locals>.seed at 0x107c2b240>, 'it/cdb4ee7a0835444790be6626301cf731/')
+
+    @requires_minio
+    async def test_interrupted_replay(minio):
+        peer, _, _, _, _ = minio
+        writer, writer_spy = await peer("writer")
+        for index in range(3):
+            await writer.write_note(f"{index}.md", f"Body {index}", create=True)
+        journals = sorted(
+            [key for op, key in writer_spy.calls if op == "put"],
+            key=journal_sort_key,
+        )
+>       assert len(journals) == 3
+E       assert 0 == 3
+E        +  where 0 = len([])
+
+tests/test_integration_minio.py:197: AssertionError
+------------------------------ Captured log call -------------------------------
+WARNING  journal_store:journal_store.py:362 journal store state reset: cleared docs/processed/meta tables and removed 0 chunk file(s)
+_____________________________ test_sibling_writers _____________________________
+
+minio = (<function minio.<locals>.peer at 0x107cfed40>, <function minio.<locals>.keys at 0x107cfef20>, <function minio.<locals>.wipe at 0x107cfee80>, <function minio.<locals>.seed at 0x107cfede0>, 'it/e0045e81358a47e89c51a902d461afdd/')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x107c4c7d0>
+
+    @requires_minio
+    async def test_sibling_writers(minio, monkeypatch):
+        peer, keys, _, _, prefix = minio
+        first, first_spy = await peer("first")
+        second, second_spy = await peer("second")
+        # Both peers start before either publishes and allocate at the same ms.
+        monkeypatch.setattr(
+            storage_journal, "time",
+            SimpleNamespace(time=lambda: 1700000000.0,
+                            monotonic=storage_journal.time.monotonic),
+        )
+        revisions = await asyncio.gather(
+            first.write_note("shared.md", "First sibling", create=True),
+            second.write_note("shared.md", "Second sibling", create=True),
+        )
+        shared_keys = [
+            key for spy in (first_spy, second_spy)
+            for op, key in spy.calls if op == "put"
+        ]
+>       assert len(set(shared_keys)) == 2
+E       assert 0 == 2
+E        +  where 0 = len(set())
+E        +    where set() = set([])
+
+tests/test_integration_minio.py:236: AssertionError
+------------------------------ Captured log call -------------------------------
+WARNING  journal_store:journal_store.py:362 journal store state reset: cleared docs/processed/meta tables and removed 0 chunk file(s)
+WARNING  journal_store:journal_store.py:362 journal store state reset: cleared docs/processed/meta tables and removed 0 chunk file(s)
+=========================== short test summary info ============================
+FAILED tests/test_integration_minio.py::test_interrupted_replay - assert 0 == 3
+FAILED tests/test_integration_minio.py::test_sibling_writers - assert 0 == 2
+2 failed, 42 passed in 0.97s
+............................................                             [100%]
+44 passed in 1.28s
+
+Re-run after spy filter fix: 44/44 PASSED (2026-11-21 18:33) — put_if_absent publications verified against real S3.
+
+Post PR2-fix re-run: 2026-11-21 20:21 — codec/refresh fixes vs real S3.

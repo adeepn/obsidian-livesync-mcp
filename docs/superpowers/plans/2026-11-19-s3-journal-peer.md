@@ -124,7 +124,9 @@
 
 **Interfaces:**
 - Consumes: journal_codec, pick_winner, path identity.
-- Produces: реализация `write_note(path, content, *, create=False, overwrite=False, expected_rev=None)`, `delete_note(path, expected_rev=None)`, `rename_note`, `copy_note` (поднятие `RenamePartialError` маппится на фазы: у нас фаза одна — «target_published»; семантика rename в append-мире: новый док + soft-delete старого ОДНИМ журнальным файлом — атомарно по файлу).
+> Superseded Task 7 wording: - Produces: реализация `write_note(path, content, *, create=False, overwrite=False, expected_rev=None)`, `delete_note(path, expected_rev=None)`, `rename_note`, `copy_note` (поднятие `RenamePartialError` маппится на фазы: у нас фаза одна — «target_published»; семантика rename в append-мире: новый док + soft-delete старого ОДНИМ журнальным файлом — атомарно по файлу).
+
+- **Amended by ruling (final architecture review), Task 7:** write_note, delete_note, rename_note и copy_note публикуют append-only журналы. Rename публикует target и tombstone source одним атомарным journal-файлом; RenamePartialError остаётся только в CouchDB backend, journal backend его не поднимает.
   - Алгоритм записи: validate_vault_path → локальный winner (expected_rev несовпадение → ConcurrentModification с текстом по контракту B1: «изменена параллельно; перечитайте и повторите») → новая ревизия `<gen+1>-<32 hex>` + `_revisions`-цепочка от winner → чанк(и) по chunk_id_for → serialize+deflate → имя `max(now_ms, числовой_максимум_всех_виденных_ключей + 1)` с монотонным counter процесса → put → НЕМЕДЛЕННО get+inflate+parse (несовпадение байтов → StorageError, «success» не возвращается) → apply_journal к store + mark_processed + last_sent_key.
   - Soft delete = ревизия с `deleted:true`, `type/path/children/eden` сохранены. Бинарные пути: BinaryNoteError (write — только текст; copy/rename переносят children+eden как есть).
   - Sibling-семантика: если после нашей записи приходит чужой журнал с конкур-листом — оба живут, winner детерминирован; ответ «успех» означает durable publication (контракт B1), не финального победителя.
@@ -142,7 +144,7 @@
 - Consumes: всё; `config.load_config` уже валидирует s3-группу (Task 1).
 - Produces: `get_backend(cfg)` строит `Boto3ObjectStorage(cfg.s3) + JournalStore(Path(cfg.s3.state_dir), path_identity)`; path_identity не известен до startup_check → JournalBackend создаёт store лениво внутри startup_check (выбрасывает UnsupportedVault из factory-вызова startup); README: раздел S3 (URI или переменные, state dir, первый полный replay, обновление перед операциями, конфликт-семантика журнала), CHANGELOG unreleased, AGENTS.md — новые модули.
 
-- [ ] **Step 1: failing tests** — `test_get_backend_s3` возвращает JournalBackend (с тестовым state_dir); env-пример валиден `load_config`; grep-assert: в репо не осталось строк «Plan B»/«arrives in Plan B».
+- [ ] **Step 1: failing tests** — `test_get_backend_s3` возвращает JournalBackend (с тестовым state_dir); env-пример валиден `load_config`; grep-assert: `server.py`, `config.py`, `README.md`, `.env.example`, `CHANGELOG.md` не содержат заглушек недоступного S3 backend; исторические планы и docstrings с provenance вне проверки.
 - [ ] **Step 2: FAIL → Step 3: implement → Step 4: PASS + полная suite + smoke `python -c "import server"` без env (fail-closed по конфигу, не traceback).**
 - [ ] **Step 5: Commit** — `feat: wire s3 journal backend into factory and docs`
 
@@ -160,7 +162,7 @@
 ### Task 10: Integration B — живой клиент, ручная приёмка (пользователь)
 
 **Files:**
-- Create: `docs/live-check-s3-checklist.md`; артефакты в `docs/test-artifacts/2026-11-19-live-s3/` (входят лог LiveSync + скриншоты + выводы скриптов)
+- Create: `docs/live-check-s3-checklist.md`; артефакты в `docs/test-artifacts/2026-11-19-live-s3/` (входят лог LiveSync (скриншот ИЛИ вербатим-транскрипт, RULING B-12) + выводы скриптов)
 
 **Interfaces:**
 - Consumes: рабочий JournalBackend (Tasks 5–8), тестовый vault `/Users/adeep/Documents/TESTVault`, docker MinIO из Task 9.
@@ -169,5 +171,5 @@
   (б) контроллер: свежий state_dir, startup+refresh, сверка всех файлов vault хеш-в-хеш (скрипт по образцу live_check_phase1) + capture первого журнального файла как golden для codec-теста (committed fixture);
   (в) сервер пишет (create/update/move/soft-delete — скрипт phase2-аналог) → пользователь Replicate → подтверждение применения (в т.ч. что LiveSync НЕ отверг нашего «невидимого писателя»: лог без ошибок — иначе план-Д: регистрация узла в milestone, отдельная задача);
   (г) пользователь пишет с клиента → сервер refresh → видит;
-  (д) артефакты: скриншот лога LiveSync после (в), выводы скриптов, итоговая строка PASS/FAIL.
+  (д) артефакты: скриншот ИЛИ вербатим-транскрипт лога LiveSync после (в) (RULING B-12; принят `docs/test-artifacts/2026-11-20-live-s3/client-log-replicate.md`), выводы скриптов, итоговая строка PASS/FAIL.
 - [ ] **Step 1: написать чек-лист + скрипты (`/tmp` или `scripts/live_check_s3.py` — по образцу couchdb-фазы)**; **Step 2: прогнать (а)-(д) с пользователем**; **Step 3: зафиксировать артефакты + golden fixture в tests/fixtures/**; **Step 4: Commit** — `docs: live s3 acceptance checklist and artifacts`.

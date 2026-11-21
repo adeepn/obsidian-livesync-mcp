@@ -405,7 +405,13 @@ class CouchDBBackend:
                     "such a vault"
                 )
 
-    async def refresh(self) -> None:
+    async def refresh(self, force: bool = False) -> None:
+        """Reload metadata only on explicit refresh; reads query CouchDB directly.
+
+        Index consumers retain their update-sequence check in _current_index.
+        """
+        if not force:
+            return
         info = await self._db_info()
         self._index = await self._load_index()
         self._index_seq = info.get("update_seq")

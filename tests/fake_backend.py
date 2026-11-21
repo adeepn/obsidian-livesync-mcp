@@ -55,8 +55,11 @@ class FakeBackend:
     async def startup_check(self):
         self._call("startup_check")
 
-    async def refresh(self):
-        self._call("refresh")
+    async def refresh(self, force=False):
+        if force:
+            self._call("refresh", force)
+        else:
+            self._call("refresh")
 
     async def close(self):
         self._call("close")

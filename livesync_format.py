@@ -4,11 +4,15 @@ Single source of truth for the ``path -> document id`` mapping, the
 vault-path namespace rules, and the note/chunk document codecs used by
 every storage backend (audit B2/B3/B4/B7/B9/B10).
 
-Mirrors upstream livesync-commonlib ``src/string_and_binary/path.ts`` and
+Mirrors upstream livesync-commonlib ``src/string_and_binary/path.ts``,
+``src/common/pathNormalization.ts``, and
 ``src/managers/EntryManager/EntryManagerImpls.ts`` for the configuration
 this server supports: ``handleFilenameCaseSensitive=false`` (ids are
 lowercased) and path obfuscation disabled. Vaults that use obfuscation or
-E2EE are rejected at backend startup instead.
+E2EE are rejected at backend startup instead. Path identity comes in two
+flavors (upstream ``pathNormalizationVersion``): legacy v0 keeps paths as
+typed, v1 compares Unicode NFC forms — see ``path2id`` and
+``resolve_path_identity``.
 """
 
 from __future__ import annotations
@@ -16,6 +20,7 @@ from __future__ import annotations
 import base64
 import binascii
 import hashlib
+import unicodedata
 from copy import deepcopy
 
 # Upstream isPlainText (path.ts): extensions stored as plain text chunks.
@@ -54,9 +59,30 @@ _RESERVED_FIRST_SEGMENTS = frozenset({"_design", "_local"})
 # LiveSync service documents that live at the vault root (db.const.ts).
 SERVICE_DOC_IDS = frozenset({"obsydian_livesync_version", "syncinfo"})
 
+# Path identity modes (upstream common/pathNormalization.ts): version 0
+# keeps the path as typed when deriving document ids; version 1 compares
+# Unicode NFC forms. Backends fix one mode per vault at startup via
+# ``resolve_path_identity`` and pass it to ``path2id`` as ``nfc=``.
+PATH_IDENTITY_LEGACY = "legacy"
+PATH_IDENTITY_NFC = "nfc"
+
 
 class ForbiddenPathError(Exception):
     """Vault path collides with a LiveSync or CouchDB service namespace."""
+
+
+class UnsupportedVaultSettings(ValueError):
+    """Milestone settings describe a vault this server cannot serve.
+
+    Raised by ``resolve_path_identity`` with the reason in the message.
+    This module must stay dependency-free (storage layers import it, not
+    the other way round), so the exception is a plain ``ValueError``.
+
+    Mapping rule for backends: catch and re-raise as the storage-layer
+    ``UnsupportedVault`` preserving the text, e.g.
+    ``except UnsupportedVaultSettings as exc:
+    raise UnsupportedVault(str(exc)) from exc``.
+    """
 
 
 def _normalize_path(path: str) -> str:
@@ -85,17 +111,143 @@ def canonical_path(path: str) -> str:
     return _normalize_path(path)
 
 
-def path2id(path: str) -> str:
+def path2id(path: str, *, nfc: bool = False) -> str:
     """Map a vault path to a LiveSync document id.
 
     Upstream ``path2id_base`` with ``caseInsensitive=true`` and no
     obfuscation: lowercase, and a leading ``_`` is escaped to ``/_`` because
     CouchDB reserves ids starting with ``_``.
+
+    ``nfc=True`` selects the v1 path identity (``pathNormalizationVersion``
+    1): the raw path is normalized to Unicode NFC *before* the existing
+    separator normalization and lowercase — the same composition as
+    upstream ``normalisePathForIdentity`` feeding ``path2id_base`` — so
+    decomposed and precomposed spellings share one id. The default keeps
+    the legacy (v0) behavior: decomposed spellings stay distinct.
     """
+    if nfc:
+        path = unicodedata.normalize("NFC", path)
     normalized = _normalize_path(path).lower()
     if normalized.startswith("_"):
         return "/" + normalized
     return normalized
+
+
+# Milestone settings key holding per-device settings maps (upstream
+# common/models/tweak.definition.ts:153 and journal/
+# LiveSyncJournalReplicator.ts:135: tweak_values is keyed by device id).
+_PREFERRED_DEVICE_ID = "PREFERRED"
+
+# Tweak keys this server knows how to read. A settings map counts as
+# readable only when it holds at least one of them; anything else is
+# metadata or an empty map, and resolution fails closed instead of
+# silently selecting legacy.
+_RECOGNIZED_TWEAK_KEYS = frozenset(
+    {
+        "pathNormalizationVersion",
+        "encrypt",
+        "usePathObfuscation",
+        "handleFilenameCaseSensitive",
+    }
+)
+
+_UNREADABLE_SETTINGS_REASON = "vault settings missing or unreadable"
+
+# Settings this server cannot serve, with the human-readable refusal for
+# each. The reason is reported for the first matching setting found.
+_UNSUPPORTED_SETTINGS = (
+    (
+        "encrypt",
+        "the vault uses LiveSync end-to-end encryption, "
+        "which this server does not support",
+    ),
+    (
+        "usePathObfuscation",
+        "the vault uses path obfuscation, "
+        "which this server does not support",
+    ),
+    (
+        "handleFilenameCaseSensitive",
+        "the vault uses case-sensitive filenames "
+        "(handleFilenameCaseSensitive); this server maps paths "
+        "to document ids case-insensitively and cannot serve "
+        "such a vault",
+    ),
+)
+
+
+def _milestone_setting_maps(milestone_settings: dict) -> list[dict]:
+    """Resolve preferred settings, or conservatively every device.
+
+    Same resolution as the CouchDB backend startup check: without a
+    ``tweak_values`` key the settings sit at the top level (older
+    milestone shapes); otherwise the ``PREFERRED`` entry wins and, when
+    absent, every per-device map is read. A map only counts as settings
+    when it holds at least one recognized tweak key, and resolution fails
+    closed (``UnsupportedVaultSettings``) when no readable settings exist.
+    """
+    if not isinstance(milestone_settings, dict):
+        raise UnsupportedVaultSettings(_UNREADABLE_SETTINGS_REASON)
+    if "tweak_values" not in milestone_settings:
+        candidates = [milestone_settings]
+    else:
+        entries = milestone_settings["tweak_values"]
+        if not isinstance(entries, dict):
+            raise UnsupportedVaultSettings(_UNREADABLE_SETTINGS_REASON)
+        preferred = entries.get(_PREFERRED_DEVICE_ID)
+        if isinstance(preferred, dict):
+            candidates = [preferred]
+        else:
+            candidates = [
+                value for value in entries.values() if isinstance(value, dict)
+            ]
+    maps = [
+        settings
+        for settings in candidates
+        if _RECOGNIZED_TWEAK_KEYS & settings.keys()
+    ]
+    if not maps:
+        raise UnsupportedVaultSettings(_UNREADABLE_SETTINGS_REASON)
+    return maps
+
+
+def resolve_path_identity(milestone_settings: dict) -> str:
+    """Derive the vault's path identity mode from milestone settings.
+
+    Returns ``PATH_IDENTITY_NFC`` when any resolved settings map sets
+    ``pathNormalizationVersion`` to 1 (upstream v1 compares NFC forms when
+    deriving document ids) and ``PATH_IDENTITY_LEGACY`` for 0 or absent
+    (upstream treats an undefined version as 0). Like upstream
+    ``assertSupportedPathNormalizationVersion``, every other value — other
+    numbers, non-numbers, explicit null — is refused.
+
+    Refuses with ``UnsupportedVaultSettings`` — reason in the message —
+    when a resolved map turns on ``encrypt``, ``usePathObfuscation``, or
+    ``handleFilenameCaseSensitive``, when the version is not 0/1/absent,
+    or when no readable settings exist; backends re-raise that as their
+    storage-layer ``UnsupportedVault`` (see the mapping rule on
+    ``UnsupportedVaultSettings``).
+    """
+    nfc = False
+    for settings in _milestone_setting_maps(milestone_settings):
+        for key, reason in _UNSUPPORTED_SETTINGS:
+            if settings.get(key):
+                raise UnsupportedVaultSettings(reason)
+        if "pathNormalizationVersion" not in settings:
+            continue  # absent means legacy (upstream: undefined -> 0)
+        version = settings["pathNormalizationVersion"]
+        if (
+            isinstance(version, bool)
+            or not isinstance(version, (int, float))
+            or version not in (0, 1)
+        ):
+            raise UnsupportedVaultSettings(
+                f"unsupported pathNormalizationVersion {version!r}; "
+                "this server supports 0 (legacy) and 1 (NFC)"
+            )
+        if version == 1:
+            nfc = True
+    return PATH_IDENTITY_NFC if nfc else PATH_IDENTITY_LEGACY
 
 
 def validate_vault_path(path: str) -> None:

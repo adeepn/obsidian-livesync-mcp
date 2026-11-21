@@ -1,0 +1,275 @@
+FFFFFFFF                                                                 [100%]
+=================================== FAILURES ===================================
+___ TestRuntimeHistoryGuards.test_refresh_replays_replacement_history[False] ___
+
+self = <tests.test_storage_journal.TestRuntimeHistoryGuards object at 0x118333890>
+tmp_path = PosixPath('/private/var/folders/_g/qr9n6_2s2j78cdmc_flnkhx80000gn/T/pytest-of-adeep/pytest-113/test_refresh_replays_replaceme0')
+changed_epoch = False
+
+    @pytest.mark.parametrize('changed_epoch', [False, True])
+    async def test_refresh_replays_replacement_history(self, tmp_path, changed_epoch):
+        backend, storage = make_backend(tmp_path, healthy_bucket())
+        await backend.startup_check()
+        await backend.refresh()
+        sent = await backend.write_note('sent.md', 'old', create=True)
+        last_sent = backend._store.last_sent_key
+        # Keep a processed key but replace its contents: reset must replay it.
+        replacement = meta_doc('replacement.md', '1-new')
+        storage._objects[JOURNAL_1] = journal_blob([replacement])
+        if changed_epoch:
+            storage._objects[SYNC_PARAMETERS_KEY] = params_blob(salt='salt-b')
+        else:
+            del storage._objects[last_sent]
+        storage.get_calls.clear()
+        await backend.refresh(force=True)
+        paths = {meta['path'] for meta in await backend.list_notes()}
+>       assert 'replacement.md' in paths
+E       AssertionError: assert 'replacement.md' in {'a.md', 'b.md', 'c.md', 'sent.md'}
+
+tests/test_storage_journal.py:1563: AssertionError
+------------------------------ Captured log call -------------------------------
+WARNING  journal_store:journal_store.py:329 journal store state reset: cleared docs/processed/meta tables and removed 0 chunk file(s)
+___ TestRuntimeHistoryGuards.test_refresh_replays_replacement_history[True] ____
+
+self = <tests.test_storage_journal.TestRuntimeHistoryGuards object at 0x1183339d0>
+tmp_path = PosixPath('/private/var/folders/_g/qr9n6_2s2j78cdmc_flnkhx80000gn/T/pytest-of-adeep/pytest-113/test_refresh_replays_replaceme1')
+changed_epoch = True
+
+    @pytest.mark.parametrize('changed_epoch', [False, True])
+    async def test_refresh_replays_replacement_history(self, tmp_path, changed_epoch):
+        backend, storage = make_backend(tmp_path, healthy_bucket())
+        await backend.startup_check()
+        await backend.refresh()
+        sent = await backend.write_note('sent.md', 'old', create=True)
+        last_sent = backend._store.last_sent_key
+        # Keep a processed key but replace its contents: reset must replay it.
+        replacement = meta_doc('replacement.md', '1-new')
+        storage._objects[JOURNAL_1] = journal_blob([replacement])
+        if changed_epoch:
+            storage._objects[SYNC_PARAMETERS_KEY] = params_blob(salt='salt-b')
+        else:
+            del storage._objects[last_sent]
+        storage.get_calls.clear()
+        await backend.refresh(force=True)
+        paths = {meta['path'] for meta in await backend.list_notes()}
+>       assert 'replacement.md' in paths
+E       AssertionError: assert 'replacement.md' in {'a.md', 'b.md', 'c.md', 'sent.md'}
+
+tests/test_storage_journal.py:1563: AssertionError
+------------------------------ Captured log call -------------------------------
+WARNING  journal_store:journal_store.py:329 journal store state reset: cleared docs/processed/meta tables and removed 0 chunk file(s)
+_ TestRuntimeHistoryGuards.test_write_after_wipe_resets_and_refuses_publication _
+
+self = <tests.test_storage_journal.TestRuntimeHistoryGuards object at 0x11840d940>
+tmp_path = PosixPath('/private/var/folders/_g/qr9n6_2s2j78cdmc_flnkhx80000gn/T/pytest-of-adeep/pytest-113/test_write_after_wipe_resets_a0')
+
+    async def test_write_after_wipe_resets_and_refuses_publication(self, tmp_path):
+        backend, storage = make_backend(tmp_path, healthy_bucket())
+        await backend.startup_check()
+        await backend.refresh()
+        original = await backend.write_note('sent.md', 'old', create=True)
+        del storage._objects[backend._store.last_sent_key]
+        before = dict(storage._objects)
+        puts = len(storage.put_calls)
+>       with pytest.raises(ConcurrentModification, match='remote was rebuilt; retry the operation after refresh'):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE ConcurrentModification
+
+tests/test_storage_journal.py:1578: Failed
+------------------------------ Captured log call -------------------------------
+WARNING  journal_store:journal_store.py:329 journal store state reset: cleared docs/processed/meta tables and removed 0 chunk file(s)
+_______________ test_invalid_timestamps_are_isolated[mtime-inf] ________________
+
+tmp_path = PosixPath('/private/var/folders/_g/qr9n6_2s2j78cdmc_flnkhx80000gn/T/pytest-of-adeep/pytest-113/test_invalid_timestamps_are_is0')
+field = 'mtime', value = inf
+
+    @pytest.mark.parametrize('field,value', [
+        ('mtime', float('1e999')), ('ctime', 'x'),
+        ('mtime', -1), ('ctime', True), ('mtime', float('-inf')),
+    ])
+    async def test_invalid_timestamps_are_isolated(tmp_path, field, value):
+        good = meta_doc('good.md', '1-good')
+        good.update(type='notes', data='valid')
+        bad = meta_doc('bad.md', '1-bad')
+        bad.update(type='notes', data='invalid')
+        bad[field] = value
+        backend, _ = make_backend(tmp_path, healthy_bucket(**{
+            JOURNAL_1: deflate_journal((json.dumps(good) + '\n' +
+                json.dumps(bad).replace('Infinity', '1e999') + '\n').encode()), JOURNAL_2: None, JOURNAL_3: None,
+        }))
+        await backend.startup_check()
+        await backend.refresh()
+>       assert [meta['path'] for meta in await backend.list_notes()] == ['good.md']
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_storage_journal.py:1604:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+storage_journal.py:480: in list_notes
+    meta = self._meta_from_doc(doc)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+storage_journal.py:674: in _meta_from_doc
+    mtime=_as_ms(doc.get("mtime")),
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+value = inf
+
+    def _as_ms(value: object) -> int:
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return 0
+>       return int(value)
+               ^^^^^^^^^^
+E       OverflowError: cannot convert float infinity to integer
+
+storage_journal.py:139: OverflowError
+------------------------------ Captured log call -------------------------------
+WARNING  journal_store:journal_store.py:329 journal store state reset: cleared docs/processed/meta tables and removed 0 chunk file(s)
+________________ test_invalid_timestamps_are_isolated[ctime-x] _________________
+
+tmp_path = PosixPath('/private/var/folders/_g/qr9n6_2s2j78cdmc_flnkhx80000gn/T/pytest-of-adeep/pytest-113/test_invalid_timestamps_are_is1')
+field = 'ctime', value = 'x'
+
+    @pytest.mark.parametrize('field,value', [
+        ('mtime', float('1e999')), ('ctime', 'x'),
+        ('mtime', -1), ('ctime', True), ('mtime', float('-inf')),
+    ])
+    async def test_invalid_timestamps_are_isolated(tmp_path, field, value):
+        good = meta_doc('good.md', '1-good')
+        good.update(type='notes', data='valid')
+        bad = meta_doc('bad.md', '1-bad')
+        bad.update(type='notes', data='invalid')
+        bad[field] = value
+        backend, _ = make_backend(tmp_path, healthy_bucket(**{
+            JOURNAL_1: deflate_journal((json.dumps(good) + '\n' +
+                json.dumps(bad).replace('Infinity', '1e999') + '\n').encode()), JOURNAL_2: None, JOURNAL_3: None,
+        }))
+        await backend.startup_check()
+        await backend.refresh()
+>       assert [meta['path'] for meta in await backend.list_notes()] == ['good.md']
+E       AssertionError: assert ['bad.md', 'good.md'] == ['good.md']
+E
+E         At index 0 diff: 'bad.md' != 'good.md'
+E         Left contains one more item: 'good.md'
+E         Use -v to get more diff
+
+tests/test_storage_journal.py:1604: AssertionError
+------------------------------ Captured log call -------------------------------
+WARNING  journal_store:journal_store.py:329 journal store state reset: cleared docs/processed/meta tables and removed 0 chunk file(s)
+________________ test_invalid_timestamps_are_isolated[mtime--1] ________________
+
+tmp_path = PosixPath('/private/var/folders/_g/qr9n6_2s2j78cdmc_flnkhx80000gn/T/pytest-of-adeep/pytest-113/test_invalid_timestamps_are_is2')
+field = 'mtime', value = -1
+
+    @pytest.mark.parametrize('field,value', [
+        ('mtime', float('1e999')), ('ctime', 'x'),
+        ('mtime', -1), ('ctime', True), ('mtime', float('-inf')),
+    ])
+    async def test_invalid_timestamps_are_isolated(tmp_path, field, value):
+        good = meta_doc('good.md', '1-good')
+        good.update(type='notes', data='valid')
+        bad = meta_doc('bad.md', '1-bad')
+        bad.update(type='notes', data='invalid')
+        bad[field] = value
+        backend, _ = make_backend(tmp_path, healthy_bucket(**{
+            JOURNAL_1: deflate_journal((json.dumps(good) + '\n' +
+                json.dumps(bad).replace('Infinity', '1e999') + '\n').encode()), JOURNAL_2: None, JOURNAL_3: None,
+        }))
+        await backend.startup_check()
+        await backend.refresh()
+>       assert [meta['path'] for meta in await backend.list_notes()] == ['good.md']
+E       AssertionError: assert ['bad.md', 'good.md'] == ['good.md']
+E
+E         At index 0 diff: 'bad.md' != 'good.md'
+E         Left contains one more item: 'good.md'
+E         Use -v to get more diff
+
+tests/test_storage_journal.py:1604: AssertionError
+------------------------------ Captured log call -------------------------------
+WARNING  journal_store:journal_store.py:329 journal store state reset: cleared docs/processed/meta tables and removed 0 chunk file(s)
+_______________ test_invalid_timestamps_are_isolated[ctime-True] _______________
+
+tmp_path = PosixPath('/private/var/folders/_g/qr9n6_2s2j78cdmc_flnkhx80000gn/T/pytest-of-adeep/pytest-113/test_invalid_timestamps_are_is3')
+field = 'ctime', value = True
+
+    @pytest.mark.parametrize('field,value', [
+        ('mtime', float('1e999')), ('ctime', 'x'),
+        ('mtime', -1), ('ctime', True), ('mtime', float('-inf')),
+    ])
+    async def test_invalid_timestamps_are_isolated(tmp_path, field, value):
+        good = meta_doc('good.md', '1-good')
+        good.update(type='notes', data='valid')
+        bad = meta_doc('bad.md', '1-bad')
+        bad.update(type='notes', data='invalid')
+        bad[field] = value
+        backend, _ = make_backend(tmp_path, healthy_bucket(**{
+            JOURNAL_1: deflate_journal((json.dumps(good) + '\n' +
+                json.dumps(bad).replace('Infinity', '1e999') + '\n').encode()), JOURNAL_2: None, JOURNAL_3: None,
+        }))
+        await backend.startup_check()
+        await backend.refresh()
+>       assert [meta['path'] for meta in await backend.list_notes()] == ['good.md']
+E       AssertionError: assert ['bad.md', 'good.md'] == ['good.md']
+E
+E         At index 0 diff: 'bad.md' != 'good.md'
+E         Left contains one more item: 'good.md'
+E         Use -v to get more diff
+
+tests/test_storage_journal.py:1604: AssertionError
+------------------------------ Captured log call -------------------------------
+WARNING  journal_store:journal_store.py:329 journal store state reset: cleared docs/processed/meta tables and removed 0 chunk file(s)
+_______________ test_invalid_timestamps_are_isolated[mtime--inf] _______________
+
+tmp_path = PosixPath('/private/var/folders/_g/qr9n6_2s2j78cdmc_flnkhx80000gn/T/pytest-of-adeep/pytest-113/test_invalid_timestamps_are_is4')
+field = 'mtime', value = -inf
+
+    @pytest.mark.parametrize('field,value', [
+        ('mtime', float('1e999')), ('ctime', 'x'),
+        ('mtime', -1), ('ctime', True), ('mtime', float('-inf')),
+    ])
+    async def test_invalid_timestamps_are_isolated(tmp_path, field, value):
+        good = meta_doc('good.md', '1-good')
+        good.update(type='notes', data='valid')
+        bad = meta_doc('bad.md', '1-bad')
+        bad.update(type='notes', data='invalid')
+        bad[field] = value
+        backend, _ = make_backend(tmp_path, healthy_bucket(**{
+            JOURNAL_1: deflate_journal((json.dumps(good) + '\n' +
+                json.dumps(bad).replace('Infinity', '1e999') + '\n').encode()), JOURNAL_2: None, JOURNAL_3: None,
+        }))
+        await backend.startup_check()
+        await backend.refresh()
+>       assert [meta['path'] for meta in await backend.list_notes()] == ['good.md']
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_storage_journal.py:1604:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+storage_journal.py:480: in list_notes
+    meta = self._meta_from_doc(doc)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+storage_journal.py:674: in _meta_from_doc
+    mtime=_as_ms(doc.get("mtime")),
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+value = -inf
+
+    def _as_ms(value: object) -> int:
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return 0
+>       return int(value)
+               ^^^^^^^^^^
+E       OverflowError: cannot convert float infinity to integer
+
+storage_journal.py:139: OverflowError
+------------------------------ Captured log call -------------------------------
+WARNING  journal_store:journal_store.py:329 journal store state reset: cleared docs/processed/meta tables and removed 0 chunk file(s)
+=========================== short test summary info ============================
+FAILED tests/test_storage_journal.py::TestRuntimeHistoryGuards::test_refresh_replays_replacement_history[False]
+FAILED tests/test_storage_journal.py::TestRuntimeHistoryGuards::test_refresh_replays_replacement_history[True]
+FAILED tests/test_storage_journal.py::TestRuntimeHistoryGuards::test_write_after_wipe_resets_and_refuses_publication
+FAILED tests/test_storage_journal.py::test_invalid_timestamps_are_isolated[mtime-inf]
+FAILED tests/test_storage_journal.py::test_invalid_timestamps_are_isolated[ctime-x]
+FAILED tests/test_storage_journal.py::test_invalid_timestamps_are_isolated[mtime--1]
+FAILED tests/test_storage_journal.py::test_invalid_timestamps_are_isolated[ctime-True]
+FAILED tests/test_storage_journal.py::test_invalid_timestamps_are_isolated[mtime--inf]
+8 failed, 122 deselected in 1.52s

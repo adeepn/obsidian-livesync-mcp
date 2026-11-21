@@ -103,7 +103,7 @@ async def test_backlinks_finds_anchor_links(tools, link):
 async def test_refresh_calls_backend_refresh(tools):
     server, fake = tools
     await server.obsidian_refresh()
-    assert ("refresh", ()) in fake.calls
+    assert fake.calls == [("refresh", (True,))]
 
 
 async def test_tags_and_graph_isolate_unreadable_notes(tools):
@@ -185,9 +185,26 @@ async def test_get_backend_couchdb():
     await backend.close()
 
 
-def test_get_backend_s3_pending():
-    with pytest.raises(RuntimeError, match="^S3 backend arrives in Plan B$"):
-        server.get_backend(SimpleNamespace(backend="s3"))
+async def test_get_backend_s3(tmp_path):
+    from config import load_config
+    from storage_journal import JournalBackend
+    from object_storage import Boto3ObjectStorage
+
+    cfg = load_config({
+        "LIVESYNC_BACKEND": "s3",
+        "LIVESYNC_S3_URI": "sls://AK:SK@https://minio.local?bucket=vault&region=auto",
+        "S3_STATE_DIR": str(tmp_path / "state"),
+        "S3_REFRESH_MIN_INTERVAL_SEC": "2.5",
+        "MCP_API_KEY": "test-token",
+    })
+    backend = server.get_backend(cfg)
+    assert isinstance(backend, JournalBackend)
+    assert isinstance(backend._object_storage, Boto3ObjectStorage)
+    assert backend._state_dir == tmp_path / "state"
+    assert backend.refresh_min_interval == 2.5
+    assert backend._store is None
+    assert not (tmp_path / "state").exists()
+    await backend.close()
 
 
 async def test_vault_stats_reports_backend(tools):
@@ -540,3 +557,19 @@ async def test_capped_empty_listing_does_not_claim_absence(tools, monkeypatch, n
     assert 'narrow' in result['message'].lower()
     assert 'No notes found' not in response
     assert 'No templates found' not in response
+
+
+async def test_fetch_couchdb_does_not_scan_index_for_refresh(monkeypatch):
+    from tests.test_storage_couchdb import fake_backend
+
+    doc = {"_id": "note.md", "path": "Note.md", "type": "plain",
+           "children": ["h:inline"], "eden": {"h:inline": "hello"},
+           "ctime": 1, "mtime": 2, "size": 5}
+    async with fake_backend({"note.md": doc}) as (backend, log):
+        monkeypatch.setattr(server, "backend", backend)
+        result = json.loads(await server.obsidian_fetch("Note.md"))
+        assert result["content"] == "hello"
+        assert not any(r.url.path.endswith("/_all_docs") for r in log)
+        log.clear()
+        assert await server.obsidian_refresh() == "Vault refreshed."
+        assert any(r.method == "GET" and r.url.path.endswith("/_all_docs") for r in log)

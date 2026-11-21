@@ -1,5 +1,6 @@
 # Runtime dependencies: exact pins / bounded ranges (audit A1).
 # Fully frozen environment: requirements.lock (pip freeze of the working venv).
+boto3==1.44.2
 mcp[cli]==1.30.0
 pydantic>=2,<3
 python-dotenv>=1,<2

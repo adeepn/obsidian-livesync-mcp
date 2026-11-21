@@ -1,0 +1,18 @@
+vault milestone has advisory locked: true flag; remote marked as rebuilt; peer performs full replay
+VISIBLE: От клиента.md rev 3-b3e2036629244536a14b37743b3c388d
+byte-exact vs disk: True
+--- content ---
+**`От клиента.md`**
+**`От клиента.md`**
+**`От клиента.md`**
+**`От клиента.md`**
+v
+**`От клиента.md`**
+**`От клиента.md`**
+**`От клиента.md`**
+
+
+== PHASE: client-write visibility ==
+user created От клиента.md in Obsidian; client uploaded journal (4 docs, 1 chunk); peer forced refresh -> VISIBLE rev 3-b3e2036629244536a14b37743b3c388d; byte-exact vs disk: True
+
+OVERALL LIVE ACCEPTANCE: PASS 4/4 directions (real client 1.0.50 vs JournalBackend, SeaweedFS docker, legacy identity; locked-advisory milestone accepted per Ruling B-11)

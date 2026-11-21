@@ -1,0 +1,1036 @@
+........................................................................ [ 69%]
+...FFFFFFFFFFFFFFFFFFFFFFFFFFFFF                                         [100%]
+=================================== FAILURES ===================================
+_______ TestJournalWrites.test_create_revision_chain_replace_and_delete ________
+
+self = <tests.test_storage_journal.TestJournalWrites object at 0x10696b110>
+tmp_path = PosixPath('/private/var/folders/_g/qr9n6_2s2j78cdmc_flnkhx80000gn/T/pytest-of-adeep/pytest-76/test_create_revision_chain_rep0')
+
+    async def test_create_revision_chain_replace_and_delete(self, tmp_path):
+        backend, storage = await write_backend(tmp_path)
+>       first = await backend.write_note('A.md', 'привет\n', create=True, mtime=123)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_storage_journal.py:1081:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <storage_journal.JournalBackend object at 0x106a38a50>, path = 'A.md'
+content = 'привет\n', create = True, overwrite = False, mtime = 123
+expected_rev = None
+
+    async def write_note(
+        self,
+        path: str,
+        content: str,
+        *,
+        create: bool = False,
+        overwrite: bool = False,
+        mtime: int | None = None,
+        expected_rev: str | None = None,
+    ) -> NoteMeta:
+>       raise NotImplementedError("journal note writes arrive in Task 7")
+E       NotImplementedError: journal note writes arrive in Task 7
+
+storage_journal.py:666: NotImplementedError
+------------------------------ Captured log call -------------------------------
+WARNING  journal_store:journal_store.py:329 journal store state reset: cleared docs/processed/meta tables and removed 0 chunk file(s)
+________ TestJournalWrites.test_create_and_missing_rules_no_publication ________
+
+self = <tests.test_storage_journal.TestJournalWrites object at 0x10696afd0>
+tmp_path = PosixPath('/private/var/folders/_g/qr9n6_2s2j78cdmc_flnkhx80000gn/T/pytest-of-adeep/pytest-76/test_create_and_missing_rules_0')
+
+    async def test_create_and_missing_rules_no_publication(self, tmp_path):
+        backend, storage = await write_backend(tmp_path)
+>       await backend.write_note('a.md', 'original', create=True)
+
+tests/test_storage_journal.py:1110:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <storage_journal.JournalBackend object at 0x1069c8350>, path = 'a.md'
+content = 'original', create = True, overwrite = False, mtime = None
+expected_rev = None
+
+    async def write_note(
+        self,
+        path: str,
+        content: str,
+        *,
+        create: bool = False,
+        overwrite: bool = False,
+        mtime: int | None = None,
+        expected_rev: str | None = None,
+    ) -> NoteMeta:
+>       raise NotImplementedError("journal note writes arrive in Task 7")
+E       NotImplementedError: journal note writes arrive in Task 7
+
+storage_journal.py:666: NotImplementedError
+------------------------------ Captured log call -------------------------------
+WARNING  journal_store:journal_store.py:329 journal store state reset: cleared docs/processed/meta tables and removed 0 chunk file(s)
+_________ TestJournalWrites.test_stale_revision_never_puts[a.md-write] _________
+
+self = <tests.test_storage_journal.TestJournalWrites object at 0x1069a4c30>
+tmp_path = PosixPath('/private/var/folders/_g/qr9n6_2s2j78cdmc_flnkhx80000gn/T/pytest-of-adeep/pytest-76/test_stale_revision_never_puts0')
+operation = 'write', path = 'a.md'
+
+    @pytest.mark.parametrize('operation', ['write', 'delete'])
+    @pytest.mark.parametrize('path', ['a.md', 'missing.md'])
+    async def test_stale_revision_never_puts(self, tmp_path, operation, path):
+        backend, storage = await write_backend(tmp_path)
+>       await backend.write_note('a.md', 'original', create=True)
+
+tests/test_storage_journal.py:1124:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <storage_journal.JournalBackend object at 0x107366450>, path = 'a.md'
+content = 'original', create = True, overwrite = False, mtime = None
+expected_rev = None
+
+    async def write_note(
+        self,
+        path: str,
+        content: str,
+        *,
+        create: bool = False,
+        overwrite: bool = False,
+        mtime: int | None = None,
+        expected_rev: str | None = None,
+    ) -> NoteMeta:
+>       raise NotImplementedError("journal note writes arrive in Task 7")
+E       NotImplementedError: journal note writes arrive in Task 7
+
+storage_journal.py:666: NotImplementedError
+------------------------------ Captured log call -------------------------------
+WARNING  journal_store:journal_store.py:329 journal store state reset: cleared docs/processed/meta tables and removed 0 chunk file(s)
+________ TestJournalWrites.test_stale_revision_never_puts[a.md-delete] _________
+
+self = <tests.test_storage_journal.TestJournalWrites object at 0x1069a4d60>
+tmp_path = PosixPath('/private/var/folders/_g/qr9n6_2s2j78cdmc_flnkhx80000gn/T/pytest-of-adeep/pytest-76/test_stale_revision_never_puts1')
+operation = 'delete', path = 'a.md'
+
+    @pytest.mark.parametrize('operation', ['write', 'delete'])
+    @pytest.mark.parametrize('path', ['a.md', 'missing.md'])
+    async def test_stale_revision_never_puts(self, tmp_path, operation, path):
+        backend, storage = await write_backend(tmp_path)
+>       await backend.write_note('a.md', 'original', create=True)
+
+tests/test_storage_journal.py:1124:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <storage_journal.JournalBackend object at 0x1075d6ad0>, path = 'a.md'
+content = 'original', create = True, overwrite = False, mtime = None
+expected_rev = None
+
+    async def write_note(
+        self,
+        path: str,
+        content: str,
+        *,
+        create: bool = False,
+        overwrite: bool = False,
+        mtime: int | None = None,
+        expected_rev: str | None = None,
+    ) -> NoteMeta:
+>       raise NotImplementedError("journal note writes arrive in Task 7")
+E       NotImplementedError: journal note writes arrive in Task 7
+
+storage_journal.py:666: NotImplementedError
+------------------------------ Captured log call -------------------------------
+WARNING  journal_store:journal_store.py:329 journal store state reset: cleared docs/processed/meta tables and removed 0 chunk file(s)
+______ TestJournalWrites.test_stale_revision_never_puts[missing.md-write] ______
+
+self = <tests.test_storage_journal.TestJournalWrites object at 0x106cac830>
+tmp_path = PosixPath('/private/var/folders/_g/qr9n6_2s2j78cdmc_flnkhx80000gn/T/pytest-of-adeep/pytest-76/test_stale_revision_never_puts2')
+operation = 'write', path = 'missing.md'
+
+    @pytest.mark.parametrize('operation', ['write', 'delete'])
+    @pytest.mark.parametrize('path', ['a.md', 'missing.md'])
+    async def test_stale_revision_never_puts(self, tmp_path, operation, path):
+        backend, storage = await write_backend(tmp_path)
+>       await backend.write_note('a.md', 'original', create=True)
+
+tests/test_storage_journal.py:1124:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <storage_journal.JournalBackend object at 0x107509450>, path = 'a.md'
+content = 'original', create = True, overwrite = False, mtime = None
+expected_rev = None
+
+    async def write_note(
+        self,
+        path: str,
+        content: str,
+        *,
+        create: bool = False,
+        overwrite: bool = False,
+        mtime: int | None = None,
+        expected_rev: str | None = None,
+    ) -> NoteMeta:
+>       raise NotImplementedError("journal note writes arrive in Task 7")
+E       NotImplementedError: journal note writes arrive in Task 7
+
+storage_journal.py:666: NotImplementedError
+------------------------------ Captured log call -------------------------------
+WARNING  journal_store:journal_store.py:329 journal store state reset: cleared docs/processed/meta tables and removed 0 chunk file(s)
+_____ TestJournalWrites.test_stale_revision_never_puts[missing.md-delete] ______
+
+self = <tests.test_storage_journal.TestJournalWrites object at 0x1069b87c0>
+tmp_path = PosixPath('/private/var/folders/_g/qr9n6_2s2j78cdmc_flnkhx80000gn/T/pytest-of-adeep/pytest-76/test_stale_revision_never_puts3')
+operation = 'delete', path = 'missing.md'
+
+    @pytest.mark.parametrize('operation', ['write', 'delete'])
+    @pytest.mark.parametrize('path', ['a.md', 'missing.md'])
+    async def test_stale_revision_never_puts(self, tmp_path, operation, path):
+        backend, storage = await write_backend(tmp_path)
+>       await backend.write_note('a.md', 'original', create=True)
+
+tests/test_storage_journal.py:1124:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <storage_journal.JournalBackend object at 0x1076943d0>, path = 'a.md'
+content = 'original', create = True, overwrite = False, mtime = None
+expected_rev = None
+
+    async def write_note(
+        self,
+        path: str,
+        content: str,
+        *,
+        create: bool = False,
+        overwrite: bool = False,
+        mtime: int | None = None,
+        expected_rev: str | None = None,
+    ) -> NoteMeta:
+>       raise NotImplementedError("journal note writes arrive in Task 7")
+E       NotImplementedError: journal note writes arrive in Task 7
+
+storage_journal.py:666: NotImplementedError
+------------------------------ Captured log call -------------------------------
+WARNING  journal_store:journal_store.py:329 journal store state reset: cleared docs/processed/meta tables and removed 0 chunk file(s)
+____ TestJournalWrites.test_readback_failure_does_not_change_store[missing] ____
+
+self = <tests.test_storage_journal.TestJournalWrites object at 0x1069b89e0>
+tmp_path = PosixPath('/private/var/folders/_g/qr9n6_2s2j78cdmc_flnkhx80000gn/T/pytest-of-adeep/pytest-76/test_readback_failure_does_not0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x106a85400>
+kind = 'missing'
+
+    @pytest.mark.parametrize('kind', ['missing', 'corrupt', 'other-records', 'extra-record'])
+    async def test_readback_failure_does_not_change_store(self, tmp_path, monkeypatch, kind):
+        backend, storage = await write_backend(tmp_path)
+>       old = await backend.write_note('a.md', 'original', create=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_storage_journal.py:1137:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <storage_journal.JournalBackend object at 0x10737c450>, path = 'a.md'
+content = 'original', create = True, overwrite = False, mtime = None
+expected_rev = None
+
+    async def write_note(
+        self,
+        path: str,
+        content: str,
+        *,
+        create: bool = False,
+        overwrite: bool = False,
+        mtime: int | None = None,
+        expected_rev: str | None = None,
+    ) -> NoteMeta:
+>       raise NotImplementedError("journal note writes arrive in Task 7")
+E       NotImplementedError: journal note writes arrive in Task 7
+
+storage_journal.py:666: NotImplementedError
+------------------------------ Captured log call -------------------------------
+WARNING  journal_store:journal_store.py:329 journal store state reset: cleared docs/processed/meta tables and removed 0 chunk file(s)
+____ TestJournalWrites.test_readback_failure_does_not_change_store[corrupt] ____
+
+self = <tests.test_storage_journal.TestJournalWrites object at 0x106965950>
+tmp_path = PosixPath('/private/var/folders/_g/qr9n6_2s2j78cdmc_flnkhx80000gn/T/pytest-of-adeep/pytest-76/test_readback_failure_does_not1')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x106a864a0>
+kind = 'corrupt'
+
+    @pytest.mark.parametrize('kind', ['missing', 'corrupt', 'other-records', 'extra-record'])
+    async def test_readback_failure_does_not_change_store(self, tmp_path, monkeypatch, kind):
+        backend, storage = await write_backend(tmp_path)
+>       old = await backend.write_note('a.md', 'original', create=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_storage_journal.py:1137:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <storage_journal.JournalBackend object at 0x107696ad0>, path = 'a.md'
+content = 'original', create = True, overwrite = False, mtime = None
+expected_rev = None
+
+    async def write_note(
+        self,
+        path: str,
+        content: str,
+        *,
+        create: bool = False,
+        overwrite: bool = False,
+        mtime: int | None = None,
+        expected_rev: str | None = None,
+    ) -> NoteMeta:
+>       raise NotImplementedError("journal note writes arrive in Task 7")
+E       NotImplementedError: journal note writes arrive in Task 7
+
+storage_journal.py:666: NotImplementedError
+------------------------------ Captured log call -------------------------------
+WARNING  journal_store:journal_store.py:329 journal store state reset: cleared docs/processed/meta tables and removed 0 chunk file(s)
+_ TestJournalWrites.test_readback_failure_does_not_change_store[other-records] _
+
+self = <tests.test_storage_journal.TestJournalWrites object at 0x106965b50>
+tmp_path = PosixPath('/private/var/folders/_g/qr9n6_2s2j78cdmc_flnkhx80000gn/T/pytest-of-adeep/pytest-76/test_readback_failure_does_not2')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x106a867b0>
+kind = 'other-records'
+
+    @pytest.mark.parametrize('kind', ['missing', 'corrupt', 'other-records', 'extra-record'])
+    async def test_readback_failure_does_not_change_store(self, tmp_path, monkeypatch, kind):
+        backend, storage = await write_backend(tmp_path)
+>       old = await backend.write_note('a.md', 'original', create=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_storage_journal.py:1137:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <storage_journal.JournalBackend object at 0x106a3a8d0>, path = 'a.md'
+content = 'original', create = True, overwrite = False, mtime = None
+expected_rev = None
+
+    async def write_note(
+        self,
+        path: str,
+        content: str,
+        *,
+        create: bool = False,
+        overwrite: bool = False,
+        mtime: int | None = None,
+        expected_rev: str | None = None,
+    ) -> NoteMeta:
+>       raise NotImplementedError("journal note writes arrive in Task 7")
+E       NotImplementedError: journal note writes arrive in Task 7
+
+storage_journal.py:666: NotImplementedError
+------------------------------ Captured log call -------------------------------
+WARNING  journal_store:journal_store.py:329 journal store state reset: cleared docs/processed/meta tables and removed 0 chunk file(s)
+_ TestJournalWrites.test_readback_failure_does_not_change_store[extra-record] __
+
+self = <tests.test_storage_journal.TestJournalWrites object at 0x106997d40>
+tmp_path = PosixPath('/private/var/folders/_g/qr9n6_2s2j78cdmc_flnkhx80000gn/T/pytest-of-adeep/pytest-76/test_readback_failure_does_not3')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x106a872a0>
+kind = 'extra-record'
+
+    @pytest.mark.parametrize('kind', ['missing', 'corrupt', 'other-records', 'extra-record'])
+    async def test_readback_failure_does_not_change_store(self, tmp_path, monkeypatch, kind):
+        backend, storage = await write_backend(tmp_path)
+>       old = await backend.write_note('a.md', 'original', create=True)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_storage_journal.py:1137:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <storage_journal.JournalBackend object at 0x107508050>, path = 'a.md'
+content = 'original', create = True, overwrite = False, mtime = None
+expected_rev = None
+
+    async def write_note(
+        self,
+        path: str,
+        content: str,
+        *,
+        create: bool = False,
+        overwrite: bool = False,
+        mtime: int | None = None,
+        expected_rev: str | None = None,
+    ) -> NoteMeta:
+>       raise NotImplementedError("journal note writes arrive in Task 7")
+E       NotImplementedError: journal note writes arrive in Task 7
+
+storage_journal.py:666: NotImplementedError
+------------------------------ Captured log call -------------------------------
+WARNING  journal_store:journal_store.py:329 journal store state reset: cleared docs/processed/meta tables and removed 0 chunk file(s)
+___________ TestJournalWrites.test_fresh_peer_roundtrip_three_notes ____________
+
+self = <tests.test_storage_journal.TestJournalWrites object at 0x106997f20>
+tmp_path = PosixPath('/private/var/folders/_g/qr9n6_2s2j78cdmc_flnkhx80000gn/T/pytest-of-adeep/pytest-76/test_fresh_peer_roundtrip_thre0')
+
+    async def test_fresh_peer_roundtrip_three_notes(self, tmp_path):
+        writer, storage = await write_backend(tmp_path / 'writer')
+        texts = {'a.md': 'one\n', 'Заметки/Приём.md': 'два', 'c.canvas': '{"nodes":[]}'}
+        for path, text in texts.items():
+>           await writer.write_note(path, text, create=True)
+
+tests/test_storage_journal.py:1168:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <storage_journal.JournalBackend object at 0x106bdb4d0>, path = 'a.md'
+content = 'one\n', create = True, overwrite = False, mtime = None
+expected_rev = None
+
+    async def write_note(
+        self,
+        path: str,
+        content: str,
+        *,
+        create: bool = False,
+        overwrite: bool = False,
+        mtime: int | None = None,
+        expected_rev: str | None = None,
+    ) -> NoteMeta:
+>       raise NotImplementedError("journal note writes arrive in Task 7")
+E       NotImplementedError: journal note writes arrive in Task 7
+
+storage_journal.py:666: NotImplementedError
+------------------------------ Captured log call -------------------------------
+WARNING  journal_store:journal_store.py:329 journal store state reset: cleared docs/processed/meta tables and removed 0 chunk file(s)
+_ TestJournalWrites.test_monotonic_names_include_processed_keys_and_clock_rollback _
+
+self = <tests.test_storage_journal.TestJournalWrites object at 0x106ba60b0>
+tmp_path = PosixPath('/private/var/folders/_g/qr9n6_2s2j78cdmc_flnkhx80000gn/T/pytest-of-adeep/pytest-76/test_monotonic_names_include_p0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x106bbadd0>
+
+    async def test_monotonic_names_include_processed_keys_and_clock_rollback(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(storage_journal.time, 'time', lambda: 10)
+        objects = {MILESTONE_KEY: milestone_blob(), SYNC_PARAMETERS_KEY: params_blob(),
+                   '10000-docs.jsonl.gz': journal_blob([meta_doc('old.md', '1-old')])}
+        backend, storage = await write_backend(tmp_path, objects=objects)
+        await backend.refresh(force=True)  # processed keys must still contribute
+>       await backend.write_note('a.md', 'one', create=True)
+
+tests/test_storage_journal.py:1185:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <storage_journal.JournalBackend object at 0x107561ad0>, path = 'a.md'
+content = 'one', create = True, overwrite = False, mtime = None
+expected_rev = None
+
+    async def write_note(
+        self,
+        path: str,
+        content: str,
+        *,
+        create: bool = False,
+        overwrite: bool = False,
+        mtime: int | None = None,
+        expected_rev: str | None = None,
+    ) -> NoteMeta:
+>       raise NotImplementedError("journal note writes arrive in Task 7")
+E       NotImplementedError: journal note writes arrive in Task 7
+
+storage_journal.py:666: NotImplementedError
+------------------------------ Captured log call -------------------------------
+WARNING  journal_store:journal_store.py:329 journal store state reset: cleared docs/processed/meta tables and removed 0 chunk file(s)
+________ TestJournalWrites.test_device_sibling_kept_and_listing_unique _________
+
+self = <tests.test_storage_journal.TestJournalWrites object at 0x106ba6a50>
+tmp_path = PosixPath('/private/var/folders/_g/qr9n6_2s2j78cdmc_flnkhx80000gn/T/pytest-of-adeep/pytest-76/test_device_sibling_kept_and_l0')
+
+    async def test_device_sibling_kept_and_listing_unique(self, tmp_path):
+        backend, storage = await write_backend(tmp_path)
+>       await backend.write_note('a.md', 'ours', create=True)
+
+tests/test_storage_journal.py:1197:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <storage_journal.JournalBackend object at 0x106a394d0>, path = 'a.md'
+content = 'ours', create = True, overwrite = False, mtime = None
+expected_rev = None
+
+    async def write_note(
+        self,
+        path: str,
+        content: str,
+        *,
+        create: bool = False,
+        overwrite: bool = False,
+        mtime: int | None = None,
+        expected_rev: str | None = None,
+    ) -> NoteMeta:
+>       raise NotImplementedError("journal note writes arrive in Task 7")
+E       NotImplementedError: journal note writes arrive in Task 7
+
+storage_journal.py:666: NotImplementedError
+------------------------------ Captured log call -------------------------------
+WARNING  journal_store:journal_store.py:329 journal store state reset: cleared docs/processed/meta tables and removed 0 chunk file(s)
+_______ TestJournalWrites.test_forbidden_before_any_storage_call[write] ________
+
+self = <tests.test_storage_journal.TestJournalWrites object at 0x106bd3450>
+tmp_path = PosixPath('/private/var/folders/_g/qr9n6_2s2j78cdmc_flnkhx80000gn/T/pytest-of-adeep/pytest-76/test_forbidden_before_any_stor0')
+operation = 'write'
+
+    @pytest.mark.parametrize('operation', ['write', 'delete', 'rename-source', 'rename-target', 'copy-source', 'copy-target'])
+    async def test_forbidden_before_any_storage_call(self, tmp_path, operation):
+        backend, storage = await write_backend(tmp_path)
+        with pytest.raises(ForbiddenPathError):
+            if operation == 'write':
+>               await backend.write_note('.obsidian/x.md', 'bad', create=True)
+
+tests/test_storage_journal.py:1214:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <storage_journal.JournalBackend object at 0x10737d8d0>
+path = '.obsidian/x.md', content = 'bad', create = True, overwrite = False
+mtime = None, expected_rev = None
+
+    async def write_note(
+        self,
+        path: str,
+        content: str,
+        *,
+        create: bool = False,
+        overwrite: bool = False,
+        mtime: int | None = None,
+        expected_rev: str | None = None,
+    ) -> NoteMeta:
+>       raise NotImplementedError("journal note writes arrive in Task 7")
+E       NotImplementedError: journal note writes arrive in Task 7
+
+storage_journal.py:666: NotImplementedError
+------------------------------ Captured log call -------------------------------
+WARNING  journal_store:journal_store.py:329 journal store state reset: cleared docs/processed/meta tables and removed 0 chunk file(s)
+_______ TestJournalWrites.test_forbidden_before_any_storage_call[delete] _______
+
+self = <tests.test_storage_journal.TestJournalWrites object at 0x106a59b50>
+tmp_path = PosixPath('/private/var/folders/_g/qr9n6_2s2j78cdmc_flnkhx80000gn/T/pytest-of-adeep/pytest-76/test_forbidden_before_any_stor1')
+operation = 'delete'
+
+    @pytest.mark.parametrize('operation', ['write', 'delete', 'rename-source', 'rename-target', 'copy-source', 'copy-target'])
+    async def test_forbidden_before_any_storage_call(self, tmp_path, operation):
+        backend, storage = await write_backend(tmp_path)
+        with pytest.raises(ForbiddenPathError):
+            if operation == 'write':
+                await backend.write_note('.obsidian/x.md', 'bad', create=True)
+            elif operation == 'delete':
+>               await backend.delete_note('.obsidian/x.md')
+
+tests/test_storage_journal.py:1216:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <storage_journal.JournalBackend object at 0x106bd9f50>
+path = '.obsidian/x.md', expected_rev = None
+
+    async def delete_note(
+        self, path: str, expected_rev: str | None = None
+    ) -> bool:
+>       raise NotImplementedError("journal note writes arrive in Task 7")
+E       NotImplementedError: journal note writes arrive in Task 7
+
+storage_journal.py:671: NotImplementedError
+------------------------------ Captured log call -------------------------------
+WARNING  journal_store:journal_store.py:329 journal store state reset: cleared docs/processed/meta tables and removed 0 chunk file(s)
+___ TestJournalWrites.test_forbidden_before_any_storage_call[rename-source] ____
+
+self = <tests.test_storage_journal.TestJournalWrites object at 0x106a59d90>
+tmp_path = PosixPath('/private/var/folders/_g/qr9n6_2s2j78cdmc_flnkhx80000gn/T/pytest-of-adeep/pytest-76/test_forbidden_before_any_stor2')
+operation = 'rename-source'
+
+    @pytest.mark.parametrize('operation', ['write', 'delete', 'rename-source', 'rename-target', 'copy-source', 'copy-target'])
+    async def test_forbidden_before_any_storage_call(self, tmp_path, operation):
+        backend, storage = await write_backend(tmp_path)
+        with pytest.raises(ForbiddenPathError):
+            if operation == 'write':
+                await backend.write_note('.obsidian/x.md', 'bad', create=True)
+            elif operation == 'delete':
+                await backend.delete_note('.obsidian/x.md')
+            else:
+                method = backend.rename_note if operation.startswith('rename') else backend.copy_note
+                args = ('.obsidian/x.md', 'ok.md') if operation.endswith('source') else ('ok.md', '.obsidian/x.md')
+>               await method(*args)
+
+tests/test_storage_journal.py:1220:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <storage_journal.JournalBackend object at 0x10749f4d0>
+path = '.obsidian/x.md', new_path = 'ok.md', overwrite = False
+
+    async def rename_note(
+        self, path: str, new_path: str, *, overwrite: bool = False
+    ) -> NoteMeta:
+>       raise NotImplementedError("journal note writes arrive in Task 7")
+E       NotImplementedError: journal note writes arrive in Task 7
+
+storage_journal.py:676: NotImplementedError
+------------------------------ Captured log call -------------------------------
+WARNING  journal_store:journal_store.py:329 journal store state reset: cleared docs/processed/meta tables and removed 0 chunk file(s)
+___ TestJournalWrites.test_forbidden_before_any_storage_call[rename-target] ____
+
+self = <tests.test_storage_journal.TestJournalWrites object at 0x106a2d230>
+tmp_path = PosixPath('/private/var/folders/_g/qr9n6_2s2j78cdmc_flnkhx80000gn/T/pytest-of-adeep/pytest-76/test_forbidden_before_any_stor3')
+operation = 'rename-target'
+
+    @pytest.mark.parametrize('operation', ['write', 'delete', 'rename-source', 'rename-target', 'copy-source', 'copy-target'])
+    async def test_forbidden_before_any_storage_call(self, tmp_path, operation):
+        backend, storage = await write_backend(tmp_path)
+        with pytest.raises(ForbiddenPathError):
+            if operation == 'write':
+                await backend.write_note('.obsidian/x.md', 'bad', create=True)
+            elif operation == 'delete':
+                await backend.delete_note('.obsidian/x.md')
+            else:
+                method = backend.rename_note if operation.startswith('rename') else backend.copy_note
+                args = ('.obsidian/x.md', 'ok.md') if operation.endswith('source') else ('ok.md', '.obsidian/x.md')
+>               await method(*args)
+
+tests/test_storage_journal.py:1220:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <storage_journal.JournalBackend object at 0x107694050>, path = 'ok.md'
+new_path = '.obsidian/x.md', overwrite = False
+
+    async def rename_note(
+        self, path: str, new_path: str, *, overwrite: bool = False
+    ) -> NoteMeta:
+>       raise NotImplementedError("journal note writes arrive in Task 7")
+E       NotImplementedError: journal note writes arrive in Task 7
+
+storage_journal.py:676: NotImplementedError
+------------------------------ Captured log call -------------------------------
+WARNING  journal_store:journal_store.py:329 journal store state reset: cleared docs/processed/meta tables and removed 0 chunk file(s)
+____ TestJournalWrites.test_forbidden_before_any_storage_call[copy-source] _____
+
+self = <tests.test_storage_journal.TestJournalWrites object at 0x106a2d5a0>
+tmp_path = PosixPath('/private/var/folders/_g/qr9n6_2s2j78cdmc_flnkhx80000gn/T/pytest-of-adeep/pytest-76/test_forbidden_before_any_stor4')
+operation = 'copy-source'
+
+    @pytest.mark.parametrize('operation', ['write', 'delete', 'rename-source', 'rename-target', 'copy-source', 'copy-target'])
+    async def test_forbidden_before_any_storage_call(self, tmp_path, operation):
+        backend, storage = await write_backend(tmp_path)
+        with pytest.raises(ForbiddenPathError):
+            if operation == 'write':
+                await backend.write_note('.obsidian/x.md', 'bad', create=True)
+            elif operation == 'delete':
+                await backend.delete_note('.obsidian/x.md')
+            else:
+                method = backend.rename_note if operation.startswith('rename') else backend.copy_note
+                args = ('.obsidian/x.md', 'ok.md') if operation.endswith('source') else ('ok.md', '.obsidian/x.md')
+>               await method(*args)
+
+tests/test_storage_journal.py:1220:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <storage_journal.JournalBackend object at 0x106bdbf50>
+path = '.obsidian/x.md', new_path = 'ok.md', overwrite = False
+
+    async def copy_note(
+        self, path: str, new_path: str, *, overwrite: bool = False
+    ) -> NoteMeta:
+>       raise NotImplementedError("journal note writes arrive in Task 7")
+E       NotImplementedError: journal note writes arrive in Task 7
+
+storage_journal.py:681: NotImplementedError
+------------------------------ Captured log call -------------------------------
+WARNING  journal_store:journal_store.py:329 journal store state reset: cleared docs/processed/meta tables and removed 0 chunk file(s)
+____ TestJournalWrites.test_forbidden_before_any_storage_call[copy-target] _____
+
+self = <tests.test_storage_journal.TestJournalWrites object at 0x10698f250>
+tmp_path = PosixPath('/private/var/folders/_g/qr9n6_2s2j78cdmc_flnkhx80000gn/T/pytest-of-adeep/pytest-76/test_forbidden_before_any_stor5')
+operation = 'copy-target'
+
+    @pytest.mark.parametrize('operation', ['write', 'delete', 'rename-source', 'rename-target', 'copy-source', 'copy-target'])
+    async def test_forbidden_before_any_storage_call(self, tmp_path, operation):
+        backend, storage = await write_backend(tmp_path)
+        with pytest.raises(ForbiddenPathError):
+            if operation == 'write':
+                await backend.write_note('.obsidian/x.md', 'bad', create=True)
+            elif operation == 'delete':
+                await backend.delete_note('.obsidian/x.md')
+            else:
+                method = backend.rename_note if operation.startswith('rename') else backend.copy_note
+                args = ('.obsidian/x.md', 'ok.md') if operation.endswith('source') else ('ok.md', '.obsidian/x.md')
+>               await method(*args)
+
+tests/test_storage_journal.py:1220:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <storage_journal.JournalBackend object at 0x106bdaed0>, path = 'ok.md'
+new_path = '.obsidian/x.md', overwrite = False
+
+    async def copy_note(
+        self, path: str, new_path: str, *, overwrite: bool = False
+    ) -> NoteMeta:
+>       raise NotImplementedError("journal note writes arrive in Task 7")
+E       NotImplementedError: journal note writes arrive in Task 7
+
+storage_journal.py:681: NotImplementedError
+------------------------------ Captured log call -------------------------------
+WARNING  journal_store:journal_store.py:329 journal store state reset: cleared docs/processed/meta tables and removed 0 chunk file(s)
+__________ TestJournalWrites.test_binary_write_refused_before_storage __________
+
+self = <tests.test_storage_journal.TestJournalWrites object at 0x10698f1b0>
+tmp_path = PosixPath('/private/var/folders/_g/qr9n6_2s2j78cdmc_flnkhx80000gn/T/pytest-of-adeep/pytest-76/test_binary_write_refused_befo0')
+
+    async def test_binary_write_refused_before_storage(self, tmp_path):
+        backend, storage = await write_backend(tmp_path)
+        with pytest.raises(BinaryNoteError):
+>           await backend.write_note('a.png', 'text', create=True)
+
+tests/test_storage_journal.py:1226:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <storage_journal.JournalBackend object at 0x1075d4a50>, path = 'a.png'
+content = 'text', create = True, overwrite = False, mtime = None
+expected_rev = None
+
+    async def write_note(
+        self,
+        path: str,
+        content: str,
+        *,
+        create: bool = False,
+        overwrite: bool = False,
+        mtime: int | None = None,
+        expected_rev: str | None = None,
+    ) -> NoteMeta:
+>       raise NotImplementedError("journal note writes arrive in Task 7")
+E       NotImplementedError: journal note writes arrive in Task 7
+
+storage_journal.py:666: NotImplementedError
+------------------------------ Captured log call -------------------------------
+WARNING  journal_store:journal_store.py:329 journal store state reset: cleared docs/processed/meta tables and removed 0 chunk file(s)
+_________ TestJournalWrites.test_shared_chunk_collision_refused[False] _________
+
+self = <tests.test_storage_journal.TestJournalWrites object at 0x106a164e0>
+tmp_path = PosixPath('/private/var/folders/_g/qr9n6_2s2j78cdmc_flnkhx80000gn/T/pytest-of-adeep/pytest-76/test_shared_chunk_collision_re0')
+full_json = False
+
+    @pytest.mark.parametrize('full_json', [False, True])
+    async def test_shared_chunk_collision_refused(self, tmp_path, full_json):
+        backend, storage = await write_backend(tmp_path)
+        chunk = chunk_id_for('wanted')
+        backend._store.apply_journal('collision', {} if full_json else {chunk: 'different'},
+                                    [{'_id': chunk, '_rev': '1-bad', 'type': 'leaf', 'data': 'different'}] if full_json else [])
+        with pytest.raises(StorageError):
+>           await backend.write_note('a.md', 'wanted', create=True)
+
+tests/test_storage_journal.py:1236:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <storage_journal.JournalBackend object at 0x107366ed0>, path = 'a.md'
+content = 'wanted', create = True, overwrite = False, mtime = None
+expected_rev = None
+
+    async def write_note(
+        self,
+        path: str,
+        content: str,
+        *,
+        create: bool = False,
+        overwrite: bool = False,
+        mtime: int | None = None,
+        expected_rev: str | None = None,
+    ) -> NoteMeta:
+>       raise NotImplementedError("journal note writes arrive in Task 7")
+E       NotImplementedError: journal note writes arrive in Task 7
+
+storage_journal.py:666: NotImplementedError
+------------------------------ Captured log call -------------------------------
+WARNING  journal_store:journal_store.py:329 journal store state reset: cleared docs/processed/meta tables and removed 0 chunk file(s)
+_________ TestJournalWrites.test_shared_chunk_collision_refused[True] __________
+
+self = <tests.test_storage_journal.TestJournalWrites object at 0x106a5ced0>
+tmp_path = PosixPath('/private/var/folders/_g/qr9n6_2s2j78cdmc_flnkhx80000gn/T/pytest-of-adeep/pytest-76/test_shared_chunk_collision_re1')
+full_json = True
+
+    @pytest.mark.parametrize('full_json', [False, True])
+    async def test_shared_chunk_collision_refused(self, tmp_path, full_json):
+        backend, storage = await write_backend(tmp_path)
+        chunk = chunk_id_for('wanted')
+        backend._store.apply_journal('collision', {} if full_json else {chunk: 'different'},
+                                    [{'_id': chunk, '_rev': '1-bad', 'type': 'leaf', 'data': 'different'}] if full_json else [])
+        with pytest.raises(StorageError):
+>           await backend.write_note('a.md', 'wanted', create=True)
+
+tests/test_storage_journal.py:1236:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <storage_journal.JournalBackend object at 0x10737d550>, path = 'a.md'
+content = 'wanted', create = True, overwrite = False, mtime = None
+expected_rev = None
+
+    async def write_note(
+        self,
+        path: str,
+        content: str,
+        *,
+        create: bool = False,
+        overwrite: bool = False,
+        mtime: int | None = None,
+        expected_rev: str | None = None,
+    ) -> NoteMeta:
+>       raise NotImplementedError("journal note writes arrive in Task 7")
+E       NotImplementedError: journal note writes arrive in Task 7
+
+storage_journal.py:666: NotImplementedError
+------------------------------ Captured log call -------------------------------
+WARNING  journal_store:journal_store.py:329 journal store state reset: cleared docs/processed/meta tables and removed 0 chunk file(s)
+_____________ TestJournalMoves.test_same_path_and_case_only_rename _____________
+
+self = <tests.test_storage_journal.TestJournalMoves object at 0x10696b390>
+tmp_path = PosixPath('/private/var/folders/_g/qr9n6_2s2j78cdmc_flnkhx80000gn/T/pytest-of-adeep/pytest-76/test_same_path_and_case_only_r0')
+
+    async def test_same_path_and_case_only_rename(self, tmp_path):
+        backend, storage = await write_backend(tmp_path)
+>       first = await backend.write_note('A.md', 'body', create=True)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_storage_journal.py:1244:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <storage_journal.JournalBackend object at 0x106a3a3d0>, path = 'A.md'
+content = 'body', create = True, overwrite = False, mtime = None
+expected_rev = None
+
+    async def write_note(
+        self,
+        path: str,
+        content: str,
+        *,
+        create: bool = False,
+        overwrite: bool = False,
+        mtime: int | None = None,
+        expected_rev: str | None = None,
+    ) -> NoteMeta:
+>       raise NotImplementedError("journal note writes arrive in Task 7")
+E       NotImplementedError: journal note writes arrive in Task 7
+
+storage_journal.py:666: NotImplementedError
+------------------------------ Captured log call -------------------------------
+WARNING  journal_store:journal_store.py:329 journal store state reset: cleared docs/processed/meta tables and removed 0 chunk file(s)
+______ TestJournalMoves.test_target_rules_and_missing_source[rename_note] ______
+
+self = <tests.test_storage_journal.TestJournalMoves object at 0x10696b4d0>
+tmp_path = PosixPath('/private/var/folders/_g/qr9n6_2s2j78cdmc_flnkhx80000gn/T/pytest-of-adeep/pytest-76/test_target_rules_and_missing_0')
+operation = 'rename_note'
+
+    @pytest.mark.parametrize('operation', ['rename_note', 'copy_note'])
+    async def test_target_rules_and_missing_source(self, tmp_path, operation):
+        backend, storage = await write_backend(tmp_path)
+        method = getattr(backend, operation)
+>       await backend.write_note('a.md', 'source', create=True)
+
+tests/test_storage_journal.py:1261:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <storage_journal.JournalBackend object at 0x1075d4450>, path = 'a.md'
+content = 'source', create = True, overwrite = False, mtime = None
+expected_rev = None
+
+    async def write_note(
+        self,
+        path: str,
+        content: str,
+        *,
+        create: bool = False,
+        overwrite: bool = False,
+        mtime: int | None = None,
+        expected_rev: str | None = None,
+    ) -> NoteMeta:
+>       raise NotImplementedError("journal note writes arrive in Task 7")
+E       NotImplementedError: journal note writes arrive in Task 7
+
+storage_journal.py:666: NotImplementedError
+------------------------------ Captured log call -------------------------------
+WARNING  journal_store:journal_store.py:329 journal store state reset: cleared docs/processed/meta tables and removed 0 chunk file(s)
+_______ TestJournalMoves.test_target_rules_and_missing_source[copy_note] _______
+
+self = <tests.test_storage_journal.TestJournalMoves object at 0x1069a4fc0>
+tmp_path = PosixPath('/private/var/folders/_g/qr9n6_2s2j78cdmc_flnkhx80000gn/T/pytest-of-adeep/pytest-76/test_target_rules_and_missing_1')
+operation = 'copy_note'
+
+    @pytest.mark.parametrize('operation', ['rename_note', 'copy_note'])
+    async def test_target_rules_and_missing_source(self, tmp_path, operation):
+        backend, storage = await write_backend(tmp_path)
+        method = getattr(backend, operation)
+>       await backend.write_note('a.md', 'source', create=True)
+
+tests/test_storage_journal.py:1261:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <storage_journal.JournalBackend object at 0x10737d2d0>, path = 'a.md'
+content = 'source', create = True, overwrite = False, mtime = None
+expected_rev = None
+
+    async def write_note(
+        self,
+        path: str,
+        content: str,
+        *,
+        create: bool = False,
+        overwrite: bool = False,
+        mtime: int | None = None,
+        expected_rev: str | None = None,
+    ) -> NoteMeta:
+>       raise NotImplementedError("journal note writes arrive in Task 7")
+E       NotImplementedError: journal note writes arrive in Task 7
+
+storage_journal.py:666: NotImplementedError
+------------------------------ Captured log call -------------------------------
+WARNING  journal_store:journal_store.py:329 journal store state reset: cleared docs/processed/meta tables and removed 0 chunk file(s)
+____ TestJournalMoves.test_eden_only_body_and_ctime_preserved[rename_note] _____
+
+self = <tests.test_storage_journal.TestJournalMoves object at 0x1069a50f0>
+tmp_path = PosixPath('/private/var/folders/_g/qr9n6_2s2j78cdmc_flnkhx80000gn/T/pytest-of-adeep/pytest-76/test_eden_only_body_and_ctime_0')
+operation = 'rename_note'
+
+    @pytest.mark.parametrize('operation', ['rename_note', 'copy_note'])
+    async def test_eden_only_body_and_ctime_preserved(self, tmp_path, operation):
+        backend, storage = await write_backend(tmp_path)
+        chunk = chunk_id_for('inline')
+        source = {'_id': 'a.md', '_rev': '3-source', '_revisions': {'start': 3, 'ids': ['source', 'parent', 'root']},
+                  'path': 'a.md', 'type': 'plain', 'children': [chunk],
+                  'eden': {chunk: {'data': 'inline'}}, 'ctime': 12, 'mtime': 34, 'size': 6}
+        storage.put('1-docs.jsonl.gz', journal_blob([source]))
+        await backend.refresh(force=True)
+        storage.put_calls.clear()
+>       await getattr(backend, operation)('a.md', 'b.md')
+
+tests/test_storage_journal.py:1286:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <storage_journal.JournalBackend object at 0x106bd9fd0>, path = 'a.md'
+new_path = 'b.md', overwrite = False
+
+    async def rename_note(
+        self, path: str, new_path: str, *, overwrite: bool = False
+    ) -> NoteMeta:
+>       raise NotImplementedError("journal note writes arrive in Task 7")
+E       NotImplementedError: journal note writes arrive in Task 7
+
+storage_journal.py:676: NotImplementedError
+------------------------------ Captured log call -------------------------------
+WARNING  journal_store:journal_store.py:329 journal store state reset: cleared docs/processed/meta tables and removed 0 chunk file(s)
+_____ TestJournalMoves.test_eden_only_body_and_ctime_preserved[copy_note] ______
+
+self = <tests.test_storage_journal.TestJournalMoves object at 0x1069ab1d0>
+tmp_path = PosixPath('/private/var/folders/_g/qr9n6_2s2j78cdmc_flnkhx80000gn/T/pytest-of-adeep/pytest-76/test_eden_only_body_and_ctime_1')
+operation = 'copy_note'
+
+    @pytest.mark.parametrize('operation', ['rename_note', 'copy_note'])
+    async def test_eden_only_body_and_ctime_preserved(self, tmp_path, operation):
+        backend, storage = await write_backend(tmp_path)
+        chunk = chunk_id_for('inline')
+        source = {'_id': 'a.md', '_rev': '3-source', '_revisions': {'start': 3, 'ids': ['source', 'parent', 'root']},
+                  'path': 'a.md', 'type': 'plain', 'children': [chunk],
+                  'eden': {chunk: {'data': 'inline'}}, 'ctime': 12, 'mtime': 34, 'size': 6}
+        storage.put('1-docs.jsonl.gz', journal_blob([source]))
+        await backend.refresh(force=True)
+        storage.put_calls.clear()
+>       await getattr(backend, operation)('a.md', 'b.md')
+
+tests/test_storage_journal.py:1286:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <storage_journal.JournalBackend object at 0x10749f7d0>, path = 'a.md'
+new_path = 'b.md', overwrite = False
+
+    async def copy_note(
+        self, path: str, new_path: str, *, overwrite: bool = False
+    ) -> NoteMeta:
+>       raise NotImplementedError("journal note writes arrive in Task 7")
+E       NotImplementedError: journal note writes arrive in Task 7
+
+storage_journal.py:681: NotImplementedError
+------------------------------ Captured log call -------------------------------
+WARNING  journal_store:journal_store.py:329 journal store state reset: cleared docs/processed/meta tables and removed 0 chunk file(s)
+_ TestJournalMoves.test_failed_publication_preserves_source_and_target[rename_note] _
+
+self = <tests.test_storage_journal.TestJournalMoves object at 0x1069b8c00>
+tmp_path = PosixPath('/private/var/folders/_g/qr9n6_2s2j78cdmc_flnkhx80000gn/T/pytest-of-adeep/pytest-76/test_failed_publication_preser0')
+operation = 'rename_note'
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x107573e00>
+
+    @pytest.mark.parametrize('operation', ['rename_note', 'copy_note'])
+    async def test_failed_publication_preserves_source_and_target(self, tmp_path, operation, monkeypatch):
+        backend, storage = await write_backend(tmp_path)
+>       await backend.write_note('a.md', 'source', create=True)
+
+tests/test_storage_journal.py:1309:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <storage_journal.JournalBackend object at 0x1075618d0>, path = 'a.md'
+content = 'source', create = True, overwrite = False, mtime = None
+expected_rev = None
+
+    async def write_note(
+        self,
+        path: str,
+        content: str,
+        *,
+        create: bool = False,
+        overwrite: bool = False,
+        mtime: int | None = None,
+        expected_rev: str | None = None,
+    ) -> NoteMeta:
+>       raise NotImplementedError("journal note writes arrive in Task 7")
+E       NotImplementedError: journal note writes arrive in Task 7
+
+storage_journal.py:666: NotImplementedError
+------------------------------ Captured log call -------------------------------
+WARNING  journal_store:journal_store.py:329 journal store state reset: cleared docs/processed/meta tables and removed 0 chunk file(s)
+_ TestJournalMoves.test_failed_publication_preserves_source_and_target[copy_note] _
+
+self = <tests.test_storage_journal.TestJournalMoves object at 0x1069b8e20>
+tmp_path = PosixPath('/private/var/folders/_g/qr9n6_2s2j78cdmc_flnkhx80000gn/T/pytest-of-adeep/pytest-76/test_failed_publication_preser1')
+operation = 'copy_note'
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x107572120>
+
+    @pytest.mark.parametrize('operation', ['rename_note', 'copy_note'])
+    async def test_failed_publication_preserves_source_and_target(self, tmp_path, operation, monkeypatch):
+        backend, storage = await write_backend(tmp_path)
+>       await backend.write_note('a.md', 'source', create=True)
+
+tests/test_storage_journal.py:1309:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <storage_journal.JournalBackend object at 0x107509c50>, path = 'a.md'
+content = 'source', create = True, overwrite = False, mtime = None
+expected_rev = None
+
+    async def write_note(
+        self,
+        path: str,
+        content: str,
+        *,
+        create: bool = False,
+        overwrite: bool = False,
+        mtime: int | None = None,
+        expected_rev: str | None = None,
+    ) -> NoteMeta:
+>       raise NotImplementedError("journal note writes arrive in Task 7")
+E       NotImplementedError: journal note writes arrive in Task 7
+
+storage_journal.py:666: NotImplementedError
+------------------------------ Captured log call -------------------------------
+WARNING  journal_store:journal_store.py:329 journal store state reset: cleared docs/processed/meta tables and removed 0 chunk file(s)
+=========================== short test summary info ============================
+FAILED tests/test_storage_journal.py::TestJournalWrites::test_create_revision_chain_replace_and_delete
+FAILED tests/test_storage_journal.py::TestJournalWrites::test_create_and_missing_rules_no_publication
+FAILED tests/test_storage_journal.py::TestJournalWrites::test_stale_revision_never_puts[a.md-write]
+FAILED tests/test_storage_journal.py::TestJournalWrites::test_stale_revision_never_puts[a.md-delete]
+FAILED tests/test_storage_journal.py::TestJournalWrites::test_stale_revision_never_puts[missing.md-write]
+FAILED tests/test_storage_journal.py::TestJournalWrites::test_stale_revision_never_puts[missing.md-delete]
+FAILED tests/test_storage_journal.py::TestJournalWrites::test_readback_failure_does_not_change_store[missing]
+FAILED tests/test_storage_journal.py::TestJournalWrites::test_readback_failure_does_not_change_store[corrupt]
+FAILED tests/test_storage_journal.py::TestJournalWrites::test_readback_failure_does_not_change_store[other-records]
+FAILED tests/test_storage_journal.py::TestJournalWrites::test_readback_failure_does_not_change_store[extra-record]
+FAILED tests/test_storage_journal.py::TestJournalWrites::test_fresh_peer_roundtrip_three_notes
+FAILED tests/test_storage_journal.py::TestJournalWrites::test_monotonic_names_include_processed_keys_and_clock_rollback
+FAILED tests/test_storage_journal.py::TestJournalWrites::test_device_sibling_kept_and_listing_unique
+FAILED tests/test_storage_journal.py::TestJournalWrites::test_forbidden_before_any_storage_call[write]
+FAILED tests/test_storage_journal.py::TestJournalWrites::test_forbidden_before_any_storage_call[delete]
+FAILED tests/test_storage_journal.py::TestJournalWrites::test_forbidden_before_any_storage_call[rename-source]
+FAILED tests/test_storage_journal.py::TestJournalWrites::test_forbidden_before_any_storage_call[rename-target]
+FAILED tests/test_storage_journal.py::TestJournalWrites::test_forbidden_before_any_storage_call[copy-source]
+FAILED tests/test_storage_journal.py::TestJournalWrites::test_forbidden_before_any_storage_call[copy-target]
+FAILED tests/test_storage_journal.py::TestJournalWrites::test_binary_write_refused_before_storage
+FAILED tests/test_storage_journal.py::TestJournalWrites::test_shared_chunk_collision_refused[False]
+FAILED tests/test_storage_journal.py::TestJournalWrites::test_shared_chunk_collision_refused[True]
+FAILED tests/test_storage_journal.py::TestJournalMoves::test_same_path_and_case_only_rename
+FAILED tests/test_storage_journal.py::TestJournalMoves::test_target_rules_and_missing_source[rename_note]
+FAILED tests/test_storage_journal.py::TestJournalMoves::test_target_rules_and_missing_source[copy_note]
+FAILED tests/test_storage_journal.py::TestJournalMoves::test_eden_only_body_and_ctime_preserved[rename_note]
+FAILED tests/test_storage_journal.py::TestJournalMoves::test_eden_only_body_and_ctime_preserved[copy_note]
+FAILED tests/test_storage_journal.py::TestJournalMoves::test_failed_publication_preserves_source_and_target[rename_note]
+FAILED tests/test_storage_journal.py::TestJournalMoves::test_failed_publication_preserves_source_and_target[copy_note]
+29 failed, 75 passed in 1.10s
