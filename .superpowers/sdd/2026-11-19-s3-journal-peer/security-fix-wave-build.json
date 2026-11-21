@@ -1,0 +1,13 @@
+{
+  "check": "python-bytecode-build",
+  "passed": true,
+  "files": [
+    "journal_codec.py",
+    "journal_store.py",
+    "object_storage.py",
+    "storage_journal.py",
+    "tests/fake_object_storage.py",
+    "tests/test_journal_security.py",
+    "tests/test_storage_journal.py"
+  ]
+}

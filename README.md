@@ -152,14 +152,46 @@ state directory per vault/peer and persist it across restarts. It contains
 `chunks/` (cached chunk files).
 
 `obsidian_refresh` lists remote journals and replays unseen files.
-`S3_REFRESH_MIN_INTERVAL_SEC` is the minimum spacing between completed
-refreshes (positive seconds, default 5); calls within that interval are skipped.
+`S3_REFRESH_MIN_INTERVAL_SEC` is the minimum spacing between refresh attempts, including failures
+and partial budget stops (positive seconds, default 5); calls within that interval are skipped.
 Ordinary tool calls refresh automatically using the same throttle. There is
 no background polling. `obsidian_refresh` also uses this throttle; allow the
-interval to elapse to receive subsequent device changes. Refresh failures
+interval to elapse to receive subsequent device changes. Internal callers can use
+`refresh(force=True)` to bypass the throttle. Refresh failures
 return a tool error instead of serving stale data.
 
+Replay uses bounded downloads (512 MiB compressed per object), inflation (1 GiB),
+records (100,000 per file), lines (64 MiB in UTF-8 bytes), and JSON nesting
+(512 levels). Limits are module constants in `object_storage.py` and
+`journal_codec.py`; `Boto3ObjectStorage(max_object_bytes=...)` and the codec
+keyword arguments allow overrides. `JournalBackend` also accepts
+`max_inflated_bytes`, `max_records`, and `max_line_bytes`.
+
+Each refresh examines at most 1,000,000 keys, downloads at most 4 GiB
+(including sync parameters), and has a 300-second wall-clock budget.
+Override these through `JournalBackend(max_refresh_keys=...,
+max_refresh_bytes=..., max_refresh_seconds=...)`. These are Python constructor
+options, not environment variables. Stops are logged; processed files stay
+processed. Key-limited sweeps continue from their last listed key, then restart
+from the beginning so late objects below the cursor are eventually discovered.
+Files are numerically ordered within each bounded window. Byte/time stops retry
+the unfinished window and skip its processed files. The time budget is checked
+between synchronous operations; an in-flight request, parse or SQLite transaction
+can finish after the deadline. Configure budgets large enough for a single
+allowed journal plus control reads. Restarting the server restarts the listing
+sweep; the durable processed ledger preserves replay progress.
+
+Local state directories and chunk shards are private (`0700`); SQLite and newly
+written chunk files use `0600`. Opening an existing cache tightens permissive
+directory modes and logs each correction once.
+
 Remote storage is append-only: updates publish new journal objects.
+Publication first attempts atomic create-only `PutObject(IfNoneMatch="*")`
+(Ruling B-13). Occupied keys are regenerated, with at most ten attempts;
+read-back verification still precedes local application. Providers reporting
+conditional writes as unsupported use the B-10 exists-precheck + put fallback,
+with a warning logged once per adapter. That compatibility fallback retains
+the race between the precheck and upload.
 The backend never deletes S3 objects, prunes history, or runs remote garbage
 collection. Deleting a note publishes a tombstone; it does not remove journal
 objects. Local cache resets can delete local state.
