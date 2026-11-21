@@ -373,10 +373,10 @@ class TestReplay:
             await backend.refresh()
         assert await files_processed(backend) == 0
 
-        # Repair the broken file: the retry sees the whole bucket again.
+        # Repair the broken file: force bypasses failure backoff.
         storage._objects[JOURNAL_9] = journal_blob([meta_doc("i.md", "1-i")])
         storage.get_calls.clear()
-        await backend.refresh()
+        await backend.refresh(force=True)
         assert storage.get_calls == [SYNC_PARAMETERS_KEY, JOURNAL_9, JOURNAL_10, journal_11]
         assert await files_processed(backend) == 3
 
@@ -386,10 +386,10 @@ class TestReplay:
         storage.get_calls.clear()
         original_get = storage.get
 
-        def fail_journal(key):
+        def fail_journal(key, **kwargs):
             if key == JOURNAL_1:
                 raise ValueError("/abs/state/path note.md 3-x secret")
-            return original_get(key)
+            return original_get(key, **kwargs)
 
         monkeypatch.setattr(storage, 'get', fail_journal)
         with pytest.raises(StorageError, match=JOURNAL_1) as exc_info:
@@ -488,17 +488,18 @@ class TestThrottle:
         assert storage.list_calls == [""]
         assert await files_processed(backend) == 3
 
-    async def test_failed_refresh_is_not_throttled(self, tmp_path):
+    async def test_failed_refresh_is_throttled(self, tmp_path):
         backend, storage = make_backend(
             tmp_path, healthy_bucket(**{JOURNAL_1: b"corrupt"}), refresh_min_interval=60.0
         )
         await backend.startup_check()
         with pytest.raises(StorageError):
             await backend.refresh()
-        # The failed attempt does not arm the throttle: an immediate retry
-        # hits the storage again instead of silently skipping.
+        # A hostile file cannot cause unlimited immediate retry work.
+        await backend.refresh()
+        assert len(storage.list_calls) == 1
         with pytest.raises(StorageError):
-            await backend.refresh()
+            await backend.refresh(force=True)
         assert len(storage.list_calls) == 2
 
 

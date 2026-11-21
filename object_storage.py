@@ -217,6 +217,7 @@ class Boto3ObjectStorage:
         kwargs: dict = {"Bucket": self._bucket, "Prefix": self._prefix}
         if start_after:
             kwargs["StartAfter"] = self._wire_key(start_after)
+        seen_tokens: set[str] = set()
         while True:
             if limit is not None:
                 kwargs["MaxKeys"] = min(limit - len(keys), _MAX_PAGE_KEYS)
@@ -234,6 +235,9 @@ class Boto3ObjectStorage:
             token = response.get("NextContinuationToken")
             if not token:
                 break
+            if token in seen_tokens:
+                raise StorageError("object storage listing made no pagination progress")
+            seen_tokens.add(token)
             # StartAfter only applies to the first page; continuation
             # pages are driven by the token alone.
             kwargs.pop("StartAfter", None)

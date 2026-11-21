@@ -68,7 +68,7 @@ from livesync_format import (
     soft_delete_revision,
     validate_vault_path,
 )
-from object_storage import JournalObjectStorage
+from object_storage import JournalObjectStorage, ObjectSizeLimit, MAX_OBJECT_BYTES
 from storage_base import (
     BinaryNoteError,
     ConcurrentModification,
@@ -124,6 +124,17 @@ def journal_sort_key(name: str) -> tuple[int, int, str]:
 
 _TEXT_WINDOW_SIZE = 50
 
+# Aggregate refresh limits, independent of the per-file codec/download caps.
+MAX_REFRESH_KEYS = 1_000_000
+MAX_REFRESH_BYTES = 4 * 1024**3
+MAX_REFRESH_SECONDS = 300.0
+_LIST_PAGE_SIZE = 1000
+
+
+class _RefreshBudgetStop(Exception):
+    """Internal clean partial-stop signal; never marks a file processed."""
+
+
 
 def _has_hidden_segment(path: str) -> bool:
     """Whether any path segment is a dotfile (``.obsidian``, ...)."""
@@ -164,16 +175,26 @@ class JournalBackend:
         state_dir: Path,
         refresh_min_interval: float = 5.0,
         *,
+        max_refresh_keys: int = MAX_REFRESH_KEYS,
+        max_refresh_bytes: int = MAX_REFRESH_BYTES,
+        max_refresh_seconds: float = MAX_REFRESH_SECONDS,
         max_inflated_bytes: int = MAX_INFLATED_BYTES,
         max_records: int = MAX_RECORDS,
         max_line_bytes: int = MAX_LINE_BYTES,
     ):
-        for value in (max_inflated_bytes, max_records, max_line_bytes):
+        for value in (max_refresh_keys, max_refresh_bytes, max_refresh_seconds,
+                      max_inflated_bytes, max_records, max_line_bytes):
             if value <= 0 or not math.isfinite(value):
                 raise ValueError("journal limits must be positive and finite")
+        self.max_refresh_keys = max_refresh_keys
+        self.max_refresh_bytes = max_refresh_bytes
+        self.max_refresh_seconds = max_refresh_seconds
         self.max_inflated_bytes = max_inflated_bytes
         self.max_records = max_records
         self.max_line_bytes = max_line_bytes
+        self._listing_cursor = ""
+        self._refresh_deadline: float | None = None
+        self._refresh_downloaded = 0
         self._object_storage = object_storage
         self._state_dir = Path(state_dir)
         self.refresh_min_interval = refresh_min_interval
@@ -253,15 +274,16 @@ class JournalBackend:
     async def refresh(self, force: bool = False) -> None:
         """Replay journal files missing from the processed ledger.
 
-        One complete listing per refresh (no StartAfter cursor — Plan B
-        Ruling B-8, since lexicographic ordering hides numerically later
-        journals); already-processed files are skipped idempotently.
+        Bounded listing windows form complete, repeating sweeps (B-8).
+        Each window is replayed in numeric order; already-processed files
+        are skipped idempotently. Budget stops retain completed files and
+        retry the unfinished window; key-budget stops continue the sweep.
         Refreshes closer than ``refresh_min_interval`` together are
         skipped unless ``force`` is set; a skipped refresh is a no-op.
         Candidates are ordered by their numeric ms prefix and applied one
-        by one; the first failing file stops the replay without advancing
-        the checkpoint (its predecessors stay processed), so the next
-        refresh retries from the same file.
+        by one; the first failing file stops replay without marking it
+        processed. Completed, partial and failed passes arm the throttle;
+        force=True bypasses it.
         """
         store = self._require_store("refresh")
         now = time.monotonic()
@@ -271,25 +293,51 @@ class JournalBackend:
             and now - self._last_refresh < self.refresh_min_interval
         ):
             return
-        candidates = self._list_journals()
-        epoch = self._load_sync_parameters_epoch()
-        if store.epoch != (epoch or ""):
-            store.epoch = epoch or ""
-            self._clear_refresh_clock()
-        self._probe_remote_wipe(epoch)
-        for name in candidates:
-            if not store.processed(name):
-                self._replay_one(store, name)
-        # Arm the throttle only after a completed pass: failed refreshes
-        # stay retryable immediately.
-        self._last_refresh = time.monotonic()
-        self._last_refresh_at = datetime.now(timezone.utc)
-        if candidates:
-            logger.info(
-                "journal replay applied %d file(s), last %r",
-                len(candidates),
-                candidates[-1],
-            )
+        self._refresh_deadline = now + self.max_refresh_seconds
+        self._refresh_downloaded = 0
+        try:
+            # Resolve resets before choosing the listing continuation.
+            epoch = self._load_sync_parameters_epoch()
+            if store.epoch != (epoch or ""):
+                store.epoch = epoch or ""
+                self._clear_refresh_clock()
+            self._probe_remote_wipe(epoch)
+            candidates, next_cursor = self._list_journals()
+            for name in candidates:
+                self._check_refresh_time(name)
+                if not store.processed(name):
+                    self._replay_one(store, name)
+            # Advance only after this entire window was replayed. A byte/time
+            # stop or failure retries the same window, skipping its ledger.
+            self._listing_cursor = next_cursor
+        except _RefreshBudgetStop as exc:
+            logger.warning("journal refresh budget stop: %s", exc)
+        finally:
+            self._refresh_deadline = None
+            # Failures also arm the throttle; force=True bypasses it.
+            self._last_refresh = time.monotonic()
+            self._last_refresh_at = datetime.now(timezone.utc)
+
+    def _check_refresh_time(self, point: str) -> None:
+        if self._refresh_deadline is not None and time.monotonic() >= self._refresh_deadline:
+            raise _RefreshBudgetStop(f"wall-clock at {point!r}")
+
+    def _get_object(self, key: str) -> bytes | None:
+        if self._refresh_deadline is None:
+            return self._object_storage.get(key)
+        self._check_refresh_time(key)
+        remaining = self.max_refresh_bytes - self._refresh_downloaded
+        if remaining <= 0:
+            raise _RefreshBudgetStop(f"download bytes at {key!r}")
+        try:
+            blob = self._object_storage.get(key, max_bytes=remaining)
+        except ObjectSizeLimit:
+            if remaining < getattr(self._object_storage, "max_object_bytes", MAX_OBJECT_BYTES):
+                raise _RefreshBudgetStop(f"download bytes at {key!r}") from None
+            raise
+        self._refresh_downloaded += len(blob) if blob is not None else 0
+        self._check_refresh_time(key)
+        return blob
 
     async def backend_info(self) -> dict:
         """Diagnostics for ``vault_stats`` and startup logs."""
@@ -320,7 +368,7 @@ class JournalBackend:
 
     def _load_milestone(self) -> dict | None:
         """The milestone settings object, or ``None`` when absent."""
-        blob = self._object_storage.get(MILESTONE_KEY)
+        blob = self._get_object(MILESTONE_KEY)
         if blob is None:
             return None
         try:
@@ -339,7 +387,7 @@ class JournalBackend:
         Mirrors upstream ``getJournalEpochFromSyncParams``
         (JournalSyncCore.ts:343-345): ``"<protocolVersion>:<pbkdf2salt>"``.
         """
-        blob = self._object_storage.get(SYNC_PARAMETERS_KEY)
+        blob = self._get_object(SYNC_PARAMETERS_KEY)
         if blob is None:
             return None
         try:
@@ -403,36 +451,42 @@ class JournalBackend:
 
     def _clear_refresh_clock(self) -> None:
         """After a state reset, the next refresh must not be throttled."""
+        self._listing_cursor = ""
         self._last_refresh = None
         self._last_refresh_at = None
 
     # -- Replay helpers ----------------------------------------------------------
 
-    def _list_journals(self) -> list[str]:
-        """List journal names, excluding control keys, in numeric ms order.
+    def _list_journals(self) -> tuple[list[str], str]:
+        """Bounded lexicographic windows; numerically sort each replay window.
 
-        Refresh filters processed files after
-        checking for a remote reset.
-
-        Deliberately no StartAfter cursor (Plan B Ruling B-8): S3 lists in
-        lexicographic order, where ``"10-..."`` sorts *before* ``"9-..."``,
-        so a cursor at the greatest processed name would permanently hide
-        numerically later journals that sort lexicographically earlier. A
-        full listing is one API call on a throttled (>= refresh_min_interval)
-        refresh, and the processed-set filter keeps replay idempotent.
+        Complete sweeps restart at the beginning (B-8), so late keys below a
+        previous continuation cannot remain hidden. The processed ledger
+        ensures retries and repeated sweeps converge.
         """
-        keys = self._object_storage.list("")
+        keys: list[str] = []
+        cursor = self._listing_cursor
+        next_cursor = ""
+        while len(keys) < self.max_refresh_keys:
+            self._check_refresh_time(cursor)
+            limit = min(_LIST_PAGE_SIZE, self.max_refresh_keys - len(keys))
+            page = self._object_storage.list(cursor, limit=limit)
+            if not page:
+                break
+            if len(page) > limit or page[-1] <= cursor or any(k <= cursor for k in page):
+                raise StorageError("journal listing made no pagination progress")
+            keys.extend(page)
+            cursor = page[-1]
+            if len(page) < limit:
+                break
+        else:
+            next_cursor = cursor
+            logger.warning("journal refresh key budget stop at %r", cursor)
         for key in keys:
             match = _MS_PREFIX_RE.match(key)
             if match is not None:
                 self._max_seen_ms = max(self._max_seen_ms, int(match.group(1)))
-        candidates = [
-            key
-            for key in keys
-            if is_journal_key(key)
-        ]
-        candidates.sort(key=journal_sort_key)
-        return candidates
+        return sorted((key for key in keys if is_journal_key(key)), key=journal_sort_key), next_cursor
 
     def _replay_one(self, store: JournalStore, name: str) -> None:
         """Fetch, decode and apply one journal file.
@@ -443,7 +497,7 @@ class JournalBackend:
         refresh retries it.
         """
         try:
-            blob = self._object_storage.get(name)
+            blob = self._get_object(name)
             if blob is None:
                 raise StorageError(
                     f"journal file {name!r} disappeared during replay"

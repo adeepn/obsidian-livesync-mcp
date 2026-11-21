@@ -71,12 +71,56 @@ def test_revision_upper_boundary():
 
 
 
+async def test_failed_refresh_throttled(tmp_path):
+    peer, storage = await backend(tmp_path, {'1-docs.jsonl.gz': b'bad'})
+    try:
+        with pytest.raises(StorageError):
+            await peer.refresh()
+        calls = len(storage.list_calls)
+        await peer.refresh()
+        assert len(storage.list_calls) == calls
+        with pytest.raises(StorageError):
+            await peer.refresh(force=True)
+    finally:
+        await peer.close()
 
 
+async def test_key_budget_continues(tmp_path, caplog):
+    objects = {f'{i}-docs.jsonl.gz': journal_blob([meta_doc(f'{i}.md', '1-a')]) for i in range(5)}
+    peer, _ = await backend(tmp_path, objects, max_refresh_keys=2)
+    try:
+        for _ in range(5):
+            await peer.refresh(force=True)
+        assert peer._store.files_processed_count() == 5
+        assert 'budget' in caplog.text
+    finally:
+        await peer.close()
 
 
+async def test_nonprogress_listing(tmp_path):
+    peer, storage = await backend(tmp_path)
+    storage.list = lambda start_after='', limit=None: [f'{i:04d}-docs.jsonl.gz' for i in range(1000)]
+    try:
+        with pytest.raises(StorageError, match='progress'):
+            await peer.refresh(force=True)
+    finally:
+        await peer.close()
 
 
+async def test_byte_budget_continues(tmp_path, caplog):
+    objects = {f'{i}-docs.jsonl.gz': journal_blob([meta_doc(f'{i}.md', '1-a')]) for i in range(3)}
+    # Includes the sync-parameters control read on each refresh.
+    budget = len(params_blob()) + len(next(iter(objects.values())))
+    peer, _ = await backend(tmp_path, objects, max_refresh_bytes=budget)
+    try:
+        await peer.refresh(force=True)
+        assert peer._store.files_processed_count() == 1
+        for _ in range(2):
+            await peer.refresh(force=True)
+        assert peer._store.files_processed_count() == 3
+        assert 'budget' in caplog.text
+    finally:
+        await peer.close()
 
 
 async def test_atomic_collision(tmp_path, monkeypatch):
@@ -165,6 +209,25 @@ async def test_hostile_file_has_clean_error(tmp_path, kind):
         await peer.close()
 
 
+async def test_time_budget_preserves_progress(tmp_path, monkeypatch, caplog):
+    import storage_journal
+    clock = [0.0]
+    monkeypatch.setattr(storage_journal.time, 'monotonic', lambda: clock[0])
+    peer, storage = await backend(tmp_path, {f'{i}-docs.jsonl.gz': journal_blob([meta_doc(f'{i}.md', '1-a')]) for i in range(3)}, max_refresh_seconds=1)
+    apply = peer._store.apply_journal
+    def slow_apply(*args):
+        apply(*args)
+        clock[0] += 2
+    peer._store.apply_journal = slow_apply
+    try:
+        await peer.refresh(force=True)
+        assert peer._store.files_processed_count() == 1
+        for _ in range(2):
+            await peer.refresh(force=True)
+        assert peer._store.files_processed_count() == 3
+        assert 'wall-clock' in caplog.text
+    finally:
+        await peer.close()
 
 
 def test_recursion_error_normalized(monkeypatch):
@@ -190,3 +253,13 @@ def test_conditional_success_and_fake_atomicity():
     assert fake.put_if_absent('a', b'first') == 'created'
     assert fake.put_if_absent('a', b'second') == 'exists'
     assert fake.get('a') == b'first'
+
+
+def test_repeated_s3_continuation_token():
+    storage = object.__new__(Boto3ObjectStorage)
+    storage._bucket, storage._prefix = 'test', ''
+    storage._client = Mock()
+    storage._client.list_objects_v2.return_value = {'Contents': [], 'IsTruncated': True, 'NextContinuationToken': 'same'}
+    with pytest.raises(StorageError, match='progress'):
+        storage.list(limit=1)
+    assert storage._client.list_objects_v2.call_count == 2
