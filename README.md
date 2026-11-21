@@ -14,26 +14,6 @@ The server reads and writes the same vault storage as the Obsidian plugin.
 CouchDB holds the live documents; S3 holds append-only journals that this peer
 replays into local SQLite revision trees and chunk files.
 
-### Why a native peer (not the whole plugin)
-
-Upstream Self-hosted LiveSync is a TypeScript Obsidian plugin running inside
-an Electron renderer. It depends on Obsidian APIs, IndexedDB/PouchDB browser
-builds and the app's service container; it has no supported headless/CLI runtime.
-Embedding it would require Node plus a browser-like environment and still
-require extracting the journal replicator from that service graph.
-During design, **Option B: Node sidecar on @vrtmrz/livesync-commonlib** was
-considered and rejected for this deployment: with E2EE disabled, a native peer
-keeps one runtime and a small, reviewable implementation covered by tests.
-The original estimate was roughly 1.5k lines of Python, not a current size guarantee.
-We take the upstream wire format, mirrored byte-exactly and validated by a
-journal captured from a real client plus oracle tests embedding upstream's
-escape specification. Compatibility gates check milestone settings, path
-identity (including NFC for S3), and versions; unknown versions fail closed.
-Those gates mitigate format drift without vendoring the plugin.
-The trade-off is tracking upstream format changes here. A vendored client could
-inherit format updates with upstream upgrades, at the cost of a second runtime
-and a much larger, app-coupled surface to audit.
-
 ## Backends
 
 Storage is selected by a single environment variable, `LIVESYNC_BACKEND`:
