@@ -59,6 +59,8 @@ from livesync_format import (
     legacy_body,
 )
 
+from storage_base import StorageError
+
 logger = logging.getLogger(__name__)
 
 _DB_FILENAME = "journal.sqlite3"
@@ -164,6 +166,19 @@ class JournalStore:
         self.state_dir = Path(state_dir)
         self.path_identity = path_identity
         self._chunks_dir = self.state_dir / _CHUNKS_DIRNAME
+        db_path = self.state_dir / _DB_FILENAME
+        # Check every persistence entry before chmod, traversal, or SQLite open.
+        # is_symlink also detects dangling links.
+        for path, label in (
+            (self.state_dir, "state directory"),
+            (self._chunks_dir, "chunks directory"),
+            (db_path, "sqlite file"),
+        ):
+            if path.is_symlink():
+                raise StorageError(
+                    f"{label} is a symlink; refusing to operate through it — "
+                    "move the real directory or file and remove the link"
+                )
         _private_directory(self.state_dir)
         _private_directory(self._chunks_dir)
         for directory in self._chunks_dir.rglob("*"):
@@ -172,7 +187,6 @@ class JournalStore:
         # Pin the chunk root for resolved-path containment checks.
         self._chunks_root = self._chunks_dir.resolve()
 
-        db_path = self.state_dir / _DB_FILENAME
         descriptor = os.open(db_path, os.O_CREAT | os.O_RDWR, 0o600)
         os.close(descriptor)
         db_path.chmod(0o600)

@@ -182,7 +182,9 @@ def _milestone_setting_maps(milestone_settings: dict) -> list[dict]:
     Same resolution as the CouchDB backend startup check: without a
     ``tweak_values`` key the settings sit at the top level (older
     milestone shapes); otherwise the ``PREFERRED`` entry wins and, when
-    absent, every per-device map is read. A map only counts as settings
+    absent, every per-device map is read. Non-map legacy device entries
+    are skipped, but a present non-map PREFERRED entry is refused.
+    A map only counts as settings
     when it holds at least one recognized tweak key, and resolution fails
     closed (``UnsupportedVaultSettings``) when no readable settings exist.
     """
@@ -194,8 +196,13 @@ def _milestone_setting_maps(milestone_settings: dict) -> list[dict]:
         entries = milestone_settings["tweak_values"]
         if not isinstance(entries, dict):
             raise UnsupportedVaultSettings(_UNREADABLE_SETTINGS_REASON)
-        preferred = entries.get(_PREFERRED_DEVICE_ID)
-        if isinstance(preferred, dict):
+        if _PREFERRED_DEVICE_ID in entries:
+            preferred = entries[_PREFERRED_DEVICE_ID]
+            if not isinstance(preferred, dict):
+                raise UnsupportedVaultSettings(
+                    "PREFERRED settings must be a mapping; observed type "
+                    f"{type(preferred).__name__}"
+                )
             candidates = [preferred]
         else:
             candidates = [

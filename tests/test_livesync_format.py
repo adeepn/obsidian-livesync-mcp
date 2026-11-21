@@ -450,7 +450,6 @@ def test_resolve_identity_no_settings_fails_closed():
     for milestone in (
         {"tweak_values": {}},                      # no readable settings
         {"tweak_values": {"device-a": None}},      # values are not maps
-        {"tweak_values": {"PREFERRED": "bad"}},    # preferred is not a map
         {"tweak_values": []},                      # tweak_values unreadable
     ):
         with pytest.raises(UnsupportedVaultSettings, match="missing or unreadable"):
@@ -522,3 +521,23 @@ def test_unsupported_vault_settings_contract():
     with pytest.raises(UnsupportedVaultSettings) as excinfo:
         resolve_path_identity({})
     assert str(excinfo.value) == "vault settings missing or unreadable"
+
+
+@pytest.mark.parametrize("preferred", ["corrupt", None, 42, []])
+def test_malformed_preferred_refuses_device_fallback(preferred):
+    with pytest.raises(UnsupportedVaultSettings) as exc:
+        resolve_path_identity({"tweak_values": {
+            "PREFERRED": preferred,
+            "device": {"pathNormalizationVersion": 0},
+        }})
+    assert "PREFERRED" in str(exc.value)
+    assert type(preferred).__name__ in str(exc.value)
+    assert "corrupt" not in str(exc.value)
+
+
+def test_preferred_absent_skips_heterogeneous_device_entries():
+    assert resolve_path_identity({"tweak_values": {
+        "old-device": None,
+        "other-device": ["legacy"],
+        "device": {"pathNormalizationVersion": 0},
+    }}) == "legacy"

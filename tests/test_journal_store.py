@@ -21,6 +21,7 @@ import pytest
 import journal_store
 from journal_store import JournalStore, pick_winner
 from livesync_format import PATH_IDENTITY_LEGACY, PATH_IDENTITY_NFC
+from storage_base import StorageError
 
 JOURNAL_1 = "1700000000000-docs.jsonl.gz"
 JOURNAL_2 = "1700000001000-docs.jsonl.gz"
@@ -631,3 +632,54 @@ class TestSqliteLayout:
         store.apply_journal(JOURNAL_1, {}, [meta_doc("a.md", "1-x")])
         store.apply_journal(JOURNAL_2, {}, [meta_doc("b.md", "1-x")])
         assert store.files_processed_count() == 2
+
+
+@pytest.mark.parametrize("target", ["state", "chunks", "sqlite"])
+@pytest.mark.parametrize("reopen", [False, True])
+@pytest.mark.parametrize("dangling", [False, True])
+def test_open_rejects_symlinked_persistence(tmp_path, target, reopen, dangling):
+    state = tmp_path / "nested" / "state"
+    if reopen:
+        JournalStore(state, PATH_IDENTITY_LEGACY).close()
+    outside = tmp_path / "outside"
+    if not dangling:
+        outside.mkdir()
+    if target == "state":
+        if reopen:
+            state.rename(tmp_path / "original")
+        else:
+            state.parent.mkdir()
+        link = state
+        destination = tmp_path / "original" if reopen and not dangling else outside
+    else:
+        state.mkdir(parents=True, exist_ok=True)
+        link = state / ("chunks" if target == "chunks" else DB_PATH)
+        if link.exists():
+            if target == "chunks":
+                link.rmdir()
+            else:
+                link.unlink()
+        destination = outside if target == "chunks" else outside / "database"
+        if target == "sqlite" and not dangling:
+            destination.write_bytes(b"untouched")
+    link.symlink_to(destination, target_is_directory=target != "sqlite")
+    before = {str(p.relative_to(outside)): p.read_bytes()
+              for p in outside.rglob("*") if p.is_file()}
+    with pytest.raises(StorageError, match="symlink.*refusing"):
+        JournalStore(state, PATH_IDENTITY_LEGACY)
+    assert link.is_symlink()
+    assert {str(p.relative_to(outside)): p.read_bytes()
+            for p in outside.rglob("*") if p.is_file()} == before
+    if dangling:
+        assert not outside.exists()
+
+
+def test_nested_state_normal_operation_and_reopen(tmp_path):
+    state = tmp_path / "nested" / "state"
+    store = JournalStore(state, PATH_IDENTITY_LEGACY)
+    store.apply_journal(JOURNAL_1, {"h:0123456789abcdef": "body"}, [])
+    store.close()
+    reopened = JournalStore(state, PATH_IDENTITY_LEGACY)
+    assert reopened.processed(JOURNAL_1)
+    assert (state / "chunks" / "01" / "23456789abcdef").read_text() == "body"
+    reopened.close()
