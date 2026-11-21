@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Added S3 local peer state size/path diagnostics and `vault_stats.local_state` warnings controlled by `S3_STATE_SIZE_WARN_MB` (disabled by default)
 - Added shared bearer API key authentication via `MCP_API_KEY` for MCP clients that use `Authorization: Bearer <token>`
 - Added the S3 journal backend with append-only publication, local SQLite/chunk state, URI or individual-variable configuration, and legacy/NFC path identity support
 - Added `LIVESYNC_BACKEND` configuration to select CouchDB or S3 journal storage at startup
@@ -16,6 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Expanded the connection guide with plugin credential sources, both S3 configuration forms, a complete environment reference, local replica monitoring/reset procedures, and the native-peer architecture rationale
 - Rewrote the storage layer: all 20 tools now operate through a storage-agnostic `StorageBackend` interface, with a LiveSync-aware `CouchDBBackend` implementation (soft-delete visibility, chunked documents, optimistic locking, error messages free of internal URLs and revisions)
 - Rewrote frontmatter handling on `ruamel.yaml` round-trip editing: comments, quoting and key order are preserved; tag add/remove coerce types instead of corrupting YAML
 - Rebuilt the link graph with an Obsidian-compatible resolver (heading anchors, aliases, markdown links); unreadable notes stay in resolution instead of being dropped

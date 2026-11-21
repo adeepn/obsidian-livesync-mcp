@@ -9,7 +9,7 @@ This repository is a small Python MCP server for accessing an Obsidian LiveSync 
 - `storage_base.py`: storage-agnostic `StorageBackend` protocol plus the storage exception hierarchy.
 - `storage_couchdb.py`: `CouchDBBackend`, the LiveSync-aware CouchDB implementation of the protocol.
 - `journal_codec.py`: LiveSync journal record parsing and serialization.
-- `journal_store.py`: local SQLite revision state and on-disk chunk cache.
+- `journal_store.py`: local SQLite revision state and on-disk chunk cache; `state_size_bytes()` measures SQLite/sidecar and chunk bytes for backend/tool observability.
 - `object_storage.py`: S3 object storage adapter using boto3.
 - `storage_journal.py`: append-only LiveSync S3 journal storage backend.
 - `livesync_format.py`: LiveSync document/chunk codecs, path rules, and vault validation.

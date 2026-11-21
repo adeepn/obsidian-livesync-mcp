@@ -7,16 +7,38 @@ No Obsidian desktop app required on the server — connects to CouchDB or S3-com
 ## Architecture
 
 ```
-Obsidian (phone/desktop) <-> CouchDB <-> MCP Server <-> Claude Code / Claude.ai
+Obsidian + LiveSync <-> CouchDB or S3 journals <-> Python MCP peer <-> MCP client
 ```
 
-Obsidian clients sync via the LiveSync plugin to a CouchDB instance. This MCP server reads and writes directly to CouchDB, providing 20 tools for managing your vault — no Obsidian REST API or desktop app needed on the server side.
+The server reads and writes the same vault storage as the Obsidian plugin.
+CouchDB holds the live documents; S3 holds append-only journals that this peer
+replays into local SQLite revision trees and chunk files.
+
+### Why a native peer (not the whole plugin)
+
+Upstream Self-hosted LiveSync is a TypeScript Obsidian plugin running inside
+an Electron renderer. It depends on Obsidian APIs, IndexedDB/PouchDB browser
+builds and the app's service container; it has no supported headless/CLI runtime.
+Embedding it would require Node plus a browser-like environment and still
+require extracting the journal replicator from that service graph.
+During design, **Option B: Node sidecar on @vrtmrz/livesync-commonlib** was
+considered and rejected for this deployment: with E2EE disabled, a native peer
+keeps one runtime and a small, reviewable implementation covered by tests.
+The original estimate was roughly 1.5k lines of Python, not a current size guarantee.
+We take the upstream wire format, mirrored byte-exactly and validated by a
+journal captured from a real client plus oracle tests embedding upstream's
+escape specification. Compatibility gates check milestone settings, path
+identity (including NFC for S3), and versions; unknown versions fail closed.
+Those gates mitigate format drift without vendoring the plugin.
+The trade-off is tracking upstream format changes here. A vendored client could
+inherit format updates with upstream upgrades, at the cost of a second runtime
+and a much larger, app-coupled surface to audit.
 
 ## Backends
 
 Storage is selected by a single environment variable, `LIVESYNC_BACKEND`:
 
-- **`couchdb`** (current) — talks directly to the CouchDB instance your vault syncs to. Configure it with the `COUCHDB_*` variables below.
+- **`couchdb`** — talks directly to the CouchDB instance your vault syncs to. Configure it with the `COUCHDB_*` variables below.
 - **`s3`** — replays and publishes Self-hosted LiveSync journals in S3-compatible storage, with a local SQLite and chunk cache.
 
 All tools work through a storage-agnostic backend interface, so switching backends later is a configuration change, not a rewrite. The `vault_stats` tool reports the active backend in its `backend` field.
@@ -93,54 +115,123 @@ cp .env.example .env
 
 The server validates configuration when the application is constructed at import. Missing required variables, an absent auth mode, or placeholder secrets from `.env.example` fail immediately. `create_app(cfg)` accepts an injected validated `Config`; auth, URL, host, port, and backend startup all use that same configuration. Environment changes after construction require a new application or restart. OAuth still uses the preconfigured client registration and redirect URI rules below.
 
-| Variable | Description | Default |
-|---|---|---|
-| `LIVESYNC_BACKEND` | Storage backend: `couchdb` or `s3` | required, no default |
-| `COUCHDB_URL` | CouchDB URL | `http://localhost:5984` |
-| `COUCHDB_USER` | CouchDB username | required when backend is `couchdb` |
-| `COUCHDB_PASSWORD` | CouchDB password | required when backend is `couchdb` |
-| `COUCHDB_DATABASE` | LiveSync database name | required when backend is `couchdb` |
-| `MCP_API_KEY` | Shared bearer token for MCP clients such as Codex (bearer mode) | required unless OAuth group is set |
-| `OAUTH_PASSWORD` | Password enforced at the `/authorize` form in OAuth mode | required for OAuth, together with the two below |
-| `OAUTH_CLIENT_ID` | OAuth client ID for pre-registered client | required for OAuth |
-| `OAUTH_CLIENT_SECRET` | OAuth client secret | required for OAuth |
-| `MCP_SERVER_URL` | Public HTTPS URL of this server | `https://localhost:8484` |
-| `MCP_HOST` | Bind address | `0.0.0.0` |
-| `MCP_PORT` | Port | `8484` |
+### Quick start matrix
 
-### S3 journal backend
+Open **Obsidian → Settings → Self-hosted LiveSync** in a vault that already
+syncs successfully. Use the connection settings for that same vault, not a new
+bucket or database. Labels can vary with plugin version.
 
-Set `LIVESYNC_BACKEND=s3` and choose exactly one connection form.
-URI form (replace the placeholders with credentials):
+| Backend | Where credentials come from | Configuration | First tool call | Smoke check |
+| --- | --- | --- | --- | --- |
+| CouchDB | Plugin remote database settings: CouchDB URI, username, password and database name | CouchDB block below + shared server/auth block | Direct access, no full journal replay or local replica | Call `obsidian_vault_stats`, then `obsidian_list_notes` from an MCP client |
+| S3 journal | Plugin object-storage/journal settings: **Copy setup URI** (`sls://…`), or endpoint, access key, secret key, bucket, region and prefix | Exactly one S3 block below + shared server/auth block | Full journal replay; time scales with history and network, disk roughly vault size or larger with history | Call the same two tools; allow replay to finish or continue across bounded refreshes |
+
+Put the following shared settings in `.env`, replacing the deployment URL and
+setting a strong bearer token locally (for example, generate one with
+`python -c 'import secrets; print(secrets.token_urlsafe(32))'`). Never share it.
+For a local smoke check, these lines bind only to localhost:
 
 ```dotenv
-LIVESYNC_S3_URI=sls://your_access_key:your_secret_key@https://minio.local?bucket=vault&region=auto&prefix=
+MCP_API_KEY=<paste-generated-token>
+MCP_SERVER_URL=http://localhost:8484
+MCP_HOST=127.0.0.1
+MCP_PORT=8484
 ```
 
-Or use individual variables; leave `LIVESYNC_S3_URI` unset:
+For remote clients, configure your public HTTPS URL and reverse proxy; see
+Connecting Clients and Authentication. Alternatively use the complete OAuth
+group instead of `MCP_API_KEY`.
+
+**CouchDB:** copy the four values from the plugin's remote database settings.
+`COUCHDB_URL` is the server base URL; keep the database name in its own field.
+Replace all angle-bracket fields before starting:
 
 ```dotenv
-S3_ENDPOINT_URL=https://minio.local
-S3_ACCESS_KEY_ID=your_access_key
-S3_SECRET_ACCESS_KEY=your_secret_key
-S3_BUCKET=vault
+LIVESYNC_BACKEND=couchdb
+COUCHDB_URL=<CouchDB-server-URI>
+COUCHDB_USER=<plugin-username>
+COUCHDB_PASSWORD=<plugin-password>
+COUCHDB_DATABASE=<plugin-database-name>
+```
+
+> **CouchDB compatibility:** legacy path identity only today: case-insensitive,
+> normalization version 0, no E2EE or path obfuscation. NFC is refused.
+> The S3 peer supports NFC identity; CouchDB NFC support remains future work.
+> CouchDB needs no local state directory.
+
+**S3 URI:** paste the plugin's object-storage `sls://` setup URI as one line.
+An Obsidian-wide encrypted setup link is not an S3 connection URI.
+
+```dotenv
+LIVESYNC_BACKEND=s3
+LIVESYNC_S3_URI=<paste-sls://-setup-URI>
+```
+
+**S3 individual fields:** use this instead of the URI block; copy the values
+from the same plugin object-storage settings:
+
+```dotenv
+LIVESYNC_BACKEND=s3
+S3_ENDPOINT_URL=<plugin-endpoint-URL>
+S3_ACCESS_KEY_ID=<plugin-access-key>
+S3_SECRET_ACCESS_KEY=<plugin-secret-key>
+S3_BUCKET=<plugin-bucket>
 S3_REGION=auto
 S3_PREFIX=
 ```
 
-Endpoint, credentials and bucket are required in the individual form.
-Region defaults to `auto` and prefix to an empty string. Prefix is prepended
-literally to object keys; include a trailing slash for a folder prefix.
-Do not set any individual connection variable alongside a URI, even to an
-empty value. Shared settings work with either form:
+Use the plugin's region and prefix if nonempty. Optional local state settings
+are described under Local cache. Do not leave both S3 connection forms enabled,
+even with empty individual values. If starting from `.env.example`, remove its
+unused backend/auth settings and replace its placeholder secrets.
 
-```dotenv
-S3_STATE_DIR=./data
-S3_REFRESH_MIN_INTERVAL_SEC=5
-```
+Start with `python run.py`, connect an MCP client to `http://localhost:8484/mcp`
+using the bearer token, and call `obsidian_vault_stats` and `obsidian_list_notes`.
+Expect the chosen `backend`, sensible note counts and known vault paths.
+CouchDB access is immediate apart from the requested vault scan; S3's initial
+replay can be lengthy. Startup validates settings but does not replay journals.
+There is no dedicated health endpoint; these tool calls check storage access too.
 
-Configure client authentication separately, as below. Placeholder credentials
-are rejected at startup.
+### Environment reference
+
+This table covers every environment variable consumed by `config.py`.
+“Required for S3 fields” means only the individual-variable connection form;
+URI and individual fields are mutually exclusive. Backend-specific settings
+are read only for the selected backend. Empty defaults below mean an empty string.
+
+| Variable | Default | Requirement | Purpose |
+| --- | --- | --- | --- |
+| `LIVESYNC_BACKEND` | none | Required | Select `couchdb` or `s3` |
+| `COUCHDB_URL` | `http://localhost:5984` | Optional | CouchDB server base URL |
+| `COUCHDB_USER` | none | Required for CouchDB | Database username |
+| `COUCHDB_PASSWORD` | none | Required for CouchDB | Database password |
+| `COUCHDB_DATABASE` | none | Required for CouchDB | LiveSync database name |
+| `LIVESYNC_S3_URI` | empty | Required unless S3 fields set | `sls://access:secret@endpoint?bucket=…&region=…&prefix=…` connection |
+| `S3_ENDPOINT_URL` | none | Required for S3 fields | S3-compatible endpoint URL |
+| `S3_ACCESS_KEY_ID` | none | Required for S3 fields | Object-storage access key |
+| `S3_SECRET_ACCESS_KEY` | none | Required for S3 fields | Object-storage secret key |
+| `S3_BUCKET` | none | Required for S3 fields | Existing LiveSync journal bucket |
+| `S3_REGION` | `auto` (fields); empty if omitted in URI | Optional | Object-storage region |
+| `S3_PREFIX` | empty | Optional | Literal key prefix, including trailing slash if needed |
+| `S3_STATE_DIR` | `./data` | Optional | Dedicated persistent local replica directory |
+| `S3_REFRESH_MIN_INTERVAL_SEC` | `5` | Optional | Positive finite seconds between refresh attempts |
+| `S3_STATE_SIZE_WARN_MB` | `0` | Optional | Non-negative integer warning threshold in MiB; 0 disables |
+| `MCP_API_KEY` | empty | Required unless full OAuth group set | Shared bearer token; takes precedence over OAuth |
+| `OAUTH_PASSWORD` | empty | Required for OAuth | Password on the authorization form |
+| `OAUTH_CLIENT_ID` | empty | Required for OAuth | Pre-registered client ID |
+| `OAUTH_CLIENT_SECRET` | empty | Required for OAuth | Pre-registered client secret |
+| `MCP_SERVER_URL` | `https://localhost:8484` | Optional | External server base URL used for auth resource binding |
+| `MCP_HOST` | `0.0.0.0` | Optional | HTTP bind address |
+| `MCP_PORT` | `8484` | Optional | HTTP port, integer 1–65535 |
+| `LIVESYNC_SCAN_MAX_NOTES` | `10000` | Optional | Positive note count cap per aggregate scan |
+| `LIVESYNC_SCAN_MAX_BYTES` | `67108864` | Optional | Positive aggregate UTF-8 byte cap per scan |
+
+### S3 journal backend
+
+Set `LIVESYNC_BACKEND=s3` and choose exactly one connection form.
+Use the URI or individual-variable block in the quick start matrix.
+Prefix is prepended literally to object keys; include a trailing slash for a
+folder prefix. Shared state settings work with either connection form.
 
 Before each tool operation, the backend refreshes its local state. On first
 use, this replays the full journal history. This one-time replay can take a
@@ -206,6 +297,58 @@ resolution.
 Supported S3 vault settings are legacy path identity (normalization version 0)
 and NFC identity (version 1), with case-insensitive filenames. E2EE, path
 obfuscation and case-sensitive filename settings are rejected at startup.
+
+### Local cache (S3)
+
+The state directory is a **rebuildable replica**, not an eviction cache.
+`journal.sqlite3` holds revision trees, replay checkpoints and peer metadata;
+SQLite WAL/SHM sidecars may also be present. `chunks/` holds content-addressed
+chunks, including historical chunks. State grows with vault content and history
+and is **never auto-pruned** during normal operation. Remote journals are
+append-only, so deleting a note does not reclaim its history here.
+
+Keep a dedicated writable `S3_STATE_DIR` per vault/peer, persisted across restarts.
+Allow roughly vault-sized disk space initially and potentially much more for
+history, revision metadata and SQLite overhead. Replay time depends on journal
+volume and network speed; there is no fixed completion time. Large histories
+may need multiple refresh calls because replay has per-call budgets.
+
+Monitor `obsidian_vault_stats` → `local_state`: `path`, `bytes`,
+`human_readable_size`, `warn_threshold_mb`, and `warning`. Size is a best-effort
+sum of logical SQLite/sidecar and chunk-file bytes, measured once per call;
+it may differ from filesystem allocated space reported by `du`.
+Set `S3_STATE_SIZE_WARN_MB=1024`, for example, to warn above 1024 MiB
+(1 MB here means 1,048,576 bytes). Zero disables warnings; equality does not
+warn. A warning adds a human-readable `hint` to the tool response. This is
+observability only: it does not stop writes or delete anything.
+
+For a manual check in a shell with `S3_STATE_DIR` set to the configured path:
+
+```bash
+du -sh "$S3_STATE_DIR"
+```
+
+`.env` is loaded by `run.py`, not automatically by your shell. If the setting
+is unset, check the default `./data` relative to the server's working directory.
+
+To reset safely:
+
+1. Stop the server (for systemd: `sudo systemctl stop obsidian-mcp`) and any
+   other process using that state directory. Confirm the remote vault is intact.
+2. Check the exact configured path. Move the directory aside for recovery, or
+   remove only that directory with `rm -rf -- "$S3_STATE_DIR"` after verifying
+   that the variable is set and points to the intended peer state directory.
+3. Start the server (`sudo systemctl start obsidian-mcp` for systemd). The next
+   tool call replays remote journals to rebuild local state; allow time and disk
+   for a full replay. Check statistics and known notes before discarding a backup.
+
+A reset removes local replay progress; it does not delete remote journals.
+Automatic logical resets occur on a journal epoch change
+(`protocolVersion:pbkdf2salt`) or when the last journal published by this peer
+vanishes, indicating a remote wipe. These clear local tables/chunks and require
+replay again; they are compatibility/recovery actions, not space-based eviction.
+Changing path-identity mode requires a fresh state directory; it fails closed
+rather than silently converting the existing replica.
 
 ### 3. Run
 
