@@ -158,7 +158,8 @@ Ordinary tool calls refresh automatically using the same throttle. There is
 no background polling. `obsidian_refresh` also uses this throttle; allow the
 interval to elapse to receive subsequent device changes. Internal callers can use
 `refresh(force=True)` to bypass the throttle. Refresh failures
-return a tool error instead of serving stale data.
+return a tool error instead of serving stale data. Calls throttled after an
+unresolved failure also return an error; a successful refresh clears that failure.
 
 Replay uses bounded downloads (512 MiB compressed per object), inflation (1 GiB),
 records (100,000 per file), lines (64 MiB in UTF-8 bytes), and JSON nesting

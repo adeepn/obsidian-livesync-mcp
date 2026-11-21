@@ -124,7 +124,9 @@
 
 **Interfaces:**
 - Consumes: journal_codec, pick_winner, path identity.
-- Produces: реализация `write_note(path, content, *, create=False, overwrite=False, expected_rev=None)`, `delete_note(path, expected_rev=None)`, `rename_note`, `copy_note` (поднятие `RenamePartialError` маппится на фазы: у нас фаза одна — «target_published»; семантика rename в append-мире: новый док + soft-delete старого ОДНИМ журнальным файлом — атомарно по файлу).
+> Superseded Task 7 wording: - Produces: реализация `write_note(path, content, *, create=False, overwrite=False, expected_rev=None)`, `delete_note(path, expected_rev=None)`, `rename_note`, `copy_note` (поднятие `RenamePartialError` маппится на фазы: у нас фаза одна — «target_published»; семантика rename в append-мире: новый док + soft-delete старого ОДНИМ журнальным файлом — атомарно по файлу).
+
+- **Amended by ruling (final architecture review), Task 7:** write_note, delete_note, rename_note и copy_note публикуют append-only журналы. Rename публикует target и tombstone source одним атомарным journal-файлом; RenamePartialError остаётся только в CouchDB backend, journal backend его не поднимает.
   - Алгоритм записи: validate_vault_path → локальный winner (expected_rev несовпадение → ConcurrentModification с текстом по контракту B1: «изменена параллельно; перечитайте и повторите») → новая ревизия `<gen+1>-<32 hex>` + `_revisions`-цепочка от winner → чанк(и) по chunk_id_for → serialize+deflate → имя `max(now_ms, числовой_максимум_всех_виденных_ключей + 1)` с монотонным counter процесса → put → НЕМЕДЛЕННО get+inflate+parse (несовпадение байтов → StorageError, «success» не возвращается) → apply_journal к store + mark_processed + last_sent_key.
   - Soft delete = ревизия с `deleted:true`, `type/path/children/eden` сохранены. Бинарные пути: BinaryNoteError (write — только текст; copy/rename переносят children+eden как есть).
   - Sibling-семантика: если после нашей записи приходит чужой журнал с конкур-листом — оба живут, winner детерминирован; ответ «успех» означает durable publication (контракт B1), не финального победителя.
