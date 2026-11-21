@@ -236,6 +236,25 @@ class JournalStore:
                 tmp_file.unlink(missing_ok=True)
 
     def _insert_doc(self, name: str, doc: object) -> None:
+        gen, rev_hash = self._validate_doc(name, doc)
+        doc_id = doc["_id"]
+        self._conn.execute(
+            "INSERT OR IGNORE INTO docs(doc_id, gen, rev_hash, doc_json) "
+            "VALUES (?, ?, ?, ?)",
+            (doc_id, gen, rev_hash, _dump_doc(doc)),
+        )
+
+    def validate_journal(self, chunks: dict[str, str], docs: list[dict]) -> None:
+        """Check deterministic store constraints without changing local state."""
+        for chunk_id, data in chunks.items():
+            self._chunk_path(chunk_id)
+            data.encode("utf-8")
+        for doc in docs:
+            self._validate_doc("publication", doc)
+            _dump_doc(doc)
+
+    @staticmethod
+    def _validate_doc(name: str, doc: object) -> tuple[int, str]:
         if not isinstance(doc, dict):
             raise ValueError(f"{name}: journal document must be a JSON object")
         doc_id = doc.get("_id")
@@ -254,11 +273,7 @@ class JournalStore:
             raise ValueError(
                 f"{name}: journal document {doc_id!r} has invalid revision {rev!r}"
             ) from None
-        self._conn.execute(
-            "INSERT OR IGNORE INTO docs(doc_id, gen, rev_hash, doc_json) "
-            "VALUES (?, ?, ?, ?)",
-            (doc_id, gen, rev_hash, _dump_doc(doc)),
-        )
+        return gen, rev_hash
 
     def _chunk_path(self, chunk_id: str) -> Path:
         if not isinstance(chunk_id, str) or _CHUNK_ID_RE.fullmatch(chunk_id) is None:

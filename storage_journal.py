@@ -853,13 +853,27 @@ class JournalBackend:
         is never deleted; a later refresh may replay a published orphan.
         """
         store = self._require_store("publish")
-        if self._probe_remote_wipe(store.epoch or None):
-            raise ConcurrentModification(
-                "remote was rebuilt; retry the operation after refresh"
-            )
         try:
             payload = serialize_journal(chunks, docs)
+            if len(payload) > self.max_inflated_bytes:
+                raise StorageError("journal inflated output exceeds limit")
+            try:
+                journal = parse_journal(
+                    payload, max_records=self.max_records,
+                    max_line_bytes=self.max_line_bytes,
+                )
+            except ValueError as exc:
+                raise StorageError(f"journal publication preflight failed: {exc}") from exc
+            store.validate_journal(journal.chunks, journal.docs)
             blob = deflate_journal(payload)
+            if len(blob) > getattr(self._object_storage, "max_object_bytes", MAX_OBJECT_BYTES):
+                raise StorageError("journal compressed object size exceeds limit")
+            if len(blob) > self.max_refresh_bytes:
+                raise StorageError("journal download bytes exceeds refresh limit")
+            if self._probe_remote_wipe(store.epoch or None):
+                raise ConcurrentModification(
+                    "remote was rebuilt; retry the operation after refresh"
+                )
             ms = max(int(time.time() * 1000), self._max_seen_ms + 1)
             # Reserve even failed attempts so a retry cannot reuse their key.
             self._max_seen_ms = ms
@@ -881,8 +895,13 @@ class JournalBackend:
             readback = self._object_storage.get(name)
             if readback is None:
                 raise StorageError("journal read-back verification failed")
-            decoded = inflate_journal(readback)
-            journal = parse_journal(decoded, name=name)
+            decoded = inflate_journal(
+                readback, max_output_bytes=self.max_inflated_bytes,
+            )
+            journal = parse_journal(
+                decoded, name=name, max_records=self.max_records,
+                max_line_bytes=self.max_line_bytes,
+            )
             if (
                 decoded != payload
                 or journal.chunks != dict(chunks)

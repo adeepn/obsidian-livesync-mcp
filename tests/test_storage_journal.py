@@ -1608,3 +1608,37 @@ async def test_invalid_timestamps_are_isolated(tmp_path, field, value):
     assert [meta['path'] for meta in await backend.list_notes()] == ['good.md']
     assert [(meta['path'], text) async for meta, text in backend.iterate_texts('.md')] == [('good.md', 'valid')]
     await backend.close()
+
+@pytest.mark.parametrize("limit,value,match", [
+    ("max_line_bytes", 30, "line length"),
+    ("max_inflated_bytes", 30, "inflated"),
+    ("max_records", 1, "record count"),
+    ("max_refresh_bytes", 1, "download"),
+    ("max_object_bytes", 1, "object"),
+])
+async def test_publication_preflight_limits(tmp_path, limit, value, match):
+    backend, storage = make_backend(tmp_path, healthy_bucket())
+    await backend.startup_check()
+    setattr(storage if limit == "max_object_bytes" else backend, limit, value)
+    with pytest.raises(StorageError, match=match):
+        await backend.write_note("a.md", "body", create=True)
+    assert storage.put_calls == []
+    assert backend._store.winner("a.md") is None
+    assert backend._store.last_sent_key == ""
+
+
+async def test_publication_rejects_oversized_chunk_before_put(tmp_path):
+    backend, storage = make_backend(tmp_path, healthy_bucket())
+    await backend.startup_check()
+    with pytest.raises(StorageError, match="line length"):
+        await backend.write_note("big.md", "x" * (64 * 1024**2 + 1), create=True)
+    assert storage.put_calls == []
+    assert backend._store.winner("big.md") is None
+
+
+async def test_publication_preflights_store_revision(tmp_path):
+    backend, storage = make_backend(tmp_path, healthy_bucket())
+    await backend.startup_check()
+    with pytest.raises(StorageError):
+        backend._publish([], [meta_doc("bad.md", "invalid")])
+    assert storage.put_calls == []
