@@ -195,6 +195,7 @@ class JournalBackend:
         self._listing_cursor = ""
         self._refresh_deadline: float | None = None
         self._refresh_downloaded = 0
+        self._sync_parameters_bytes: int | None = None
         self._object_storage = object_storage
         self._state_dir = Path(state_dir)
         self.refresh_min_interval = refresh_min_interval
@@ -400,6 +401,7 @@ class JournalBackend:
         """
         blob = self._get_object(SYNC_PARAMETERS_KEY)
         if blob is None:
+            self._sync_parameters_bytes = 0
             return None
         try:
             params = json.loads(blob.decode("utf-8"))
@@ -417,6 +419,7 @@ class JournalBackend:
             or not isinstance(salt, str)
         ):
             raise UnsupportedVault("journal sync parameters object is malformed")
+        self._sync_parameters_bytes = len(blob)
         return f"{protocol_version}:{salt}"
 
     def _has_remote_journals(self) -> bool:
@@ -879,7 +882,13 @@ class JournalBackend:
             blob = deflate_journal(payload)
             if len(blob) > getattr(self._object_storage, "max_object_bytes", MAX_OBJECT_BYTES):
                 raise StorageError("journal compressed object size exceeds limit")
-            if len(blob) > self.max_refresh_bytes:
+            # A fresh replay reads sync parameters before downloading journals.
+            # Leave room for that control read and modest object growth.
+            control_reserve = (
+                64 * 1024 if self._sync_parameters_bytes is None
+                else self._sync_parameters_bytes + 1024
+            )
+            if len(blob) + control_reserve > self.max_refresh_bytes:
                 raise StorageError("journal download bytes exceeds refresh limit")
             if self._probe_remote_wipe(store.epoch or None):
                 raise ConcurrentModification(

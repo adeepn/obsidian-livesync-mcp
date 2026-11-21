@@ -1645,6 +1645,59 @@ async def test_publication_preflights_store_revision(tmp_path):
     assert storage.put_calls == []
 
 
+@pytest.mark.parametrize("observation", ["startup", "refresh", "unknown"])
+async def test_publication_reserves_control_read_bytes(tmp_path, observation):
+    backend, storage = make_backend(tmp_path, healthy_bucket())
+    await backend.startup_check()
+    params = storage._objects[SYNC_PARAMETERS_KEY]
+    if observation == "refresh":
+        # The latest control read must replace the startup observation.
+        params += b" " * 2048
+        storage._objects[SYNC_PARAMETERS_KEY] = params
+        await backend.refresh(force=True)
+    elif observation == "unknown":
+        backend._sync_parameters_bytes = None
+    docs = [meta_doc("new.md", "1-new")]
+    blob = deflate_journal(serialize_journal([], docs))
+    reserve = 64 * 1024 if observation == "unknown" else len(params) + 1024
+    backend.max_refresh_bytes = len(blob) + reserve - 1
+    before = dict(storage._objects)
+    try:
+        with pytest.raises(StorageError, match="download"):
+            backend._publish([], docs)
+        assert storage.put_calls == []
+        assert storage._objects == before
+        # Original reviewer case: payload alone fits the entire budget.
+        backend.max_refresh_bytes = len(blob)
+        with pytest.raises(StorageError, match="download"):
+            backend._publish([], docs)
+        assert storage.put_calls == []
+    finally:
+        await backend.close()
+
+
+async def test_accepted_publication_fits_fresh_refresh(tmp_path):
+    backend, storage = make_backend(tmp_path, {
+        MILESTONE_KEY: milestone_blob(), SYNC_PARAMETERS_KEY: params_blob(),
+    })
+    await backend.startup_check()
+    docs = [meta_doc("new.md", "1-new")]
+    blob = deflate_journal(serialize_journal([], docs))
+    budget = len(blob) + len(params_blob()) + 1024
+    backend.max_refresh_bytes = budget
+    reader = JournalBackend(storage, tmp_path / "reader", max_refresh_bytes=budget)
+    try:
+        backend._publish([], docs)
+        assert len(storage.put_calls) == 1
+        await reader.startup_check()
+        await reader.refresh()
+        assert reader._store.processed(backend._store.last_sent_key)
+        assert reader._store.winner("new.md") == docs[0]
+    finally:
+        await reader.close()
+        await backend.close()
+
+
 @pytest.mark.parametrize("force", [False, True])
 async def test_refresh_failure_recovers_after_retry(tmp_path, force):
     backend, storage = make_backend(
