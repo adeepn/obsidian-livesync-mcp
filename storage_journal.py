@@ -175,6 +175,7 @@ class JournalBackend:
         state_dir: Path,
         refresh_min_interval: float = 5.0,
         *,
+        state_size_warn_mb: int = 0,
         max_refresh_keys: int = MAX_REFRESH_KEYS,
         max_refresh_bytes: int = MAX_REFRESH_BYTES,
         max_refresh_seconds: float = MAX_REFRESH_SECONDS,
@@ -198,6 +199,7 @@ class JournalBackend:
         self._sync_parameters_bytes: int | None = None
         self._object_storage = object_storage
         self._state_dir = Path(state_dir)
+        self.state_size_warn_mb = state_size_warn_mb
         self.refresh_min_interval = refresh_min_interval
         self._store: JournalStore | None = None
         # Throttle clock (monotonic) and the wall-clock stamp for diagnostics.
@@ -356,6 +358,9 @@ class JournalBackend:
         store = self._store
         return {
             "backend": "s3-journal",
+            "state_dir_path": str(self._state_dir),
+            "state_dir_bytes": store.state_size_bytes() if store else 0,
+            "state_size_warn_mb": self.state_size_warn_mb,
             "path_identity": store.path_identity if store else None,
             "epoch": store.epoch if store else None,
             "files_processed": store.files_processed_count() if store else 0,

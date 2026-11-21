@@ -54,6 +54,7 @@ def get_backend(cfg: Config) -> StorageBackend:
             Boto3ObjectStorage(cfg.s3),
             Path(cfg.s3.state_dir),
             cfg.s3.refresh_min_interval_sec,
+            state_size_warn_mb=cfg.s3.state_size_warn_mb,
         )
     if cfg.couchdb is None:
         raise ConfigError("CouchDB configuration is required.")
@@ -1102,7 +1103,23 @@ async def obsidian_vault_stats() -> str:
         by_ext[ext] = by_ext.get(ext, 0) + 1
     tags = await _tags()
     info = await _backend().backend_info()
+    local_state = {}
+    if info.get("backend") == "s3-journal":
+        size = info["state_dir_bytes"]
+        threshold = info["state_size_warn_mb"]
+        warning = threshold > 0 and size > threshold * 1024 * 1024
+        local_state["local_state"] = {
+            "path": info["state_dir_path"], "bytes": size,
+            "human_readable_size": f"{size / (1024 * 1024):.2f} MiB",
+            "warn_threshold_mb": threshold, "warning": warning,
+        }
+        if warning:
+            local_state["hint"] = (
+                f"local peer state exceeds {threshold} MB; "
+                "see README 'Local cache' for monitoring and reset"
+            )
     return json.dumps({
+        **local_state,
         "total_notes": len(notes), "by_extension": by_ext,
         "total_size_bytes": sum(n.get("size") or 0 for n in notes),
         "total_tags": len(tags["tags"]), "backend": info.get("backend"),

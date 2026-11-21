@@ -44,6 +44,7 @@ import logging
 import os
 import re
 import sqlite3
+import stat
 import tempfile
 from pathlib import Path
 
@@ -156,6 +157,27 @@ class JournalStore:
     ``chunks/`` tree. See the module docstring for the format and the
     revision-tree semantics.
     """
+
+    def state_size_bytes(self) -> int:
+        """Logical bytes in SQLite (including WAL/SHM) and the chunk tree.
+
+        Best-effort measurement: a concurrent reset may remove files during
+        the walk. Do not follow symlinks outside this peer's state.
+        """
+        paths = [self.state_dir / name for name in
+                 (_DB_FILENAME, _DB_FILENAME + "-wal", _DB_FILENAME + "-shm")]
+        def file_size(path: Path) -> int:
+            try:
+                info = path.lstat()
+                return info.st_size if stat.S_ISREG(info.st_mode) else 0
+            except FileNotFoundError:
+                return 0
+
+        total = sum(file_size(path) for path in paths)
+        for root, dirs, files in os.walk(self._chunks_dir, followlinks=False):
+            dirs[:] = [d for d in dirs if not (Path(root) / d).is_symlink()]
+            total += sum(file_size(Path(root) / name) for name in files)
+        return total
 
     def __init__(self, state_dir: Path, path_identity: str):
         if path_identity not in (PATH_IDENTITY_LEGACY, PATH_IDENTITY_NFC):

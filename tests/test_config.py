@@ -253,3 +253,14 @@ def test_s3_rejects_example_secret_placeholders(form):
            {**S3_INDIVIDUAL_ENV, "S3_SECRET_ACCESS_KEY": "your_secret_key"})
     with pytest.raises(ConfigError, match="placeholder"):
         load_config(env)
+
+
+@pytest.mark.parametrize("raw, expected", [("0", 0), ("12", 12), ("", 0)])
+def test_state_size_warning_threshold(raw, expected):
+    assert load_config({**S3_ENV, "S3_STATE_SIZE_WARN_MB": raw}).s3.state_size_warn_mb == expected
+
+
+@pytest.mark.parametrize("raw", ["-1", "1.5", "invalid"])
+def test_state_size_warning_threshold_invalid(raw):
+    with pytest.raises(ConfigError, match="S3_STATE_SIZE_WARN_MB"):
+        load_config({**S3_ENV, "S3_STATE_SIZE_WARN_MB": raw})

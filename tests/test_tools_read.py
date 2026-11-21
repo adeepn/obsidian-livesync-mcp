@@ -195,6 +195,7 @@ async def test_get_backend_s3(tmp_path):
         "LIVESYNC_S3_URI": "sls://AK:SK@https://minio.local?bucket=vault&region=auto",
         "S3_STATE_DIR": str(tmp_path / "state"),
         "S3_REFRESH_MIN_INTERVAL_SEC": "2.5",
+        "S3_STATE_SIZE_WARN_MB": "17",
         "MCP_API_KEY": "test-token",
     })
     backend = server.get_backend(cfg)
@@ -202,6 +203,7 @@ async def test_get_backend_s3(tmp_path):
     assert isinstance(backend._object_storage, Boto3ObjectStorage)
     assert backend._state_dir == tmp_path / "state"
     assert backend.refresh_min_interval == 2.5
+    assert backend.state_size_warn_mb == 17
     assert backend._store is None
     assert not (tmp_path / "state").exists()
     await backend.close()
@@ -573,3 +575,34 @@ async def test_fetch_couchdb_does_not_scan_index_for_refresh(monkeypatch):
         log.clear()
         assert await server.obsidian_refresh() == "Vault refreshed."
         assert any(r.method == "GET" and r.url.path.endswith("/_all_docs") for r in log)
+
+
+@pytest.mark.parametrize("threshold, size, warning", [
+    (0, 2 * 1024 * 1024, False),
+    (1, 1024 * 1024, False),
+    (1, 1024 * 1024 + 1, True),
+    (2, 1024 * 1024, False),
+])
+async def test_vault_stats_local_state(tmp_path, monkeypatch, threshold, size, warning):
+    from tests.test_storage_journal import make_backend, healthy_bucket
+    from journal_store import JournalStore
+    backend, _ = make_backend(tmp_path, healthy_bucket(), state_size_warn_mb=threshold)
+    await backend.startup_check()
+    calls = []
+    def measure(store):
+        calls.append(store)
+        return size
+    monkeypatch.setattr(JournalStore, "state_size_bytes", measure)
+    monkeypatch.setattr(server, "backend", backend)
+    try:
+        result = json.loads(await server.obsidian_vault_stats())
+        local = result["local_state"]
+        assert local["bytes"] == size
+        assert local["path"] == str(tmp_path / "state")
+        assert local["warn_threshold_mb"] == threshold
+        assert local["warning"] is warning
+        assert "MiB" in local["human_readable_size"]
+        assert ("hint" in result) is warning
+        assert len(calls) == 1
+    finally:
+        await backend.close()

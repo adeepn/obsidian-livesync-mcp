@@ -1728,3 +1728,15 @@ async def test_entire_latex_note_survives_publish_readback_and_parse(tmp_path):
         assert (await backend.read_note("Math.md"))["text"] == text
     finally:
         await backend.close()
+
+
+async def test_backend_info_state_size(tmp_path):
+    backend, _ = make_backend(tmp_path, healthy_bucket())
+    await backend.startup_check()
+    try:
+        info = await backend.backend_info()
+        assert info["state_dir_path"] == str(tmp_path / "state")
+        assert info["state_dir_bytes"] > 0
+        assert info["state_dir_bytes"] == backend._store.state_size_bytes()
+    finally:
+        await backend.close()

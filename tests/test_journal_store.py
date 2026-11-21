@@ -683,3 +683,13 @@ def test_nested_state_normal_operation_and_reopen(tmp_path):
     assert reopened.processed(JOURNAL_1)
     assert (state / "chunks" / "01" / "23456789abcdef").read_text() == "body"
     reopened.close()
+
+
+def test_state_size_bytes_includes_sqlite_sidecars_and_nested_chunks(store):
+    root = store.state_dir
+    shard = root / "chunks" / "nested"
+    shard.mkdir()
+    (shard / "fixture").write_bytes(b"abcde")
+    expected = sum(p.stat().st_size for p in root.iterdir() if p.is_file()) + 5
+    (root / "unrelated.txt").write_bytes(b"ignored")
+    assert store.state_size_bytes() == expected

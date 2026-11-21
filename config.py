@@ -76,6 +76,7 @@ class S3Config:
     uri: str
     state_dir: str = S3_STATE_DIR_DEFAULT
     refresh_min_interval_sec: float = S3_REFRESH_MIN_INTERVAL_DEFAULT
+    state_size_warn_mb: int = 0
 
 
 @dataclass(frozen=True)
@@ -229,10 +230,17 @@ def _load_s3(env: Mapping[str, str]) -> S3Config:
     _reject_placeholder(connection.access_key, "S3_ACCESS_KEY_ID")
     _reject_placeholder(connection.secret_key, "S3_SECRET_ACCESS_KEY")
     state_dir, refresh_sec = _load_s3_state(env)
+    try:
+        warn_mb = int(env.get("S3_STATE_SIZE_WARN_MB", "").strip() or "0")
+        if warn_mb < 0:
+            raise ValueError
+    except ValueError:
+        raise ConfigError("S3_STATE_SIZE_WARN_MB must be a non-negative integer") from None
     return replace(
         connection,
         state_dir=state_dir,
         refresh_min_interval_sec=refresh_sec,
+        state_size_warn_mb=warn_mb,
     )
 
 
