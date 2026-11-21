@@ -200,6 +200,7 @@ class JournalBackend:
         self.refresh_min_interval = refresh_min_interval
         self._store: JournalStore | None = None
         # Throttle clock (monotonic) and the wall-clock stamp for diagnostics.
+        self._last_refresh_failure: Exception | None = None
         self._last_refresh: float | None = None
         self._last_refresh_at: datetime | None = None
         self._max_seen_ms = 0
@@ -279,7 +280,8 @@ class JournalBackend:
         are skipped idempotently. Budget stops retain completed files and
         retry the unfinished window; key-budget stops continue the sweep.
         Refreshes closer than ``refresh_min_interval`` together are
-        skipped unless ``force`` is set; a skipped refresh is a no-op.
+        skipped unless ``force`` is set. A skipped refresh re-raises an
+        unresolved failure; otherwise it is a no-op.
         Candidates are ordered by their numeric ms prefix and applied one
         by one; the first failing file stops replay without marking it
         processed. Completed, partial and failed passes arm the throttle;
@@ -292,6 +294,10 @@ class JournalBackend:
             and self._last_refresh is not None
             and now - self._last_refresh < self.refresh_min_interval
         ):
+            if self._last_refresh_failure is not None:
+                raise StorageError(
+                    "refresh failed previously; retry after interval or force"
+                ) from self._last_refresh_failure
             return
         self._refresh_deadline = now + self.max_refresh_seconds
         self._refresh_downloaded = 0
@@ -312,6 +318,11 @@ class JournalBackend:
             self._listing_cursor = next_cursor
         except _RefreshBudgetStop as exc:
             logger.warning("journal refresh budget stop: %s", exc)
+        except Exception as exc:
+            self._last_refresh_failure = exc
+            raise
+        else:
+            self._last_refresh_failure = None
         finally:
             self._refresh_deadline = None
             # Failures also arm the throttle; force=True bypasses it.

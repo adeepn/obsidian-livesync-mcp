@@ -496,7 +496,8 @@ class TestThrottle:
         with pytest.raises(StorageError):
             await backend.refresh()
         # A hostile file cannot cause unlimited immediate retry work.
-        await backend.refresh()
+        with pytest.raises(StorageError, match="refresh failed previously"):
+            await backend.refresh()
         assert len(storage.list_calls) == 1
         with pytest.raises(StorageError):
             await backend.refresh(force=True)
@@ -1642,3 +1643,21 @@ async def test_publication_preflights_store_revision(tmp_path):
     with pytest.raises(StorageError):
         backend._publish([], [meta_doc("bad.md", "invalid")])
     assert storage.put_calls == []
+
+
+@pytest.mark.parametrize("force", [False, True])
+async def test_refresh_failure_recovers_after_retry(tmp_path, force):
+    backend, storage = make_backend(
+        tmp_path, healthy_bucket(**{JOURNAL_1: b"corrupt"}), refresh_min_interval=60
+    )
+    await backend.startup_check()
+    with pytest.raises(StorageError):
+        await backend.refresh()
+    with pytest.raises(StorageError, match="refresh failed previously"):
+        await backend.refresh()
+    storage.put(JOURNAL_1, journal_blob([meta_doc("a.md", "1-a")]))
+    if not force:
+        backend._last_refresh -= 61
+    await backend.refresh(force=force)
+    await backend.refresh()
+    assert backend._store.winner("a.md")["_rev"] == "1-a"

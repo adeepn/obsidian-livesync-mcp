@@ -88,7 +88,8 @@ async def test_failed_refresh_throttled(tmp_path):
         with pytest.raises(StorageError):
             await peer.refresh()
         calls = len(storage.list_calls)
-        await peer.refresh()
+        with pytest.raises(StorageError, match="refresh failed previously"):
+            await peer.refresh()
         assert len(storage.list_calls) == calls
         with pytest.raises(StorageError):
             await peer.refresh(force=True)
