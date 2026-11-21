@@ -160,7 +160,7 @@
 ### Task 10: Integration B — живой клиент, ручная приёмка (пользователь)
 
 **Files:**
-- Create: `docs/live-check-s3-checklist.md`; артефакты в `docs/test-artifacts/2026-11-19-live-s3/` (входят лог LiveSync + скриншоты + выводы скриптов)
+- Create: `docs/live-check-s3-checklist.md`; артефакты в `docs/test-artifacts/2026-11-19-live-s3/` (входят лог LiveSync (скриншот ИЛИ вербатим-транскрипт, RULING B-12) + выводы скриптов)
 
 **Interfaces:**
 - Consumes: рабочий JournalBackend (Tasks 5–8), тестовый vault `/Users/adeep/Documents/TESTVault`, docker MinIO из Task 9.
@@ -169,5 +169,5 @@
   (б) контроллер: свежий state_dir, startup+refresh, сверка всех файлов vault хеш-в-хеш (скрипт по образцу live_check_phase1) + capture первого журнального файла как golden для codec-теста (committed fixture);
   (в) сервер пишет (create/update/move/soft-delete — скрипт phase2-аналог) → пользователь Replicate → подтверждение применения (в т.ч. что LiveSync НЕ отверг нашего «невидимого писателя»: лог без ошибок — иначе план-Д: регистрация узла в milestone, отдельная задача);
   (г) пользователь пишет с клиента → сервер refresh → видит;
-  (д) артефакты: скриншот лога LiveSync после (в), выводы скриптов, итоговая строка PASS/FAIL.
+  (д) артефакты: скриншот ИЛИ вербатим-транскрипт лога LiveSync после (в) (RULING B-12; принят `docs/test-artifacts/2026-11-20-live-s3/client-log-replicate.md`), выводы скриптов, итоговая строка PASS/FAIL.
 - [ ] **Step 1: написать чек-лист + скрипты (`/tmp` или `scripts/live_check_s3.py` — по образцу couchdb-фазы)**; **Step 2: прогнать (а)-(д) с пользователем**; **Step 3: зафиксировать артефакты + golden fixture в tests/fixtures/**; **Step 4: Commit** — `docs: live s3 acceptance checklist and artifacts`.
