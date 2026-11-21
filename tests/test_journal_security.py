@@ -69,6 +69,17 @@ def test_revision_upper_boundary():
         parse_rev('9223372036854775808-a')
 
 
+@pytest.mark.skipif(os.name != 'posix', reason='POSIX permissions')
+def test_private_state(tmp_path):
+    root = tmp_path / 'state'
+    root.mkdir(mode=0o755)
+    store = JournalStore(root, PATH_IDENTITY_LEGACY)
+    try:
+        store.apply_journal('a', {'h:abcd': 'private'}, [])
+        for path in [root, *root.rglob('*')]:
+            assert stat.S_IMODE(path.stat().st_mode) == (0o700 if path.is_dir() else 0o600)
+    finally:
+        store.close()
 
 
 async def test_failed_refresh_throttled(tmp_path):

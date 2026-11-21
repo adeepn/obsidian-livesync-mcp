@@ -139,6 +139,14 @@ def pick_winner(leaves: list[dict]) -> dict | None:
     return max(leaves, key=rank)
 
 
+def _private_directory(path: Path) -> None:
+    """Create private directories and tighten previously permissive caches."""
+    path.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if path.stat().st_mode & 0o077:
+        path.chmod(0o700)
+        logger.warning("tightened journal state directory permissions: %s", path)
+
+
 class JournalStore:
     """Local journal-peer state rooted at ``state_dir``.
 
@@ -156,12 +164,19 @@ class JournalStore:
         self.state_dir = Path(state_dir)
         self.path_identity = path_identity
         self._chunks_dir = self.state_dir / _CHUNKS_DIRNAME
-        self.state_dir.mkdir(parents=True, exist_ok=True)
-        self._chunks_dir.mkdir(parents=True, exist_ok=True)
+        _private_directory(self.state_dir)
+        _private_directory(self._chunks_dir)
+        for directory in self._chunks_dir.rglob("*"):
+            if directory.is_dir() and not directory.is_symlink():
+                _private_directory(directory)
         # Pin the chunk root for resolved-path containment checks.
         self._chunks_root = self._chunks_dir.resolve()
 
-        self._conn = sqlite3.connect(self.state_dir / _DB_FILENAME)
+        db_path = self.state_dir / _DB_FILENAME
+        descriptor = os.open(db_path, os.O_CREAT | os.O_RDWR, 0o600)
+        os.close(descriptor)
+        db_path.chmod(0o600)
+        self._conn = sqlite3.connect(db_path)
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA synchronous=NORMAL")
         self._conn.executescript(_SCHEMA_V1)
@@ -203,7 +218,7 @@ class JournalStore:
                     continue
                 if chunk_file.exists():
                     continue
-                chunk_file.parent.mkdir(parents=True, exist_ok=True)
+                _private_directory(chunk_file.parent)
                 with tempfile.NamedTemporaryFile(
                     dir=chunk_file.parent, prefix=".staged-", delete=False
                 ) as stream:
