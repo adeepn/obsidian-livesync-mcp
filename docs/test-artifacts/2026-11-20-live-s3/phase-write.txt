@@ -1,0 +1,14 @@
+
+== WRITE PHASE (server -> journal append) ==
+vault milestone has advisory locked: true flag; remote marked as rebuilt; peer performs full replay
+PASS startup + forced refresh
+PASS create Серверная S3.md rev=1-e60860a36a756a90e810d30a3cfd5bdb
+PASS create На удаление s3.md rev=1-bf0b5720668aa862112a01f3d51be082
+PASS append Тестовая заметка.md rev=2-bb32962e17a71daed6a8bd486e467bb0
+PASS move Серверная S3.md -> Папка S3/Переехавшая.md rev=1-ffd16b91aa8833f3c055c2143da210d0
+PASS soft-delete На удаление s3.md rev=2-a11955a3c387b0fa232295596967da31
+PASS read-back Папка S3/Переехавшая.md rev=1-ffd16b91aa8833f3c055c2143da210d0
+PASS read-back Тестовая заметка.md rev=2-bb32962e17a71daed6a8bd486e467bb0
+PASS read-back Серверная S3.md rev=absent
+PASS read-back На удаление s3.md rev=absent
+PASS overall write-phase

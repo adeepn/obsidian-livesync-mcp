@@ -7,6 +7,7 @@ import logging
 import os
 import re
 import secrets
+import sys
 import time
 import copy
 import hashlib
@@ -14,6 +15,7 @@ from contextlib import aclosing, asynccontextmanager
 from contextvars import ContextVar
 from scan_budget import ScanBudget
 from functools import wraps
+from pathlib import Path
 from typing import Any
 
 # httpx/httpcore log every request line — full internal CouchDB URLs —
@@ -32,6 +34,8 @@ from storage_base import (
     ConcurrentModification, UnsupportedVault, StorageUnavailable, NoteContent,
 )
 from storage_couchdb import CouchDBBackend
+from storage_journal import JournalBackend
+from object_storage import Boto3ObjectStorage
 from frontmatter import (
     FrontmatterError, get_properties, split_frontmatter, set_properties,
     delete_properties, add_tags, remove_tags, insert_after_frontmatter,
@@ -44,7 +48,13 @@ from oauth_provider import SimpleOAuthProvider
 def get_backend(cfg: Config) -> StorageBackend:
     """Construct the selected storage implementation."""
     if cfg.backend == "s3":
-        raise RuntimeError("S3 backend arrives in Plan B")
+        if cfg.s3 is None:
+            raise ConfigError("S3 configuration is required.")
+        return JournalBackend(
+            Boto3ObjectStorage(cfg.s3),
+            Path(cfg.s3.state_dir),
+            cfg.s3.refresh_min_interval_sec,
+        )
     if cfg.couchdb is None:
         raise ConfigError("CouchDB configuration is required.")
     return CouchDBBackend(
@@ -196,12 +206,19 @@ def _storage_message(error: StorageError) -> str:
     return "Error: unable to access vault storage."
 
 
-def _tool_errors(handler):
+def _tool_errors(handler=None, *, force_refresh: bool = False):
+    if handler is None:
+        return lambda fn: _tool_errors(fn, force_refresh=force_refresh)
+
     @wraps(handler)
     async def guarded(*args, **kwargs):
         if _backend() is None:
             return "Error: server not started; storage backend is unavailable."
         try:
+            if force_refresh:
+                await _backend().refresh(force=True)
+            else:
+                await _backend().refresh()
             return await handler(*args, **kwargs)
         except regex_runner.RegexTimeoutError:
             return "Error: regex pattern too complex or input too large."
@@ -1154,15 +1171,21 @@ async def obsidian_list_templates(folder: str = "templates") -> str:
 
 
 @_tool
-@_tool_errors
+@_tool_errors(force_refresh=True)
 async def obsidian_refresh() -> str:
     """Refresh the backend's local vault representation."""
-    await _backend().refresh()
+    # The shared tool wrapper performs the refresh, including error mapping.
     return "Vault refreshed."
 
 
 # run.py loads dotenv before this single environment-consumption point.
-mcp = create_app(load_config())
+try:
+    mcp = create_app(load_config())
+except ConfigError as error:
+    if __name__ != "__main__":
+        raise
+    print(f"Configuration error: {error}", file=sys.stderr)
+    raise SystemExit(2) from None
 
 
 # --- Main ---

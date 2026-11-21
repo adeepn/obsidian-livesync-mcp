@@ -1,0 +1,26 @@
+# Live S3 acceptance 2026-11-20 14:51 — real Obsidian client (1.0.50, rebuild-complete, locked-advisory) vs JournalBackend
+
+== SWEEP (replay of real client journals into fresh peer state) ==
+vault milestone has advisory locked: true flag; remote marked as rebuilt; peer performs full replay
+journal store state reset: cleared docs/processed/meta tables and removed 0 chunk file(s)
+PASS startup + forced refresh
+PASS note Welcome.md size=206
+PASS note test-image.png size=10362
+PASS note Картинка.md size=197
+PASS note Папка/Переехавшая.md size=136
+PASS note Связанная заметка.md size=353
+PASS note Тестовая заметка.md size=611
+PASS captured 1795168856518-docs.jsonl.gz -> /Volumes/Devel/jHOME/obsidian-livesync-mcp/.worktrees/plan-b/tests/fixtures/live_client_journal_sample.bin (12294 bytes)
+PASS sweep 6 notes
+PASS overall sweep-notes
+
+== VERIFY VAULT (backend vs disk, byte-exact) ==
+vault milestone has advisory locked: true flag; remote marked as rebuilt; peer performs full replay
+PASS startup + forced refresh
+PASS byte match Welcome.md
+PASS byte match test-image.png
+PASS byte match Картинка.md
+PASS byte match Папка/Переехавшая.md
+PASS byte match Связанная заметка.md
+PASS byte match Тестовая заметка.md
+PASS overall verify-vault

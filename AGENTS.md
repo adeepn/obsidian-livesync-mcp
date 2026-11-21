@@ -2,12 +2,16 @@
 
 ## Project Structure & Module Organization
 
-This repository is a small Python MCP server for accessing an Obsidian LiveSync vault through a configurable storage backend (CouchDB today). Core files live at the root:
+This repository is a small Python MCP server for accessing an Obsidian LiveSync vault through a configurable storage backend (CouchDB or S3 journal). Core files live at the root:
 
 - `server.py`: FastMCP server setup, all MCP tool definitions, auth wiring, and the `get_backend(cfg)` factory that builds the storage backend from configuration.
 - `config.py`: strict environment validation (`load_config`) — backend selection, backend credentials, client auth; rejects placeholder secrets.
 - `storage_base.py`: storage-agnostic `StorageBackend` protocol plus the storage exception hierarchy.
 - `storage_couchdb.py`: `CouchDBBackend`, the LiveSync-aware CouchDB implementation of the protocol.
+- `journal_codec.py`: LiveSync journal record parsing and serialization.
+- `journal_store.py`: local SQLite revision state and on-disk chunk cache.
+- `object_storage.py`: S3 object storage adapter using boto3.
+- `storage_journal.py`: append-only LiveSync S3 journal storage backend.
 - `livesync_format.py`: LiveSync document/chunk codecs, path rules, and vault validation.
 - `frontmatter.py`: round-trip YAML frontmatter editing (ruamel.yaml).
 - `links.py`: Obsidian-compatible link extraction, resolution, and graph building.

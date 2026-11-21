@@ -1482,7 +1482,7 @@ async def test_scan_retains_only_one_window_of_legacy_bodies(monkeypatch):
     refs = []
     peak = 0
     async with fake_backend(docs) as (backend, _):
-        await backend.refresh()  # index contains no bodies
+        await backend.refresh(force=True)  # warm index before tracking body windows
         original = backend._post_all_docs
         async def tracked(*args, **kwargs):
             nonlocal peak
@@ -1586,3 +1586,12 @@ async def test_scan_releases_chunk_references_before_next_window(monkeypatch, in
             del text
         assert count == _TEXT_WINDOW_SIZE + 1
         assert all(ref() is None for ref in refs)
+
+
+async def test_ordinary_refresh_does_not_scan_but_force_reloads_index():
+    async with fake_backend() as (backend, log):
+        await backend.refresh()
+        assert not any(r.url.path.endswith("/_all_docs") for r in log)
+        log.clear()
+        await backend.refresh(force=True)
+        assert any(r.method == "GET" and r.url.path.endswith("/_all_docs") for r in log)

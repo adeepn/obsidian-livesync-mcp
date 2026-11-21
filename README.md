@@ -2,7 +2,7 @@
 
 Remote MCP server for accessing your Obsidian vault via CouchDB / [Self-hosted LiveSync](https://github.com/vrtmrz/obsidian-livesync). Works with Claude Code, Claude.ai, and any MCP-compatible client.
 
-No Obsidian desktop app required on the server — connects directly to CouchDB.
+No Obsidian desktop app required on the server — connects to CouchDB or S3-compatible LiveSync journal storage.
 
 ## Architecture
 
@@ -17,7 +17,7 @@ Obsidian clients sync via the LiveSync plugin to a CouchDB instance. This MCP se
 Storage is selected by a single environment variable, `LIVESYNC_BACKEND`:
 
 - **`couchdb`** (current) — talks directly to the CouchDB instance your vault syncs to. Configure it with the `COUCHDB_*` variables below.
-- **`s3`** (Plan B, not yet available) — will support Self-hosted LiveSync setups that keep the vault in S3-compatible storage. Selecting it today fails at startup with an explicit message.
+- **`s3`** — replays and publishes Self-hosted LiveSync journals in S3-compatible storage, with a local SQLite and chunk cache.
 
 All tools work through a storage-agnostic backend interface, so switching backends later is a configuration change, not a rewrite. The `vault_stats` tool reports the active backend in its `backend` field.
 
@@ -55,10 +55,10 @@ All tools work through a storage-agnostic backend interface, so switching backen
 
 ## Prerequisites
 
-- CouchDB with Obsidian LiveSync data
+- CouchDB with Obsidian LiveSync data, or S3-compatible LiveSync journal storage
 - Python 3.11+
 
-### Vault compatibility
+### CouchDB vault compatibility
 
 The server derives document ids from vault paths the same way LiveSync does, so it supports vaults using the plugin's default path settings:
 
@@ -95,7 +95,7 @@ The server validates configuration when the application is constructed at import
 
 | Variable | Description | Default |
 |---|---|---|
-| `LIVESYNC_BACKEND` | Storage backend: `couchdb` or `s3` (Plan B, not yet available) | required, no default |
+| `LIVESYNC_BACKEND` | Storage backend: `couchdb` or `s3` | required, no default |
 | `COUCHDB_URL` | CouchDB URL | `http://localhost:5984` |
 | `COUCHDB_USER` | CouchDB username | required when backend is `couchdb` |
 | `COUCHDB_PASSWORD` | CouchDB password | required when backend is `couchdb` |
@@ -107,6 +107,105 @@ The server validates configuration when the application is constructed at import
 | `MCP_SERVER_URL` | Public HTTPS URL of this server | `https://localhost:8484` |
 | `MCP_HOST` | Bind address | `0.0.0.0` |
 | `MCP_PORT` | Port | `8484` |
+
+### S3 journal backend
+
+Set `LIVESYNC_BACKEND=s3` and choose exactly one connection form.
+URI form (replace the placeholders with credentials):
+
+```dotenv
+LIVESYNC_S3_URI=sls://your_access_key:your_secret_key@https://minio.local?bucket=vault&region=auto&prefix=
+```
+
+Or use individual variables; leave `LIVESYNC_S3_URI` unset:
+
+```dotenv
+S3_ENDPOINT_URL=https://minio.local
+S3_ACCESS_KEY_ID=your_access_key
+S3_SECRET_ACCESS_KEY=your_secret_key
+S3_BUCKET=vault
+S3_REGION=auto
+S3_PREFIX=
+```
+
+Endpoint, credentials and bucket are required in the individual form.
+Region defaults to `auto` and prefix to an empty string. Prefix is prepended
+literally to object keys; include a trailing slash for a folder prefix.
+Do not set any individual connection variable alongside a URI, even to an
+empty value. Shared settings work with either form:
+
+```dotenv
+S3_STATE_DIR=./data
+S3_REFRESH_MIN_INTERVAL_SEC=5
+```
+
+Configure client authentication separately, as below. Placeholder credentials
+are rejected at startup.
+
+Before each tool operation, the backend refreshes its local state. On first
+use, this replays the full journal history. This one-time replay can take a
+long time for a large vault. Startup validates settings and opens local state; it does not replay
+journals. Subsequent refreshes use the processed-file ledger; epoch changes or a detected
+remote wipe reset the cache and require replay again. Use a dedicated writable
+state directory per vault/peer and persist it across restarts. It contains
+`journal.sqlite3` (SQLite revision state and processed journals) and
+`chunks/` (cached chunk files).
+
+`obsidian_refresh` lists remote journals and replays unseen files.
+`S3_REFRESH_MIN_INTERVAL_SEC` is the minimum spacing between refresh attempts, including failures
+and partial budget stops (positive seconds, default 5); calls within that interval are skipped.
+Ordinary tool calls refresh automatically using the same throttle. There is
+no background polling. `obsidian_refresh` also uses this throttle; allow the
+interval to elapse to receive subsequent device changes. Internal callers can use
+`refresh(force=True)` to bypass the throttle. Refresh failures
+return a tool error instead of serving stale data. Calls throttled after an
+unresolved failure also return an error; a successful refresh clears that failure.
+
+Replay uses bounded downloads (512 MiB compressed per object), inflation (1 GiB),
+records (100,000 per file), lines (64 MiB in UTF-8 bytes), and JSON nesting
+(512 levels). Limits are module constants in `object_storage.py` and
+`journal_codec.py`; `Boto3ObjectStorage(max_object_bytes=...)` and the codec
+keyword arguments allow overrides. `JournalBackend` also accepts
+`max_inflated_bytes`, `max_records`, and `max_line_bytes`.
+
+Each refresh examines at most 1,000,000 keys, downloads at most 4 GiB
+(including sync parameters), and has a 300-second wall-clock budget.
+Override these through `JournalBackend(max_refresh_keys=...,
+max_refresh_bytes=..., max_refresh_seconds=...)`. These are Python constructor
+options, not environment variables. Stops are logged; processed files stay
+processed. Key-limited sweeps continue from their last listed key, then restart
+from the beginning so late objects below the cursor are eventually discovered.
+Files are numerically ordered within each bounded window. Byte/time stops retry
+the unfinished window and skip its processed files. The time budget is checked
+between synchronous operations; an in-flight request, parse or SQLite transaction
+can finish after the deadline. Configure budgets large enough for a single
+allowed journal plus control reads. Restarting the server restarts the listing
+sweep; the durable processed ledger preserves replay progress.
+
+Local state directories and chunk shards are private (`0700`); SQLite and newly
+written chunk files use `0600`. Opening an existing cache tightens permissive
+directory modes and logs each correction once.
+
+Remote storage is append-only: updates publish new journal objects.
+Publication first attempts atomic create-only `PutObject(IfNoneMatch="*")`
+(Ruling B-13). Occupied keys are regenerated, with at most ten attempts;
+read-back verification still precedes local application. Providers reporting
+conditional writes as unsupported use the B-10 exists-precheck + put fallback,
+with a warning logged once per adapter. That compatibility fallback retains
+the race between the precheck and upload.
+The backend never deletes S3 objects, prunes history, or runs remote garbage
+collection. Deleting a note publishes a tombstone; it does not remove journal
+objects. Local cache resets can delete local state.
+
+Concurrent edits can leave sibling revisions. The winner is deterministic:
+highest revision generation, then lexicographically greatest revision hash.
+A successful write confirms publication, not that it will remain the winner.
+Sibling revisions remain available to LiveSync's conflict UI in Obsidian for
+resolution.
+
+Supported S3 vault settings are legacy path identity (normalization version 0)
+and NFC identity (version 1), with case-insensitive filenames. E2EE, path
+obfuscation and case-sensitive filename settings are rejected at startup.
 
 ### 3. Run
 
@@ -211,5 +310,6 @@ iteration order. They do not guarantee a snapshot across the scan: CouchDB
 changes can be interleaved between metadata windows and chunk fetches. Results
 can therefore combine observations from different times; a successful mutation
 means durable publication, not a promise that it remains the eventual winner.
-The future Plan B journal backend must document its own scan semantics and
-protect chunks referenced by active scans from reclamation.
+The S3 journal backend also uses best-effort scans of its local state.
+Refresh or state resets can interleave with a scan; chunks are retained until
+an epoch or remote-wipe reset. An unreadable note can be returned without text.
