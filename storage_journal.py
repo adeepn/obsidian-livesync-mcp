@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import re
 import secrets
 import sqlite3
@@ -134,8 +135,14 @@ def _matches_extension(path: str, extension: str) -> bool:
 
 
 def _as_ms(value: object) -> int:
+    if value is None:
+        return 0  # Legacy documents may omit timestamps.
     if isinstance(value, bool) or not isinstance(value, (int, float)):
-        return 0
+        raise StorageError("corrupt note timestamp: expected a number")
+    if isinstance(value, float) and not math.isfinite(value):
+        raise StorageError("corrupt note timestamp: expected a finite number")
+    if value < 0:
+        raise StorageError("corrupt note timestamp: expected a non-negative number")
     return int(value)
 
 
@@ -253,9 +260,15 @@ class JournalBackend:
             and now - self._last_refresh < self.refresh_min_interval
         ):
             return
-        candidates = self._list_unprocessed_journals(store)
+        candidates = self._list_journals()
+        epoch = self._load_sync_parameters_epoch()
+        if store.epoch != (epoch or ""):
+            store.epoch = epoch or ""
+            self._clear_refresh_clock()
+        self._probe_remote_wipe(epoch)
         for name in candidates:
-            self._replay_one(store, name)
+            if not store.processed(name):
+                self._replay_one(store, name)
         # Arm the throttle only after a completed pass: failed refreshes
         # stay retryable immediately.
         self._last_refresh = time.monotonic()
@@ -349,10 +362,11 @@ class JournalBackend:
             for key in self._object_storage.list("", limit=1)
         )
 
-    def _probe_remote_wipe(self, epoch: str | None) -> None:
+    def _probe_remote_wipe(self, epoch: str | None) -> bool:
         """Reset local state when the last-sent journal has vanished.
 
-        A missing object for the last file this peer sent or replayed
+        Returns whether a reset occurred. A missing object for the last
+        file this peer sent
         means the bucket was wiped or rebuilt (objects are never deleted
         individually, spec section 7), like upstream's
         ``ensureCheckpointCachesAreFresh`` wipe probe. ``epoch``, when
@@ -361,10 +375,10 @@ class JournalBackend:
         """
         store = self._store
         if store is None:
-            return
+            return False
         key = store.last_sent_key
         if not key or self._object_storage.exists(key):
-            return
+            return False
         logger.warning(
             "journal object %r vanished; assuming a remote wipe and "
             "resetting local state",
@@ -374,6 +388,7 @@ class JournalBackend:
         if epoch is not None:
             store.epoch = epoch
         self._clear_refresh_clock()
+        return True
 
     def _clear_refresh_clock(self) -> None:
         """After a state reset, the next refresh must not be throttled."""
@@ -382,9 +397,11 @@ class JournalBackend:
 
     # -- Replay helpers ----------------------------------------------------------
 
-    def _list_unprocessed_journals(self, store: JournalStore) -> list[str]:
-        """Journal names to replay: one complete listing, control keys and
-        already-processed files dropped, ordered by numeric ms prefix.
+    def _list_journals(self) -> list[str]:
+        """List journal names, excluding control keys, in numeric ms order.
+
+        Refresh filters processed files after
+        checking for a remote reset.
 
         Deliberately no StartAfter cursor (Plan B Ruling B-8): S3 lists in
         lexicographic order, where ``"10-..."`` sorts *before* ``"9-..."``,
@@ -401,7 +418,7 @@ class JournalBackend:
         candidates = [
             key
             for key in keys
-            if is_journal_key(key) and not store.processed(key)
+            if is_journal_key(key)
         ]
         candidates.sort(key=journal_sort_key)
         return candidates
@@ -768,6 +785,10 @@ class JournalBackend:
         is never deleted; a later refresh may replay a published orphan.
         """
         store = self._require_store("publish")
+        if self._probe_remote_wipe(store.epoch or None):
+            raise ConcurrentModification(
+                "remote was rebuilt; retry the operation after refresh"
+            )
         try:
             payload = serialize_journal(chunks, docs)
             blob = deflate_journal(payload)

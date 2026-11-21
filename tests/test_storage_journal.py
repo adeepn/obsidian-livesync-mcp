@@ -246,7 +246,7 @@ class TestEpochAndWipe:
         # The reset cleared the processed ledger: the replay lists from the
         # beginning again and re-reads every journal.
         assert storage.list_calls == [""]
-        assert sorted(storage.get_calls) == [JOURNAL_1, JOURNAL_2, JOURNAL_3]
+        assert sorted(storage.get_calls) == sorted([SYNC_PARAMETERS_KEY, JOURNAL_1, JOURNAL_2, JOURNAL_3])
         await backend.close()
 
     async def test_same_epoch_keeps_state(self, tmp_path):
@@ -293,7 +293,7 @@ class TestReplay:
         storage.get_calls.clear()
 
         await backend.refresh()
-        assert storage.get_calls == [JOURNAL_1, JOURNAL_2, JOURNAL_3]
+        assert storage.get_calls == [SYNC_PARAMETERS_KEY, JOURNAL_1, JOURNAL_2, JOURNAL_3]
         assert await files_processed(backend) == 3
 
     async def test_second_refresh_after_full_replay_is_noop(self, tmp_path):
@@ -305,9 +305,9 @@ class TestReplay:
 
         await backend.refresh(force=True)
         # One complete listing (Ruling B-8: no StartAfter cursor); every
-        # listed journal is already processed, so nothing is fetched.
+        # listed journal is already processed; only sync params are fetched.
         assert storage.list_calls == [""]
-        assert storage.get_calls == []
+        assert storage.get_calls == [SYNC_PARAMETERS_KEY]
         assert await files_processed(backend) == 3
 
     async def test_numeric_ordering_beats_lexicographic(self, tmp_path):
@@ -349,7 +349,7 @@ class TestReplay:
         storage._objects[JOURNAL_10] = journal_blob([meta_doc("j.md", "1-j")])
         storage.get_calls.clear()
         await backend.refresh(force=True)
-        assert storage.get_calls == [JOURNAL_10]
+        assert storage.get_calls == [SYNC_PARAMETERS_KEY, JOURNAL_10]
         assert await files_processed(backend) == 2
 
     async def test_mixed_width_failure_and_repair_converges(self, tmp_path):
@@ -377,16 +377,21 @@ class TestReplay:
         storage._objects[JOURNAL_9] = journal_blob([meta_doc("i.md", "1-i")])
         storage.get_calls.clear()
         await backend.refresh()
-        assert storage.get_calls == [JOURNAL_9, JOURNAL_10, journal_11]
+        assert storage.get_calls == [SYNC_PARAMETERS_KEY, JOURNAL_9, JOURNAL_10, journal_11]
         assert await files_processed(backend) == 3
 
-    async def test_replay_error_message_sanitized(self, tmp_path):
+    async def test_replay_error_message_sanitized(self, tmp_path, monkeypatch):
         backend, storage = make_backend(tmp_path, healthy_bucket())
         await backend.startup_check()
         storage.get_calls.clear()
-        storage.fail_next_get(
-            1, error=ValueError("/abs/state/path note.md 3-x secret")
-        )
+        original_get = storage.get
+
+        def fail_journal(key):
+            if key == JOURNAL_1:
+                raise ValueError("/abs/state/path note.md 3-x secret")
+            return original_get(key)
+
+        monkeypatch.setattr(storage, 'get', fail_journal)
         with pytest.raises(StorageError, match=JOURNAL_1) as exc_info:
             await backend.refresh()
         message = str(exc_info.value)
@@ -411,7 +416,7 @@ class TestReplay:
         storage.get_calls.clear()
         with pytest.raises(StorageError, match=JOURNAL_2):
             await backend.refresh(force=True)
-        assert storage.get_calls == [JOURNAL_2]
+        assert storage.get_calls == [SYNC_PARAMETERS_KEY, JOURNAL_2]
 
     async def test_control_objects_are_never_parsed_as_journals(self, tmp_path):
         backend, storage = make_backend(
@@ -422,7 +427,7 @@ class TestReplay:
         storage.get_calls.clear()
 
         await backend.refresh()
-        assert storage.get_calls == [JOURNAL_1, JOURNAL_2, JOURNAL_3]
+        assert storage.get_calls == [SYNC_PARAMETERS_KEY, JOURNAL_1, JOURNAL_2, JOURNAL_3]
         assert await files_processed(backend) == 3
 
     async def test_unavailable_get_propagates_and_keeps_checkpoint(self, tmp_path):
@@ -433,7 +438,7 @@ class TestReplay:
         with pytest.raises(StorageUnavailable):
             await backend.refresh()
         assert await files_processed(backend) == 0
-        assert storage.get_calls == [JOURNAL_1]
+        assert storage.get_calls == [SYNC_PARAMETERS_KEY]
 
         # Once healthy again, replay completes from the checkpoint.
         await backend.refresh(force=True)
@@ -1535,3 +1540,70 @@ class TestJournalWriteEdges:
         with pytest.raises(StorageError, match='ancestry'):
             await backend.write_note('a.md', 'body')
         assert storage.put_calls == []
+
+
+class TestRuntimeHistoryGuards:
+    @pytest.mark.parametrize('changed_epoch', [False, True])
+    async def test_refresh_replays_replacement_history(self, tmp_path, changed_epoch):
+        backend, storage = make_backend(tmp_path, healthy_bucket())
+        await backend.startup_check()
+        await backend.refresh()
+        sent = await backend.write_note('sent.md', 'old', create=True)
+        last_sent = backend._store.last_sent_key
+        # Keep a processed key but replace its contents: reset must replay it.
+        replacement = meta_doc('replacement.md', '1-new')
+        storage._objects[JOURNAL_1] = journal_blob([replacement])
+        if changed_epoch:
+            storage._objects[SYNC_PARAMETERS_KEY] = params_blob(salt='salt-b')
+        else:
+            del storage._objects[last_sent]
+        storage.get_calls.clear()
+        await backend.refresh(force=True)
+        paths = {meta['path'] for meta in await backend.list_notes()}
+        assert 'replacement.md' in paths
+        assert 'a.md' not in paths
+        assert (sent['path'] in paths) == changed_epoch
+        assert storage.get_calls.count(SYNC_PARAMETERS_KEY) == 1
+        assert backend._store.epoch == ('2:salt-b' if changed_epoch else '2:salt-a')
+        await backend.close()
+
+    async def test_write_after_wipe_resets_and_refuses_publication(self, tmp_path):
+        backend, storage = make_backend(tmp_path, healthy_bucket())
+        await backend.startup_check()
+        await backend.refresh()
+        original = await backend.write_note('sent.md', 'old', create=True)
+        del storage._objects[backend._store.last_sent_key]
+        before = dict(storage._objects)
+        puts = len(storage.put_calls)
+        with pytest.raises(ConcurrentModification, match='remote was rebuilt; retry the operation after refresh'):
+            await backend.write_note('sent.md', 'stale', expected_rev=original['rev'])
+        assert storage._objects == before
+        assert len(storage.put_calls) == puts
+        assert await backend.list_notes() == []
+        await backend.refresh()  # reset also clears the throttle
+        assert await files_processed(backend) == 3
+        await backend.close()
+
+
+@pytest.mark.parametrize('field,value', [
+    ('mtime', float('1e999')), ('ctime', 'x'),
+    ('mtime', -1), ('ctime', True), ('mtime', float('-inf')),
+])
+async def test_invalid_timestamps_are_isolated(tmp_path, field, value):
+    good = meta_doc('good.md', '1-good')
+    good.update(type='notes', data='valid')
+    bad = meta_doc('bad.md', '1-bad')
+    bad.update(type='notes', data='invalid')
+    bad[field] = value
+    # Valid JSON exponent overflows Python's float parser. Bypass the
+    # publication serializer, which correctly refuses non-finite numbers.
+    payload = (json.dumps(good) + '\n' +
+               json.dumps(bad).replace('Infinity', '1e999') + '\n').encode()
+    backend, _ = make_backend(tmp_path, healthy_bucket(**{
+        JOURNAL_1: deflate_journal(payload), JOURNAL_2: None, JOURNAL_3: None,
+    }))
+    await backend.startup_check()
+    await backend.refresh()
+    assert [meta['path'] for meta in await backend.list_notes()] == ['good.md']
+    assert [(meta['path'], text) async for meta, text in backend.iterate_texts('.md')] == [('good.md', 'valid')]
+    await backend.close()
