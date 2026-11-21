@@ -75,6 +75,7 @@ class JournalObjectStorage(Protocol):
 
     def put(self, key: str, data: bytes) -> None: ...
 
+    def put_if_absent(self, key: str, data: bytes) -> str: ...
 
     def list(self, start_after: str = "", limit: int | None = None) -> list[str]: ...
 
@@ -112,6 +113,7 @@ class Boto3ObjectStorage:
         if max_object_bytes < 1:
             raise ValueError("max_object_bytes must be positive")
         self.max_object_bytes = max_object_bytes
+        self._conditional_warning_logged = False
         if not cfg.bucket:
             raise ValueError("S3 bucket must be a non-empty string")
         self._bucket = cfg.bucket
@@ -184,6 +186,29 @@ class Boto3ObjectStorage:
         except (ClientError, BotoCoreError) as exc:
             raise self._unavailable("PUT", key, exc) from None
 
+    def put_if_absent(self, key: str, data: bytes) -> str:
+        """Create atomically when supported by the S3-compatible provider."""
+        try:
+            self._client.put_object(
+                Bucket=self._bucket, Key=self._wire_key(key), Body=data,
+                IfNoneMatch="*",
+            )
+            return "created"
+        except ClientError as exc:
+            code = str(exc.response.get("Error", {}).get("Code", ""))
+            status = exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+            if code in {"412", "PreconditionFailed"} or status == 412:
+                return "exists"
+            if code in {"NotImplemented", "NotSupported", "UnsupportedOperation",
+                        "UnsupportedHeader", "NotImplementedException",
+                        "XNotImplemented", "501"} or status == 501:
+                if not self._conditional_warning_logged:
+                    logger.warning("conditional journal publication unsupported; using B-10 fallback")
+                    self._conditional_warning_logged = True
+                return "unsupported"
+            raise self._unavailable("PUT", key, exc) from None
+        except BotoCoreError as exc:
+            raise self._unavailable("PUT", key, exc) from None
 
     def list(self, start_after: str = "", limit: int | None = None) -> list[str]:
         if limit is not None and limit < 1:

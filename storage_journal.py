@@ -811,11 +811,19 @@ class JournalBackend:
             self._max_seen_ms = ms
             for _ in range(10):
                 name = journal_filename(ms, suffix=secrets.token_hex(16))
+                outcome = self._object_storage.put_if_absent(name, blob)
+                if outcome == "created":
+                    break
+                if outcome == "exists":
+                    continue
+                if outcome != "unsupported":
+                    raise StorageError("invalid conditional publication result")
+                # B-10 compatibility fallback cannot exclude a racing writer.
                 if not self._object_storage.exists(name):
+                    self._object_storage.put(name, blob)
                     break
             else:
                 raise StorageError("could not allocate an unused journal key")
-            self._object_storage.put(name, blob)
             readback = self._object_storage.get(name)
             if readback is None:
                 raise StorageError("journal read-back verification failed")

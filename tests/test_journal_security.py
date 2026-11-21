@@ -79,8 +79,35 @@ def test_revision_upper_boundary():
 
 
 
+async def test_atomic_collision(tmp_path, monkeypatch):
+    peer, storage = await backend(tmp_path)
+    original = storage.put_if_absent
+    rival = b'rival object'
+    collision = []
+    def race(key, data):
+        if not collision:
+            collision.append(key)
+            storage._objects[key] = rival
+        return original(key, data)
+    storage.put_if_absent = race
+    try:
+        await peer.write_note('a.md', 'body', create=True)
+        assert storage.get(collision[0]) == rival
+        assert peer._store.last_sent_key != collision[0]
+        assert storage.get(peer._store.last_sent_key) is not None
+    finally:
+        await peer.close()
 
 
+async def test_unsupported_fallback(tmp_path):
+    peer, storage = await backend(tmp_path)
+    storage.conditional_put_supported = False
+    try:
+        await peer.write_note('a.md', 'body', create=True)
+        assert peer._store.last_sent_key in storage.exists_calls
+        assert len(storage.put_calls) == 1
+    finally:
+        await peer.close()
 
 
 @pytest.mark.parametrize('declared', [True, False])
@@ -96,6 +123,19 @@ def test_download_bound(declared):
     assert body.closed
 
 
+@pytest.mark.parametrize('code,status,result', [('PreconditionFailed',412,'exists'), ('NotImplemented',501,'unsupported'), ('AccessDenied',403,None)])
+def test_conditional_s3_errors(code, status, result):
+    storage = object.__new__(Boto3ObjectStorage)
+    storage._bucket, storage._prefix = 'test', ''
+    storage._conditional_warning_logged = False
+    storage._client = Mock()
+    storage._client.put_object.side_effect = ClientError({'Error': {'Code': code}, 'ResponseMetadata': {'HTTPStatusCode': status}}, 'PutObject')
+    if result is None:
+        with pytest.raises(StorageError):
+            storage.put_if_absent('a', b'b')
+    else:
+        assert storage.put_if_absent('a', b'b') == result
+    assert storage._client.put_object.call_args.kwargs['IfNoneMatch'] == '*'
 
 
 @pytest.mark.parametrize('kind', ['bomb', 'deep', 'line', 'records', 'download'])
@@ -138,3 +178,15 @@ def test_recursion_error_normalized(monkeypatch):
 def test_json_depth_guard_ignores_quoted_brackets():
     doc = {'_id': 'a', '_rev': '1-a', 'text': '[{"\\' * 1000}
     assert codec.parse_journal(codec.serialize_journal([], [doc])).docs == [doc]
+
+
+def test_conditional_success_and_fake_atomicity():
+    storage = object.__new__(Boto3ObjectStorage)
+    storage._bucket, storage._prefix = 'test', 'prefix/'
+    storage._client = Mock()
+    assert storage.put_if_absent('a', b'b') == 'created'
+    assert storage._client.put_object.call_args.kwargs == {'Bucket': 'test', 'Key': 'prefix/a', 'Body': b'b', 'IfNoneMatch': '*'}
+    fake = FakeObjectStorage()
+    assert fake.put_if_absent('a', b'first') == 'created'
+    assert fake.put_if_absent('a', b'second') == 'exists'
+    assert fake.get('a') == b'first'

@@ -47,6 +47,7 @@ class FakeObjectStorage:
         *,
         latency: float = 0.0,
     ):
+        self.conditional_put_supported = True
         self.max_object_bytes = MAX_OBJECT_BYTES
         self._objects: dict[str, bytes] = dict(initial or {})
         self._lock = threading.Lock()
@@ -112,6 +113,20 @@ class FakeObjectStorage:
         with self._lock:
             self._objects[key] = data
 
+    def put_if_absent(self, key: str, data: bytes) -> str:
+        key = _check_key(key)
+        if not self.conditional_put_supported:
+            return "unsupported"
+        self._sleep()
+        if self._fail_put:
+            self._fail_put = False
+            raise self._scripted_error(self._fail_put_error, "put")
+        with self._lock:
+            if key in self._objects:
+                return "exists"
+            self.put_calls.append((key, data))
+            self._objects[key] = data
+            return "created"
 
     def list(self, start_after: str = "", limit: int | None = None) -> list[str]:
         if limit is not None and limit < 1:
