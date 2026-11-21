@@ -23,6 +23,7 @@ import time
 from collections.abc import Mapping
 
 from storage_base import StorageUnavailable
+from object_storage import ObjectSizeLimit, MAX_OBJECT_BYTES
 
 
 def _check_key(key: object) -> str:
@@ -46,6 +47,7 @@ class FakeObjectStorage:
         *,
         latency: float = 0.0,
     ):
+        self.max_object_bytes = MAX_OBJECT_BYTES
         self._objects: dict[str, bytes] = dict(initial or {})
         self._lock = threading.Lock()
         self._latency = latency
@@ -86,7 +88,7 @@ class FakeObjectStorage:
 
     # -- JournalObjectStorage protocol --------------------------------------
 
-    def get(self, key: str) -> bytes | None:
+    def get(self, key: str, *, max_bytes: int | None = None) -> bytes | None:
         key = _check_key(key)
         self.get_calls.append(key)
         self._sleep()
@@ -94,7 +96,11 @@ class FakeObjectStorage:
             self._fail_get_remaining -= 1
             raise self._scripted_error(self._fail_get_error, "get")
         with self._lock:
-            return self._objects.get(key)
+            data = self._objects.get(key)
+            limit = self.max_object_bytes if max_bytes is None else min(max_bytes, self.max_object_bytes)
+            if data is not None and len(data) > limit:
+                raise ObjectSizeLimit(f"object {key!r} exceeds download limit")
+            return data
 
     def put(self, key: str, data: bytes) -> None:
         key = _check_key(key)
@@ -105,6 +111,7 @@ class FakeObjectStorage:
             raise self._scripted_error(self._fail_put_error, "put")
         with self._lock:
             self._objects[key] = data
+
 
     def list(self, start_after: str = "", limit: int | None = None) -> list[str]:
         if limit is not None and limit < 1:

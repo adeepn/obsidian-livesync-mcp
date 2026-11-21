@@ -116,7 +116,10 @@ def parse_rev(rev: object) -> tuple[int, str]:
     match = _REV_RE.match(rev) if isinstance(rev, str) else None
     if match is None:
         raise ValueError(f"invalid revision {rev!r}; expected '<gen>-<hash>'")
-    return int(match.group(1)), match.group(2)
+    generation = int(match.group(1))
+    if not 0 <= generation <= 2**63 - 1:
+        raise ValueError("revision generation exceeds SQLite INTEGER range")
+    return generation, match.group(2)
 
 
 def pick_winner(leaves: list[dict]) -> dict | None:

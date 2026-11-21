@@ -48,6 +48,13 @@ _ESCAPE_PREFIX = "\\f"
 _RAW_WBITS = -15
 _DEFLATE_LEVEL = 8
 
+# Per-file replay limits; callers may override keyword arguments. Byte limits
+# apply before decoding UTF-8 or constructing JSON objects.
+MAX_INFLATED_BYTES = 1024**3
+MAX_RECORDS = 100_000
+MAX_JSON_DEPTH = 512
+MAX_LINE_BYTES = 64 * 1024**2
+
 _CORRUPT_BLOB_MESSAGE = "incompatible or corrupt journal blob"
 
 
@@ -152,15 +159,19 @@ def deflate_journal(payload: bytes) -> bytes:
     return compressor.compress(payload) + compressor.flush()
 
 
-def inflate_journal(blob: bytes) -> bytes:
+def inflate_journal(blob: bytes, *, max_output_bytes: int = MAX_INFLATED_BYTES) -> bytes:
     """Inflate a journal blob; raise ``ValueError`` on any corruption.
 
     Only the raw-DEFLATE format devices write is accepted (zlib- or
     gzip-wrapped streams are foreign input and fail loudly).
     """
+    if max_output_bytes < 1:
+        raise ValueError("max_output_bytes must be positive")
     decompressor = zlib.decompressobj(_RAW_WBITS)
     try:
-        out = decompressor.decompress(blob) + decompressor.flush()
+        out = decompressor.decompress(blob, max_output_bytes + 1)
+        if len(out) > max_output_bytes or decompressor.unconsumed_tail:
+            raise ValueError("journal inflated output exceeds limit")
     except zlib.error as exc:
         raise ValueError(_CORRUPT_BLOB_MESSAGE) from exc
     if not decompressor.eof or decompressor.unused_data:
@@ -170,7 +181,10 @@ def inflate_journal(blob: bytes) -> bytes:
     return out
 
 
-def parse_journal(data: bytes, *, name: str = "") -> JournalFile:
+def parse_journal(
+    data: bytes, *, name: str = "", max_records: int = MAX_RECORDS,
+    max_line_bytes: int = MAX_LINE_BYTES,
+) -> JournalFile:
     """Parse inflated journal bytes into a :class:`JournalFile`.
 
     ``name`` is optional error context (the journal file name) carried onto
@@ -187,7 +201,18 @@ def parse_journal(data: bytes, *, name: str = "") -> JournalFile:
         raise ValueError(
             f"{name}: line {lineno}: journal record must end with {_RECORD_SPLIT!r}"
         )
-    for lineno, raw_line in enumerate(data[:-1].split(b"\n"), start=1):
+    # Scan offsets instead of splitting/copying every line before limits apply.
+    start = 0
+    lineno = 0
+    while start < len(data):
+        lineno += 1
+        if lineno > max_records:
+            raise ValueError(f"{name}: line {lineno}: journal record count exceeds limit")
+        end = data.find(b"\n", start, start + max_line_bytes + 1)
+        if end == -1:
+            raise ValueError(f"{name}: line {lineno}: journal line length exceeds limit")
+        raw_line = data[start:end]
+        start = end + 1
         if not raw_line:
             raise ValueError(f"{name}: line {lineno}: empty journal record")
         try:
@@ -219,12 +244,33 @@ def _reject_json_constant(name: str, lineno: int, token: str) -> None:
 def _parse_metadata_line(
     target: JournalFile, name: str, lineno: int, line: str
 ) -> None:
+    # Python versions differ in where the C decoder raises RecursionError.
+    # Bound nesting before parsing, while ignoring brackets inside strings.
+    if line.count("[") + line.count("{") > MAX_JSON_DEPTH:
+        depth = 0
+        quoted = escaped = False
+        for char in line:
+            if quoted:
+                if escaped:
+                    escaped = False
+                elif char == "\\":
+                    escaped = True
+                elif char == '"':
+                    quoted = False
+            elif char == '"':
+                quoted = True
+            elif char in "[{":
+                depth += 1
+                if depth > MAX_JSON_DEPTH:
+                    raise ValueError(f"{name}: line {lineno}: JSON nesting exceeds limit")
+            elif char in "]}":
+                depth -= 1
     try:
         doc = json.loads(
             line,
             parse_constant=lambda token: _reject_json_constant(name, lineno, token),
         )
-    except json.JSONDecodeError as exc:
+    except (json.JSONDecodeError, RecursionError) as exc:
         raise ValueError(f"{name}: line {lineno}: invalid journal record") from exc
     if not isinstance(doc, dict):
         raise ValueError(f"{name}: line {lineno}: invalid journal record")

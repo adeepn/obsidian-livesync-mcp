@@ -43,6 +43,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from journal_codec import (
+    MAX_INFLATED_BYTES, MAX_RECORDS, MAX_LINE_BYTES,
     deflate_journal,
     inflate_journal,
     journal_filename,
@@ -162,7 +163,17 @@ class JournalBackend:
         object_storage: JournalObjectStorage,
         state_dir: Path,
         refresh_min_interval: float = 5.0,
+        *,
+        max_inflated_bytes: int = MAX_INFLATED_BYTES,
+        max_records: int = MAX_RECORDS,
+        max_line_bytes: int = MAX_LINE_BYTES,
     ):
+        for value in (max_inflated_bytes, max_records, max_line_bytes):
+            if value <= 0 or not math.isfinite(value):
+                raise ValueError("journal limits must be positive and finite")
+        self.max_inflated_bytes = max_inflated_bytes
+        self.max_records = max_records
+        self.max_line_bytes = max_line_bytes
         self._object_storage = object_storage
         self._state_dir = Path(state_dir)
         self.refresh_min_interval = refresh_min_interval
@@ -437,11 +448,14 @@ class JournalBackend:
                 raise StorageError(
                     f"journal file {name!r} disappeared during replay"
                 )
-            journal = parse_journal(inflate_journal(blob), name=name)
+            journal = parse_journal(
+                inflate_journal(blob, max_output_bytes=self.max_inflated_bytes),
+                name=name, max_records=self.max_records, max_line_bytes=self.max_line_bytes,
+            )
             store.apply_journal(name, journal.chunks, journal.docs)
-        except StorageError:
+        except StorageUnavailable:
             raise
-        except (ValueError, OSError, sqlite3.Error) as exc:
+        except (StorageError, ValueError, OSError, sqlite3.Error) as exc:
             # The public message carries the file name and the error class
             # only; details (document ids, paths, revisions) stay in the
             # server log (audit C7).

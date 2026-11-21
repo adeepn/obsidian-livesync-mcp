@@ -34,12 +34,21 @@ from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
 
 from config import S3Config
-from storage_base import StorageUnavailable
+from storage_base import StorageError, StorageUnavailable
 
 logger = logging.getLogger(__name__)
 
 # S3 ListObjectsV2 never returns more than 1000 keys per page.
 _MAX_PAGE_KEYS = 1000
+
+# Maximum compressed object size, including control objects (512 MiB).
+MAX_OBJECT_BYTES = 512 * 1024**2
+_READ_BLOCK_BYTES = 1024**2
+
+
+class ObjectSizeLimit(StorageError):
+    """An object exceeded the bounded download size."""
+
 
 # Error codes reported by S3-compatible stores for a missing object.
 # HEAD returns 404 without a body, which botocore surfaces as code "404".
@@ -62,9 +71,10 @@ class JournalObjectStorage(Protocol):
     probe. There is intentionally no delete (spec section 7).
     """
 
-    def get(self, key: str) -> bytes | None: ...
+    def get(self, key: str, *, max_bytes: int | None = None) -> bytes | None: ...
 
     def put(self, key: str, data: bytes) -> None: ...
+
 
     def list(self, start_after: str = "", limit: int | None = None) -> list[str]: ...
 
@@ -98,7 +108,10 @@ class Boto3ObjectStorage:
     endpoints); logs include only the operation, bucket, key and error class.
     """
 
-    def __init__(self, cfg: S3Config):
+    def __init__(self, cfg: S3Config, *, max_object_bytes: int = MAX_OBJECT_BYTES):
+        if max_object_bytes < 1:
+            raise ValueError("max_object_bytes must be positive")
+        self.max_object_bytes = max_object_bytes
         if not cfg.bucket:
             raise ValueError("S3 bucket must be a non-empty string")
         self._bucket = cfg.bucket
@@ -137,13 +150,25 @@ class Boto3ObjectStorage:
 
     # -- JournalObjectStorage protocol --------------------------------------
 
-    def get(self, key: str) -> bytes | None:
+    def get(self, key: str, *, max_bytes: int | None = None) -> bytes | None:
         try:
             response = self._client.get_object(
                 Bucket=self._bucket, Key=self._wire_key(key)
             )
             with closing(response["Body"]) as body:
-                return body.read()
+                limit = self.max_object_bytes
+                if max_bytes is not None:
+                    limit = min(limit, max_bytes)
+                if response.get("ContentLength", 0) > limit:
+                    raise ObjectSizeLimit(f"object {key!r} exceeds download limit")
+                chunks = bytearray()
+                while True:
+                    block = body.read(min(_READ_BLOCK_BYTES, limit + 1 - len(chunks)))
+                    if not block:
+                        return bytes(chunks)
+                    chunks.extend(block)
+                    if len(chunks) > limit:
+                        raise ObjectSizeLimit(f"object {key!r} exceeds download limit")
         except ClientError as exc:
             if _is_missing(exc):
                 return None
@@ -158,6 +183,7 @@ class Boto3ObjectStorage:
             )
         except (ClientError, BotoCoreError) as exc:
             raise self._unavailable("PUT", key, exc) from None
+
 
     def list(self, start_after: str = "", limit: int | None = None) -> list[str]:
         if limit is not None and limit < 1:

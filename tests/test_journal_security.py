@@ -1,0 +1,140 @@
+"""Security boundaries for untrusted journal peers (offline only)."""
+import json
+import os
+import stat
+import sys
+from io import BytesIO
+from unittest.mock import Mock
+
+import pytest
+from botocore.exceptions import ClientError
+
+import journal_codec as codec
+from journal_store import JournalStore, parse_rev
+from livesync_format import PATH_IDENTITY_LEGACY
+from object_storage import Boto3ObjectStorage
+from storage_base import StorageError
+from storage_journal import JournalBackend, MILESTONE_KEY, SYNC_PARAMETERS_KEY
+from tests.fake_object_storage import FakeObjectStorage
+from tests.test_storage_journal import milestone_blob, params_blob, journal_blob, meta_doc
+
+
+async def backend(tmp_path, objects=None, **kwargs):
+    storage = FakeObjectStorage({MILESTONE_KEY: milestone_blob(),
+                                 SYNC_PARAMETERS_KEY: params_blob(), **(objects or {})})
+    peer = JournalBackend(storage, tmp_path, **kwargs)
+    await peer.startup_check()
+    return peer, storage
+
+
+def test_inflate_bomb():
+    blob = codec.deflate_journal(b'x' * (1024 * 1024))
+    with pytest.raises(ValueError, match='journal inflated output exceeds limit'):
+        codec.inflate_journal(blob, max_output_bytes=4096)
+    assert codec.inflate_journal(codec.deflate_journal(b'x' * 4096), max_output_bytes=4096) == b'x' * 4096
+
+
+def test_parse_limits():
+    with pytest.raises(ValueError, match='hostile: line 1:.*line.*limit'):
+        codec.parse_journal(b'~h:a\x1f' + b'x' * 100 + b'\n', name='hostile', max_line_bytes=16)
+    with pytest.raises(ValueError, match='hostile: line 2:.*record.*limit'):
+        codec.parse_journal(b'~h:a\x1fx\n' * 2, name='hostile', max_records=1)
+
+
+def test_deep_json():
+    data = b'{"_id":"a","_rev":"1-a","nested":' + b'[' * (sys.getrecursionlimit() + 100) + b'0' + b']' * (sys.getrecursionlimit() + 100) + b'}\n'
+    with pytest.raises(ValueError, match='deep: line 1:'):
+        codec.parse_journal(data, name='deep')
+
+
+async def test_revision_bounds_retry_convergence(tmp_path):
+    bad = '1-docs.jsonl.gz'
+    good = '2-docs.jsonl.gz'
+    peer, storage = await backend(tmp_path, {bad: journal_blob([meta_doc('bad.md', '9223372036854775808-a')]), good: journal_blob([meta_doc('good.md', '1-a')])})
+    try:
+        for _ in range(2):
+            with pytest.raises(StorageError, match='1-docs.jsonl.gz.*ValueError'):
+                await peer.refresh(force=True)
+            assert not peer._store.processed(bad)
+        storage._objects.pop(bad)
+        await peer.refresh(force=True)
+        assert peer._store.processed(good)
+    finally:
+        await peer.close()
+
+
+def test_revision_upper_boundary():
+    assert parse_rev('9223372036854775807-a')[0] == 2**63-1
+    with pytest.raises(ValueError):
+        parse_rev('9223372036854775808-a')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+@pytest.mark.parametrize('declared', [True, False])
+def test_download_bound(declared):
+    storage = object.__new__(Boto3ObjectStorage)
+    storage._bucket, storage._prefix = 'test', ''
+    storage.max_object_bytes = 16
+    body = BytesIO(b'x' * 100)
+    storage._client = Mock()
+    storage._client.get_object.return_value = {'Body': body, **({'ContentLength': 100} if declared else {})}
+    with pytest.raises(StorageError):
+        storage.get('hostile')
+    assert body.closed
+
+
+
+
+@pytest.mark.parametrize('kind', ['bomb', 'deep', 'line', 'records', 'download'])
+async def test_hostile_file_has_clean_error(tmp_path, kind):
+    kwargs = {}
+    payload = b'~h:a\x1f' + b'x' * 100_000 + b'\n'
+    if kind == 'bomb':
+        kwargs['max_inflated_bytes'] = 1024
+    elif kind == 'line':
+        kwargs['max_line_bytes'] = 64
+    elif kind == 'records':
+        kwargs['max_records'] = 1
+        payload = b'~h:a\x1fx\n' * 2
+    elif kind == 'deep':
+        payload = b'{"_id":"a","_rev":"1-a","nested":' + b'[' * 2000 + b'0' + b']' * 2000 + b'}\n'
+    name = '1-docs.jsonl.gz'
+    peer, storage = await backend(tmp_path, {name: codec.deflate_journal(payload)}, **kwargs)
+    if kind == 'download':
+        storage.max_object_bytes = len(params_blob()) + 1
+        storage._objects[name] = b'x' * 200
+    try:
+        with pytest.raises(StorageError) as caught:
+            await peer.refresh(force=True)
+        assert str(caught.value) == f"journal file {name!r} could not be replayed: " + ('ObjectSizeLimit' if kind == 'download' else 'ValueError')
+        assert not peer._store.processed(name)
+    finally:
+        await peer.close()
+
+
+
+
+def test_recursion_error_normalized(monkeypatch):
+    def recursion(*args, **kwargs):
+        raise RecursionError('decoder depth')
+    monkeypatch.setattr(codec.json, 'loads', recursion)
+    with pytest.raises(ValueError, match='nested: line 1:'):
+        codec.parse_journal(b'{"_id":"a","_rev":"1-a"}\n', name='nested')
+
+
+def test_json_depth_guard_ignores_quoted_brackets():
+    doc = {'_id': 'a', '_rev': '1-a', 'text': '[{"\\' * 1000}
+    assert codec.parse_journal(codec.serialize_journal([], [doc])).docs == [doc]
