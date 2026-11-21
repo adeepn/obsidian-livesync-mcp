@@ -122,3 +122,5 @@ FAILED tests/test_integration_minio.py::test_sibling_writers - assert 0 == 2
 44 passed in 1.28s
 
 Re-run after spy filter fix: 44/44 PASSED (2026-11-21 18:33) — put_if_absent publications verified against real S3.
+
+Post PR2-fix re-run: 2026-11-21 20:21 — codec/refresh fixes vs real S3.
