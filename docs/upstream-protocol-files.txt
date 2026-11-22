@@ -1,0 +1,11 @@
+# Paths relative to vrtmrz/livesync-commonlib
+src/replication/journal/JournalSyncCore.ts
+src/replication/journal/journalRecords.ts
+src/replication/journal/journalReceive.ts
+src/replication/journal/LiveSyncJournalReplicator.ts
+src/replication/journal/objectstore/MinioStorageAdapter.ts
+src/replication/journal/objectstore/JournalStorageAdapter.ts
+src/common/utils.ts
+src/common/models/tweak.definition.ts
+src/common/types.ts
+src/string_and_binary/path.ts

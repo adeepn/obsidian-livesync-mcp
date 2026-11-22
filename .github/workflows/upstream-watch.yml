@@ -1,0 +1,54 @@
+name: Upstream watch
+on:
+  schedule:
+    - cron: '23 7 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+  issues: write
+concurrency:
+  group: upstream-watch
+  cancel-in-progress: false
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      # Fetch this exact revision without third-party actions or persisted auth.
+      - name: Read repository source
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/tarball/$GITHUB_SHA" > "$RUNNER_TEMP/source.tar.gz"
+          tar -xzf "$RUNNER_TEMP/source.tar.gz" --strip-components=1
+      - name: Check upstream and reconcile drift issue
+        shell: bash
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/upstream-check.txt"
+          code=0
+          bash scripts/check_upstream.sh > "$output" 2>&1 || code=$?
+          cat "$output"
+          if [[ "$code" != 0 && "$code" != 2 && "$code" != 3 ]]; then
+            exit 4
+          fi
+          issue=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open \
+            --label upstream-drift --limit 1 --json number --jq '.[0].number // empty')
+          if [[ "$code" == 0 ]]; then
+            if [[ -n "$issue" ]]; then
+              gh issue close "$issue" --repo "$GITHUB_REPOSITORY" \
+                --comment 'Upstream check is clean against the committed pin; closing automatically.'
+            fi
+            exit 0
+          fi
+          gh label create upstream-drift --repo "$GITHUB_REPOSITORY" \
+            --color D93F0B --description 'Upstream release or protocol changes' --force
+          title='Upstream LiveSync drift'
+          if [[ -n "$issue" ]]; then
+            gh issue edit "$issue" --repo "$GITHUB_REPOSITORY" \
+              --title "$title" --body-file "$output"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --label upstream-drift \
+              --title "$title" --body-file "$output"
+          fi

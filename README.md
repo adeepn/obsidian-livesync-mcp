@@ -23,6 +23,25 @@ Storage is selected by a single environment variable, `LIVESYNC_BACKEND`:
 
 All tools work through a storage-agnostic backend interface, so switching backends later is a configuration change, not a rewrite. The `vault_stats` tool reports the active backend in its `backend` field.
 
+## Upstream tracking
+
+The daily and manually dispatched upstream watcher compares the latest
+`vrtmrz/obsidian-livesync` release with [the compatibility pin](docs/upstream-pin.md)
+and checks commonlib default-branch changes against the
+[protocol manifest](docs/upstream-protocol-files.txt). It maintains one open
+`upstream-drift` issue, updates its comparison output, and closes it when clean.
+Check failures fail the workflow without closing an existing alert.
+
+On drift, read the issue diff, update the pin through a PR, extend codec tests
+or capture a new golden journal fixture from a real client, and note the
+change in CHANGELOG. The initial commonlib tracking pin does not replace the
+older audit or the plugin 1.0.50 live acceptance.
+
+Run `scripts/check_upstream.sh` locally with authenticated `gh`. Once a month,
+repeat the Task-10 live smoke against a **scratch bucket** using
+`scripts/live_check_s3.py` (sweep-notes, verify-vault, write-phase,
+verify-visible); follow the [live acceptance checklist](docs/live-check-s3-checklist.md).
+
 ## Features
 
 ### Notes
