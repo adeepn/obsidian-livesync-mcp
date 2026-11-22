@@ -5,6 +5,7 @@ src/replication/journal/journalReceive.ts
 src/replication/journal/LiveSyncJournalReplicator.ts
 src/replication/journal/objectstore/MinioStorageAdapter.ts
 src/replication/journal/objectstore/JournalStorageAdapter.ts
+src/pouchdb/compress.ts
 src/common/utils.ts
 src/common/models/tweak.definition.ts
 src/common/types.ts

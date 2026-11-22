@@ -1743,6 +1743,18 @@ async def test_backend_info_state_size(tmp_path):
 
 
 class TestMetadataCanary:
+    async def test_json_chunk_has_no_protocol_notes(self, tmp_path):
+        chunk = {"_id": "h:abc", "_rev": "1-a", "type": "leaf", "data": "body"}
+        backend, _ = make_backend(tmp_path, healthy_bucket(**{
+            JOURNAL_1: journal_blob([chunk]), JOURNAL_2: None, JOURNAL_3: None,
+        }))
+        try:
+            await backend.startup_check()
+            await backend.refresh(force=True)
+            assert (await backend.backend_info())["protocol_notes"] == []
+        finally:
+            await backend.close()
+
     async def test_unknown_fields_are_sorted_cached_and_cleared(self, tmp_path):
         doc = dict(meta_doc("a.md", "1-a"), foo=1, zeta=True)
         backend, storage = make_backend(tmp_path, healthy_bucket(**{

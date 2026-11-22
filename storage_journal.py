@@ -339,7 +339,12 @@ class JournalBackend:
             # Inspect only the last successful journal, once per refresh.
             # No-op and failed replay retain the last successful observation.
             if recent_docs is not None:
-                keys = {key for doc in recent_docs for key in doc}
+                # Full-JSON chunk records share journal.docs with metadata.
+                keys = {
+                    key for doc in recent_docs
+                    if not doc["_id"].startswith("h:")
+                    for key in doc
+                }
                 unknown = sorted(keys - KNOWN_METADATA_KEYS)
                 self._protocol_notes = (
                     ["unknown metadata fields in recent journals: " + ", ".join(unknown)]
