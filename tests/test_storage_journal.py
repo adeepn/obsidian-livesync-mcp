@@ -1740,3 +1740,38 @@ async def test_backend_info_state_size(tmp_path):
         assert info["state_dir_bytes"] == backend._store.state_size_bytes()
     finally:
         await backend.close()
+
+
+class TestMetadataCanary:
+    async def test_unknown_fields_are_sorted_cached_and_cleared(self, tmp_path):
+        doc = dict(meta_doc("a.md", "1-a"), foo=1, zeta=True)
+        backend, storage = make_backend(tmp_path, healthy_bucket(**{
+            JOURNAL_1: journal_blob([doc]), JOURNAL_2: None, JOURNAL_3: None,
+        }))
+        await backend.startup_check()
+        await backend.refresh(force=True)
+        expected = ["unknown metadata fields in recent journals: foo, zeta"]
+        assert (await backend.backend_info()).get("protocol_notes") == expected
+        await backend.refresh(force=True)
+        assert (await backend.backend_info()).get("protocol_notes") == expected
+        storage.put(JOURNAL_2, b"corrupt")
+        with pytest.raises(StorageError, match="could not be replayed"):
+            await backend.refresh(force=True)
+        assert (await backend.backend_info()).get("protocol_notes") == expected
+        with pytest.raises(StorageError, match="refresh failed previously"):
+            await backend.refresh()
+        storage.put(JOURNAL_2, journal_blob([meta_doc("b.md", "1-b")]))
+        await backend.refresh(force=True)
+        assert not (await backend.backend_info()).get("protocol_notes")
+        await backend.close()
+
+    async def test_golden_fixture_has_no_protocol_notes(self, tmp_path):
+        from pathlib import Path
+        sample = Path(__file__).parent / "fixtures/live_client_journal_sample.bin"
+        backend, _ = make_backend(tmp_path, healthy_bucket(**{
+            JOURNAL_1: sample.read_bytes(), JOURNAL_2: None, JOURNAL_3: None,
+        }))
+        await backend.startup_check()
+        await backend.refresh(force=True)
+        assert not (await backend.backend_info()).get("protocol_notes")
+        await backend.close()

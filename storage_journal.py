@@ -124,6 +124,13 @@ def journal_sort_key(name: str) -> tuple[int, int, str]:
 
 _TEXT_WINDOW_SIZE = 50
 
+# File metadata fields from livesync_format.new_metadata_doc and the live golden
+# journal, including revision ancestry and both tombstone representations.
+KNOWN_METADATA_KEYS = frozenset({
+    "_id", "_rev", "_revisions", "path", "ctime", "mtime", "size", "type",
+    "children", "eden", "deleted", "_deleted",
+})
+
 # Aggregate refresh limits, independent of the per-file codec/download caps.
 MAX_REFRESH_KEYS = 1_000_000
 MAX_REFRESH_BYTES = 4 * 1024**3
@@ -206,6 +213,7 @@ class JournalBackend:
         self._last_refresh_failure: Exception | None = None
         self._last_refresh: float | None = None
         self._last_refresh_at: datetime | None = None
+        self._protocol_notes: list[str] = []
         self._max_seen_ms = 0
 
     # -- StorageBackend: lifecycle -------------------------------------------
@@ -304,6 +312,7 @@ class JournalBackend:
             return
         self._refresh_deadline = now + self.max_refresh_seconds
         self._refresh_downloaded = 0
+        recent_docs: list[dict] | None = None
         try:
             # Resolve resets before choosing the listing continuation.
             epoch = self._load_sync_parameters_epoch()
@@ -315,7 +324,7 @@ class JournalBackend:
             for name in candidates:
                 self._check_refresh_time(name)
                 if not store.processed(name):
-                    self._replay_one(store, name)
+                    recent_docs = self._replay_one(store, name)
             # Advance only after this entire window was replayed. A byte/time
             # stop or failure retries the same window, skipping its ledger.
             self._listing_cursor = next_cursor
@@ -327,6 +336,15 @@ class JournalBackend:
         else:
             self._last_refresh_failure = None
         finally:
+            # Inspect only the last successful journal, once per refresh.
+            # No-op and failed replay retain the last successful observation.
+            if recent_docs is not None:
+                keys = {key for doc in recent_docs for key in doc}
+                unknown = sorted(keys - KNOWN_METADATA_KEYS)
+                self._protocol_notes = (
+                    ["unknown metadata fields in recent journals: " + ", ".join(unknown)]
+                    if unknown else []
+                )
             self._refresh_deadline = None
             # Failures also arm the throttle; force=True bypasses it.
             self._last_refresh = time.monotonic()
@@ -358,6 +376,7 @@ class JournalBackend:
         store = self._store
         return {
             "backend": "s3-journal",
+            "protocol_notes": list(self._protocol_notes),
             "state_dir_path": str(self._state_dir),
             "state_dir_bytes": store.state_size_bytes() if store else 0,
             "state_size_warn_mb": self.state_size_warn_mb,
@@ -507,7 +526,7 @@ class JournalBackend:
                 self._max_seen_ms = max(self._max_seen_ms, int(match.group(1)))
         return sorted((key for key in keys if is_journal_key(key)), key=journal_sort_key), next_cursor
 
-    def _replay_one(self, store: JournalStore, name: str) -> None:
+    def _replay_one(self, store: JournalStore, name: str) -> list[dict]:
         """Fetch, decode and apply one journal file.
 
         Storage-layer failures propagate unchanged (they already name the
@@ -526,6 +545,7 @@ class JournalBackend:
                 name=name, max_records=self.max_records, max_line_bytes=self.max_line_bytes,
             )
             store.apply_journal(name, journal.chunks, journal.docs)
+            return journal.docs[-100:]
         except StorageUnavailable:
             raise
         except (StorageError, ValueError, OSError, sqlite3.Error) as exc:
