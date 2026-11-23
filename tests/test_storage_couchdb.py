@@ -1592,3 +1592,17 @@ async def test_couchdb_rejects_metadata_identity_collision():
     async with fake_backend(docs) as (backend, _):
         with pytest.raises(StorageError, match="identity|collision"):
             await backend.list_notes()
+
+
+async def test_deleted_metadata_identity_refused_before_resurrection():
+    docs = {
+        "_local/obsydian_livesync_milestone": {"handleFilenameCaseSensitive": True},
+        "a.md": {"_id": "a.md", "_rev": "1-a", "path": "A.md",
+                 "type": "plain", "deleted": True, "children": [], "size": 0},
+    }
+    async with fake_backend(docs) as (backend, log):
+        await backend.startup_check()
+        before = len(log)
+        with pytest.raises(StorageError, match="identity mismatch"):
+            await backend.write_note("a.md", "replacement", create=True)
+        assert mutation_free(log, before)

@@ -43,7 +43,7 @@ from frontmatter import (
     FrontmatterError, get_properties, split_frontmatter, set_properties,
     delete_properties, add_tags, remove_tags, insert_after_frontmatter,
 )
-from livesync_format import ForbiddenPathError
+from livesync_format import ForbiddenPathError, PATH_IDENTITY_LEGACY
 from links import GraphBuilder, extract_links, resolve_link
 from auth_config import StaticBearerTokenVerifier, select_auth_mode
 from oauth_provider import SimpleOAuthProvider
@@ -357,7 +357,9 @@ async def _scan_texts():
 
 async def _graph() -> dict:
     paths = [meta["path"] for meta in await _scan_notes()]
-    graph = GraphBuilder(paths)
+    identity = (await _backend().backend_info()).get(
+        "path_identity", PATH_IDENTITY_LEGACY)
+    graph = GraphBuilder(paths, path_identity=identity)
     processed = set()
     skipped = []
     async with aclosing(_scan_texts()) as texts:
@@ -908,7 +910,9 @@ async def obsidian_get_links(
     if direction not in ("out", "in", "both"):
         return "Invalid direction. Use: out, in, both."
     graph = await _graph()
-    resolved = resolve_link(path, graph["nodes"])
+    identity = (await _backend().backend_info()).get(
+        "path_identity", PATH_IDENTITY_LEGACY)
+    resolved = resolve_link(path, graph["nodes"], path_identity=identity)
     result = {"path": resolved or path, "skipped": graph["skipped"]}
     if direction in ("out", "both"):
         result["outgoing"] = [

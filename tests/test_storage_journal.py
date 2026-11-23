@@ -1823,24 +1823,61 @@ async def test_sensitive_paths_and_folder_identity(tmp_path, nfc):
 
 
 def test_identity_paths_have_no_unconditional_lowercase():
+    import ast
     import pathlib
-    import re
-    for name in ("storage_journal.py", "storage_couchdb.py", "journal_store.py"):
-        source = pathlib.Path(name).read_text()
-        # Extension selection is intentionally independent of identity.
-        source = re.sub(r"def _matches_extension\(.*?(?=\ndef |\nclass )", "", source,
-                        flags=re.S)
-        assert ".lower()" not in source, name
+    for name in ("storage_journal.py", "storage_couchdb.py", "journal_store.py", "links.py"):
+        tree = ast.parse(pathlib.Path(name).read_text())
+
+        def inspect(node, function=None):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                function = node.name
+            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                    and node.func.attr in {"lower", "casefold"}):
+                # Extension matching stays insensitive. The link comparison
+                # helper is identity-aware and covered by four-mode tests.
+                allowed = ({"_without_md", "_comparison_key"} if name == "links.py"
+                           else {"_matches_extension"})
+                assert function in allowed, (name, node.lineno, function)
+            for child in ast.iter_child_nodes(node):
+                inspect(child, function)
+
+        inspect(tree)
 
 
-async def test_replay_rejects_metadata_identity_collision(tmp_path):
+@pytest.mark.parametrize("deleted", [False, True])
+async def test_replay_rejects_metadata_identity_collision(tmp_path, deleted):
     backend, _ = make_backend(tmp_path, healthy_bucket(**{
-        JOURNAL_1: journal_blob([meta_doc("A.md", "1-a"), meta_doc("a.md", "1-b")]),
+        JOURNAL_1: journal_blob([
+            dict(meta_doc("A.md", "1-a"), deleted=deleted),
+            dict(meta_doc("a.md", "1-b"), deleted=deleted),
+        ]),
     }))
     try:
         await backend.startup_check()
         with pytest.raises(StorageError, match="could not be replayed"):
             await backend.refresh(force=True)
         assert not backend._store.processed(JOURNAL_1)
+    finally:
+        await backend.close()
+
+
+async def test_deleted_metadata_identity_refused_before_resurrection(tmp_path):
+    milestone = json.loads(milestone_blob())
+    milestone["tweak_values"]["PREFERRED"]["handleFilenameCaseSensitive"] = True
+    backend, objects = make_backend(tmp_path, healthy_bucket(**{
+        MILESTONE_KEY: json.dumps(milestone).encode(),
+    }))
+    try:
+        await backend.startup_check()
+        # Seed an already-cached tombstone to exercise publication, not replay.
+        backend._store.apply_journal("cached", {}, [{
+            "_id": "a.md", "_rev": "1-a", "path": "A.md", "type": "plain",
+            "deleted": True, "children": [], "size": 0,
+        }])
+        before = list(objects.put_calls)
+        with pytest.raises(StorageError, match="identity mismatch"):
+            await backend.write_note("a.md", "replacement", create=True)
+        assert objects.put_calls == before
+        assert backend._store.winner("a.md")["_rev"] == "1-a"
     finally:
         await backend.close()

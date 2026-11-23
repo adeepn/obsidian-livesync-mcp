@@ -92,7 +92,9 @@ def validate_document_identity(doc: dict, identity: str) -> None:
             validate_vault_path(path)
         except ForbiddenPathError:
             return  # hidden/service paths are handled by the existing read gate
-    if is_note_document(doc) and isinstance(path, str) and path:
+    metadata = (doc.get("type") in ("plain", "newnote", "notes")
+                and not is_service_document_id(str(doc.get("_id", ""))))
+    if metadata and isinstance(path, str) and path:
         if doc.get("_id") != identity_path2id(path, identity):
             raise ValueError(
                 "metadata path identity mismatch or collision; rebuild/fetch required"

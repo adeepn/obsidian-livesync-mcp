@@ -100,6 +100,28 @@ async def test_backlinks_finds_anchor_links(tools, link):
     assert result["outgoing"] == []
 
 
+@pytest.mark.parametrize("nfc", [False, True])
+async def test_graph_tools_use_backend_case_identity(monkeypatch, nfc):
+    from tests.test_storage_couchdb import fake_backend
+
+    docs = {"_local/obsydian_livesync_milestone": {
+        "handleFilenameCaseSensitive": True, "pathNormalizationVersion": int(nfc)}}
+    async with fake_backend(docs) as (backend, _):
+        await backend.startup_check()
+        for path, text in [("Source.md", "[[A]] [[a]]"), ("A.md", ""), ("a.md", "")]:
+            await backend.write_note(path, text, create=True)
+        monkeypatch.setattr(server, "backend", backend, raising=False)
+        graph = json.loads(await server.obsidian_get_link_graph())
+        assert graph["edges"] == [
+            {"from": "Source.md", "to": "A.md"},
+            {"from": "Source.md", "to": "a.md"},
+        ]
+        for path in ("A.md", "a.md"):
+            result = json.loads(await server.obsidian_get_links(path))
+            assert result["path"] == path
+            assert result["backlinks"] == [{"path": "Source.md"}]
+
+
 async def test_refresh_calls_backend_refresh(tools):
     server, fake = tools
     await server.obsidian_refresh()

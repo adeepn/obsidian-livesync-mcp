@@ -400,6 +400,7 @@ class CouchDBBackend:
         info = await self._db_info()
         return {
             "backend": "couchdb",
+            "path_identity": self._path_identity,
             "database": self._database,
             "doc_count": info.get("doc_count"),
             "update_seq": info.get("update_seq"),

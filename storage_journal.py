@@ -819,6 +819,14 @@ class JournalBackend:
         store = self._require_store("write")
         return identity_path2id(path, store.path_identity)
 
+    def _validate_identity(self, doc: dict | None) -> None:
+        if doc is not None:
+            try:
+                validate_document_identity(
+                    doc, self._require_store("identity").path_identity)
+            except ValueError as exc:
+                raise StorageError(str(exc)) from exc
+
     @staticmethod
     def _check_expected_rev(doc: dict | None, expected_rev: str | None) -> None:
         if expected_rev is not None and (
@@ -1035,6 +1043,7 @@ class JournalBackend:
         store = self._require_store("write_note")
         doc_id = self._doc_id(path)
         parent = store.winner(doc_id)
+        self._validate_identity(parent)
         self._check_expected_rev(parent, expected_rev)
         live = parent is not None and not parent.get("deleted")
         if live and create and not overwrite:
@@ -1086,6 +1095,7 @@ class JournalBackend:
     def _copy_revision(self, source: dict, new_path: str, overwrite: bool) -> dict:
         doc_id = self._doc_id(new_path)
         target = self._require_store("move/copy").winner(doc_id)
+        self._validate_identity(target)
         if target is not None and not target.get("deleted") and not overwrite:
             raise NoteExists(f"note already exists: {new_path}")
         body = clone_metadata(

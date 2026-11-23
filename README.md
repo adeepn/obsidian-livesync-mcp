@@ -92,12 +92,15 @@ either limit returns an error without content or truncation. The hard cap keeps
 JSON-RPC payloads manageable. `obsidian_fetch` returns binary metadata including
 `size` and `sha256`, without the body. Use text note tools for textual paths.
 
-The server derives document ids from vault paths the same way LiveSync does, so it supports vaults using the plugin's default path settings:
+The server derives document ids from vault paths the same way LiveSync does.
+Both backends support these vault settings:
 
 - **No end-to-end encryption** — E2EE vaults are rejected at startup (and encrypted chunks are refused on read).
 - **No path obfuscation** — obfuscated vaults are rejected at startup.
-- **Case-insensitive filenames** (`handleFilenameCaseSensitive` off, the default) — document ids are lowercased paths.
-- **No Unicode NFC path normalization** (`pathNormalizationVersion` 0, the default).
+- **Either filename case setting** — document ids preserve case when
+  `handleFilenameCaseSensitive` is on and are lowercased otherwise (the default).
+- **Path normalization version 0 or 1** — legacy spelling (the default), or
+  Unicode NFC, independently of the case setting.
 
 A vault using an unsupported combination fails the startup check with an explicit error instead of serving mismatched data.
 
@@ -164,9 +167,9 @@ COUCHDB_PASSWORD=<plugin-password>
 COUCHDB_DATABASE=<plugin-database-name>
 ```
 
-> **CouchDB compatibility:** legacy path identity only today: case-insensitive,
-> normalization version 0, no E2EE or path obfuscation. NFC is refused.
-> The S3 peer supports NFC identity; CouchDB NFC support remains future work.
+> **Vault compatibility:** both backends support normalization version 0 or 1
+> (Unicode NFC), each with case-insensitive or case-sensitive filenames.
+> E2EE and path obfuscation remain unsupported.
 > CouchDB needs no local state directory.
 
 **S3 URI:** paste the plugin's object-storage `sls://` setup URI as one line.
