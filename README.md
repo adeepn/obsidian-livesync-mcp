@@ -70,6 +70,7 @@ verify-visible); follow the [live acceptance checklist](docs/live-check-s3-check
 - **canvas_edge** — Add/remove canvas edges
 
 ### Other
+- **obsidian_upload_attachment** — Upload PDFs, scans, and other binary attachments from base64 (32 MiB decoded maximum)
 - **vault_stats** — Vault statistics
 - **create_from_template** — Create from template with variable substitution
 - **list_templates** — List available templates
@@ -80,6 +81,11 @@ verify-visible); follow the [live acceptance checklist](docs/live-check-s3-check
 - Python 3.11+
 
 ### CouchDB vault compatibility
+
+Binary uploads are capped at **32 MiB decoded** and stored as LiveSync
+`newnote` documents with per-chunk base64 data. `obsidian_fetch` returns
+binary metadata including `size` and `sha256`, without the body; full binary
+download can be added in a follow-up. Use text note tools for textual paths.
 
 The server derives document ids from vault paths the same way LiveSync does, so it supports vaults using the plugin's default path settings:
 
@@ -226,6 +232,11 @@ are read only for the selected backend. Empty defaults below mean an empty strin
 | `LIVESYNC_SCAN_MAX_BYTES` | `67108864` | Optional | Positive aggregate UTF-8 byte cap per scan |
 
 ### S3 journal backend
+
+Binary uploads are capped at **32 MiB decoded** and stored as LiveSync
+`newnote` documents with per-chunk base64 data. `obsidian_fetch` returns
+binary metadata including `size` and `sha256`, without the body; full binary
+download can be added in a follow-up. Use text note tools for textual paths.
 
 Set `LIVESYNC_BACKEND=s3` and choose exactly one connection form.
 Use the URI or individual-variable block in the quick start matrix.

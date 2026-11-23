@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Added `obsidian_upload_attachment` for binary PDF/scan uploads up to 32 MiB decoded through CouchDB or S3 journals, using LiveSync `newnote` base64 storage and returning size/SHA-256 metadata
+
 - Added S3 local peer state size/path diagnostics and `vault_stats.local_state` warnings controlled by `S3_STATE_SIZE_WARN_MB` (disabled by default)
 - Added shared bearer API key authentication via `MCP_API_KEY` for MCP clients that use `Authorization: Bearer <token>`
 - Added the S3 journal backend with append-only publication, local SQLite/chunk state, URI or individual-variable configuration, and legacy/NFC path identity support

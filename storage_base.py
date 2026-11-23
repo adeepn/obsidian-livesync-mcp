@@ -12,6 +12,9 @@ from __future__ import annotations
 from typing import AsyncIterator, Protocol, TypedDict, runtime_checkable
 
 
+MAX_ATTACHMENT_BYTES = 32 * 1024 * 1024
+
+
 class StorageError(Exception):
     """Base class for every storage-level failure."""
 
@@ -169,6 +172,25 @@ class StorageBackend(Protocol):
         written. ``None`` keeps last-writer-wins semantics and must be
         reserved for callers that genuinely intend an unconditional
         overwrite or a plain create.
+        """
+        ...
+
+    async def write_attachment(
+        self,
+        path: str,
+        data: bytes,
+        *,
+        create: bool = False,
+        overwrite: bool = False,
+        expected_rev: str | None = None,
+    ) -> NoteMeta:
+        """Write binary data with write_note create/overwrite/resurrection rules.
+
+        Validate ForbiddenPath first; writable-text paths raise BinaryNoteError
+        ("textual path; use write_note"). Stale expected_rev refuses all writes.
+        MAX_ATTACHMENT_BYTES caps decoded data at 32 MiB; larger bodies raise
+        ValueError naming the cap and actual size. Journal preflight caps make
+        bodies above roughly 40 MiB undeployable anyway; 32 MiB leaves headroom.
         """
         ...
 

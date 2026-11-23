@@ -116,6 +116,18 @@ class FakeBackend:
         self.add(path, content, mtime=mtime if mtime is not None else 2)
         return deepcopy(self.notes[path]["meta"])
 
+    async def write_attachment(self, path, data, *, create=False,
+                               overwrite=False, expected_rev=None):
+        self._call("write_attachment", path, data, create, overwrite, expected_rev)
+        if expected_rev is not None and self._current_rev(path) != expected_rev:
+            raise ConcurrentModification("note changed concurrently; re-read and retry")
+        if path in self.notes and create and not overwrite:
+            raise NoteExists(path)
+        if path not in self.notes and not create:
+            raise NoteNotFound(path)
+        self.add(path, data=data)
+        return deepcopy(self.notes[path]["meta"])
+
     async def delete_note(self, path, expected_rev=None):
         self._call("delete_note", path, expected_rev)
         if expected_rev is not None and self._current_rev(path) != expected_rev:

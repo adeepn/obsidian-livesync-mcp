@@ -54,6 +54,7 @@ from livesync_format import (
     canonical_path,
     chunk_id_for,
     doc_type_for,
+    encode_newnote,
     is_text_doc,
     is_writable_text_path,
     new_metadata_doc,
@@ -62,6 +63,7 @@ from livesync_format import (
     validate_vault_path,
 )
 from storage_base import (
+    MAX_ATTACHMENT_BYTES,
     BinaryNoteError,
     ConcurrentModification,
     RenamePartialError,
@@ -909,6 +911,36 @@ class CouchDBBackend:
                 "this server writes textual notes only"
             )
 
+        return await self._write_content(
+            path, content, len(content.encode("utf-8")), doc_type_for(path),
+            create=create, overwrite=overwrite, mtime=mtime,
+            expected_rev=expected_rev,
+        )
+
+    async def write_attachment(
+        self, path: str, data: bytes, *, create: bool = False,
+        overwrite: bool = False, expected_rev: str | None = None,
+    ) -> NoteMeta:
+        """Write a binary LiveSync newnote; cap decoded data at 32 MiB."""
+        validate_vault_path(path)
+        if is_writable_text_path(path):
+            raise BinaryNoteError(f"note {path!r}: textual path; use write_note")
+        if len(data) > MAX_ATTACHMENT_BYTES:
+            raise ValueError(
+                f"attachment exceeds 32 MiB cap ({MAX_ATTACHMENT_BYTES} bytes); "
+                f"actual size {len(data)} bytes"
+            )
+        return await self._write_content(
+            path, encode_newnote(data)[0], len(data), "newnote",
+            create=create, overwrite=overwrite, expected_rev=expected_rev,
+        )
+
+    async def _write_content(
+        self, path: str, content: str, size: int, doc_type: str, *,
+        create: bool, overwrite: bool, mtime: int | None = None,
+        expected_rev: str | None = None,
+    ) -> NoteMeta:
+        """Publish encoded chunk data through the shared write transaction."""
         doc_id = path2id(path)
         doc = await self._get_doc(doc_id, conflicts=True)
         if doc is not None:
@@ -922,14 +954,13 @@ class CouchDBBackend:
 
         children = [await self._write_chunk(path, content)]
         new_mtime = _now_ms() if mtime is None else mtime
-        size = len(content.encode("utf-8"))
         if doc is None:
             body = new_metadata_doc(
-                path, children, size, doc_type_for(path), new_mtime, new_mtime
+                path, children, size, doc_type, new_mtime, new_mtime
             )
         else:
             # New revision of the old body: children/mtime/size/type
-            # replaced (a write always stores plain text — audit B3),
+            # replaced with the encoded body format,
             # soft-delete flag and conflict shadows dropped.
             body = clone_metadata(doc)
             body.pop("_conflicts", None)
@@ -938,7 +969,7 @@ class CouchDBBackend:
             body["children"] = children
             body["mtime"] = new_mtime
             body["size"] = size
-            body["type"] = doc_type_for(path)
+            body["type"] = doc_type
         body["path"] = canonical_path(path)
         body["_rev"] = await self._put_doc(doc_id, body)
         return self._meta_from_doc(body)

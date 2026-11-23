@@ -56,10 +56,12 @@ from livesync_format import (
     PATH_IDENTITY_NFC,
     ForbiddenPathError,
     UnsupportedVaultSettings,
+    assemble_binary,
     canonical_path,
     chunk_id_for,
     clone_metadata,
     doc_type_for,
+    encode_newnote,
     is_note_document,
     is_writable_text_path,
     new_metadata_doc,
@@ -70,6 +72,7 @@ from livesync_format import (
 )
 from object_storage import JournalObjectStorage, ObjectSizeLimit, MAX_OBJECT_BYTES
 from storage_base import (
+    MAX_ATTACHMENT_BYTES,
     BinaryNoteError,
     ConcurrentModification,
     NoteContent,
@@ -887,7 +890,10 @@ class JournalBackend:
                 "existing shared content chunk could not be validated"
             ) from exc
 
-    def _publish(self, chunks: list[tuple[str, str]], docs: list[dict]) -> None:
+    def _publish(
+        self, chunks: list[tuple[str, str]], docs: list[dict], *,
+        attachment_data: bytes | None = None,
+    ) -> None:
         """Confirm the exact journal before any local mutation.
 
         No await separates the precondition, put, verification and apply:
@@ -958,6 +964,11 @@ class JournalBackend:
                 or journal.docs != docs
             ):
                 raise StorageError("journal read-back verification failed")
+            if attachment_data is not None and assemble_binary([
+                journal.chunks[chunk_id]
+                for chunk_id in journal.docs[0]["children"]
+            ]) != attachment_data:
+                raise StorageError("journal read-back verification failed")
             store.apply_journal(name, journal.chunks, journal.docs)
             store.last_sent_key = name
         except StorageError:
@@ -982,6 +993,37 @@ class JournalBackend:
                 f"note {path!r} has a binary extension; "
                 "this server writes textual notes only"
             )
+        return await self._write_content(
+            path, content, len(content.encode("utf-8")), doc_type_for(path),
+            create=create, overwrite=overwrite, mtime=mtime,
+            expected_rev=expected_rev,
+        )
+
+    async def write_attachment(
+        self, path: str, data: bytes, *, create: bool = False,
+        overwrite: bool = False, expected_rev: str | None = None,
+    ) -> NoteMeta:
+        """Write a binary LiveSync newnote; cap decoded data at 32 MiB."""
+        validate_vault_path(path)
+        if is_writable_text_path(path):
+            raise BinaryNoteError(f"note {path!r}: textual path; use write_note")
+        if len(data) > MAX_ATTACHMENT_BYTES:
+            raise ValueError(
+                f"attachment exceeds 32 MiB cap ({MAX_ATTACHMENT_BYTES} bytes); "
+                f"actual size {len(data)} bytes"
+            )
+        return await self._write_content(
+            path, encode_newnote(data)[0], len(data), "newnote",
+            attachment_data=data,
+            create=create, overwrite=overwrite, expected_rev=expected_rev,
+        )
+
+    async def _write_content(
+        self, path: str, content: str, size: int, doc_type: str, *,
+        create: bool, overwrite: bool, mtime: int | None = None,
+        expected_rev: str | None = None, attachment_data: bytes | None = None,
+    ) -> NoteMeta:
+        """Publish encoded chunk data through the shared write transaction."""
         store = self._require_store("write_note")
         doc_id = self._doc_id(path)
         parent = store.winner(doc_id)
@@ -996,19 +1038,19 @@ class JournalBackend:
         stamp = int(time.time() * 1000) if mtime is None else mtime
         if parent is None:
             body = new_metadata_doc(
-                path, [chunk_id], len(content.encode("utf-8")),
-                doc_type_for(path), stamp, stamp,
+                path, [chunk_id], size,
+                doc_type, stamp, stamp,
             )
         else:
             body = clone_metadata(parent)
             body.pop("deleted", None)
             body.update(
                 children=[chunk_id], eden={}, mtime=stamp,
-                size=len(content.encode("utf-8")), type=doc_type_for(path),
+                size=size, type=doc_type,
             )
         body.update(_id=doc_id, path=canonical_path(path))
         body = self._next_revision(body, parent)
-        self._publish([(chunk_id, content)], [body])
+        self._publish([(chunk_id, content)], [body], attachment_data=attachment_data)
         return self._meta_from_doc(body)
 
     async def delete_note(

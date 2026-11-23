@@ -1,0 +1,205 @@
+"""Binary upload contracts shared by both storage implementations and MCP."""
+import base64
+import hashlib
+import json
+
+import pytest
+
+import server
+from journal_codec import MAX_LINE_BYTES, parse_journal, serialize_journal
+from livesync_format import ForbiddenPathError
+from storage_base import BinaryNoteError, ConcurrentModification, NoteExists, NoteNotFound
+from storage_journal import JournalBackend
+from tests.fake_backend import FakeBackend
+from tests.test_storage_couchdb import fake_backend
+from tests.test_storage_journal import make_backend, healthy_bucket
+
+CAP = 32 * 1024 * 1024
+DATA = b"%PDF-1.7\n\x00\xff\x80scan\r\n"
+
+
+@pytest.fixture(params=["couchdb", "journal"])
+async def backend(request, tmp_path):
+    if request.param == "couchdb":
+        async with fake_backend() as (backend, log):
+            yield backend
+    else:
+        backend, _ = make_backend(tmp_path, healthy_bucket())
+        await backend.startup_check()
+        try:
+            yield backend
+        finally:
+            await backend.close()
+
+
+async def test_attachment_roundtrip_and_write_semantics(backend):
+    with pytest.raises(NoteNotFound):
+        await backend.write_attachment("scan.pdf", DATA)
+    meta = await backend.write_attachment("scan.pdf", DATA, create=True)
+    assert meta["size"] == len(DATA)
+    assert meta["type"] == "newnote"
+    note = await backend.read_note("scan.pdf")
+    assert note["is_text"] is False
+    assert note["data"] == DATA
+    assert note["rev"] == meta["rev"]
+    with pytest.raises(NoteExists):
+        await backend.write_attachment("scan.pdf", b"new", create=True)
+    updated = await backend.write_attachment("scan.pdf", b"new", create=True, overwrite=True)
+    assert updated["ctime"] == meta["ctime"]
+    with pytest.raises(ConcurrentModification):
+        await backend.write_attachment("scan.pdf", b"stale", expected_rev=meta["rev"])
+    assert (await backend.read_note("scan.pdf"))["data"] == b"new"
+    await backend.delete_note("scan.pdf")
+    with pytest.raises(NoteNotFound):
+        await backend.write_attachment("scan.pdf", DATA)
+    await backend.write_attachment("scan.pdf", DATA, create=True)
+    assert (await backend.read_note("scan.pdf"))["data"] == DATA
+
+
+@pytest.mark.parametrize("path", ["note.md", "board.canvas", "db.base", "note.MD"])
+async def test_attachment_refuses_text(backend, path):
+    with pytest.raises(BinaryNoteError, match="textual path; use write_note"):
+        await backend.write_attachment(path, DATA, create=True)
+
+
+async def test_attachment_forbidden_before_text_or_size(backend):
+    with pytest.raises(ForbiddenPathError):
+        await backend.write_attachment(".hidden.md", b"x" * (CAP + 1), create=True)
+
+
+async def test_attachment_cap(backend):
+    with pytest.raises(ValueError, match=r"32 MiB.*33554433"):
+        await backend.write_attachment("scan.pdf", b"x" * (CAP + 1), create=True)
+    assert await backend.read_note("scan.pdf") is None
+
+
+async def test_journal_attachment_two_peer_replay(tmp_path):
+    writer, storage = make_backend(tmp_path / "writer", healthy_bucket())
+    reader = JournalBackend(storage, tmp_path / "reader")
+    try:
+        await writer.startup_check()
+        await writer.write_attachment("scans/scan.pdf", DATA, create=True)
+        await reader.startup_check()
+        await reader.refresh(force=True)
+        note = await reader.read_note("scans/scan.pdf")
+        assert note["data"] == DATA
+        assert note["is_text"] is False
+        assert note["meta"]["size"] == len(DATA)
+    finally:
+        await writer.close()
+        await reader.close()
+
+
+def test_max_attachment_fits_journal_line():
+    encoded = base64.b64encode(b"x" * CAP).decode("ascii")
+    payload = serialize_journal([("h:0123456789abcdef", encoded)], [])
+    assert max(map(len, payload.splitlines())) < MAX_LINE_BYTES == 64 * 1024 * 1024
+    assert parse_journal(payload).chunks["h:0123456789abcdef"] == encoded
+
+
+@pytest.mark.parametrize("content", ["YQ", "!!!!", "YQ===", "é"])
+async def test_tool_invalid_base64(monkeypatch, content):
+    fake = FakeBackend()
+    monkeypatch.setattr(server, "backend", fake)
+    result = await server.obsidian_upload_attachment("scan.pdf", content)
+    assert "base64" in result.lower() and "error" in result.lower()
+    assert not fake.notes
+
+
+async def test_tool_upload_response_and_fetch(monkeypatch):
+    fake = FakeBackend()
+    monkeypatch.setattr(server, "backend", fake)
+    result = json.loads(await server.obsidian_upload_attachment("scan.pdf", base64.b64encode(DATA).decode()))
+    expected = {"path": "scan.pdf", "size": len(DATA), "sha256": hashlib.sha256(DATA).hexdigest()}
+    assert result == expected
+    assert fake.notes["scan.pdf"]["data"] == DATA
+    fetched = json.loads(await server.obsidian_fetch("scan.pdf"))
+    assert all(fetched[k] == v for k, v in expected.items())
+    assert "content" not in fetched and "data" not in fetched
+
+
+async def test_journal_verifies_original_bytes_before_local_apply(tmp_path, monkeypatch):
+    import storage_journal
+    from storage_base import StorageError
+    backend, _ = make_backend(tmp_path, healthy_bucket())
+    try:
+        await backend.startup_check()
+        monkeypatch.setattr(storage_journal, "encode_newnote", lambda data: ["d3Jvbmc="])
+        with pytest.raises(StorageError, match="read-back verification"):
+            await backend.write_attachment("scan.pdf", DATA, create=True)
+        assert await backend.read_note("scan.pdf") is None
+    finally:
+        await backend.close()
+
+
+async def test_tool_size_guard(monkeypatch):
+    fake = FakeBackend()
+    monkeypatch.setattr(server, "backend", fake)
+    result = await server.obsidian_upload_attachment("scan.pdf", base64.b64encode(b"x" * (CAP + 1)).decode())
+    assert "32 MiB" in result and "33554433" in result
+    assert not fake.notes
+
+
+async def test_tool_overwrite(monkeypatch):
+    fake = FakeBackend()
+    fake.add("scan.pdf", data=DATA)
+    monkeypatch.setattr(server, "backend", fake)
+    assert "error" in (await server.obsidian_upload_attachment("scan.pdf", "eA==")).lower()
+    result = json.loads(await server.obsidian_upload_attachment("scan.pdf", "eA==", overwrite=True))
+    assert result["size"] == 1
+    assert fake.notes["scan.pdf"]["data"] == b"x"
+
+
+async def test_couchdb_stale_attachment_writes_nothing():
+    async with fake_backend() as (backend, log):
+        meta = await backend.write_attachment("scan.pdf", DATA, create=True)
+        await backend.write_attachment("scan.pdf", b"new", expected_rev=meta["rev"])
+        log.clear()
+        with pytest.raises(ConcurrentModification):
+            await backend.write_attachment("scan.pdf", b"stale", expected_rev=meta["rev"])
+        assert all(req.method == "GET" for req in log)
+
+
+async def test_journal_stale_attachment_writes_nothing(tmp_path):
+    backend, storage = make_backend(tmp_path, healthy_bucket())
+    try:
+        await backend.startup_check()
+        meta = await backend.write_attachment("scan.pdf", DATA, create=True)
+        await backend.write_attachment("scan.pdf", b"new", expected_rev=meta["rev"])
+        storage.put_calls.clear()
+        with pytest.raises(ConcurrentModification):
+            await backend.write_attachment("scan.pdf", b"stale", expected_rev=meta["rev"])
+        assert storage.put_calls == []
+        assert (await backend.read_note("scan.pdf"))["data"] == b"new"
+    finally:
+        await backend.close()
+
+
+@pytest.mark.parametrize("encrypted", [False, True])
+async def test_couchdb_attachment_refuses_corrupt_shared_chunk(encrypted):
+    from livesync_format import chunk_id_for
+    from storage_base import StorageError
+    encoded = base64.b64encode(DATA).decode()
+    chunk_id = chunk_id_for(encoded)
+    docs = {chunk_id: {"_id": chunk_id, "type": "leaf", "data": encoded if encrypted else "corrupt", "e_": encrypted}}
+    async with fake_backend(docs) as (backend, log):
+        with pytest.raises(StorageError):
+            await backend.write_attachment("scan.pdf", DATA, create=True)
+        assert all(req.method == "GET" for req in log)
+
+
+@pytest.mark.parametrize("target", ["chunk", "metadata"])
+async def test_couchdb_attachment_requires_201(target):
+    from livesync_format import chunk_id_for
+    from storage_base import StorageUnavailable
+    chunk_id = chunk_id_for(base64.b64encode(DATA).decode())
+    async with fake_backend(put_202_ids=(chunk_id if target == "chunk" else "scan.pdf",)) as (backend, _):
+        with pytest.raises(StorageUnavailable, match="durable"):
+            await backend.write_attachment("scan.pdf", DATA, create=True)
+        assert await backend.read_note("scan.pdf") is None
+
+
+async def test_tool_textual_path_error(monkeypatch, backend):
+    monkeypatch.setattr(server, "backend", backend)
+    result = await server.obsidian_upload_attachment("note.md", "eA==")
+    assert "textual path" in result and "text note tools" in result

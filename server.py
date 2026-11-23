@@ -10,6 +10,8 @@ import secrets
 import sys
 import time
 import copy
+import base64
+import binascii
 import hashlib
 from contextlib import aclosing, asynccontextmanager
 from contextvars import ContextVar
@@ -29,6 +31,7 @@ from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
 from mcp.server.transport_security import TransportSecuritySettings
 from config import Config, ConfigError, load_config
 from storage_base import (
+    MAX_ATTACHMENT_BYTES,
     RenamePartialError, UnresolvedConflicts,
     StorageBackend, StorageError, NoteNotFound, NoteExists, BinaryNoteError,
     ConcurrentModification, UnsupportedVault, StorageUnavailable, NoteContent,
@@ -447,6 +450,39 @@ async def obsidian_search(query: str, regex: bool = False) -> str:
     return json.dumps(
         {"results": results, "skipped": skipped}, ensure_ascii=False, indent=2
     )
+
+
+@_tool
+@_tool_errors
+async def obsidian_upload_attachment(
+    path: str, content_b64: str, *, overwrite: bool = False,
+) -> str:
+    """Upload a binary attachment (PDF, scan, image) from strict base64.
+
+    Decoded data is capped at 32 MiB. Textual paths (.md/.base/.canvas,
+    etc.) must use the text note tools instead. Existing attachments require
+    overwrite=True. Returns path, decoded size, and SHA-256; binary fetch
+    returns metadata only.
+    """
+    try:
+        data = base64.b64decode(content_b64, validate=True)
+    except (binascii.Error, ValueError):
+        return "Error: invalid base64 content (characters or padding)."
+    if len(data) > MAX_ATTACHMENT_BYTES:
+        return (
+            f"Error: attachment exceeds 32 MiB cap ({MAX_ATTACHMENT_BYTES} bytes); "
+            f"actual size {len(data)} bytes."
+        )
+    try:
+        meta = await _backend().write_attachment(
+            path, data, create=True, overwrite=overwrite,
+        )
+    except BinaryNoteError:
+        return "Error: textual path; use the text note tools."
+    return json.dumps({
+        "path": meta["path"], "size": len(data),
+        "sha256": hashlib.sha256(data).hexdigest(),
+    }, ensure_ascii=False)
 
 
 # 2. obsidian-fetch
