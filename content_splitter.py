@@ -16,6 +16,10 @@ from collections.abc import Mapping
 import xxhash
 
 
+class UnsupportedWriterMode(ValueError):
+    """Readable vault settings whose writer is not implemented yet."""
+
+
 def _js_utf8(text: str) -> bytes:
     # Blob/TextEncoder replace lone JS surrogates with U+FFFD and combine pairs.
     return text.encode('utf-16-le', errors='surrogatepass').decode(
@@ -49,30 +53,47 @@ class ContentSplitter:
 
     def __init__(self, tweak_values: Mapping | None = None):
         settings = dict(tweak_values or {})
-        if settings.get('chunkSplitterVersion', 'v3-rabin-karp') != 'v3-rabin-karp':
-            raise ValueError('unsupported chunkSplitterVersion; v3-rabin-karp required')
-        if settings.get('hashAlg', 'xxhash64') != 'xxhash64':
-            raise ValueError('unsupported hashAlg; xxhash64 required')
+        self.minimum_chunk_size = self._number(settings, 'minimumChunkSize', 20)
+        custom = self._number(settings, 'customChunkSize', 0, allow_negative=True)
+        try:
+            self.absolute_max_piece_size = math.floor(102400 * (custom + 1))
+        except (OverflowError, ValueError) as exc:
+            raise ValueError('invalid customChunkSize') from exc
         if settings.get('encrypt'):
             raise ValueError('encrypted chunk IDs are unsupported')
+        unsupported = []
+        for name, default in (('chunkSplitterVersion', 'v3-rabin-karp'),
+                              ('hashAlg', 'xxhash64')):
+            value = settings.get(name, default)
+            if value != default:
+                unsupported.append(f'{name}={value}')
         # configuredIdKey runs even without encryption (idDerivation.ts:53-67).
         version = settings.get('idDerivationVersion', 0)
         key = settings.get('idDerivationKey', '')
         if type(version) is not int or version not in (0, 1):
-            raise ValueError('invalid idDerivationVersion')
+            unsupported.append(f'idDerivationVersion={version}')
         if (version == 0 and key != '') or (version == 1 and (
             not isinstance(key, str) or re.fullmatch('[0-9a-f]{64}', key) is None
         )):
-            raise ValueError('invalid idDerivationKey configuration')
-        self.minimum_chunk_size = self._number(settings, 'minimumChunkSize', 20)
-        custom = self._number(settings, 'customChunkSize', 0, allow_negative=True)
-        self.absolute_max_piece_size = math.floor(102400 * (custom + 1))
+            # Never expose the configured key in diagnostics or tool errors.
+            unsupported.append(f'idDerivationVersion={version}')
+            unsupported.append('idDerivationKey=<invalid configuration>')
+        if unsupported:
+            raise UnsupportedWriterMode(
+                'vault uses ' + ', '.join(unsupported) +
+                '; peer writes are not implemented for this mode yet — '
+                'reads, search and replay work'
+            )
 
     @staticmethod
     def _number(settings: dict, key: str, default: int, *, allow_negative=False) -> float:
         value = settings.get(key, default)
-        if (isinstance(value, bool) or not isinstance(value, (int, float))
-                or not math.isfinite(value) or (value < 0 and not allow_negative)):
+        try:
+            valid = (not isinstance(value, bool) and isinstance(value, (int, float))
+                     and math.isfinite(value) and (value >= 0 or allow_negative))
+        except (OverflowError, ValueError) as exc:
+            raise ValueError(f'invalid {key}') from exc
+        if not valid:
             raise ValueError(f'invalid {key}')
         return value
 

@@ -64,6 +64,9 @@ class FakeBackend:
     async def close(self):
         self._call("close")
 
+    def check_writer_support(self) -> None:
+        pass
+
     async def backend_info(self):
         self._call("backend_info")
         return {"backend": "fake"}

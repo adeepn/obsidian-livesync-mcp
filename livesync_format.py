@@ -22,7 +22,7 @@ import binascii
 import unicodedata
 from copy import deepcopy
 
-from content_splitter import ContentSplitter, chunk_id_for_piece
+from content_splitter import ContentSplitter, UnsupportedWriterMode, chunk_id_for_piece
 
 # Upstream isPlainText (path.ts): extensions stored as plain text chunks.
 TEXT_EXTENSIONS = frozenset(
@@ -406,11 +406,17 @@ def chunk_id_for(data: str) -> str:
     return chunk_id_for_piece(data)
 
 
+class UnsupportedWriterSettings(UnsupportedVaultSettings):
+    """Writer-only incompatibility; existing content remains readable."""
+
+
 def resolve_content_splitter(milestone_settings: dict) -> ContentSplitter:
     """Resolve preferred tweaks, refusing ambiguous per-device split settings."""
     try:
         splitters = [ContentSplitter(settings)
                      for settings in _milestone_setting_maps(milestone_settings)]
+    except UnsupportedWriterMode as exc:
+        raise UnsupportedWriterSettings(str(exc)) from exc
     except ValueError as exc:
         raise UnsupportedVaultSettings(str(exc)) from exc
     first = splitters[0]

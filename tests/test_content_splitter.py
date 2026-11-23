@@ -177,21 +177,23 @@ async def test_writers_skip_empty_decoded_text_pieces(tmp_path, backend_kind):
 @pytest.mark.parametrize('setting', [{'hashAlg': 'sha1'}, {'chunkSplitterVersion':'v2'},
                                      {'idDerivationVersion':1, 'idDerivationKey':'invalid'}])
 @pytest.mark.parametrize('backend_kind', ['couchdb', 'journal'])
-async def test_startup_refuses_unsupported_chunk_settings(tmp_path, setting, backend_kind):
+async def test_startup_records_unsupported_chunk_writer(tmp_path, setting, backend_kind):
     from tests.test_storage_couchdb import fake_vault
     from tests.test_storage_journal import make_backend, MILESTONE_KEY
-    from storage_base import UnsupportedVault
     milestone = {'tweak_values': {'PREFERRED': {'pathNormalizationVersion':0, **setting}}}
     if backend_kind == 'couchdb':
         async with fake_vault({'_local/obsydian_livesync_milestone':milestone}) as (backend, _, log):
-            with pytest.raises(UnsupportedVault):
-                await backend.startup_check()
+            await backend.startup_check()
+            assert (await backend.backend_info())['writer_supported'] is False
             assert all(r.method == 'GET' for r in log)
     else:
         backend, storage = make_backend(tmp_path, {MILESTONE_KEY:json.dumps(milestone).encode()})
-        with pytest.raises(UnsupportedVault):
+        try:
             await backend.startup_check()
-        assert storage.put_calls == []
+            assert (await backend.backend_info())['writer_supported'] is False
+            assert storage.put_calls == []
+        finally:
+            await backend.close()
 
 async def test_journal_refuses_colliding_pieces_before_publication(tmp_path, monkeypatch):
     import storage_journal

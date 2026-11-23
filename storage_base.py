@@ -65,6 +65,10 @@ class UnsupportedVault(StorageError):
     obfuscation, ...)."""
 
 
+class WriterUnsupported(StorageError):
+    """A writer-only compatibility refusal safe to display to tool clients."""
+
+
 class StorageUnavailable(StorageError):
     """The storage backend is unreachable or rejected the request."""
 
@@ -126,6 +130,13 @@ class StorageBackend(Protocol):
         Raises ``StorageUnavailable`` when the backend is unreachable and
         ``UnsupportedVault`` for E2EE/obfuscation vaults
         (audits B5/B6/B14).
+        """
+        ...
+
+    def check_writer_support(self) -> None:
+        """Raise WriterUnsupported before tool refresh or any mutation.
+
+        This check inspects resolved startup settings without storage I/O.
         """
         ...
 
@@ -234,7 +245,11 @@ class StorageBackend(Protocol):
         ...
 
     async def backend_info(self) -> dict:
-        """Diagnostics for ``vault_stats`` and startup logs."""
+        """Diagnostics for ``vault_stats`` and startup logs.
+
+        Concrete backends report ``writer_supported`` and an optional
+        ``writer_unsupported_reason`` independently of read compatibility.
+        """
         ...
 
     async def close(self) -> None:

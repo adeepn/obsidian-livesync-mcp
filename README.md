@@ -111,8 +111,11 @@ has no v3 effect. Text at least 4 MiB uses binary splitting thresholds
 while retaining text chunks. Binary data is split before each piece is
 base64-encoded. Empty content has no children; repeated pieces retain their
 ordered references. Explicit older splitter versions and other hash
-algorithms are refused at startup. Existing chunks remain readable under
-their original IDs; a fresh write derives the upstream IDs.
+algorithms allow startup, reads, search and journal replay. All mutations
+are refused with a tool error until that writer mode is implemented.
+`backend_info` reports `writer_supported` and `writer_unsupported_reason`.
+Existing chunks remain readable under their original IDs; a supported fresh
+write derives the upstream IDs.
 
 
 ## Setup

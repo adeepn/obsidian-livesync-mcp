@@ -56,6 +56,7 @@ from livesync_format import (
     PATH_IDENTITY_LEGACY,
     ForbiddenPathError,
     UnsupportedVaultSettings,
+    UnsupportedWriterSettings,
     assemble_binary,
     canonical_path,
     resolve_content_splitter,
@@ -82,6 +83,7 @@ from storage_base import (
     StorageError,
     StorageUnavailable,
     UnsupportedVault,
+    WriterUnsupported,
 )
 
 logger = logging.getLogger(__name__)
@@ -212,6 +214,7 @@ class JournalBackend:
         self.state_size_warn_mb = state_size_warn_mb
         self.refresh_min_interval = refresh_min_interval
         self._store: JournalStore | None = None
+        self._writer_unsupported_reason = None
         self._splitter = ContentSplitter()
         # Throttle clock (monotonic) and the wall-clock stamp for diagnostics.
         self._last_refresh_failure: Exception | None = None
@@ -232,6 +235,7 @@ class JournalBackend:
         present. A bucket without milestone and journals is treated as a
         fresh vault with legacy path identity (logged).
         """
+        self._writer_unsupported_reason = None
         milestone = self._load_milestone()
         if milestone is None:
             if self._has_remote_journals():
@@ -254,6 +258,9 @@ class JournalBackend:
             try:
                 identity = resolve_path_identity(milestone)
                 self._splitter = resolve_content_splitter(milestone)
+            except UnsupportedWriterSettings as exc:
+                self._splitter = None
+                self._writer_unsupported_reason = str(exc)
             except UnsupportedVaultSettings as exc:
                 raise UnsupportedVault(str(exc)) from exc
 
@@ -386,6 +393,8 @@ class JournalBackend:
         """Diagnostics for ``vault_stats`` and startup logs."""
         store = self._store
         return {
+            "writer_supported": self._writer_unsupported_reason is None,
+            "writer_unsupported_reason": self._writer_unsupported_reason,
             "backend": "s3-journal",
             "protocol_notes": list(self._protocol_notes),
             "state_dir_path": str(self._state_dir),
@@ -995,6 +1004,10 @@ class JournalBackend:
         except (ValueError, OSError, sqlite3.Error) as exc:
             raise StorageError("journal publication or verification failed") from exc
 
+    def check_writer_support(self) -> None:
+        if self._writer_unsupported_reason is not None:
+            raise WriterUnsupported(self._writer_unsupported_reason)
+
     async def write_note(
         self,
         path: str,
@@ -1006,6 +1019,7 @@ class JournalBackend:
         expected_rev: str | None = None,
     ) -> NoteMeta:
         """Replace a text body; only explicit create resurrects a tombstone."""
+        self.check_writer_support()
         validate_vault_path(path)
         if not is_writable_text_path(path):
             raise BinaryNoteError(
@@ -1023,6 +1037,7 @@ class JournalBackend:
         overwrite: bool = False, expected_rev: str | None = None,
     ) -> NoteMeta:
         """Write a binary LiveSync newnote; cap decoded data at 32 MiB."""
+        self.check_writer_support()
         validate_vault_path(path)
         if is_writable_text_path(path):
             raise BinaryNoteError(f"note {path!r}: textual path; use write_note")
@@ -1085,6 +1100,7 @@ class JournalBackend:
         self, path: str, expected_rev: str | None = None
     ) -> bool:
         """Append a soft deletion, preserving all body references."""
+        self.check_writer_support()
         validate_vault_path(path)
         store = self._require_store("delete_note")
         parent = store.winner(self._doc_id(path))
@@ -1126,6 +1142,7 @@ class JournalBackend:
         is never raised by this backend. Failed verification reports
         StorageError.
         """
+        self.check_writer_support()
         validate_vault_path(path)
         validate_vault_path(new_path)
         new_path = canonical_path(new_path)
@@ -1152,6 +1169,7 @@ class JournalBackend:
         self, path: str, new_path: str, *, overwrite: bool = False
     ) -> NoteMeta:
         """Copy references (including eden), preserving body and ctime."""
+        self.check_writer_support()
         validate_vault_path(path)
         validate_vault_path(new_path)
         source = self._source_doc(path)

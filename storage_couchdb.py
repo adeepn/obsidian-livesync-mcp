@@ -62,6 +62,7 @@ from livesync_format import (
     validate_document_identity,
     resolve_path_identity,
     UnsupportedVaultSettings,
+    UnsupportedWriterSettings,
     PATH_IDENTITY_LEGACY,
     soft_delete_revision,
     validate_vault_path,
@@ -79,6 +80,7 @@ from storage_base import (
     StorageError,
     StorageUnavailable,
     UnsupportedVault,
+    WriterUnsupported,
 )
 
 logger = logging.getLogger(__name__)
@@ -145,6 +147,7 @@ class CouchDBBackend:
         self._scan_limits = (scan_max_notes, scan_max_bytes)
         self._database = database
         self._path_identity = PATH_IDENTITY_LEGACY
+        self._writer_unsupported_reason = None
         self._splitter = ContentSplitter()
         self._client = httpx.AsyncClient(
             base_url=url if url.endswith("/") else url + "/",
@@ -353,6 +356,7 @@ class CouchDBBackend:
     # -- StorageBackend: lifecycle -------------------------------------------
 
     async def startup_check(self) -> None:
+        self._writer_unsupported_reason = None
         self._splitter = ContentSplitter()
         await self._db_info()
         version_doc = await self._get_doc(_VERSION_DOC_ID)
@@ -382,6 +386,9 @@ class CouchDBBackend:
         try:
             self._path_identity = resolve_path_identity(body)
             self._splitter = resolve_content_splitter(body)
+        except UnsupportedWriterSettings as exc:
+            self._splitter = None
+            self._writer_unsupported_reason = str(exc)
         except UnsupportedVaultSettings as exc:
             raise UnsupportedVault(str(exc)) from exc
 
@@ -402,6 +409,8 @@ class CouchDBBackend:
     async def backend_info(self) -> dict:
         info = await self._db_info()
         return {
+            "writer_supported": self._writer_unsupported_reason is None,
+            "writer_unsupported_reason": self._writer_unsupported_reason,
             "backend": "couchdb",
             "path_identity": self._path_identity,
             "database": self._database,
@@ -867,6 +876,10 @@ class CouchDBBackend:
         revision.pop("_conflicts", None)
         await self._put_doc(self._path2id(path), revision)
 
+    def check_writer_support(self) -> None:
+        if self._writer_unsupported_reason is not None:
+            raise WriterUnsupported(self._writer_unsupported_reason)
+
     async def write_note(
         self,
         path: str,
@@ -888,6 +901,7 @@ class CouchDBBackend:
         GET inside this write and refuses the write entirely on mismatch
         — a device edit that landed in between is never overwritten.
         """
+        self.check_writer_support()
         validate_vault_path(path)
         if not is_writable_text_path(path):
             raise BinaryNoteError(
@@ -906,6 +920,7 @@ class CouchDBBackend:
         overwrite: bool = False, expected_rev: str | None = None,
     ) -> NoteMeta:
         """Write a binary LiveSync newnote; cap decoded data at 32 MiB."""
+        self.check_writer_support()
         validate_vault_path(path)
         if is_writable_text_path(path):
             raise BinaryNoteError(f"note {path!r}: textual path; use write_note")
@@ -972,6 +987,7 @@ class CouchDBBackend:
         reserved for LiveSync's own GC (audit B1). ``expected_rev``
         guards the read-through race exactly as in ``write_note``.
         """
+        self.check_writer_support()
         validate_vault_path(path)
         doc = await self._get_doc(self._path2id(path), conflicts=True)
         self._check_expected_rev(doc, path, expected_rev)
@@ -992,6 +1008,7 @@ class CouchDBBackend:
         first, and only then is the source soft-deleted, so a failed
         copy can duplicate a note but never lose one.
         """
+        self.check_writer_support()
         validate_vault_path(path)
         validate_vault_path(new_path)
         new_path = canonical_path(new_path)
@@ -1031,6 +1048,7 @@ class CouchDBBackend:
         self, path: str, new_path: str, *, overwrite: bool = False
     ) -> NoteMeta:
         """Duplicate a note by re-publishing its chunk references."""
+        self.check_writer_support()
         validate_vault_path(path)
         validate_vault_path(new_path)
         doc = await self._get_note_doc(path)

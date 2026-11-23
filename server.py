@@ -1,6 +1,7 @@
 """Obsidian MCP Server — remote MCP server for Obsidian via CouchDB/LiveSync."""
 
 import json
+import inspect
 import asyncio
 import regex_runner
 import logging
@@ -33,7 +34,7 @@ from config import Config, ConfigError, load_config
 from storage_base import (
     MAX_ATTACHMENT_BYTES,
     RenamePartialError, UnresolvedConflicts,
-    StorageBackend, StorageError, NoteNotFound, NoteExists, BinaryNoteError,
+    WriterUnsupported, StorageBackend, StorageError, NoteNotFound, NoteExists, BinaryNoteError,
     ConcurrentModification, UnsupportedVault, StorageUnavailable, NoteContent,
 )
 from storage_couchdb import CouchDBBackend
@@ -175,7 +176,9 @@ def create_app(cfg: Config) -> FastMCP:
 # --- Helper functions ---
 
 def _storage_message(error: StorageError) -> str:
-    """Never forward backend exception text (URLs/revisions) to clients."""
+    """Map storage errors; only writer compatibility diagnostics are public."""
+    if isinstance(error, WriterUnsupported):
+        return f"Error: {error}"
     if isinstance(error, RenamePartialError):
         if error.source_state != "live":
             return (
@@ -210,15 +213,29 @@ def _storage_message(error: StorageError) -> str:
     return "Error: unable to access vault storage."
 
 
-def _tool_errors(handler=None, *, force_refresh: bool = False):
+def _tool_errors(
+    handler=None, *, force_refresh: bool = False, writer: bool = False,
+    read_action: str | None = None,
+):
     if handler is None:
-        return lambda fn: _tool_errors(fn, force_refresh=force_refresh)
+        return lambda fn: _tool_errors(
+            fn, force_refresh=force_refresh, writer=writer, read_action=read_action,
+        )
+
+    signature = inspect.signature(handler) if read_action is not None else None
 
     @wraps(handler)
     async def guarded(*args, **kwargs):
         if _backend() is None:
             return "Error: server not started; storage backend is unavailable."
         try:
+            is_write = writer
+            if is_write and signature is not None:
+                arguments = signature.bind(*args, **kwargs)
+                arguments.apply_defaults()
+                is_write = arguments.arguments['action'] != read_action
+            if is_write:
+                _backend().check_writer_support()
             if force_refresh:
                 await _backend().refresh(force=True)
             else:
@@ -455,7 +472,7 @@ async def obsidian_search(query: str, regex: bool = False) -> str:
 
 
 @_tool
-@_tool_errors
+@_tool_errors(writer=True)
 async def obsidian_upload_attachment(
     path: str, content_b64: str, *, overwrite: bool = False,
 ) -> str:
@@ -574,7 +591,7 @@ async def obsidian_fetch(path: str, include_properties: bool = True, include_sta
 
 # 3. obsidian-create-note
 @_tool
-@_tool_errors
+@_tool_errors(writer=True)
 async def obsidian_create_note(
     path: str,
     content: str = "",
@@ -604,7 +621,7 @@ async def obsidian_create_note(
 
 # 4. obsidian-update-note
 @_tool
-@_tool_errors
+@_tool_errors(writer=True)
 async def obsidian_update_note(
     path: str,
     mode: str,
@@ -709,7 +726,7 @@ async def obsidian_update_note(
 
 # 5. obsidian-delete-note
 @_tool
-@_tool_errors
+@_tool_errors(writer=True)
 async def obsidian_delete_note(path: str) -> str:
     """Delete a note from the vault.
 
@@ -725,7 +742,7 @@ async def obsidian_delete_note(path: str) -> str:
 
 # 6. obsidian-move-note
 @_tool
-@_tool_errors
+@_tool_errors(writer=True)
 async def obsidian_move_note(path: str, new_path: str) -> str:
     """Move or rename a note.
 
@@ -739,7 +756,7 @@ async def obsidian_move_note(path: str, new_path: str) -> str:
 
 # 7. obsidian-duplicate-note
 @_tool
-@_tool_errors
+@_tool_errors(writer=True)
 async def obsidian_duplicate_note(path: str, new_path: str = "") -> str:
     """Duplicate a note.
 
@@ -785,7 +802,7 @@ async def obsidian_list_notes(
 
 # 9. obsidian-manage-properties
 @_tool
-@_tool_errors
+@_tool_errors(writer=True, read_action="get")
 async def obsidian_manage_properties(
     path: str,
     action: str = "get",
@@ -832,7 +849,7 @@ async def obsidian_manage_properties(
 
 # 10. obsidian-manage-tags
 @_tool
-@_tool_errors
+@_tool_errors(writer=True, read_action="list")
 async def obsidian_manage_tags(
     path: str,
     action: str = "list",
@@ -1008,7 +1025,7 @@ async def obsidian_find_hub_notes(min_links: int = 3) -> str:
 
 # 16. obsidian-canvas-node
 @_tool
-@_tool_errors
+@_tool_errors(writer=True)
 async def obsidian_canvas_node(
     path: str,
     action: str = "add",
@@ -1097,7 +1114,7 @@ async def obsidian_canvas_node(
 
 # 17. obsidian-canvas-edge
 @_tool
-@_tool_errors
+@_tool_errors(writer=True)
 async def obsidian_canvas_edge(
     path: str,
     action: str = "add",
@@ -1210,7 +1227,7 @@ async def obsidian_vault_stats() -> str:
 
 # 19. obsidian-create-from-template
 @_tool
-@_tool_errors
+@_tool_errors(writer=True)
 async def obsidian_create_from_template(
     template_path: str,
     new_path: str,
