@@ -1632,7 +1632,7 @@ async def test_publication_rejects_oversized_chunk_before_put(tmp_path):
     backend, storage = make_backend(tmp_path, healthy_bucket())
     await backend.startup_check()
     with pytest.raises(StorageError, match="line length"):
-        await backend.write_note("big.md", "x" * (64 * 1024**2 + 1), create=True)
+        backend._publish([("h:oversized", "x" * (64 * 1024**2 + 1))], [])
     assert storage.put_calls == []
     assert backend._store.winner("big.md") is None
 

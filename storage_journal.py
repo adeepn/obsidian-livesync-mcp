@@ -51,16 +51,16 @@ from journal_codec import (
     serialize_journal,
 )
 from journal_store import EncryptedNoteError, JournalStore, parse_rev
+from content_splitter import ContentSplitter, chunk_id_for_piece
 from livesync_format import (
     PATH_IDENTITY_LEGACY,
     ForbiddenPathError,
     UnsupportedVaultSettings,
     assemble_binary,
     canonical_path,
-    chunk_id_for,
+    resolve_content_splitter,
     clone_metadata,
     doc_type_for,
-    encode_newnote,
     is_note_document,
     is_writable_text_path,
     new_metadata_doc,
@@ -212,6 +212,7 @@ class JournalBackend:
         self.state_size_warn_mb = state_size_warn_mb
         self.refresh_min_interval = refresh_min_interval
         self._store: JournalStore | None = None
+        self._splitter = ContentSplitter()
         # Throttle clock (monotonic) and the wall-clock stamp for diagnostics.
         self._last_refresh_failure: Exception | None = None
         self._last_refresh: float | None = None
@@ -243,6 +244,7 @@ class JournalBackend:
                 "treating it as a fresh vault with legacy path identity"
             )
             identity = PATH_IDENTITY_LEGACY
+            self._splitter = ContentSplitter()
         else:
             if milestone.get("locked") is True:
                 logger.warning(
@@ -251,6 +253,7 @@ class JournalBackend:
                 )
             try:
                 identity = resolve_path_identity(milestone)
+                self._splitter = resolve_content_splitter(milestone)
             except UnsupportedVaultSettings as exc:
                 raise UnsupportedVault(str(exc)) from exc
 
@@ -1029,13 +1032,13 @@ class JournalBackend:
                 f"actual size {len(data)} bytes"
             )
         return await self._write_content(
-            path, encode_newnote(data)[0], len(data), "newnote",
+            path, data, len(data), "newnote",
             attachment_data=data,
             create=create, overwrite=overwrite, expected_rev=expected_rev,
         )
 
     async def _write_content(
-        self, path: str, content: str, size: int, doc_type: str, *,
+        self, path: str, content: str | bytes, size: int, doc_type: str, *,
         create: bool, overwrite: bool, mtime: int | None = None,
         expected_rev: str | None = None, attachment_data: bytes | None = None,
     ) -> NoteMeta:
@@ -1050,24 +1053,32 @@ class JournalBackend:
             raise NoteExists(f"note already exists: {path}")
         if not live and not create:
             raise NoteNotFound(f"note not found: {path}")
-        chunk_id = chunk_id_for(content)
-        self._validate_chunk_reuse(chunk_id, content)
+        pieces = [piece for piece in self._splitter.split(content, path=path) if piece]
+        children = [chunk_id_for_piece(piece) for piece in pieces]
+        unique = {}
+        for chunk_id, piece in zip(children, pieces):
+            if chunk_id in unique and unique[chunk_id] != piece:
+                raise StorageError('content chunks with the same id hold different data')
+            unique[chunk_id] = piece
+        chunks = list(unique.items())
+        for chunk_id, piece in chunks:
+            self._validate_chunk_reuse(chunk_id, piece)
         stamp = int(time.time() * 1000) if mtime is None else mtime
         if parent is None:
             body = new_metadata_doc(
-                path, [chunk_id], size,
+                path, children, size,
                 doc_type, stamp, stamp,
             )
         else:
             body = clone_metadata(parent)
             body.pop("deleted", None)
             body.update(
-                children=[chunk_id], eden={}, mtime=stamp,
+                children=children, eden={}, mtime=stamp,
                 size=size, type=doc_type,
             )
         body.update(_id=doc_id, path=canonical_path(path))
         body = self._next_revision(body, parent)
-        self._publish([(chunk_id, content)], [body], attachment_data=attachment_data)
+        self._publish(chunks, [body], attachment_data=attachment_data)
         return self._meta_from_doc(body)
 
     async def delete_note(

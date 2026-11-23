@@ -1,7 +1,6 @@
 """Tests for LiveSync path/namespace rules and document/chunk codecs."""
 
 import base64
-import hashlib
 import unicodedata
 
 import pytest
@@ -190,9 +189,8 @@ def test_chunk_id_deterministic():
     assert chunk_id != chunk_id_for("different content")
 
 
-def test_chunk_id_sha256_prefix():
-    expected = "h:" + hashlib.sha256("body".encode("utf-8")).hexdigest()[:16]
-    assert chunk_id_for("body") == expected
+def test_chunk_id_upstream_xxhash64_vector():
+    assert chunk_id_for("helloWorld") == "h:37me21jj44pcc"
 
 
 def test_metadata_doc_shape():

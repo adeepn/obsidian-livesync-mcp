@@ -119,12 +119,11 @@ async def test_tool_upload_response_and_fetch(monkeypatch):
 
 
 async def test_journal_verifies_original_bytes_before_local_apply(tmp_path, monkeypatch):
-    import storage_journal
     from storage_base import StorageError
     backend, _ = make_backend(tmp_path, healthy_bucket())
     try:
         await backend.startup_check()
-        monkeypatch.setattr(storage_journal, "encode_newnote", lambda data: ["d3Jvbmc="])
+        monkeypatch.setattr(backend._splitter, "split", lambda data, **kwargs: ["d3Jvbmc="])
         with pytest.raises(StorageError, match="read-back verification"):
             await backend.write_attachment("scan.pdf", DATA, create=True)
         assert await backend.read_note("scan.pdf") is None

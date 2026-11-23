@@ -45,6 +45,7 @@ from scan_budget import ScanBudget
 
 import httpx
 
+from content_splitter import ContentSplitter, chunk_id_for_piece
 from livesync_format import (
     ForbiddenPathError, EncryptedInlineChunk,
     clone_metadata, extract_inline_chunks, legacy_body,
@@ -52,9 +53,8 @@ from livesync_format import (
     assemble_binary,
     assemble_text,
     canonical_path,
-    chunk_id_for,
+    resolve_content_splitter,
     doc_type_for,
-    encode_newnote,
     is_text_doc,
     is_writable_text_path,
     new_metadata_doc,
@@ -145,6 +145,7 @@ class CouchDBBackend:
         self._scan_limits = (scan_max_notes, scan_max_bytes)
         self._database = database
         self._path_identity = PATH_IDENTITY_LEGACY
+        self._splitter = ContentSplitter()
         self._client = httpx.AsyncClient(
             base_url=url if url.endswith("/") else url + "/",
             auth=(username, password),
@@ -352,6 +353,7 @@ class CouchDBBackend:
     # -- StorageBackend: lifecycle -------------------------------------------
 
     async def startup_check(self) -> None:
+        self._splitter = ContentSplitter()
         await self._db_info()
         version_doc = await self._get_doc(_VERSION_DOC_ID)
         if version_doc is not None:
@@ -379,6 +381,7 @@ class CouchDBBackend:
         body = body if isinstance(body, dict) else {}
         try:
             self._path_identity = resolve_path_identity(body)
+            self._splitter = resolve_content_splitter(body)
         except UnsupportedVaultSettings as exc:
             raise UnsupportedVault(str(exc)) from exc
 
@@ -771,10 +774,10 @@ class CouchDBBackend:
     async def _write_chunk(self, path: str, data: str) -> str:
         """PUT one content chunk (before any metadata change).
 
-        Chunk ids are deterministic (``chunk_id_for``), so a chunk
+        Chunk ids are deterministic (``chunk_id_for_piece``), so a chunk
         already stored under the computed id *should* hold exactly this
         data — but it is verified, never trusted: a differing or corrupt
-        chunk under the id (a sha256-16 truncation collision, or a
+        chunk under the id (a hash collision, or a
         damaged shared chunk) must not be published as the note's
         content. On mismatch the write aborts with the metadata
         untouched; the stored chunk is never overwritten or "repaired"
@@ -782,7 +785,7 @@ class CouchDBBackend:
         or rewritten (audit B1); a PUT happens only when the chunk is
         absent, so rewriting identical content never conflicts.
         """
-        chunk_id = chunk_id_for(data)
+        chunk_id = chunk_id_for_piece(data)
         existing = await self._get_doc(chunk_id)
         if existing is not None:
             if (
@@ -912,12 +915,12 @@ class CouchDBBackend:
                 f"actual size {len(data)} bytes"
             )
         return await self._write_content(
-            path, encode_newnote(data)[0], len(data), "newnote",
+            path, data, len(data), "newnote",
             create=create, overwrite=overwrite, expected_rev=expected_rev,
         )
 
     async def _write_content(
-        self, path: str, content: str, size: int, doc_type: str, *,
+        self, path: str, content: str | bytes, size: int, doc_type: str, *,
         create: bool, overwrite: bool, mtime: int | None = None,
         expected_rev: str | None = None,
     ) -> NoteMeta:
@@ -933,7 +936,8 @@ class CouchDBBackend:
         if not live and not create:
             raise NoteNotFound(f"note not found: {path}")
 
-        children = [await self._write_chunk(path, content)]
+        children = [await self._write_chunk(path, piece)
+                    for piece in self._splitter.split(content, path=path) if piece]
         new_mtime = _now_ms() if mtime is None else mtime
         if doc is None:
             body = new_metadata_doc(

@@ -19,9 +19,10 @@ from __future__ import annotations
 
 import base64
 import binascii
-import hashlib
 import unicodedata
 from copy import deepcopy
+
+from content_splitter import ContentSplitter, chunk_id_for_piece
 
 # Upstream isPlainText (path.ts): extensions stored as plain text chunks.
 TEXT_EXTENSIONS = frozenset(
@@ -186,6 +187,12 @@ _RECOGNIZED_TWEAK_KEYS = frozenset(
         "encrypt",
         "usePathObfuscation",
         "handleFilenameCaseSensitive",
+        "chunkSplitterVersion",
+        "hashAlg",
+        "minimumChunkSize",
+        "customChunkSize",
+        "idDerivationVersion",
+        "idDerivationKey",
     }
 )
 
@@ -390,23 +397,28 @@ def assemble_binary(chunk_datas: list[str]) -> bytes:
 
 
 def encode_newnote(data: bytes) -> list[str]:
-    """Encode a body as newnote chunk data (v1: a single chunk).
-
-    The inverse of ``assemble_binary``: the whole body becomes one
-    base64-encoded chunk. Multi-chunk splitting can be added later without
-    changing readers, because decoding is per chunk either way.
-    """
-    return [base64.b64encode(data).decode("ascii")]
+    """Split raw binary bytes and base64-encode each upstream v3 piece."""
+    return ContentSplitter().split(data)
 
 
 def chunk_id_for(data: str) -> str:
-    """Deterministic chunk document id for chunk data.
+    """Compatibility name for the upstream xxhash64 piece ID derivation."""
+    return chunk_id_for_piece(data)
 
-    ``h:`` plus the first 16 hex characters of sha256 over the chunk
-    data's UTF-8 bytes. The ``h:`` namespace is reserved for chunk
-    documents (see ``SERVICE_NAMESPACE_PREFIXES`` / validate_vault_path).
-    """
-    return "h:" + hashlib.sha256(data.encode("utf-8")).hexdigest()[:16]
+
+def resolve_content_splitter(milestone_settings: dict) -> ContentSplitter:
+    """Resolve preferred tweaks, refusing ambiguous per-device split settings."""
+    try:
+        splitters = [ContentSplitter(settings)
+                     for settings in _milestone_setting_maps(milestone_settings)]
+    except ValueError as exc:
+        raise UnsupportedVaultSettings(str(exc)) from exc
+    first = splitters[0]
+    if any((s.minimum_chunk_size, s.absolute_max_piece_size) !=
+           (first.minimum_chunk_size, first.absolute_max_piece_size)
+           for s in splitters[1:]):
+        raise UnsupportedVaultSettings('conflicting chunk splitter settings')
+    return first
 
 
 def new_metadata_doc(

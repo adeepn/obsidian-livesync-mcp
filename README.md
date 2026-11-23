@@ -104,6 +104,17 @@ Both backends support these vault settings:
 
 A vault using an unsupported combination fails the startup check with an explicit error instead of serving mismatched data.
 
+Writes use the upstream `v3-rabin-karp` splitter and `xxhash64` chunk IDs.
+The milestone's preferred `minimumChunkSize` and `customChunkSize` control
+byte boundaries; absent values default to 20 and 0. `longLineThreshold`
+has no v3 effect. Text at least 4 MiB uses binary splitting thresholds
+while retaining text chunks. Binary data is split before each piece is
+base64-encoded. Empty content has no children; repeated pieces retain their
+ordered references. Explicit older splitter versions and other hash
+algorithms are refused at startup. Existing chunks remain readable under
+their original IDs; a fresh write derives the upstream IDs.
+
+
 ## Setup
 
 ### 1. Install
