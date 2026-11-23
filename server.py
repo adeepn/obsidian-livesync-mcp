@@ -485,6 +485,46 @@ async def obsidian_upload_attachment(
     }, ensure_ascii=False)
 
 
+MAX_DOWNLOAD_BYTES = 32 * 1024 * 1024
+
+
+@_tool
+@_tool_errors
+async def obsidian_download_attachment(path: str, max_bytes: int = 0) -> str:
+    """Download a complete binary attachment as base64 with size and SHA-256.
+
+    The hard cap is 32 MiB of raw bytes for JSON-RPC payload sanity,
+    matching upload. A positive max_bytes imposes a smaller caller limit;
+    zero or negative values leave only the hard cap. Oversized files are
+    refused, never truncated, because partial binary files are corrupt.
+    Textual notes must use obsidian_fetch instead.
+    """
+    note = await _backend().read_note(path)
+    if note is None:
+        return f"Note '{path}' not found."
+    if note["is_text"]:
+        return "Error: textual note; use obsidian_fetch."
+    data = note["data"]
+    if data is None:
+        raise StorageError()
+    size = len(data)
+    if size > MAX_DOWNLOAD_BYTES:
+        return (
+            f"Error: attachment exceeds 32 MiB cap ({MAX_DOWNLOAD_BYTES} bytes); "
+            f"actual size {size} bytes."
+        )
+    if max_bytes > 0 and size > max_bytes:
+        return (
+            f"Error: attachment size {size} bytes exceeds "
+            f"max_bytes ({max_bytes} bytes)."
+        )
+    return json.dumps({
+        "path": note["meta"]["path"], "size": size,
+        "sha256": hashlib.sha256(data).hexdigest(),
+        "content_b64": base64.b64encode(data).decode("ascii"),
+    }, ensure_ascii=False)
+
+
 # 2. obsidian-fetch
 @_tool
 @_tool_errors

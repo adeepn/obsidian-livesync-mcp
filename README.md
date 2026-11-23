@@ -71,6 +71,7 @@ verify-visible); follow the [live acceptance checklist](docs/live-check-s3-check
 
 ### Other
 - **obsidian_upload_attachment** — Upload PDFs, scans, and other binary attachments from base64 (32 MiB decoded maximum)
+- **obsidian_download_attachment** — Download complete binary attachments as base64 with size/SHA-256 (32 MiB raw maximum; optional `max_bytes` limit, no truncation)
 - **vault_stats** — Vault statistics
 - **create_from_template** — Create from template with variable substitution
 - **list_templates** — List available templates
@@ -82,10 +83,14 @@ verify-visible); follow the [live acceptance checklist](docs/live-check-s3-check
 
 ### CouchDB vault compatibility
 
-Binary uploads are capped at **32 MiB decoded** and stored as LiveSync
-`newnote` documents with per-chunk base64 data. `obsidian_fetch` returns
-binary metadata including `size` and `sha256`, without the body; full binary
-download can be added in a follow-up. Use text note tools for textual paths.
+Binary uploads and downloads are symmetrically capped at **32 MiB raw
+(decoded) bytes**. Uploads are stored as LiveSync `newnote` documents with
+per-chunk base64 data. `obsidian_download_attachment(path, max_bytes=0)` returns
+JSON `{path, size, sha256, content_b64}` with base64 transport and SHA-256 over
+the raw bytes. A positive `max_bytes` sets an additional caller limit; exceeding
+either limit returns an error without content or truncation. The hard cap keeps
+JSON-RPC payloads manageable. `obsidian_fetch` returns binary metadata including
+`size` and `sha256`, without the body. Use text note tools for textual paths.
 
 The server derives document ids from vault paths the same way LiveSync does, so it supports vaults using the plugin's default path settings:
 
@@ -233,10 +238,14 @@ are read only for the selected backend. Empty defaults below mean an empty strin
 
 ### S3 journal backend
 
-Binary uploads are capped at **32 MiB decoded** and stored as LiveSync
-`newnote` documents with per-chunk base64 data. `obsidian_fetch` returns
-binary metadata including `size` and `sha256`, without the body; full binary
-download can be added in a follow-up. Use text note tools for textual paths.
+Binary uploads and downloads are symmetrically capped at **32 MiB raw
+(decoded) bytes**. Uploads are stored as LiveSync `newnote` documents with
+per-chunk base64 data. `obsidian_download_attachment(path, max_bytes=0)` returns
+JSON `{path, size, sha256, content_b64}` with base64 transport and SHA-256 over
+the raw bytes. A positive `max_bytes` sets an additional caller limit; exceeding
+either limit returns an error without content or truncation. The hard cap keeps
+JSON-RPC payloads manageable. `obsidian_fetch` returns binary metadata including
+`size` and `sha256`, without the body. Use text note tools for textual paths.
 
 Set `LIVESYNC_BACKEND=s3` and choose exactly one connection form.
 Use the URI or individual-variable block in the quick start matrix.

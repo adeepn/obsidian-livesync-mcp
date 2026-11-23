@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Added `obsidian_download_attachment` for complete binary downloads over base64 with raw size/SHA-256, an optional caller size limit, and a symmetric 32 MiB hard cap for CouchDB and S3 journals
+
 - Added `obsidian_upload_attachment` for binary PDF/scan uploads up to 32 MiB decoded through CouchDB or S3 journals, using LiveSync `newnote` base64 storage and returning size/SHA-256 metadata
 
 - Added S3 local peer state size/path diagnostics and `vault_stats.local_state` warnings controlled by `S3_STATE_SIZE_WARN_MB` (disabled by default)
