@@ -66,6 +66,49 @@
 - [ ] **Step 1: failing tests** — векторы upstream (если есть в спеках) + node-дифф оракул: `node -e "import {ContentSplitterV3}..."` генерирует границы для 10 случайных входов (текст/бинарник, разные настройки) → наш сплиттер даёт идентичные куски и id.
 - [ ] **Step 2: FAIL → Step 3: implement (rabin-karp по upstream-коду, xxhash64 через `xxhash` пакет — пин в requirements) → Step 4: PASS → Step 5: Commit** — `feat: upstream content splitter and chunk id derivation`
 
+Статус Task 3 (поправка 2026-11-24, Ruling P-2/P-3): ядро v3+xxhash64 принято ревью (23 граничных вектора + 10 дифференциальных последовательностей), НО исполнитель ограничил сплиттер значениями `v3-rabin-karp`/`xxhash64` и применил ограничение на старте сервера. Это отменено: upstream выбираемы четыре сплиттера (`v1`, `v2`, `v2-segmenter`, `v3-rabin-karp`) и hashAlg `xxhash32`/`xxhash64`/`mixed-purejs`/`sha1`/`""`. Все воспроизводимы точно на пине (исследование: ledger-файл `codex-legacy-research.out`). Паритет недостижим, пока writer поддерживает одно значение из четырёх — поэтому план расширен задачами 3a–3c.
+
+### Task 3a: чтение не зависит от writer-алгоритма (разделение гейта)
+
+**Files:**
+- Modify: `storage_couchdb.py`, `storage_journal.py` (gate на startup), `livesync_format.py` (`resolve_content_splitter`), `content_splitter.py`, `tests/*`
+
+**Interfaces:**
+- Produces: startup_check НЕ отказывает на неподдерживаемом writer-алгоритме (чтение, replay и реконструкция контента сплиттером не пользуются — работают для любого); неподдерживаемый для ЗАПИСИ алгоритм → чистая ошибка инструмента (StorageError-семейство, без traceback и без падения lifespan) ровно в момент вызова write-инструмента, с текстом «vault uses chunkSplitterVersion=X / hashAlg=Y; peer writes for this mode are not implemented yet — reads work»; `backend_info` отдаёт `writer_supported: bool` + причину. Numeric validation: `OverflowError`/`ValueError` на аномальных значениях customChunkSize/minimumChunkSize → нормализованы в keyed `ValueError` → UnsupportedVault/StorageError.
+
+- [ ] **Step 1: failing tests** — vault с `chunkSplitterVersion=v2`: startup OK, list/read/replay работают, `writer_supported=false`; write_note → StorageError без публикации/мутаций, сервер (lifespan) не падает; `customChunkSize=1e308`, `minimumChunkSize=10**400` → чистая ошибка без OverflowError; при `v3`+`xxhash64` — `writer_supported=true`, запись работает.
+- [ ] **Step 2: FAIL → Step 3: implement → Step 4: PASS → Step 5: Commit** — `fix: decouple reads from writer algorithm support`
+
+### Task 3b: остальные варианты hashAlg (точный паритет id)
+
+**Files:**
+- Modify: `content_splitter.py` (диспетчер хэшей), `tests/test_content_splitter.py`, `tests/fixtures/` (дифференциальные векторы)
+- Reference: `C:managers/HashManager/{XXHashHashManager,PureJSHashManager}.ts`, `octagonal-wheels@0.1.57 hash/purejs.js`, `C:managers/HashManager/HashManager.unit.spec.ts`
+
+**Interfaces:**
+- Consumes: исследования (таблица точных конструкций id: xxhash32 `B36(XXH32(utf8(p+"-"+L)))`; legacy `""` → `B36(Int32(XXH32(utf8(p)) XOR L))` signed; mixed-purejs → `F(p+"-"+L)` с binary64-округлением и `Math.imul`; sha1 → стандартный base64 SHA-1 через `writeString` с веткой ≤128 UTF-16 юнитов).
+- Produces: `chunk_id_for_piece(piece, *, hash_alg)` для всех пяти значений; векторы: `helloWorld` → `1n069eb` (xxhash32), `-vyucau` (legacy), `1b68nom123qfyd` (mixed), `2pGPxorWFQvCZq2k1uh76tH9ABc=` (sha1) + дифференциальный корпус против upstream-кода под Node (UTF-16 cut, суррогаты, пустая строка, CRLF, PDF/JSON-разделители) — та же инфраструктура, что в Task 3.
+- Обязательные векторы: из `HashManager.unit.spec.ts:17–31,200–307`.
+
+- [ ] **Step 1: failing tests** — все четыре таблицы-вектора; дифференциальный корпус; `backend_info` writer_supported для каждого hashAlg.
+- [ ] **Step 2: FAIL → Step 3: implement (binary64-семантика для mixed через `struct`/`math` — обычное умножение с округлением, `Math.imul` через ctypes/инт) → Step 4: PASS → Step 5: Commit** — `feat: upstream chunk id derivation for all hash algorithms`
+
+### Task 3c: сплиттеры V2, V2.5 и V1 (точный паритет границ)
+
+**Files:**
+- Create/Modify: `content_splitter.py` (классы по алгоритмам, общий препроцессинг), `tests/test_content_splitter.py`, `tests/fixtures/` (дифференциальные векторы)
+- Reference: `C:string_and_binary/chunks.ts:13–72,218–254` (V1 текст), `:436–493` (V1 бинарник), `:256–323,341–434` (V2 текст/бинарник), `C:ContentSplitter/ContentSplitterV1.ts`, `ContentSplitterV2.ts`
+
+**References:**
+- `chunkSplitterVersion` dispatch: V1 принимает `"v1"`, `""`, `undefined`; V2 принимает `"v2"` и `"v2-segmenter"`; Rabin-Karp — `"v3-rabin-karp"`. ВНИМАНИЕ: `v2-segmenter` на этом пине ведёт себя ИДЕНТИЧНО V2 (аргумент `useSegmenter` не читается в `splitPieces2V2`) — реализовывать «лексическую» сегментацию по лейблу UI было бы отличием от устройства; паритет = точная копия V2. ICU-зависимый helper сегментации предложений недостижим при нормальном dispatch и в паритет не входит (если будущий upstream начнёт его использовать — сторож upstream-watch должен это поймать: `chunks.ts` в манифесте, Task 7).
+
+**Interfaces:**
+- Produces: `ContentSplitter.split` диспетчеризует по `chunkSplitterVersion` на V1/V2/V3 (V2.5 → V2); общий препроцессинг `pieceSize = floor(102400 × (customChunkSize + 1))`, `plainSplit = path ends with .md/.txt/.canvas` (case-sensitive). Quirks, которые обязаны сохраниться (из исследования): V1 — fence-цикл, regex `/(.*?[;,:<])/g`, cut перед разделителем, LF-fallback без обновления splitSize, пустой бинарник → одна пустая base64-строка; V2 — строгий `>` при flush, adaptive minimum, бинарник ищет preferred-разделитель во всём буфере от `offset+minimum` (дальний preferred подавляет ближний LF); worker vs direct на пустом входе (`""`).
+- Доказательство паритета: upstream не содержит точных граничных векторов для V1/V2 → единственное доказательство — дифференциальный корпус против pinned upstream-кода под Node (сгенерированные фикстуры коммитятся: границы+id для корпуса входов).
+
+- [ ] **Step 1: failing tests** — дифференциальный корпус V1/V2/V2.5 (текст с fences/заголовками `#`, plain и не-plain, UTF-16 суррогатные пары на границе cut, CRLF, пустой ввод; бинарники `.pdf`/`.json`/прочие с разделителями NUL, `/`, `,`, LF; переходы minimum; customChunkSize 0/1/N); V2.5 == V2 на всём корпусе; V3 — прежние векторы без регрессии.
+- [ ] **Step 2: FAIL → Step 3: implement → Step 4: PASS → Step 5: Commit** — `feat: upstream v1 and v2 content splitters`
+
 ### Task 4: plain/newnote решение по правилам upstream
 
 **Files:**
