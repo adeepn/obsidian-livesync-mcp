@@ -314,8 +314,11 @@ Sibling revisions remain available to LiveSync's conflict UI in Obsidian for
 resolution.
 
 Supported S3 vault settings are legacy path identity (normalization version 0)
-and NFC identity (version 1), with case-insensitive filenames. E2EE, path
-obfuscation and case-sensitive filename settings are rejected at startup.
+and NFC identity (version 1), each with case-insensitive or case-sensitive
+filenames. Both backends follow the vault setting. NFC aliases composed and
+decomposed names even in sensitive mode. Existing local state with another
+identity requires rebuilding; incompatible metadata IDs are refused. E2EE
+and path obfuscation remain unsupported.
 
 ### Local cache (S3)
 

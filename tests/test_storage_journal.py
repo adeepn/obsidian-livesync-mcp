@@ -1787,3 +1787,60 @@ class TestMetadataCanary:
         await backend.refresh(force=True)
         assert not (await backend.backend_info()).get("protocol_notes")
         await backend.close()
+
+
+@pytest.mark.parametrize("nfc", [False, True])
+async def test_sensitive_paths_and_folder_identity(tmp_path, nfc):
+    milestone = json.loads(milestone_blob(path_version=int(nfc)))
+    milestone["tweak_values"]["PREFERRED"]["handleFilenameCaseSensitive"] = True
+    backend, _ = make_backend(tmp_path, healthy_bucket(**{
+        MILESTONE_KEY: json.dumps(milestone).encode(),
+    }))
+    try:
+        await backend.startup_check()
+        upper = await backend.write_note("Folder/A.md", "upper", create=True)
+        assert upper["doc_id"] == "Folder/A.md"
+        await backend.write_note("Folder/a.md", "lower", create=True)
+        assert (await backend.read_note("Folder/A.md"))["text"] == "upper"
+        assert (await backend.read_note("Folder/a.md"))["text"] == "lower"
+        assert [m["path"] for m in await backend.list_notes(folder="Folder")] == [
+            "Folder/A.md", "Folder/a.md"]
+        assert await backend.list_notes(folder="folder") == []
+        if nfc:
+            await backend.write_note("ééééé/sub/x.md", "nested", create=True)
+            folder_nfd = "e\u0301" * 5
+            assert await backend.list_notes(folder=folder_nfd, recursive=False) == []
+            nested = await backend.list_notes(folder=folder_nfd, recursive=True)
+            assert [m["path"] for m in nested] == ["ééééé/sub/x.md"]
+        await backend.write_note("Café.md", "one", create=True)
+        if nfc:
+            with pytest.raises(NoteExists):
+                await backend.write_note("Cafe\u0301.md", "two", create=True)
+        else:
+            await backend.write_note("Cafe\u0301.md", "two", create=True)
+    finally:
+        await backend.close()
+
+
+def test_identity_paths_have_no_unconditional_lowercase():
+    import pathlib
+    import re
+    for name in ("storage_journal.py", "storage_couchdb.py", "journal_store.py"):
+        source = pathlib.Path(name).read_text()
+        # Extension selection is intentionally independent of identity.
+        source = re.sub(r"def _matches_extension\(.*?(?=\ndef |\nclass )", "", source,
+                        flags=re.S)
+        assert ".lower()" not in source, name
+
+
+async def test_replay_rejects_metadata_identity_collision(tmp_path):
+    backend, _ = make_backend(tmp_path, healthy_bucket(**{
+        JOURNAL_1: journal_blob([meta_doc("A.md", "1-a"), meta_doc("a.md", "1-b")]),
+    }))
+    try:
+        await backend.startup_check()
+        with pytest.raises(StorageError, match="could not be replayed"):
+            await backend.refresh(force=True)
+        assert not backend._store.processed(JOURNAL_1)
+    finally:
+        await backend.close()

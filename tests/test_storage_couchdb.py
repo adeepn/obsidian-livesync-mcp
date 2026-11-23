@@ -153,43 +153,31 @@ async def test_startup_accepts_default_filename_and_normalization():
         await backend.startup_check()  # must not raise
 
 
-async def test_startup_rejects_case_sensitive_filenames():
-    # path2id lowercases; a vault with case-sensitive ids would collide
-    # distinct paths onto one document.
-    docs = {
-        "_local/obsydian_livesync_milestone": {
-            "tweak_values": {"PREFERRED": {"handleFilenameCaseSensitive": True}},
-        }
-    }
-    async with fake_backend(docs) as (backend, _log):
-        with pytest.raises(UnsupportedVault, match="case-sensitive"):
-            await backend.startup_check()
-
-
-async def test_startup_rejects_case_sensitive_setting_at_top_level():
-    # The milestone doc shape varies across LiveSync versions; the
-    # setting may sit at the top level instead of tweak_values.
-    docs = {
-        "_local/obsydian_livesync_milestone": {
-            "handleFilenameCaseSensitive": True,
-        }
-    }
-    async with fake_backend(docs) as (backend, _log):
-        with pytest.raises(UnsupportedVault, match="case-sensitive"):
-            await backend.startup_check()
-
-
-async def test_startup_rejects_nfc_path_normalization():
-    # pathNormalizationVersion>=1 derives ids from NFC-normalized paths;
-    # this server's path2id does not normalize, so ids would diverge.
-    docs = {
-        "_local/obsydian_livesync_milestone": {
-            "tweak_values": {"PREFERRED": {"pathNormalizationVersion": 1}},
-        }
-    }
-    async with fake_backend(docs) as (backend, _log):
-        with pytest.raises(UnsupportedVault, match="normali[sz]"):
-            await backend.startup_check()
+@pytest.mark.parametrize("nfc", [False, True])
+async def test_sensitive_couchdb_paths(nfc):
+    docs = {"_local/obsydian_livesync_milestone": {
+        "handleFilenameCaseSensitive": True, "pathNormalizationVersion": int(nfc)}}
+    async with fake_backend(docs) as (backend, _):
+        await backend.startup_check()
+        upper = await backend.write_note("Folder/A.md", "upper", create=True)
+        assert upper["doc_id"] == "Folder/A.md"
+        await backend.write_note("Folder/a.md", "lower", create=True)
+        assert (await backend.read_note("Folder/A.md"))["text"] == "upper"
+        assert (await backend.read_note("Folder/a.md"))["text"] == "lower"
+        assert len(await backend.list_notes(folder="Folder")) == 2
+        assert await backend.list_notes(folder="folder") == []
+        if nfc:
+            await backend.write_note("ééééé/sub/x.md", "nested", create=True)
+            folder_nfd = "e\u0301" * 5
+            assert await backend.list_notes(folder=folder_nfd, recursive=False) == []
+            nested = await backend.list_notes(folder=folder_nfd, recursive=True)
+            assert [m["path"] for m in nested] == ["ééééé/sub/x.md"]
+        await backend.write_note("Café.md", "one", create=True)
+        if nfc:
+            with pytest.raises(NoteExists):
+                await backend.write_note("Cafe\u0301.md", "two", create=True)
+        else:
+            await backend.write_note("Cafe\u0301.md", "two", create=True)
 
 
 async def test_startup_version_doc_is_informational(caplog):
@@ -1160,7 +1148,7 @@ async def test_rename_non_201_target_keeps_source():
 
 @pytest.mark.parametrize('key,value', [
     ('encrypt', True), ('usePathObfuscation', True),
-    ('handleFilenameCaseSensitive', True), ('pathNormalizationVersion', 1),
+    ('pathNormalizationVersion', 2),
 ])
 @pytest.mark.parametrize('preferred', [True, False])
 async def test_startup_per_device_incompatible_settings(key, value, preferred):
@@ -1595,3 +1583,12 @@ async def test_ordinary_refresh_does_not_scan_but_force_reloads_index():
         log.clear()
         await backend.refresh(force=True)
         assert any(r.method == "GET" and r.url.path.endswith("/_all_docs") for r in log)
+
+
+async def test_couchdb_rejects_metadata_identity_collision():
+    docs = {name: {"_id": name, "_rev": "1-a", "path": name,
+                   "type": "plain", "children": [], "size": 0}
+            for name in ("A.md", "a.md")}
+    async with fake_backend(docs) as (backend, _):
+        with pytest.raises(StorageError, match="identity|collision"):
+            await backend.list_notes()

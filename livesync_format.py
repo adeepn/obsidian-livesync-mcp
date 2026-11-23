@@ -7,8 +7,8 @@ every storage backend (audit B2/B3/B4/B7/B9/B10).
 Mirrors upstream livesync-commonlib ``src/string_and_binary/path.ts``,
 ``src/common/pathNormalization.ts``, and
 ``src/managers/EntryManager/EntryManagerImpls.ts`` for the configuration
-this server supports: ``handleFilenameCaseSensitive=false`` (ids are
-lowercased) and path obfuscation disabled. Vaults that use obfuscation or
+this server supports: either filename case setting and path obfuscation
+disabled. Vaults that use obfuscation or
 E2EE are rejected at backend startup instead. Path identity comes in two
 flavors (upstream ``pathNormalizationVersion``): legacy v0 keeps paths as
 typed, v1 compares Unicode NFC forms — see ``path2id`` and
@@ -62,9 +62,41 @@ SERVICE_DOC_IDS = frozenset({"obsydian_livesync_version", "syncinfo"})
 # Path identity modes (upstream common/pathNormalization.ts): version 0
 # keeps the path as typed when deriving document ids; version 1 compares
 # Unicode NFC forms. Backends fix one mode per vault at startup via
-# ``resolve_path_identity`` and pass it to ``path2id`` as ``nfc=``.
+# ``resolve_path_identity`` and apply both axes via ``identity_path2id``.
 PATH_IDENTITY_LEGACY = "legacy"
 PATH_IDENTITY_NFC = "nfc"
+PATH_IDENTITY_CASE_SENSITIVE = "case-sensitive"
+PATH_IDENTITY_NFC_CASE_SENSITIVE = "nfc-case-sensitive"
+
+
+def identity_path2id(path: str, identity: str) -> str:
+    """Apply the independent NFC and case axes of a resolved identity."""
+    return path2id(
+        path,
+        nfc=identity in (PATH_IDENTITY_NFC, PATH_IDENTITY_NFC_CASE_SENSITIVE),
+        case_sensitive=identity in (
+            PATH_IDENTITY_CASE_SENSITIVE, PATH_IDENTITY_NFC_CASE_SENSITIVE,
+        ),
+    )
+
+
+def validate_document_identity(doc: dict, identity: str) -> None:
+    """Refuse metadata from another identity before it can alias a note.
+
+    common/pathIdentity.ts:25-51 requires matching stored IDs; rebuild or
+    fetch under the selected identity instead of merging distinct entries.
+    """
+    path = doc.get("path")
+    if isinstance(path, str):
+        try:
+            validate_vault_path(path)
+        except ForbiddenPathError:
+            return  # hidden/service paths are handled by the existing read gate
+    if is_note_document(doc) and isinstance(path, str) and path:
+        if doc.get("_id") != identity_path2id(path, identity):
+            raise ValueError(
+                "metadata path identity mismatch or collision; rebuild/fetch required"
+            )
 
 
 class ForbiddenPathError(Exception):
@@ -111,11 +143,11 @@ def canonical_path(path: str) -> str:
     return _normalize_path(path)
 
 
-def path2id(path: str, *, nfc: bool = False) -> str:
+def path2id(path: str, *, nfc: bool = False, case_sensitive: bool = False) -> str:
     """Map a vault path to a LiveSync document id.
 
-    Upstream ``path2id_base`` with ``caseInsensitive=true`` and no
-    obfuscation: lowercase, and a leading ``_`` is escaped to ``/_`` because
+    Upstream ``path2id_base`` with no obfuscation: lowercase unless
+    ``case_sensitive=True``, and a leading ``_`` is escaped to ``/_`` because
     CouchDB reserves ids starting with ``_``.
 
     ``nfc=True`` selects the v1 path identity (``pathNormalizationVersion``
@@ -125,9 +157,13 @@ def path2id(path: str, *, nfc: bool = False) -> str:
     decomposed and precomposed spellings share one id. The default keeps
     the legacy (v0) behavior: decomposed spellings stay distinct.
     """
+    if path.startswith("f:"):
+        return path
     if nfc:
         path = unicodedata.normalize("NFC", path)
-    normalized = _normalize_path(path).lower()
+    normalized = _normalize_path(path)
+    if not case_sensitive:
+        normalized = normalized.lower()
     if normalized.startswith("_"):
         return "/" + normalized
     return normalized
@@ -165,13 +201,6 @@ _UNSUPPORTED_SETTINGS = (
         "usePathObfuscation",
         "the vault uses path obfuscation, "
         "which this server does not support",
-    ),
-    (
-        "handleFilenameCaseSensitive",
-        "the vault uses case-sensitive filenames "
-        "(handleFilenameCaseSensitive); this server maps paths "
-        "to document ids case-insensitively and cannot serve "
-        "such a vault",
     ),
 )
 
@@ -221,7 +250,9 @@ def _milestone_setting_maps(milestone_settings: dict) -> list[dict]:
 def resolve_path_identity(milestone_settings: dict) -> str:
     """Derive the vault's path identity mode from milestone settings.
 
-    Returns ``PATH_IDENTITY_NFC`` when any resolved settings map sets
+    Case-sensitive settings select ``PATH_IDENTITY_CASE_SENSITIVE`` or
+    ``PATH_IDENTITY_NFC_CASE_SENSITIVE`` independently of normalization.
+    Otherwise returns ``PATH_IDENTITY_NFC`` when any resolved settings map sets
     ``pathNormalizationVersion`` to 1 (upstream v1 compares NFC forms when
     deriving document ids) and ``PATH_IDENTITY_LEGACY`` for 0 or absent
     (upstream treats an undefined version as 0). Like upstream
@@ -229,17 +260,20 @@ def resolve_path_identity(milestone_settings: dict) -> str:
     numbers, non-numbers, explicit null — is refused.
 
     Refuses with ``UnsupportedVaultSettings`` — reason in the message —
-    when a resolved map turns on ``encrypt``, ``usePathObfuscation``, or
-    ``handleFilenameCaseSensitive``, when the version is not 0/1/absent,
+    when a resolved map turns on ``encrypt``, ``usePathObfuscation``,
+    when the version is not 0/1/absent,
     or when no readable settings exist; backends re-raise that as their
     storage-layer ``UnsupportedVault`` (see the mapping rule on
     ``UnsupportedVaultSettings``).
     """
+    # Case and NFC are independent axes (PathService.ts:51-63,91-106).
     nfc = False
+    case_sensitive = False
     for settings in _milestone_setting_maps(milestone_settings):
         for key, reason in _UNSUPPORTED_SETTINGS:
             if settings.get(key):
                 raise UnsupportedVaultSettings(reason)
+        case_sensitive |= bool(settings.get("handleFilenameCaseSensitive"))
         if "pathNormalizationVersion" not in settings:
             continue  # absent means legacy (upstream: undefined -> 0)
         version = settings["pathNormalizationVersion"]
@@ -254,6 +288,8 @@ def resolve_path_identity(milestone_settings: dict) -> str:
             )
         if version == 1:
             nfc = True
+    if case_sensitive:
+        return PATH_IDENTITY_NFC_CASE_SENSITIVE if nfc else PATH_IDENTITY_CASE_SENSITIVE
     return PATH_IDENTITY_NFC if nfc else PATH_IDENTITY_LEGACY
 
 

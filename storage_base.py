@@ -62,7 +62,7 @@ class RenamePartialError(StorageError):
 
 class UnsupportedVault(StorageError):
     """The vault uses features this server cannot support (E2EE, path
-    obfuscation, case-sensitive ids, ...)."""
+    obfuscation, ...)."""
 
 
 class StorageUnavailable(StorageError):
@@ -124,7 +124,7 @@ class StorageBackend(Protocol):
         """Verify availability and vault compatibility.
 
         Raises ``StorageUnavailable`` when the backend is unreachable and
-        ``UnsupportedVault`` for E2EE/obfuscation/case-sensitive vaults
+        ``UnsupportedVault`` for E2EE/obfuscation vaults
         (audits B5/B6/B14).
         """
         ...

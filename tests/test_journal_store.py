@@ -693,3 +693,11 @@ def test_state_size_bytes_includes_sqlite_sidecars_and_nested_chunks(store):
     expected = sum(p.stat().st_size for p in root.iterdir() if p.is_file()) + 5
     (root / "unrelated.txt").write_bytes(b"ignored")
     assert store.state_size_bytes() == expected
+
+
+@pytest.mark.parametrize("identity", ["case-sensitive", "nfc-case-sensitive"])
+def test_sensitive_identity_migration_requires_rebuild(tmp_path, identity):
+    store = JournalStore(tmp_path, identity)
+    store.close()
+    with pytest.raises(ValueError, match="identity"):
+        JournalStore(tmp_path, "legacy")

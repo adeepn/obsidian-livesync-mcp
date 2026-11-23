@@ -435,15 +435,22 @@ def test_resolve_identity_refuses_obfuscation():
         resolve_path_identity(milestone)
 
 
-def test_resolve_identity_refuses_case_sensitive():
-    milestone = {"tweak_values": {"PREFERRED": {
-        "handleFilenameCaseSensitive": True,
-    }}}
-    with pytest.raises(UnsupportedVaultSettings, match="case-sensitive"):
-        resolve_path_identity(milestone)
-    # The setting may sit at the top level in older milestone shapes.
-    with pytest.raises(UnsupportedVaultSettings, match="case-sensitive"):
-        resolve_path_identity({"handleFilenameCaseSensitive": True})
+@pytest.mark.parametrize("nfc", [False, True])
+def test_case_sensitive_identity(nfc):
+    from livesync_format import PATH_IDENTITY_CASE_SENSITIVE
+    identity = resolve_path_identity({"handleFilenameCaseSensitive": True,
+                                      "pathNormalizationVersion": int(nfc)})
+    assert PATH_IDENTITY_CASE_SENSITIVE in identity
+    assert ("nfc" in identity) == nfc
+    assert path2id("A.md", nfc=nfc, case_sensitive=True) == "A.md"
+    assert path2id("a.md", nfc=nfc, case_sensitive=True) == "a.md"
+    assert path2id("_A.md", case_sensitive=True) == "/_A.md"
+    assert (path2id("Cafe\u0301.md", nfc=nfc, case_sensitive=True) ==
+            path2id("Café.md", nfc=nfc, case_sensitive=True)) == nfc
+
+
+def test_obfuscated_identifier_is_unchanged():
+    assert path2id("f:AbCd") == "f:AbCd"
 
 
 def test_resolve_identity_no_settings_fails_closed():

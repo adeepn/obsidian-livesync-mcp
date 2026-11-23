@@ -53,7 +53,6 @@ from journal_codec import (
 from journal_store import EncryptedNoteError, JournalStore, parse_rev
 from livesync_format import (
     PATH_IDENTITY_LEGACY,
-    PATH_IDENTITY_NFC,
     ForbiddenPathError,
     UnsupportedVaultSettings,
     assemble_binary,
@@ -65,7 +64,8 @@ from livesync_format import (
     is_note_document,
     is_writable_text_path,
     new_metadata_doc,
-    path2id,
+    identity_path2id,
+    validate_document_identity,
     resolve_path_identity,
     soft_delete_revision,
     validate_vault_path,
@@ -552,6 +552,8 @@ class JournalBackend:
                 inflate_journal(blob, max_output_bytes=self.max_inflated_bytes),
                 name=name, max_records=self.max_records, max_line_bytes=self.max_line_bytes,
             )
+            for doc in journal.docs:
+                validate_document_identity(doc, store.path_identity)
             store.apply_journal(name, journal.chunks, journal.docs)
             return journal.docs[-100:]
         except StorageUnavailable:
@@ -589,7 +591,7 @@ class JournalBackend:
         """List live notes filtered by folder/extension, sorted by path.
 
         Same contracts as the CouchDB backend: the folder prefix matches
-        case-insensitively (original paths in the response),
+        using the vault identity (original paths in the response),
         ``recursive=False`` keeps direct children only — also at the vault
         root — and the extension matches as a case-insensitive suffix with
         or without the leading dot. Hidden dotfile segments never surface;
@@ -620,9 +622,11 @@ class JournalBackend:
             if _has_hidden_segment(path):
                 continue  # hidden files never surface as notes
             if folder_prefix:
-                if not path.lower().startswith(folder_prefix.lower() + "/"):
+                path_key = self._path2id(store, path)
+                folder_key = self._path2id(store, folder_prefix)
+                if not path_key.startswith(folder_key + "/"):
                     continue
-                remainder = path[len(folder_prefix) + 1 :]
+                remainder = path_key[len(folder_key) + 1 :]
             else:
                 remainder = path
             if not recursive and "/" in remainder:
@@ -762,7 +766,7 @@ class JournalBackend:
         path identity (NFC normalization for v1 vaults); resolving with
         any other identity would silently miss their documents.
         """
-        return path2id(path, nfc=store.path_identity == PATH_IDENTITY_NFC)
+        return identity_path2id(path, store.path_identity)
 
     @staticmethod
     def _translate_decode_error(exc: ValueError) -> StorageError:
@@ -813,7 +817,7 @@ class JournalBackend:
 
     def _doc_id(self, path: str) -> str:
         store = self._require_store("write")
-        return path2id(path, nfc=store.path_identity == PATH_IDENTITY_NFC)
+        return identity_path2id(path, store.path_identity)
 
     @staticmethod
     def _check_expected_rev(doc: dict | None, expected_rev: str | None) -> None:
@@ -914,6 +918,8 @@ class JournalBackend:
                 )
             except ValueError as exc:
                 raise StorageError(f"journal publication preflight failed: {exc}") from exc
+            for doc in journal.docs:
+                validate_document_identity(doc, store.path_identity)
             store.validate_journal(journal.chunks, journal.docs)
             blob = deflate_journal(payload)
             if len(blob) > getattr(self._object_storage, "max_object_bytes", MAX_OBJECT_BYTES):
@@ -969,6 +975,8 @@ class JournalBackend:
                 for chunk_id in journal.docs[0]["children"]
             ]) != attachment_data:
                 raise StorageError("journal read-back verification failed")
+            for doc in journal.docs:
+                validate_document_identity(doc, store.path_identity)
             store.apply_journal(name, journal.chunks, journal.docs)
             store.last_sent_key = name
         except StorageError:

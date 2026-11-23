@@ -49,6 +49,8 @@ import tempfile
 from pathlib import Path
 
 from livesync_format import (
+    PATH_IDENTITY_CASE_SENSITIVE,
+    PATH_IDENTITY_NFC_CASE_SENSITIVE,
     PATH_IDENTITY_LEGACY,
     PATH_IDENTITY_NFC,
     EncryptedInlineChunk,
@@ -180,10 +182,14 @@ class JournalStore:
         return total
 
     def __init__(self, state_dir: Path, path_identity: str):
-        if path_identity not in (PATH_IDENTITY_LEGACY, PATH_IDENTITY_NFC):
+        if path_identity not in (
+            PATH_IDENTITY_LEGACY, PATH_IDENTITY_NFC,
+            PATH_IDENTITY_CASE_SENSITIVE, PATH_IDENTITY_NFC_CASE_SENSITIVE,
+        ):
             raise ValueError(
                 f"unknown path identity {path_identity!r}; expected "
-                f"{PATH_IDENTITY_LEGACY!r} or {PATH_IDENTITY_NFC!r}"
+                f"{PATH_IDENTITY_LEGACY!r}, {PATH_IDENTITY_NFC!r}, "
+                f"{PATH_IDENTITY_CASE_SENSITIVE!r} or {PATH_IDENTITY_NFC_CASE_SENSITIVE!r}"
             )
         self.state_dir = Path(state_dir)
         self.path_identity = path_identity

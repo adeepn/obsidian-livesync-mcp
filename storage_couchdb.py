@@ -58,7 +58,11 @@ from livesync_format import (
     is_text_doc,
     is_writable_text_path,
     new_metadata_doc,
-    path2id,
+    identity_path2id,
+    validate_document_identity,
+    resolve_path_identity,
+    UnsupportedVaultSettings,
+    PATH_IDENTITY_LEGACY,
     soft_delete_revision,
     validate_vault_path,
 )
@@ -82,22 +86,6 @@ logger = logging.getLogger(__name__)
 _MILESTONE_DOC_ID = "_local/obsydian_livesync_milestone"
 _VERSION_DOC_ID = "obsydian_livesync_version"
 
-
-def _milestone_settings(body: dict) -> list[dict]:
-    """Resolve preferred settings, or conservatively check every device."""
-    if "tweak_values" not in body:
-        return [body]  # older milestones stored settings at the top level
-    # common/models/tweak.definition.ts:153 and journal/
-    # LiveSyncJournalReplicator.ts:135: tweak_values is keyed by device id.
-    entries = body["tweak_values"]
-    if isinstance(entries, dict):
-        preferred = entries.get("PREFERRED")
-        if isinstance(preferred, dict):
-            return [preferred]
-        devices = [value for value in entries.values() if isinstance(value, dict)]
-        if devices:
-            return devices
-    raise UnsupportedVault("the vault milestone has no readable device settings")
 
 # _all_docs page size for id scans and metadata batch fetches.
 _PAGE_SIZE = 500
@@ -156,6 +144,7 @@ class CouchDBBackend:
     ) -> None:
         self._scan_limits = (scan_max_notes, scan_max_bytes)
         self._database = database
+        self._path_identity = PATH_IDENTITY_LEGACY
         self._client = httpx.AsyncClient(
             base_url=url if url.endswith("/") else url + "/",
             auth=(username, password),
@@ -244,7 +233,16 @@ class CouchDBBackend:
                 raise StorageUnavailable("CouchDB database not found")
             return None
         body = response.json()
-        return body if isinstance(body, dict) else None
+        if isinstance(body, dict):
+            self._validate_identity(body)
+            return body
+        return None
+
+    def _validate_identity(self, doc: dict) -> None:
+        try:
+            validate_document_identity(doc, self._path_identity)
+        except ValueError as exc:
+            raise StorageError(str(exc)) from exc
 
     async def _post_all_docs(
         self, keys: list[str], *, include_docs: bool
@@ -318,6 +316,7 @@ class CouchDBBackend:
             for row in rows:
                 doc = row.get("doc") if isinstance(row, dict) else None
                 if isinstance(doc, dict) and is_note_document(doc):
+                    self._validate_identity(doc)
                     path = doc.get("path")
                     path = (
                         path
@@ -378,34 +377,13 @@ class CouchDBBackend:
         except ValueError:
             body = None
         body = body if isinstance(body, dict) else {}
-        for settings in _milestone_settings(body):
-            if settings.get("encrypt"):
-                raise UnsupportedVault(
-                    "the vault uses LiveSync end-to-end encryption, "
-                    "which this server does not support"
-                )
-            if settings.get("usePathObfuscation"):
-                raise UnsupportedVault(
-                    "the vault uses path obfuscation, "
-                    "which this server does not support"
-                )
-            if settings.get("handleFilenameCaseSensitive"):
-                raise UnsupportedVault(
-                    "the vault uses case-sensitive filenames "
-                    "(handleFilenameCaseSensitive); this server maps paths "
-                    "to document ids case-insensitively and cannot serve "
-                    "such a vault"
-                )
-            normalization = settings.get("pathNormalizationVersion")
-            if isinstance(normalization, (int, float)) and not isinstance(
-                normalization, bool
-            ) and normalization >= 1:
-                raise UnsupportedVault(
-                    "the vault normalizes paths with Unicode NFC when "
-                    "deriving document ids (pathNormalizationVersion >= 1); "
-                    "this server does not normalize paths and cannot serve "
-                    "such a vault"
-                )
+        try:
+            self._path_identity = resolve_path_identity(body)
+        except UnsupportedVaultSettings as exc:
+            raise UnsupportedVault(str(exc)) from exc
+
+    def _path2id(self, path: str) -> str:
+        return identity_path2id(path, self._path_identity)
 
     async def refresh(self, force: bool = False) -> None:
         """Reload metadata only on explicit refresh; reads query CouchDB directly.
@@ -449,9 +427,11 @@ class CouchDBBackend:
             meta = self._meta_from_doc(doc)
             path = meta["path"]
             if folder_prefix:
-                if not path.lower().startswith(folder_prefix.lower() + "/"):
+                path_key = self._path2id(path)
+                folder_key = self._path2id(folder_prefix)
+                if not path_key.startswith(folder_key + "/"):
                     continue
-                remainder = path[len(folder_prefix) + 1 :]
+                remainder = path_key[len(folder_key) + 1 :]
             else:
                 remainder = path
             if not recursive and "/" in remainder:
@@ -480,7 +460,7 @@ class CouchDBBackend:
 
     async def get_meta(self, path: str) -> NoteMeta:
         self._validate_read_path(path)
-        doc = await self._get_doc(path2id(path))
+        doc = await self._get_doc(self._path2id(path))
         if doc is None or not is_note_document(doc):
             raise NoteNotFound(f"note not found: {path}")
         return self._meta_from_doc(doc)
@@ -491,7 +471,7 @@ class CouchDBBackend:
         except ForbiddenPathError as exc:
             logger.info("read refused for vault path %r: %s", path, exc)
             return None
-        doc = await self._get_doc(path2id(path))
+        doc = await self._get_doc(self._path2id(path))
         if doc is None or not is_note_document(doc):
             return None
         return await self._content_from_doc(doc)
@@ -841,7 +821,7 @@ class CouchDBBackend:
 
     async def _get_note_doc(self, path: str) -> dict:
         """Live metadata document for ``path`` (conflicts refused)."""
-        doc = await self._get_doc(path2id(path), conflicts=True)
+        doc = await self._get_doc(self._path2id(path), conflicts=True)
         if doc is None or not is_note_document(doc):
             raise NoteNotFound(f"note not found: {path}")
         self._refuse_unresolved_conflicts(doc, path)
@@ -855,7 +835,7 @@ class CouchDBBackend:
         A soft-deleted or missing target is free to write; its stored
         ``_rev`` is still needed to replace the revision.
         """
-        target = await self._get_doc(path2id(new_path), conflicts=True)
+        target = await self._get_doc(self._path2id(new_path), conflicts=True)
         if target is not None:
             self._refuse_unresolved_conflicts(target, new_path)
             if not target.get("deleted") and not overwrite:
@@ -871,7 +851,7 @@ class CouchDBBackend:
         describing the same body.
         """
         body = clone_metadata(
-            doc, _id=path2id(new_path), path=canonical_path(new_path),
+            doc, _id=self._path2id(new_path), path=canonical_path(new_path),
             mtime=mtime_ms,
         )
         body.pop("_rev", None)
@@ -881,7 +861,7 @@ class CouchDBBackend:
     async def _soft_delete(self, doc: dict, path: str, mtime_ms: int) -> None:
         revision = soft_delete_revision(doc, mtime_ms)
         revision.pop("_conflicts", None)
-        await self._put_doc(path2id(path), revision)
+        await self._put_doc(self._path2id(path), revision)
 
     async def write_note(
         self,
@@ -941,7 +921,7 @@ class CouchDBBackend:
         expected_rev: str | None = None,
     ) -> NoteMeta:
         """Publish encoded chunk data through the shared write transaction."""
-        doc_id = path2id(path)
+        doc_id = self._path2id(path)
         doc = await self._get_doc(doc_id, conflicts=True)
         if doc is not None:
             self._refuse_unresolved_conflicts(doc, path)
@@ -970,6 +950,7 @@ class CouchDBBackend:
             body["mtime"] = new_mtime
             body["size"] = size
             body["type"] = doc_type
+        body["_id"] = doc_id
         body["path"] = canonical_path(path)
         body["_rev"] = await self._put_doc(doc_id, body)
         return self._meta_from_doc(body)
@@ -987,7 +968,7 @@ class CouchDBBackend:
         guards the read-through race exactly as in ``write_note``.
         """
         validate_vault_path(path)
-        doc = await self._get_doc(path2id(path), conflicts=True)
+        doc = await self._get_doc(self._path2id(path), conflicts=True)
         self._check_expected_rev(doc, path, expected_rev)
         if doc is None or doc.get("deleted"):
             return False
@@ -1013,27 +994,27 @@ class CouchDBBackend:
             return await self.get_meta(path)
 
         doc = await self._get_note_doc(path)
-        if path2id(new_path) == path2id(path):
+        if self._path2id(new_path) == self._path2id(path):
             # One document, two spellings: one revision, path updated.
             body = clone_metadata(doc)
             body.pop("_conflicts", None)
             body["path"] = new_path
             body["mtime"] = _now_ms()
-            body["_rev"] = await self._put_doc(path2id(path), body)
+            body["_rev"] = await self._put_doc(self._path2id(path), body)
             return self._meta_from_doc(body)
 
         target = await self._target_doc_for_write(new_path, overwrite=overwrite)
         body = self._moved_body(doc, new_path, _now_ms())
         if target is not None:
             body["_rev"] = target["_rev"]  # replace the old revision
-        body["_rev"] = await self._put_doc(path2id(new_path), body)
+        body["_rev"] = await self._put_doc(self._path2id(new_path), body)
         try:
             await self._soft_delete(doc, path, _now_ms())
         except Exception as exc:
             logger.exception("rename source retirement failed for %s", path)
             source_state = "unknown"
             try:
-                source = await self._get_doc(path2id(path))
+                source = await self._get_doc(self._path2id(path))
                 if source is not None and is_note_document(source):
                     source_state = "live"
             except Exception:
@@ -1052,5 +1033,5 @@ class CouchDBBackend:
         body = self._moved_body(doc, new_path, _now_ms())
         if target is not None:
             body["_rev"] = target["_rev"]  # replace the old revision
-        body["_rev"] = await self._put_doc(path2id(new_path), body)
+        body["_rev"] = await self._put_doc(self._path2id(new_path), body)
         return self._meta_from_doc(body)
