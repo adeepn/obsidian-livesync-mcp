@@ -29,9 +29,10 @@
 > size, selection and compatibility parity. Current supported/unsupported and
 > deliberate-difference statuses are consolidated in the
 > [README settings table](../../../README.md#supported-vault-settings), with
-> local recovery and outcome contracts linked there. E2EE/path obfuscation,
-> CouchDB compression/JWT and filesystem/internal/plugin sync remain outside
-> supported scope. Full-suite selection integration tests do need Node; only
+> local recovery and outcome contracts linked there. E2EE/path obfuscation and
+> filesystem/internal/plugin sync remain outside supported scope. CouchDB
+> compression and JWT were subsequently implemented (see dated G6/G7 notes).
+> Full-suite selection integration tests do need Node; only
 > committed-oracle tests are Node-free. Plugin encrypted setup exports are not
 > the peer's `sls://` connection format. Live parity acceptance is pending Task 8.
 
@@ -641,3 +642,29 @@ cases and non-ASCII header transport are not claimed byte-identical.
 are used; keep typed application diagnostics. Credentials must not escape
 through debug tracebacks. See tests/test_custom_headers.py and the G5 evidence
 directory for RED/GREEN, mutation and final full-suite verification.
+
+
+### 2026-11-25 — G6: CouchDB JWT authentication
+
+[DECISION] Support explicit JWT connection configuration for HS256, HS512,
+ES256 and ES512, exclusive with Basic auth. Follow executed commonlib
+`484c164450d61deb2e301582b60cb9b5f9fa977f`, `src/replication/httplib.ts:67-212`:
+header/payload insertion order, Latin-1 btoa, base64 key import, raw EC signatures,
+per-backend cache and strict ten-second refresh boundary. Defaults are at
+`src/common/models/setting.const.defaults.ts:198-203`; plugin field labels are at
+`SetupRemoteCouchDB.svelte:240-297` (plugin pin `5070b67beae3b60e3a79132386a08da3f1ef213a`).
+
+[GOTCHA] The prose task description said trimmed subject and floor seconds;
+the pinned code validates trimmed sub but serializes original sub (:150/:171),
+and uses signed int32 seconds (:166/:190). Preserve executed upstream behavior,
+including whitespace, Latin-1 encoding constraints and post-2038 wrapping.
+
+[REUSE] `scripts/extract_jwt_vectors.mjs` records real published Computed/binary
+helpers, verified archive integrity, source digests and synthetic test keys.
+No production credentials are fixtures. Diagnostics expose only typed auth mode
+and algorithm. PyJWT 2.15.1 and cryptography 50.0.2 are explicit direct pins;
+requirements.lock and installed versions already match.
+
+Live JWT startup is env-gated by `COUCHDB_TEST_JWT_URL`. The URL was absent in
+this task environment, so live CouchDB acceptance remains NOT DONE; the HTTP
+fake and WebCrypto-generated wire fixtures cover offline behavior.

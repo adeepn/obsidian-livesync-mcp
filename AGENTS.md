@@ -8,6 +8,7 @@ This repository is a small Python MCP server for accessing an Obsidian LiveSync 
 - `config.py`: strict environment validation (`load_config`) — backend selection, backend credentials, client auth; rejects placeholder secrets.
 - `storage_base.py`: storage-agnostic `StorageBackend` protocol plus the storage exception hierarchy.
 - `couchdb_compression.py`: unconditional CouchDB document decompression, lossless shorter-only raw-deflate writes, and typed corruption errors.
+- `couchdb_jwt.py`: pinned plugin JWT key import, compact JWS signing and per-backend token refresh.
 - `storage_couchdb.py`: `CouchDBBackend`, the LiveSync-aware CouchDB implementation of the protocol.
 - `wire_encoding.py`: shared well-formed JSON serialization and journal TextEncoder surrogate projection.
 - `journal_codec.py`: LiveSync journal record parsing and serialization.
@@ -145,3 +146,11 @@ Pull requests should include purpose, affected files or tool paths, verification
 ## Security & Configuration Tips
 
 Never commit `.env`, CouchDB credentials, OAuth client secrets, or public deployment tokens. When changing OAuth behavior, document client registration assumptions and redirect URI implications in `README.md`.
+
+`scripts/extract_jwt_vectors.mjs` executes pinned `JWTTokenGenerator` with
+integrity-verified published octagonal-wheels and Node WebCrypto; synthetic
+private keys in `tests/fixtures/jwt_upstream.json` are test-only, not secrets.
+`tests/test_couchdb_jwt.py` covers exact wire bytes, raw EC verification,
+refresh boundaries, exclusive configuration, transport hygiene and typed stats.
+Its one live startup smoke is skipped unless `COUCHDB_TEST_JWT_URL` is exported
+with JWT credentials and the intended `COUCHDB_DATABASE`.

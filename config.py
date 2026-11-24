@@ -61,6 +61,11 @@ class CouchDBConfig:
     database: str
     # common/models/setting.const.defaults.ts:196-197: empty connection headers.
     custom_headers: tuple[tuple[str, str], ...] = field(default=(), repr=False)
+    jwt_algorithm: str = ""
+    jwt_key: str = field(default="", repr=False)
+    jwt_subject: str = field(default="", repr=False)
+    jwt_key_id: str = field(default="", repr=False)
+    jwt_expiry_minutes: float = 5.0
 
 
 @dataclass(frozen=True)
@@ -257,12 +262,42 @@ def _reject_placeholder(value: str, name: str) -> None:
 
 
 def _load_couchdb(env: Mapping[str, str]) -> CouchDBConfig:
+    from couchdb_jwt import ALGORITHMS, JWTConfigError, JWTTokenGenerator
+    algorithm = env.get("COUCHDB_JWT_ALGORITHM", "")
+    jwt_names = ("COUCHDB_JWT_KEY", "COUCHDB_JWT_SUBJECT",
+                 "COUCHDB_JWT_KEY_ID", "COUCHDB_JWT_EXPIRY_MINUTES")
+    if not algorithm and any(env.get(n, "") for n in jwt_names):
+        raise ConfigError("COUCHDB_JWT_ALGORITHM is required with COUCHDB_JWT_*; choose exactly one CouchDB auth mode.")
+    if algorithm:
+        if algorithm not in ALGORITHMS:
+            raise ConfigError("COUCHDB_JWT_ALGORITHM must be HS256, HS512, ES256 or ES512.")
+        conflicts = [n for n in ("COUCHDB_USER", "COUCHDB_PASSWORD") if n in env]
+        if conflicts:
+            raise ConfigError("COUCHDB_JWT_ALGORITHM conflicts with " + ", ".join(conflicts) + "; remove Basic auth variables.")
+        try:
+            expiry = float(env.get("COUCHDB_JWT_EXPIRY_MINUTES", "5"))
+            if not math.isfinite(expiry) or expiry <= 0:
+                raise ValueError
+        except (ValueError, TypeError, OverflowError):
+            raise ConfigError("COUCHDB_JWT_EXPIRY_MINUTES must be a positive finite number; set a valid duration.") from None
+        cfg = CouchDBConfig(
+            url=env.get("COUCHDB_URL", "").strip() or COUCHDB_URL_DEFAULT,
+            user="", password="", database=_read(env, "COUCHDB_DATABASE"),
+            custom_headers=_load_custom_headers(env, "COUCHDB_CUSTOM_HEADERS"),
+            jwt_algorithm=algorithm, jwt_key=env.get("COUCHDB_JWT_KEY", ""),
+            jwt_subject=env.get("COUCHDB_JWT_SUBJECT", ""),
+            jwt_key_id=env.get("COUCHDB_JWT_KEY_ID", ""), jwt_expiry_minutes=expiry,
+        )
+        try:
+            JWTTokenGenerator(cfg)
+        except JWTConfigError as exc:
+            raise ConfigError(exc.public_message) from None
+        return cfg
     password = _read(env, "COUCHDB_PASSWORD")
     _reject_placeholder(password, "COUCHDB_PASSWORD")
     return CouchDBConfig(
         url=env.get("COUCHDB_URL", "").strip() or COUCHDB_URL_DEFAULT,
-        user=_read(env, "COUCHDB_USER"),
-        password=password,
+        user=_read(env, "COUCHDB_USER"), password=password,
         database=_read(env, "COUCHDB_DATABASE"),
         custom_headers=_load_custom_headers(env, "COUCHDB_CUSTOM_HEADERS"),
     )

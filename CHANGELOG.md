@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Settings parity
 
+- Add CouchDB JWT authentication with plugin-exact HS256/HS512 tokens and
+  ES256/ES512 raw signatures, per-backend refresh caching, validated exclusive
+  auth modes and typed auth observability. Document device-field/server-key
+  mapping; pin PyJWT and cryptography directly.
+
 - Support custom headers for CouchDB and S3 auth proxies using plugin text or
   JSON configuration, with startup validation and credential-safe diagnostics.
   Apply S3 headers after signing on every request; expose typed presence/count.

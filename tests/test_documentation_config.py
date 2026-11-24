@@ -52,6 +52,7 @@ def test_documented_connection_block_loads(name, block):
     values = {
         '<paste-generated-token>': secrets.token_urlsafe(32),
         '<CouchDB-server-URI>': 'http://127.0.0.1:5984',
+        '<plugin-jwt-key>': 'c3ludGhldGljLWRvY3MtdGVzdC1rZXk=',
         '<plugin-username>': 'local-test-user',
         '<plugin-password>': secrets.token_urlsafe(32),
         '<plugin-database-name>': 'local-test-vault',
@@ -225,3 +226,21 @@ def test_custom_header_connection_contract():
     for name in ('docs/s3-journal.md', 'docs/vault-format.md', 'CHANGELOG.md'):
         assert 'custom headers' in (ROOT / name).read_text()
     assert '2026-11-25 — G5' in (ROOT / 'docs/superpowers/specs/2026-11-23-settings-parity.md').read_text()
+
+
+def test_jwt_connection_contract_is_documented():
+    names = ('COUCHDB_JWT_ALGORITHM', 'COUCHDB_JWT_KEY', 'COUCHDB_JWT_SUBJECT',
+             'COUCHDB_JWT_KEY_ID', 'COUCHDB_JWT_EXPIRY_MINUTES')
+    for file in ('README.md', '.env.example', 'docs/connecting-storage.md'):
+        text = (ROOT / file).read_text()
+        assert all(name in text for name in names), file
+    text = (ROOT / 'docs/connecting-storage.md').read_text()
+    for label in ('Use JWT Authentication', 'JWT Algorithm', 'JWT Key',
+                  'JWT Key ID (kid)', 'JWT Subject (sub)',
+                  'JWT Expiration Duration (minutes)', 'PKCS8', 'hmac:_default',
+                  'ec:_default', 'authentication_handlers', 'auth_mode', 'jwt_algorithm'):
+        assert label in text
+    assert 'CouchDB JWT auth are not supported' not in (ROOT / 'README.md').read_text()
+    assert '2026-11-25 — G6' in (ROOT / 'docs/superpowers/specs/2026-11-23-settings-parity.md').read_text()
+    for artifact in ('couchdb_jwt.py', 'scripts/extract_jwt_vectors.mjs'):
+        assert artifact in (ROOT / 'AGENTS.md').read_text()

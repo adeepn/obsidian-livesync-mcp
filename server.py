@@ -94,6 +94,7 @@ def get_backend(cfg: Config) -> StorageBackend:
         password=cfg.couchdb.password,
         database=cfg.couchdb.database,
         custom_headers=cfg.couchdb.custom_headers,
+        jwt_config=cfg.couchdb if cfg.couchdb.jwt_algorithm else None,
         text_verdict_cache_entries=cfg.text_verdict_cache_entries,
         scan_max_notes=cfg.scan_max_notes,
         scan_max_bytes=cfg.scan_max_bytes,
@@ -1415,6 +1416,11 @@ async def obsidian_vault_stats() -> str:
     for field in ('filters_active', 'selection_writer_supported', 'enableCompression', 'custom_headers_configured'):
         if field in info:
             local_state[field] = info[field] if type(info[field]) is bool else False
+    if "auth_mode" in info:
+        mode = info["auth_mode"]
+        local_state["auth_mode"] = mode if type(mode) is str and mode in {'basic', 'jwt'} else None
+        algorithm = info.get("jwt_algorithm")
+        local_state["jwt_algorithm"] = algorithm if type(algorithm) is str and algorithm in {'HS256', 'HS512', 'ES256', 'ES512'} else None
     if "custom_headers_count" in info:
         count = info["custom_headers_count"]
         local_state["custom_headers_count"] = count if type(count) is int and 0 <= count < 2**63 else 0

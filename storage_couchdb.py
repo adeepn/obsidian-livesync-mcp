@@ -47,7 +47,9 @@ import json
 import logging
 import time
 import urllib.parse
-from typing import AsyncIterator
+from typing import AsyncIterator, Callable
+from config import CouchDBConfig
+from couchdb_jwt import JWTTokenGenerator
 
 from scan_budget import ScanBudget
 from text_eligibility import (TextProjection, DEFAULT_TEXT_SCAN_MAX_BYTES,
@@ -159,6 +161,8 @@ class CouchDBBackend(DeviceSelection):
         *,
         transport: httpx.AsyncBaseTransport | None = None,
         custom_headers: tuple[tuple[str, str], ...] = (),
+        jwt_config: CouchDBConfig | None = None,
+        jwt_clock: Callable[[], float] = time.time,
         text_verdict_cache_entries: int = DEFAULT_TEXT_VERDICT_CACHE_ENTRIES,
         scan_max_notes: int = 10000,
         scan_max_bytes: int = 64 * 1024 * 1024,
@@ -169,6 +173,7 @@ class CouchDBBackend(DeviceSelection):
         self._scan_limits = (scan_max_notes, scan_max_bytes)
         self.text_scan_max_bytes = DEFAULT_TEXT_SCAN_MAX_BYTES
         self._text_verdicts = OrderedDict()
+        self._jwt = JWTTokenGenerator(jwt_config, clock=jwt_clock) if jwt_config is not None else None
         self._custom_headers = dict(custom_headers)
         self._auth_header = "Basic " + base64.b64encode(f"{username}:{password}".encode()).decode("ascii")
         self._database = database
@@ -181,11 +186,11 @@ class CouchDBBackend(DeviceSelection):
         self.sync_max_size_mb_override = None
         self._client = httpx.AsyncClient(
             base_url=url if url.endswith("/") else url + "/",
-            auth=(username, password),
+            auth=None if self._jwt else (username, password),
             transport=transport,
             timeout=httpx.Timeout(5.0, read=30.0, write=30.0, pool=5.0),
         )
-        if custom_headers:
+        if custom_headers or self._jwt:
             # AsyncClient imports httpcore lazily: install filters only after
             # constructing its transport, including on the first connection.
             from diagnostic_hygiene import silence_transport_logging
@@ -235,7 +240,7 @@ class CouchDBBackend(DeviceSelection):
             # RemoteService.ts:360-369 uses Headers.append, including auth
             # and Content-Type. Fetch headers are case-insensitive ByteStrings.
             headers = httpx.Headers(body.pop("headers", {}), encoding="latin-1")
-            headers["Authorization"] = self._auth_header
+            headers["Authorization"] = "Bearer " + self._jwt.token() if self._jwt else self._auth_header
             for key, value in self._custom_headers.items():
                 value = value.strip(" \t")
                 if key in headers:
@@ -256,7 +261,7 @@ class CouchDBBackend(DeviceSelection):
         if code == 404 and method in {'GET', 'HEAD'}:
             return response  # missing notes are an ordinary absence
         if code >= 400:
-            if not self._custom_headers:
+            if not self._custom_headers and not self._jwt:
                 unsafe_debug(logger, response.text)
             logger.warning('CouchDB %s status: %s', operation_field(method), numeric_field(code))
             reason = (DiagnosticCode.COUCHDB_DATABASE_NOT_FOUND if code == 404 else
@@ -501,6 +506,8 @@ class CouchDBBackend(DeviceSelection):
             "writer_supported": self._writer_unsupported_reason is None and selection["selection_writer_supported"],
             "writer_unsupported_reason": writer_diagnostic(self._writer_unsupported_reason or selection["selection_unsupported_reason"]),
             "backend": "couchdb",
+            "auth_mode": "jwt" if self._jwt else "basic",
+            "jwt_algorithm": self._jwt.algorithm if self._jwt else None,
             "custom_headers_configured": bool(self._custom_headers),
             "custom_headers_count": len(self._custom_headers),
             "enableCompression": self.enable_compression is True,

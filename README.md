@@ -73,9 +73,14 @@ are read only for the selected backend. Empty defaults below mean an empty strin
 | `LIVESYNC_BACKEND` | none | Required | Select `couchdb` or `s3` |
 | `COUCHDB_CUSTOM_HEADERS` | empty | Optional | Plugin Custom Headers lines or JSON object; credential values; see [connection examples](docs/connecting-storage.md#reverse-proxies-and-auth-proxies) |
 | `COUCHDB_URL` | `http://localhost:5984` | Optional | CouchDB server base URL |
-| `COUCHDB_USER` | none | Required for CouchDB | Database username |
-| `COUCHDB_PASSWORD` | none | Required for CouchDB | Database password |
+| `COUCHDB_USER` | none | Required for CouchDB Basic auth; absent for JWT | Database username |
+| `COUCHDB_PASSWORD` | none | Required for CouchDB Basic auth; absent for JWT | Database password |
 | `COUCHDB_DATABASE` | none | Required for CouchDB | LiveSync database name |
+| `COUCHDB_JWT_ALGORITHM` | empty (Basic auth) | Select JWT mode | HS256, HS512, ES256 or ES512; remove COUCHDB_USER and COUCHDB_PASSWORD |
+| `COUCHDB_JWT_KEY` | none | Required for JWT | Base64 HMAC key or matching PKCS8 EC PEM private key; never reported |
+| `COUCHDB_JWT_SUBJECT` | none | Required for JWT | Plugin JWT Subject (sub), nonblank; original whitespace preserved |
+| `COUCHDB_JWT_KEY_ID` | empty (omit kid) | Optional for JWT | Plugin JWT Key ID (kid); match server key entry |
+| `COUCHDB_JWT_EXPIRY_MINUTES` | 5 | Optional for JWT | Positive finite minutes; cached token refreshes when exp is strictly less than integer current seconds + 10 |
 | `LIVESYNC_S3_URI` | empty | Required unless S3 fields set | `sls://access:secret@endpoint?bucket=…&region=…&prefix=…` connection |
 | `S3_ENDPOINT_URL` | none | Required for S3 fields | S3-compatible endpoint URL |
 | `S3_ACCESS_KEY_ID` | none | Required for S3 fields | Object-storage access key |
@@ -130,6 +135,8 @@ new journals. Tools refresh automatically, subject to the refresh interval;
 there is no background polling. [Connection details](docs/connecting-storage.md#s3-journal),
 [refresh, publication and conflict semantics](docs/s3-journal.md).
 
+For CouchDB JWT connections, follow the [JWT setup route](docs/connecting-storage.md#couchdb-jwt-authentication) to copy the plugin fields and configure the server verifier.
+
 ## Supported vault settings
 
 “Identical” means source-audited behavior at the pin, not live acceptance of every
@@ -157,6 +164,7 @@ combination. [Source inventory and caveats](docs/superpowers/specs/2026-11-23-se
 | `encrypt`, `E2EEAlgorithm`, `useDynamicIterationCount`, `encryptInternalMetadata` | E2EE options | Not supported for E2EE | Encrypted vaults fail startup; no encryption/decryption |
 | `usePathObfuscation` | false / true | Not supported when true | Startup refuses; see issue #4 |
 | `idDerivationVersion`, `idDerivationKey` | 0 legacy / 1 keyed | Identical for unencrypted vaults | Validate version/key configuration; unencrypted IDs follow upstream |
+| `useJWT`, `jwtAlgorithm`, `jwtKey`, `jwtKid`, `jwtSub`, `jwtExpDuration` | HS256 / HS512 / ES256 / ES512 | Identical JWT wire format | Explicit connection env; per-backend cached Bearer tokens, raw EC signatures; [setup](docs/connecting-storage.md#couchdb-jwt-authentication) |
 | `enableCompression` | false / true | Identical | CouchDB always reads compressed data; writes follow the vault (absent: false). Non-lossy CR/LF, surrogate and BOM exceptions below; journal forces off |
 | `suspendParseReplicationResult` | false / true | Deliberate difference | Reads remain available from DB; no filesystem reflection stage |
 | Hidden File Sync / customization sync | `i:`, `ix:` namespaces | Not supported | No local vault folder; hidden ignore files can be read internally |
@@ -165,6 +173,13 @@ combination. [Source inventory and caveats](docs/superpowers/specs/2026-11-23-se
 | Reflection/request/cache/concurrency tuning | Various local device options | Not supported as device settings | No host reflection or plugin request engine; [full inventory](docs/superpowers/specs/2026-11-23-settings-parity.md#ж-other-tweak_values-and-production-evidence-boundary) |
 
 ## How the peer differs from a device
+
+- CouchDB auth is explicit local configuration: choose Basic credentials or the
+  JWT environment group, independently of MCP client auth. JWT matches the pinned
+  plugin, including original subject whitespace and Latin-1 JSON encoding.
+  Non-Latin-1 identifiers cannot be encoded by the plugin either; configure
+  matching Latin-1 identifiers on the server and device. Vault stats expose only
+  `auth_mode` (`basic` or `jwt`) and `jwt_algorithm`, never keys or subjects.
 
 - CouchDB compression uses Python zlib raw deflate level 8; bytes may differ
   from device fflate output, but devices read either stream. The peer preserves
@@ -198,8 +213,8 @@ combination. [Source inventory and caveats](docs/superpowers/specs/2026-11-23-se
 - There is no local vault folder, Hidden File Sync, customization/plugin sync or
   suspended filesystem reflection. DB reads include received oversized files;
   a device may decline to reflect those files until its settings permit them.
-  Plugin encrypted setup exports and CouchDB JWT auth are not supported; copy
-  connection fields and use CouchDB username/password instead.
+  Plugin encrypted setup exports are not supported; copy
+  connection fields and choose CouchDB Basic or JWT authentication.
   Ordinary tools reserve service prefixes/names and dot-prefixed paths;
   [path admission](docs/vault-format.md#path-admission) lists the exact exclusions.
 - Refuse only inputs on which the plugin itself does not terminate: V1
