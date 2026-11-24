@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Add explicit `outcome unknown` results for mutations whose remote application
+  cannot be confirmed; require re-reading before retry and warn against
+  duplicating non-idempotent edits.
+
 - Add local device allow/ignore regex and vault ignore-file selection to both writers, with pinned ECMAScript/minimatch matching and filter diagnostics. Active filters require Node.js 22+.
 
 - Added `obsidian_download_attachment` for complete binary downloads over base64 with raw size/SHA-256, an optional caller size limit, and no fixed peer size cap for CouchDB and S3 journals
@@ -22,6 +26,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Added a `backend` field to `vault_stats` output identifying the active storage backend
 
 ### Changed
+
+- Keep completed journal writes successful when processed/last-sent bookkeeping
+  fails after commit; retry tracking with a bound, warn on exhaustion, and let
+  idempotent replay repair tracking.
+- Scope mutation preservation to peer-initiated refusals; incoming replay keeps
+  remote changes already applied before a later failure.
 
 - Replace fixed 32 MiB upload/write caps with the resolved device `syncMaxSizeInMB` rule on both backends; oversized ordinary writes and copies return a structured skipped outcome without publishing or changing the previous revision. Keep delete and received revision persistence independent of this gate; refuse oversized rename destinations before any mutation because this peer lacks the device's retained host file.
 - Remove the fixed download cap; retain the optional caller `max_bytes` limit.

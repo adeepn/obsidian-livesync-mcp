@@ -170,7 +170,9 @@ class StorageBackend(Protocol):
     Unseen remote concurrent writes may still land: journal appends commute
     and conflicts resolve by a deterministic winner. CouchDB provides stronger
     conditional-write semantics through _rev. Success means durable
-    publication, not eventual winner status.
+    publication, not eventual winner status. Mutations raise OutcomeUnknown
+    when remote application cannot be confirmed; re-read before retrying.
+    Incoming refresh/replay may legitimately apply remote changes before failing.
     """
 
     async def startup_check(self) -> None:

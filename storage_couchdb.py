@@ -822,11 +822,11 @@ class CouchDBBackend(DeviceSelection):
         """PUT a document and return its new revision.
 
         Durability requires CouchDB's explicit acknowledgement: HTTP 201
-        with an ``ok``/``rev`` body (spec §7.6). Any other status — 202
-        "Accepted" included — means the write is not confirmed on disk
-        and is treated as a failure, so no caller ever reports success
-        on an undurable write. Stale ``_rev`` bodies surface as CouchDB
-        409s, which ``_request`` maps to ``ConcurrentModification``.
+        with an ``ok``/``rev`` body (spec §7.6). A non-refusal response
+        without that confirmation (including 202 "Accepted") raises
+        OutcomeUnknown; the caller must re-read before retrying. Explicit
+        4xx refusals remain ordinary errors. Stale ``_rev`` bodies surface
+        as CouchDB 409s, mapped to ``ConcurrentModification``.
         """
         response = await self._request(
             "PUT", self._doc_path(doc_id), json_body=body

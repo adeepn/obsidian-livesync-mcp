@@ -76,6 +76,34 @@ verify-visible); follow the [live acceptance checklist](docs/live-check-s3-check
 - **create_from_template** — Create from template with variable substitution
 - **list_templates** — List available templates
 
+### Outcome reporting
+
+Peer-initiated mutations have three outcomes:
+
+- **Applied:** the backend confirmed durable publication. Journal writes also
+  committed local metadata. Success does not guarantee eventual winner status
+  against concurrent peers. Continue normally.
+- **Refused without change:** policy skips/refusals, explicit CouchDB 4xx
+  refusals, and proven connection failures before sending leave the requested
+  mutation unapplied. Correct the refusal's cause before retrying.
+- **Outcome unknown:** the result begins with `outcome unknown`. The change
+  **MAY have been applied**, because the response was lost after sending,
+  publication verification failed, or local application failed after remote
+  publication. Re-read the affected paths (refresh the journal peer) before
+  retrying. For append, prepend, search-replace, properties set and tags add,
+  a **blind retry can duplicate the change**.
+
+The preservation invariant applies to **peer-initiated mutations refused before
+application**. It does not promise unchanged state after an unknown outcome.
+Incoming replay reflects remote truth incrementally, like a device: journals
+already applied remain applied if a later download fails. Retry refresh to
+continue replay.
+
+After confirmed remote publication/read-back and local metadata commit, journal
+processed/last-sent tracking retries at most three times. Exhaustion logs a
+warning and still returns success. Replay idempotently repairs an unmarked
+journal; last-sent tracking catches up on a subsequent publish.
+
 ## Size behavior
 
 Ordinary writes in **both backends**, including text edits and attachment uploads,

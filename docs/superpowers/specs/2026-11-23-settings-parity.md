@@ -212,8 +212,9 @@ Task 8 live experiments MUST answer:
 reset (SQLite tables and chunks)” is historical, not the current contract.
 See the explicitly superseded reset/identity instructions in
 [the original implementation plan](../plans/2026-11-19-s3-journal-peer.md).
-P-13 requires a refused, failed or skipped operation to preserve locally readable
-content. This peer has no separate host filesystem copy to recover from.
+P-15 scopes P-13 preservation to peer-initiated mutations refused or skipped
+before application; an uncertain publication cannot promise unchanged content.
+This peer has no separate host filesystem copy to recover from.
 
 Here `C:` is the commonlib source root (the same as `U:` above).
 At commonlib `484c164450d61deb2e301582b60cb9b5f9fa977f`,
@@ -255,3 +256,27 @@ fresh store. Log a WARNING with the archive path and restoration instructions.
 The old store remains openable under its original identity. Restoration requires
 stopping all users, moving the new state aside, restoring the archive to the old
 path, and configuring the original identity. No automatic deletion or eviction.
+
+
+## P-15 outcome contract (Task 5 fix round 3)
+
+Preservation concerns peer-initiated mutations, not incoming replay. Replay
+applies remote truth incrementally; a later download failure does not roll back
+journals already applied. The three closed round-2 loss paths remain unchanged.
+
+A mutation reports applied only after confirmed durable publication (and local
+metadata commit for journal). Explicit pre-application refusals remain ordinary
+errors/skips with no requested mutation. A lost response after send/acceptance,
+unconfirmed acknowledgement, or failure after remote journal publication but
+before local commit raises distinct `OutcomeUnknown`. Every mutating tool
+returns its text verbatim, beginning `outcome unknown`, stating the change MAY
+have been applied and requiring a re-read before retry. Append, prepend,
+search-replace, properties set and tags add explicitly warn that blind retry
+can duplicate changes. Proven pre-send failures and explicit 4xx refusals
+remain ordinary errors.
+
+After remote read-back and local metadata commit, processed/last-sent tracking
+failure retries at most three times, then logs WARNING and returns success.
+Replaying an unmarked journal is idempotent: no duplicate leaves, unchanged
+winner, and eventual processed-ledger convergence. A later publish advances
+last-sent tracking. This reporting contract does not alter pinned upstream replay behavior or introduce an emulated parity oracle.
