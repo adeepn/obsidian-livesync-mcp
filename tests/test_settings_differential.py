@@ -3,7 +3,10 @@ import pytest
 
 from content_splitter import ContentSplitter
 from tests.settings_oracle import GRID, MATRIX, assert_partition, check_input_digest
-from tests.settings_oracle_inputs import CASES, BRANCH_CASES, case_id, grid_cases, grid_payload, grid_path
+from tests.settings_oracle_inputs import (
+    CASES, BRANCH_CASES, SWEEP_CASES, case_id, grid_cases, grid_payload,
+    grid_path, settings_for,
+)
 
 
 def test_oracle_covers_exact_inputs():
@@ -26,4 +29,17 @@ def test_settings_splitter_differential(name, settings, kind, monkeypatch):
     pieces = splitter.split(data, path=grid_path(kind))
     children = [splitter.chunk_id_for_piece(p) for p in pieces]
     assert_partition(pieces, children, {
+        'pieces': vector['split_pieces'], 'children': vector['split_children']})
+
+
+@pytest.mark.parametrize('case', SWEEP_CASES, ids=case_id)
+def test_v3_minimum_boundary_sweep(case):
+    """Hold a seeded payload fixed while sweeping the grouping threshold."""
+    settings = settings_for(case)
+    vector = GRID[case_id(case)]
+    assert vector['settings'] == settings
+    kind = case[-1]
+    splitter = ContentSplitter(settings)
+    pieces = splitter.split(grid_payload(kind)[1], path=grid_path(kind))
+    assert_partition(pieces, [splitter.chunk_id_for_piece(p) for p in pieces], {
         'pieces': vector['split_pieces'], 'children': vector['split_children']})

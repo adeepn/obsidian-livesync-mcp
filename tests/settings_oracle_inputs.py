@@ -5,6 +5,8 @@ No production imports: this module defines inputs, never expected partitions.
 from itertools import product
 import base64
 import json
+import random
+from functools import lru_cache
 
 # Named levels remain distinct even when omission equals an explicit default.
 BACKENDS = ('couchdb', 'journal')
@@ -164,7 +166,20 @@ HINT_KINDS = tuple('hint-' + ext for ext in ('MD', 'Canvas', 'TXT', 'json', 'bar
 BASE_GRID_KINDS = GRID_KINDS
 GRID_KINDS += FENCE_KINDS + HINT_KINDS + ('cyrillic-emoji', 'binary-empty', 'binary-nul', 'json-clamp', 'pdf-far-lf')
 
+@lru_cache(maxsize=None)
 def grid_payload(kind):
+    if kind.startswith("random:"):
+        _, alphabet, seed, length = kind.split(":")
+        rng = random.Random(int(seed))
+        if alphabet == "binary":
+            return ".png", bytes(rng.randrange(256) for _ in range(int(length)))
+        if alphabet == "ascii":
+            return ".md", "".join(chr(rng.randrange(32, 127)) for _ in range(int(length)))
+        chars = {"mixed": "abcАБВпривет🙂🚀\n",
+                 "newline": "abcde\n\n\r\n",
+                 "punctuation": "ab,;:<.!?=\n"}[alphabet]
+        return ".md", "".join(rng.choice(chars) for _ in range(int(length)))
+
     if kind.startswith('utf8:'):
         _, width, offset = kind.split(':')
         return '.md', 'a' * int(offset) + {2: 'é', 3: '€', 4: '🙂'}[int(width)] + 'z'
@@ -202,7 +217,6 @@ def grid_payload(kind):
     if kind == 'pdf-far-lf':
         return '.pdf', b'x' * 10001 + b'\n' + b'y' * 100000 + b'/' + b'z' * 500
     if kind == 'override':
-        import random
         return '.png', random.Random(20261124).randbytes(102401)
     if kind.startswith('floor-binary:'):
         return '.png', b'x' * int(kind.split(':')[1])
@@ -216,7 +230,7 @@ def grid_payload(kind):
 
 
 def grid_cases():
-    for case in TEXT_BOUNDARY_CASES:
+    for case in TEXT_BOUNDARY_CASES + RANDOM_CASES + SWEEP_CASES:
         yield case_id(case), settings_for(case), case[-1]
     # Keep the original exhaustive settings grid unchanged.
     for version, custom, minimum, kind in product(FACTORS[1][1], ('default', 0, 1, 5, 60, 100), ('default', 5, 20, 100), BASE_GRID_KINDS):
@@ -286,7 +300,38 @@ PARTITION_CASES += ROUND4_CASES + [
 ]
 
 
+# Seed 198 includes the independently discovered equality-at-minimum witness.
+# These recipes contain inputs only; pinned upstream supplies every expectation.
+RANDOM_CASES = [
+    ('legacy', 'v3-rabin-karp', 'xxhash64', custom, minimum, 'default',
+     f'random:{alphabet}:{seed}:{length}')
+    for custom, minimum in product((0, 1, 60), ('default', 5, 20, 100))
+    for alphabet, seeds in (('ascii', (198, 17, 42)), ('binary', (17, 42)))
+    for seed, length in product(seeds, (64, 128, 200, 300, 512, 1000, 2048))
+] + [
+    ('legacy', 'v3-rabin-karp', 'xxhash64', custom, minimum, 'default',
+     'random:mixed:198:2048')
+    for custom, minimum in product((0, 1, 60), ('default', 5, 20, 100))
+] + [
+    ('legacy', version, 'xxhash64', 0, minimum, 'default',
+     f'random:{alphabet}:{seed}:{length}')
+    for version, minimum, alphabet, seed, length in product(
+        ('v1', 'v2'), (5, 100), ('newline', 'punctuation'), (17, 42), (200, 512, 2048))
+]
+SWEEP_CASES = [
+    ('legacy', 'v3-rabin-karp', 'xxhash64', 0, minimum, 'default',
+     'random:ascii:198:2048')
+    for minimum in range(1, 301, 7)
+]
+PARTITION_CASES += [
+    ('legacy', 'v3-rabin-karp', 'xxhash64', 0, 5, 'default',
+     'random:ascii:198:300')
+]
+
+
 def grid_path(kind):
+    if kind == 'random:ascii:198:300':
+        return 'witness.md'
     if kind.startswith('utf8:'):
         return 'utf8.md'
     if kind.startswith('hint-path:'):
