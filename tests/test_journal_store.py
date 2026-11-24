@@ -186,12 +186,14 @@ class TestApplyJournal:
             )
         assert store.processed(JOURNAL_2) is False
         assert store.note_ids() == ["seed.md"]
-        # SQLite prior state kept AND zero new published chunk files (nor
-        # staged leftovers) from the failed application.
+        # Metadata rolls back; installed content-addressed orphans are safe
+        # and reusable. Staging files must still be removed.
         files = sorted(
             p.name for p in (state / "chunks").rglob("*") if p.is_file()
         )
-        assert files == ["23456789abcdef"]
+        assert files == ["23456789abcdef", "dcba9876543210"]
+        assert store.read_note("seed.md")[1] == "keep"
+        assert not list((state / "chunks").rglob(".staged-*"))
         store.close()
 
     def test_publication_failure_leaves_journal_replayable(self, store, monkeypatch):
@@ -213,7 +215,7 @@ class TestApplyJournal:
                 store.apply_journal(JOURNAL_1, chunks, docs)
 
         assert store.processed(JOURNAL_1) is False
-        assert store.leaves("retry.md") == docs
+        assert store.leaves("retry.md") == []
         assert store._chunk_path("h:first").read_bytes() == b"first body"
         assert not store._chunk_path("h:second").exists()
         assert not list(store._chunks_dir.rglob(".staged-*"))

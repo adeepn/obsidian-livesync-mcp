@@ -241,6 +241,7 @@ async def test_unsuccessful_tool_preserves_every_readable_note(backend, monkeypa
     assert 'Error:' in result or 'not found' in result or json.loads(result)['status'] in ['skipped', 'refused']
     for path, note in before.items():
         after = await backend.read_note(path)
+        assert after['text'] == note['text'], path
         assert after['data'] == note['data'], path
         assert after['rev'] == note['rev'], path
 

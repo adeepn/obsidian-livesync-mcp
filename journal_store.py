@@ -265,11 +265,10 @@ class JournalStore:
     ) -> None:
         """Replay one parsed journal file; idempotent per ``name``.
 
-        Chunks are staged in unique temporary files. Docs commit before chunks
-        are atomically published; only then is the journal marked processed in
-        a separate transaction. Failed transactions remove their staging
-        without publishing any new chunks. Publication failures leave the
-        journal unprocessed so replay can complete it idempotently.
+        Stage and install content-addressed chunks before committing metadata.
+        A failed install cannot expose a revision whose children are missing.
+        Failed transactions may leave harmless orphan chunks, reused on retry.
+        Mark processed only after both chunks and metadata are installed.
         """
         if self.processed(name):
             return
@@ -290,11 +289,11 @@ class JournalStore:
                     tmp_file = Path(stream.name)
                     staged.append((tmp_file, chunk_file))
                     stream.write(data.encode("utf-8"))
+            for tmp_file, chunk_file in staged:
+                os.replace(tmp_file, chunk_file)
             with self._conn:
                 for doc in docs or []:
                     self._insert_doc(name, doc)
-            for tmp_file, chunk_file in staged:
-                os.replace(tmp_file, chunk_file)
             self.mark_processed(name)
         finally:
             for tmp_file, _ in staged:
