@@ -448,3 +448,36 @@ Focused hygiene + specific-message regressions: **2966 passed**.
 
 Prefixed-label full suite: **7581 passed, 7 skipped, 3 subtests passed**, 95.46 s.
 Durable artifact: `task-5b-fix1-prefix-suite.log`. Diff and diff check clean.
+### vault_stats and device publication documentation
+
+RED: `/tmp/parity-stats-red.log` — missing tweak_assessment in tool output.
+vault_stats now explicitly projects only status and differing_keys and sanitizes
+that diagnostic structure; it cannot forward additional assessment values. Three
+focused tests cover the projection and both actual backends using fake transports.
+
+The spec now records both auto-accept publication paths: CURRENT updates remote
+PREFERRED; REMOTE saves local settings, reinitializes managers when no rebuild is
+required, and also updates PREFERRED (pinned plugin ModuleResolveMismatchedTweaks.ts:
+229-231,333-350). Successful compatibility checking publishes the device snapshot
+on milestone updates, including periodic last-connected updates, and initializes
+missing PREFERRED (pinned commonlib LiveSyncDBFunctions.ts:153-170). README/spec
+state the peer's explicit invisible-writer policy and the public Python API's
+migration of both inputs before assessment.
+
+Verification artifact: `task-5b-fix1-verification.json` records successful compilation
+of all eight modified Python modules and AST identity against a84a46c for all eight
+tweak assessment/startup functions. Accepted differential fixtures and assessment
+semantics are unchanged; no synthetic replacement oracle was introduced (P-7).
+
+Final full suite: **7584 passed, 7 skipped, 3 subtests passed**, 96.63 s.
+Durable artifact: `task-5b-fix1-final-suite.log`. Verification JSON refreshed for
+the final source tree, including SHA256 per changed Python module. The original
+seven skips remain; no live storage or device operations were performed.
+
+Conclusions: specific causes survive all StorageError classes; one sanitizer
+covers exception outcomes and reason fields; setting values never enter writer
+or path-normalization diagnostics; mutation uncertainty/retry guidance survives
+redaction; vault_stats matches its documented assessment contract. The requested
+fix-round changes are complete. Assessment semantics and fixtures remain intact.
+Known outstanding concerns for this round: none. Final diff reviewed and
+`git diff --check` clean. Each logical commit has a passing full-suite artifact.

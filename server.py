@@ -1355,6 +1355,12 @@ async def obsidian_vault_stats() -> str:
                 f"local peer state exceeds {threshold} MB; "
                 "see README 'Local cache' for monitoring and reset"
             )
+    if "tweak_assessment" in info:
+        assessment = info["tweak_assessment"]
+        local_state["tweak_assessment"] = sanitize_diagnostic_fields({
+            "status": assessment["status"],
+            "differing_keys": assessment["differing_keys"],
+        })
     return json.dumps({
         **local_state,
         "total_notes": len(notes), "by_extension": by_ext,

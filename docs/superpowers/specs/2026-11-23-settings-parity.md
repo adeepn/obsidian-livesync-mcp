@@ -190,14 +190,26 @@ The peer advertises `encryptInternalMetadata=false` for its plaintext writer,
 matching `getEffectiveTweakValues` (`U:pouchdb/LiveSyncDBFunctions.ts:19-24`).
 
 [DECISION] Automatic lossy alignment applies the upstream timestamp winner to the
-local writer, with a log. The plugin additionally publishes PREFERRED for a CURRENT
-winner (`P:modules/coreFeatures/ModuleResolveMismatchedTweaks.ts:317-340`). The peer
-leaves that remote publication to explicit device alignment, as required by the
-Task 5b execution brief; automatic local startup does not change remote settings.
-A CURRENT winner therefore does not prove the other devices have aligned.
+local writer, with a log. The device has additional remote side effects:
+CURRENT auto-accept updates remote PREFERRED
+(`P:modules/coreFeatures/ModuleResolveMismatchedTweaks.ts:229-231,333-339`).
+REMOTE auto-accept saves local settings, reinitializes the chunk-generation
+managers when no rebuild is required, and ALSO updates remote PREFERRED
+(`P:modules/coreFeatures/ModuleResolveMismatchedTweaks.ts:341-350`). After a
+successful compatibility check, `ensureRemoteIsCompatible` publishes the device's
+current tweak snapshot when updating the milestone (including its periodic
+last-connected update); it initializes PREFERRED if absent
+(`U:pouchdb/LiveSyncDBFunctions.ts:153-168`, publication callback at :170).
 
-[DECISION] The public peer assessment runs the Task 3c one-pass splitter migration
-on each input before comparison. The pinned assessment itself does not migrate;
+By explicit policy this peer remains an invisible writer: it publishes note
+changes but neither its device snapshot nor PREFERRED. The Task 5b execution
+brief requires local alignment without those device milestone writes. Remote
+alignment remains an explicit device operation. A CURRENT winner therefore does
+not prove the other devices have aligned.
+
+[DECISION] Public-API difference: Python runs the Task 3c one-pass splitter
+migration on both assessment inputs before comparison. The pinned assessment
+itself does not migrate;
 its raw missing `chunkSplitterVersion` uses the declared v3 default, whereas the
 migration maps a missing version to empty (the existing peer legacy writer path).
 Differential fixtures retain both raw and normalized oracle assessments so this

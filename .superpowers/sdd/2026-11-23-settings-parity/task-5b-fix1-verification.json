@@ -1,0 +1,34 @@
+{
+  "compiled": {
+    "server.py": true,
+    "diagnostic_hygiene.py": true,
+    "content_splitter.py": true,
+    "livesync_format.py": true,
+    "object_storage.py": true,
+    "storage_couchdb.py": true,
+    "storage_journal.py": true,
+    "device_selection.py": true
+  },
+  "assessment_functions_unchanged": true,
+  "compared_functions": [
+    "_assess_normalized_tweaks",
+    "_effective_peer_tweaks",
+    "_tweak_equal",
+    "_tweak_number",
+    "_tweak_transition",
+    "assess_tweak_compatibility",
+    "resolve_tweak_startup",
+    "select_newer_tweak_side"
+  ],
+  "baseline": "a84a46c",
+  "source_sha256": {
+    "server.py": "a8e16a0b7434de5bdffc352cf356b4a8a478d919d3cda95566022552ecdd50a8",
+    "diagnostic_hygiene.py": "ca5af9afd2dc1df4199053ad8875ffbe448590970515cb50abac12a0e6d1e2d6",
+    "content_splitter.py": "ff2e0565f1155f8ed628a76a05d338437be7685a086d2dd89714e5869931bec7",
+    "livesync_format.py": "c788391b4ffda9e550af2e0ec9da0a9ed6733aaba38409362a60c854d5c30a94",
+    "object_storage.py": "be715af10ec142ca0f07cd5291ded14cbb7029ce6fe7a2a475ecdbc0b0c0ba4e",
+    "storage_couchdb.py": "491689d684b72f7b030652b67ebe1fe1033e886f2acd1ee29c507b5e12afc94c",
+    "storage_journal.py": "fc58fd9fcd91d2cf8143da608d27a4ef610374098e579c96302e805ef14c921e",
+    "device_selection.py": "8a9ad2131b4885fb2ff56031ee289dab7cd8c1d92d0979190c5141c40818f314"
+  }
+}

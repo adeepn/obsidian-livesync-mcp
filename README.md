@@ -833,8 +833,10 @@ Fully advertised differences limited to `hashAlg`, `customChunkSize` and
 `chunkSplitterVersion` can align automatically. The greater positive numeric
 `tweakModified` wins; ties or two absent/nonpositive timestamps choose PREFERRED
 (REMOTE). The winner is logged and applied to this peer's writer. This startup
-check does not change device snapshots or publish PREFERRED; CURRENT winners
-therefore still require remote alignment if devices are to adopt their settings.
+check does not change device snapshots or publish PREFERRED. By explicit policy
+this peer remains an invisible writer: it publishes note changes without those
+milestone writes. CURRENT winners therefore still require remote alignment if
+devices are to adopt their settings.
 
 `LIVESYNC_AUTO_ACCEPT_COMPATIBLE_TWEAK` defaults to `true`; `false` refuses
 these differences. `LIVESYNC_DISABLE_CHECKING_CONFIG_MISMATCH` defaults to
