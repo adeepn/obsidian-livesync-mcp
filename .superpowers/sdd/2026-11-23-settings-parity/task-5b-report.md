@@ -415,3 +415,24 @@ writer/identity tests: **2393 passed**. Additional RED proofs:
 The S3 bucket configuration is no longer reflected; token redaction also covers
 single-case runs containing '+' or '/', and decoding continues to a fixed point.
 Both review reproductions pass. Diff and diff-check reviewed clean.
+
+### Folded authorization and encoded userinfo follow-up
+
+The extended corpus found two further concrete redaction gaps: folded Authorization
+values and URL userinfo containing encoded whitespace, angle brackets or '@'.
+RED proofs: `/tmp/parity-folded-auth-red.log`, `/tmp/parity-url-encoding-red.log`,
+`/tmp/parity-url-userinfo-red.log`. The sanitizer now removes the authorization
+remainder and complete userinfo-bearing URLs after decoding, including those forms.
+
+A second RED (`/tmp/parity-auth-guidance-red.log`) showed why sanitizing only the
+final OutcomeUnknown sentence was insufficient: aggressive header redaction could
+also erase uncertainty and retry guidance. The wrapper now sanitizes contextual
+paths and the cause before building that sentence, then sanitizes the complete
+outcome as the final defense. Direct `_storage_message` follows the same ordering.
+The source still constructs causes only from approved structured fields.
+Focused hygiene + specific-message regressions: **2510 passed**.
+
+Authorization/encoded-userinfo full suite: **7125 passed, 7 skipped,
+3 subtests passed**, 90.79 s. Durable artifact: `task-5b-fix1-auth-suite.log`.
+Diff reviewed; diff check clean. This follow-up is kept separate from the
+vault_stats/documentation correction as a distinct security change.

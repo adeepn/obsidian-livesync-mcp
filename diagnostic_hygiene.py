@@ -71,8 +71,8 @@ def sanitize_diagnostic(text: str) -> str:
             break
         text = decoded
     # Diagnostic URLs have no public purpose; avoid retaining host/path secrets.
-    text = re.sub(r'[A-Za-z][A-Za-z0-9+.-]*://[^\s\'"<>]+', '[redacted URL]', text)
-    text = re.sub(r'(?i)\bauthorization[\'"\s]*[:=][^\n]*', '[redacted]', text)
+    text = re.sub(r'[A-Za-z][A-Za-z0-9+.-]*://(?:[\s\S]*@)?\S+', '[redacted URL]', text)
+    text = re.sub(r'(?is)\bauthorization[\'"\s]*[:=].*', '[redacted]', text)
     text = re.sub(r'(?i)\b(?:bearer|basic)\s+[^\s,;\'"}\]]+', '[redacted]', text)
     # Keep the existing safe key-only explanation, never an actual key value.
     sentinel = 'SAFE_INVALID_ID_CONFIGURATION'

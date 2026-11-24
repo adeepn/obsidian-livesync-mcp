@@ -238,7 +238,7 @@ def _storage_message_body(error: StorageError) -> str:
     if isinstance(error, MutationNotApplied):
         return f"Error: note is unchanged; {_safe_storage_detail(error)}"
     if isinstance(error, OutcomeUnknown):
-        return _safe_storage_detail(error)
+        return OutcomeUnknown(sanitize_diagnostic(error.detail)).message()
     if isinstance(error, ReplayBudgetExceeded):
         return f"Error: {_safe_storage_detail(error)}"
     if isinstance(error, WriteSkipped):
@@ -320,9 +320,9 @@ def _tool_errors(
                 if handler.__name__ == 'obsidian_duplicate_note' and len(paths) == 1:
                     base, ext = os.path.splitext(paths[0])
                     paths.append(f"{base} copy{ext}")
-                context = ' -> '.join(paths)
+                context = sanitize_diagnostic(' -> '.join(paths))
                 if isinstance(error, OutcomeUnknown):
-                    error = OutcomeUnknown(f"{context}: {error.detail}".rstrip(': '))
+                    error = OutcomeUnknown(sanitize_diagnostic(f"{context}: {error.detail}".rstrip(': ')))
                 elif isinstance(error, WriteSkipped):
                     response = error.as_dict()
                     response['message'] = f"{context}: {response['message']}"

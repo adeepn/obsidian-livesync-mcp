@@ -17,6 +17,7 @@ PAIRS += [(json.dumps({label.upper(): 'Credential-Marker'}), 'Credential-Marker'
 PAIRS += [(repr({label: 'Credential-Marker'}), 'Credential-Marker') for label in LABELS]
 PAIRS += [
     ('Authorization: Custom Credential-Marker extra', 'Credential-Marker'),
+    ('Authorization:\n Credential-Marker', 'Credential-Marker'),
     ('password={"nested": {"value": "Credential-Marker"}}', 'Credential-Marker'),
     ('token=["Credential-Marker", "second"]', 'Credential-Marker'),
     (json.dumps({'reason': json.dumps({'password': 'Credential-Marker'})}), 'Credential-Marker'),
@@ -24,6 +25,10 @@ PAIRS += [
     ('bEaReR Credential-Marker', 'Credential-Marker'),
     ('bAsIc Credential-Marker', 'Credential-Marker'),
     ('http://ak:sk@host', 'ak:sk'),
+    ('http://user:%3CCredential-Marker%3E@host', 'Credential-Marker'),
+    ('http://user:%20Credential-Marker@host', 'Credential-Marker'),
+    ('http://u%40name:%20Credential-Marker@host', 'Credential-Marker'),
+    ('http://user:%0ACredential-Marker@host', 'Credential-Marker'),
     ('custom://user:Credential-Marker@host/path', 'Credential-Marker'),
     ('password=123456789012345678901234567890', '123456789012345678901234567890'),
     ('aws-access-key-id : Credential-Marker', 'Credential-Marker'),
@@ -98,3 +103,11 @@ async def test_backend_info_sanitizes_reasons(tmp_path, kind):
         assert 'Credential-Marker' not in json.dumps(info)
 
 
+async def test_auth_redaction_preserves_mutation_uncertainty(monkeypatch):
+    backend = FakeBackend()
+    monkeypatch.setattr(server, 'backend', backend)
+    backend.errors['refresh'] = errors.OutcomeUnknown('Authorization:\n Credential-Marker')
+    result = await server.obsidian_create_note('note.md', 'body')
+    assert 'Credential-Marker' not in result
+    assert 'MAY have been applied' in result
+    assert 'IDEMPOTENT FOR THE SAME INPUT' in result
