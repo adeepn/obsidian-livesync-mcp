@@ -404,6 +404,13 @@ for seed in (0, 1, 2):
 # Hit the content-defined candidate exactly at its text minimum on three
 # independent ASCII streams (inputs selected by a rolling-fingerprint search,
 # never by the Python splitter). Upstream still supplies partitions and IDs.
+# Near-4 MiB text makes the 30 KiB floor observable: short text's adaptive
+# maximum is below that floor and cannot distinguish a wrong floor value.
+for seed in (0, 1, 2):
+    for delta in (-1, 0, 1):
+        _equality('V3 floor / minimum override', 'v3-rabin-karp',
+                  (30720 + delta) / 102400 - 1, 30721, 'md', 4000000, seed)
+
 for seed in (198, 262, 861):
     for minimum in (127, 128, 129):
         case = ('legacy', 'v3-rabin-karp', 'xxhash64', 0, minimum, 'default',
