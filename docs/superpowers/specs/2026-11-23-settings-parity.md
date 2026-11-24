@@ -204,3 +204,54 @@ Task 8 live experiments MUST answer:
 5. Case-sensitive + NFC vault on actual filesystem: two case variants vs two canonically equivalent Unicode spellings. Check collision diagnostics and physical host aliases independently of journal identity. Capture native client journal as the golden fixture, including the ≥4 MiB text-threshold transition and binary multi-piece records.
 
 [DEFER] Universal “any settings” parity additionally requires legacy splitter/hash modes and selection/ignore policies listed above, or a narrower supported-settings claim. Task 2 additionally owns startup compatibility refusal; Task 4 additionally owns regex filtering of peer writes. These requirements are not completed by this source extraction. Neither source evidence nor Task 8 outcomes should be replaced by new arbitrary limits.
+
+
+## P-14 correction: journal epoch, wipe and identity recovery (Task 5 fix round 2)
+
+**Superseded:** the earlier Plan B requirement “epoch change → full local state
+reset (SQLite tables and chunks)” is historical, not the current contract.
+See the explicitly superseded reset/identity instructions in
+[the original implementation plan](../plans/2026-11-19-s3-journal-peer.md).
+P-13 requires a refused, failed or skipped operation to preserve locally readable
+content. This peer has no separate host filesystem copy to recover from.
+
+Here `C:` is the commonlib source root (the same as `U:` above).
+At commonlib `484c164450d61deb2e301582b60cb9b5f9fa977f`,
+`C:replication/journal/JournalSyncCore.ts:291–341` updates checkpoint records and
+resets `knownIDs`, `sentIDs`, `receivedFiles`, `sentFiles`, without touching the
+local database. `:343–400` derives the epoch, keeps caches if the epoch is equal,
+and on epoch change keeps caches if there is no send history or the last-sent
+file still exists. Only a missing last-sent file (or failed upstream listing
+probe) confirms a wipe and clears those caches. Thus the code refines the P-14
+brief: **an epoch change alone does not clear even dedupe caches**. Real pinned
+methods, not a Python/JavaScript reimplementation, are executed by the Task 5
+fix-round-2 checkpoint oracle, `scripts/probe_journal_checkpoints.mjs`.
+Run `node scripts/probe_journal_checkpoints.mjs /path/to/pinned/commonlib`;
+it verifies the source against the pin and emits JSON with all six scenarios.
+
+The peer retains every document revision and chunk on recovery; it clears only
+processed journals and last-sent tracking and replays from the beginning after
+a confirmed wipe. Insert-if-missing revision keys and content-addressed chunks
+make this idempotent. Notes absent from the new world intentionally survive
+locally and are not automatically republished; a fresh peer cannot see them.
+The peer additionally checks last-sent existence even at the same epoch, and
+propagates probe IO failures rather than interpreting them as a confirmed wipe.
+This is a conservative extension of upstream, preserving prior peer wipe
+protection and the P-13 refusal invariant.
+
+The pre-append probe is read-only: changed epoch or missing last-sent journal
+raises `ConcurrentModification` (“remote was rebuilt or journals are missing;
+refresh and retry”), without changing store state or publishing anything.
+Startup and refresh reconcile caches without deleting local content, including
+when the first replay download fails. Install staged chunks before committing
+metadata; an install failure leaves previous revisions readable. A failed apply
+may leave unreferenced content-addressed chunk files, reused on retry, but must
+not commit metadata referencing missing chunks or mark the journal processed.
+
+A path-identity change must never mix IDs or discard data: close the old store,
+move the entire state directory to the sibling
+`<state_dir>.quarantine/<UTC timestamp and unique suffix>/state`, then create a
+fresh store. Log a WARNING with the archive path and restoration instructions.
+The old store remains openable under its original identity. Restoration requires
+stopping all users, moving the new state aside, restoring the archive to the old
+path, and configuring the original identity. No automatic deletion or eviction.

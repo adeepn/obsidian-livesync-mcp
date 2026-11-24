@@ -1,5 +1,12 @@
 # S3 Journal Peer (Plan B) Implementation Plan
 
+> **SUPERSEDED — epoch/wipe/identity recovery, P-14 / Task 5 fix round 2.**
+> The full SQLite/chunk reset and identity-error requirements below are historical.
+> Current policy retains local documents/chunks, resets only dedupe tracking on
+> confirmed wipe, preserves caches on epoch-only changes, and quarantines the
+> whole old directory on identity change. See
+> [settings parity P-14 correction](../specs/2026-11-23-settings-parity.md#p-14-correction-journal-epoch-wipe-and-identity-recovery-task-5-fix-round-2).
+
 > **SUPERSEDED — политика записи, Task 4 / fix round 1 (2026-11-24).**
 > Упоминания `BinaryNoteError`, запрета записи по расширению и запрета бинарных
 > upload ниже описывают историческое решение и больше не являются требованиями.

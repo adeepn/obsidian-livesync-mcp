@@ -408,8 +408,8 @@ Errors expose sanitized causes; diagnostic details remain in server logs.
 A 4096-entry LRU caches supported allow/deny verdicts by canonical path, rules
 fingerprint, case sensitivity, and ignore-content fingerprint. CouchDB keeps it
 in process memory; the journal backend persists it in its local SQLite store
-and clears it on reset. Rules changes invalidate old entries. Ignore files are
-read before lookup, so content changes cannot reuse a stale verdict. Cache hits
+and retains it across dedupe resets. Rules changes invalidate old entries.
+Ignore files are read before lookup, so content changes cannot reuse a stale verdict. Cache hits
 avoid engine calls; misses reuse the worker instead of spawning Node per write.
 The standalone synchronous `livesync_format.is_target_file` convenience API
 retains one-shot execution for isolated callers/tests with no backend lifecycle;
@@ -499,8 +499,9 @@ folder prefix. Shared state settings work with either connection form.
 Before each tool operation, the backend refreshes its local state. On first
 use, this replays the full journal history. This one-time replay can take a
 long time for a large vault. Startup validates settings and opens local state; it does not replay
-journals. Subsequent refreshes use the processed-file ledger; epoch changes or a detected
-remote wipe reset the cache and require replay again. Use a dedicated writable
+journals. Subsequent refreshes use the processed-file ledger. A confirmed remote
+wipe clears only deduplication tracking and starts replay from the beginning;
+local notes and chunks stay readable. Use a dedicated writable
 state directory per vault/peer and persist it across restarts. It contains
 `journal.sqlite3` (SQLite revision state and processed journals) and
 `chunks/` (cached chunk files).
@@ -539,7 +540,7 @@ with a warning logged once per adapter. That compatibility fallback retains
 the race between the precheck and upload.
 The backend never deletes S3 objects, prunes history, or runs remote garbage
 collection. Deleting a note publishes a tombstone; it does not remove journal
-objects. Local cache resets can delete local state.
+objects. Automatic dedupe resets retain all local documents and chunks.
 
 Concurrent edits can leave sibling revisions. The winner is deterministic:
 highest revision generation, then lexicographically greatest revision hash.
@@ -551,7 +552,8 @@ Supported S3 vault settings are legacy path identity (normalization version 0)
 and NFC identity (version 1), each with case-insensitive or case-sensitive
 filenames. Both backends follow the vault setting. NFC aliases composed and
 decomposed names even in sensitive mode. Existing local state with another
-identity requires rebuilding; incompatible metadata IDs are refused. E2EE
+identity archives the old store in quarantine and starts fresh; incompatible
+metadata IDs are refused. E2EE
 and path obfuscation remain unsupported.
 
 ### Local cache (S3)
@@ -591,20 +593,37 @@ To reset safely:
 
 1. Stop the server (for systemd: `sudo systemctl stop obsidian-mcp`) and any
    other process using that state directory. Confirm the remote vault is intact.
-2. Check the exact configured path. Move the directory aside for recovery, or
-   remove only that directory with `rm -rf -- "$S3_STATE_DIR"` after verifying
-   that the variable is set and points to the intended peer state directory.
+2. Check the exact configured path. Move the whole state directory aside for
+   recovery; keep it until every locally retained note has been accounted for.
+   Remote history may no longer contain the only copy of a local survivor.
 3. Start the server (`sudo systemctl start obsidian-mcp` for systemd). The next
    tool call replays remote journals to rebuild local state; allow time and disk
    for a full replay. Check statistics and known notes before discarding a backup.
 
-A reset removes local replay progress; it does not delete remote journals.
-Automatic logical resets occur on a journal epoch change
-(`protocolVersion:pbkdf2salt`) or when the last journal published by this peer
-vanishes, indicating a remote wipe. These clear local tables/chunks and require
-replay again; they are compatibility/recovery actions, not space-based eviction.
-Changing path-identity mode requires a fresh state directory; it fails closed
-rather than silently converting the existing replica.
+Automatic recovery mirrors the device's checkpoint handling, not database
+removal. A missing last-sent journal clears only the processed-journal ledger
+and last-sent tracking; replay restarts from the beginning. Local revision trees,
+chunk files, and notes absent from the rebuilt remote world remain readable.
+Replay is idempotent and does not duplicate revision leaves. A fresh peer sees
+only current remote history; retained local survivors are not automatically
+republished. Epoch changes (`protocolVersion:pbkdf2salt`) without a missing
+last-sent journal merely update the epoch and preserve dedupe caches, as in
+pinned `JournalSyncCore.ts:354–400` (including devices with no send history).
+Before appending, changed epoch or missing journals cause `ConcurrentModification`
+without changing the local store or writing remote objects; refresh and retry.
+
+Changing path identity quarantines the **whole** old state directory at
+`<state_dir>.quarantine/<UTC timestamp and unique suffix>/state` and opens a fresh
+store at the configured path. A WARNING names the archive and restoration steps.
+No archive is deleted automatically. To restore, stop all processes using this
+state, move the current directory aside, move the archived `state` back to the
+configured path, and restore the old path-identity settings before starting.
+Do not open the same state directory concurrently from multiple processes.
+
+**Superseded (P-14, Task 5 fix round 2):** the previous policy of clearing all
+local tables/chunks on epoch/wipe, and refusing identity changes without a
+recovery archive, no longer applies. The earlier full-reset description is
+retained as historical context in the implementation plan.
 
 ### 3. Run
 
@@ -711,8 +730,8 @@ changes can be interleaved between metadata windows and chunk fetches. Results
 can therefore combine observations from different times; a successful mutation
 means durable publication, not a promise that it remains the eventual winner.
 The S3 journal backend also uses best-effort scans of its local state.
-Refresh or state resets can interleave with a scan; chunks are retained until
-an epoch or remote-wipe reset. An unreadable note can be returned without text.
+Refresh can interleave with a scan; epoch and remote-wipe recovery retain local
+revision trees and chunks. An unreadable note can be returned without text.
 
 ### Text scan eligibility
 
@@ -736,6 +755,6 @@ one negative verdict for its revision and byte budget; superseded verdicts are
 dropped on rewrite/replay or when a new revision/budget is observed.
 `LIVESYNC_TEXT_VERDICT_CACHE_ENTRIES` (default 4096, positive integer) caps
 the number of cached documents with LRU eviction on both backends. Journal
-verdicts live in SQLite (old caches are pruned on open) and are cleared on
-state reset; CouchDB verdicts live in process memory and are cleared on
+verdicts live in SQLite (old caches are pruned on open) and survive dedupe
+resets; CouchDB verdicts live in process memory and are cleared on
 startup/close.
