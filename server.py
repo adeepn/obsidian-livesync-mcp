@@ -281,6 +281,24 @@ def _tool_errors(
         except regex_runner.RegexTimeoutError:
             return "Error: regex pattern too complex or input too large."
         except StorageError as error:
+            if isinstance(error, (OutcomeUnknown, WriteSkipped, RenameRefused)):
+                arguments = signature.bind(*args, **kwargs)
+                arguments.apply_defaults()
+                paths = [arguments.arguments[key] for key in
+                         ('path', 'template_path', 'new_path')
+                         if arguments.arguments.get(key)]
+                if handler.__name__ == 'obsidian_duplicate_note' and len(paths) == 1:
+                    base, ext = os.path.splitext(paths[0])
+                    paths.append(f"{base} copy{ext}")
+                context = ' -> '.join(paths)
+                if isinstance(error, OutcomeUnknown):
+                    error = OutcomeUnknown(f"{context}: {error.detail}".rstrip(': '))
+                elif isinstance(error, WriteSkipped):
+                    response = error.as_dict()
+                    response['message'] = f"{context}: {response['message']}"
+                    return json.dumps(response, ensure_ascii=False)
+                else:
+                    return f"Error: {context}: {error}"
             if isinstance(error, OutcomeUnknown) and operation is not None:
                 name = operation
                 if operation_arg is not None:

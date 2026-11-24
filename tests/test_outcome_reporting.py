@@ -174,6 +174,12 @@ async def test_every_mutating_tool_reports_exact_retry_class(backend, monkeypatc
                {'search':'old','replace':'larger'} if operation == 'search-replace' else {}))
     else:
         result = await calls[operation]()
+    for path in (['invariant.canvas'] if operation.startswith(('node_', 'edge_'))
+                 else ['invariant.md', 'target.md'] if operation in ('copy', 'move')
+                 else ['invariant.md', 'new.md'] if operation == 'template'
+                 else ['new.pdf'] if operation == 'upload'
+                 else ['new.md'] if operation == 'create' else ['invariant.md']):
+        assert path in result
     assert result.startswith('outcome unknown')
     assert 'MAY have been applied' in result and 're-read' in result
     labels = {
@@ -306,8 +312,12 @@ async def test_rename_source_retirement_response_lost_stays_unknown(monkeypatch)
                 raise httpx.ReadError('source deletion response lost')
             return response
         monkeypatch.setattr(backend._client, 'request', request)
-        with pytest.raises(OutcomeUnknown):
-            await backend.rename_note('only.md', 'target.md')
+        import server
+        monkeypatch.setattr(server, 'backend', backend)
+        result = await server.obsidian_move_note('only.md', 'target.md')
+        assert result.startswith('outcome unknown')
+        assert 'only.md' in result
+        assert 'target.md' in result
         assert await backend.read_note('only.md') is None
         assert (await backend.read_note('target.md'))['text'] == 'old'
 
@@ -356,7 +366,9 @@ async def test_metadata_publication_uncertainty_boundary(monkeypatch, operation,
             assert await peer.read_note(path) == before
             assert all(body.get('type') == 'leaf' for body in puts)
         elif phase == 'retirement':
-            assert 'destination published; source removal unknown — re-read both paths' in str(caught.value)
+            assert 'destination published' in str(caught.value)
+            assert path in str(caught.value)
+            assert 'target.md' in str(caught.value)
             assert await peer.read_note(path) is None
             assert (await peer.read_note('target.md'))['text'] == 'old'
         else:
@@ -539,3 +551,57 @@ async def test_completed_publication_does_not_fail_on_tracking_read(tmp_path, mo
         assert store.processed(store.last_sent_key)
     finally:
         await peer.close()
+
+
+@pytest.mark.parametrize('outcome,operation', [
+    *[('skipped', op) for op in ('create', 'overwrite', 'upload', 'copy')],
+    ('refused', 'move'),
+    *[('outcome unknown', op) for op in ('create', 'overwrite', 'upload', 'copy', 'move', 'delete')],
+])
+async def test_structured_outcomes_name_affected_paths(backend, monkeypatch, outcome, operation):
+    import json
+    import httpx
+    import server
+    from storage_base import OutcomeUnknown
+    from storage_journal import JournalBackend
+
+    await backend.write_note('only.md', 'old', create=True)
+    monkeypatch.setattr(server, 'backend', backend)
+    if outcome == 'outcome unknown':
+        if isinstance(backend, JournalBackend):
+            publish = backend._object_storage.put_if_absent
+            def lost(*args):
+                publish(*args)
+                raise OutcomeUnknown()
+            monkeypatch.setattr(backend._object_storage, 'put_if_absent', lost)
+        else:
+            request = backend._client.request
+            async def lost(method, path, **kwargs):
+                response = await request(method, path, **kwargs)
+                if method == 'PUT' and kwargs['json'].get('type') != 'leaf':
+                    raise httpx.ReadError('accepted; response lost')
+                return response
+            monkeypatch.setattr(backend._client, 'request', lost)
+    else:
+        backend.sync_max_size_mb = 1 / 1048576
+    calls = {
+        'create': lambda: server.obsidian_create_note('target.md', 'larger'),
+        'overwrite': lambda: server.obsidian_update_note('only.md', 'overwrite', 'larger'),
+        'upload': lambda: server.obsidian_upload_attachment('target.md', 'bGFyZ2Vy'),
+        'copy': lambda: server.obsidian_duplicate_note('only.md', 'target.md'),
+        'move': lambda: server.obsidian_move_note('only.md', 'target.md'),
+        'delete': lambda: server.obsidian_delete_note('only.md'),
+    }
+    result = await calls[operation]()
+    if outcome == 'skipped':
+        response = json.loads(result)
+        assert response['status'] == outcome
+        result = response['message']
+    elif outcome == 'refused':
+        assert 'move was not performed' in result
+    else:
+        assert result.startswith(outcome)
+    paths = (['only.md', 'target.md'] if operation in ('copy', 'move')
+             else ['only.md'] if operation in ('overwrite', 'delete') else ['target.md'])
+    for path in paths:
+        assert path in result

@@ -1130,7 +1130,8 @@ class CouchDBBackend(DeviceSelection):
             await self._soft_delete(doc, path, _now_ms())
         except OutcomeUnknown:
             raise OutcomeUnknown(
-                "destination published; source removal unknown — re-read both paths"
+                f"move {path} -> {new_path}: destination published; "
+                f"source removal unknown — re-read both {path} and {new_path}"
             ) from None
         except Exception as exc:
             logger.exception("rename source retirement failed for %s", path)
