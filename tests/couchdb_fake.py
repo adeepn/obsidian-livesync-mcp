@@ -51,6 +51,12 @@ from urllib.parse import unquote
 import httpx
 
 
+def _json_response(status_code: int, body: dict) -> httpx.Response:
+    # CouchDB responses can escape UTF-16 surrogates on the _all_docs route.
+    return httpx.Response(status_code, content=json.dumps(body, ensure_ascii=True).encode('utf-8'),
+                          headers={'Content-Type': 'application/json'})
+
+
 def _next_rev(rev: str) -> str:
     generation = rev.split("-", 1)[0]
     try:
@@ -135,9 +141,7 @@ def make_fake_couchdb(
                 )
                 for key in body["keys"]
             ]
-            return httpx.Response(
-                200, json={"total_rows": live_count(), "rows": rows}
-            )
+            return _json_response(200, {"total_rows": live_count(), "rows": rows})
 
         ordered = sorted(store, key=lambda key: key.encode("utf-8"))
         ordered = [k for k in ordered if not store[k].get("_deleted")]
@@ -153,9 +157,10 @@ def make_fake_couchdb(
         limit = params.get("limit")
         window = ordered[skip:] if limit is None else ordered[skip : skip + int(limit)]
         rows = [row_for(key, include_docs, by_keys=False) for key in window]
-        return httpx.Response(200, json={"total_rows": live_count(), "rows": rows})
+        return _json_response(200, {"total_rows": live_count(), "rows": rows})
 
     def handler(request: httpx.Request) -> httpx.Response:
+        request.extensions["raw_body"] = bytes(request.content)
         request_log.append(request)
         if force_status is not None:
             # "reason" doubles as a raw-body sentinel for log-hygiene

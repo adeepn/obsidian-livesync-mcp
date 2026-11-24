@@ -74,3 +74,14 @@ minimum. Zero can leave the upstream legacy loops nonterminating, so these
 configurations are refused. Negative/nonnumeric minimums and other invalid
 writer parameters are unsupported. These guard refusals are outside the
 “identical for valid settings” claim; V3 retains its own floor/clamp semantics.
+
+## CouchDB JSON string encoding
+
+Uncompressed CouchDB requests use compact JSON with raw UTF-8 for non-ASCII
+characters and lowercase `\udXXX` escapes for surrogate code points. This
+matches PouchDB HTTP adapter 9.0.0 `lib/index.es.js:765-773`, which sends
+`JSON.stringify(doc)`. JSON parsing restores those units without loss; joining
+plain leaf data restores pairs separated by legacy splitter boundaries
+(commonlib `src/common/utils.ts:83-84`). Chunk cuts and IDs are unchanged.
+CouchDB writes have no `transport_replacements` field. The journal's compact
+leaf encoding differs; see [surrogate wire encoding](s3-journal.md#surrogate-wire-encoding).

@@ -64,3 +64,30 @@ decomposed names even in sensitive mode. Existing local state with another
 identity archives the old store in quarantine and starts fresh; incompatible
 metadata IDs are refused. E2EE
 and path obfuscation remain unsupported.
+
+## Surrogate wire encoding
+
+At commonlib `484c164450d61deb2e301582b60cb9b5f9fa977f`,
+`src/replication/journal/journalRecords.ts:69-77` encodes compact leaf records
+with `TextEncoder`, replacing each unpaired UTF-16 surrogate unit with U+FFFD.
+Metadata records use `JSON.stringify(doc) + "\n"`: non-ASCII remains UTF-8,
+and unpaired surrogates become lowercase six-character `\udXXX` escapes.
+The reader remains a fatal UTF-8 decoder (`journalRecords.ts:79-108`).
+Compression wraps these exact frame bytes in raw DEFLATE.
+
+Legacy non-plain V1 cuts can separate an emoji's surrogate pair
+(`src/string_and_binary/chunks.ts:243-252`). V2 `chunkStringGenerator` protects
+pairs at `:307-310`; it does not produce this V1 witness cut.
+The journal transport then stores two U+FFFD characters in its place on every
+device. The peer preserves the original pieces' IDs and follows that same
+transport behavior. Its successful write metadata includes the integer
+`transport_replacements` only when its publication replaced units; tool text adds:
+“The LiveSync journal transport replaces unpaired surrogate units with U+FFFD;
+the note is stored exactly as devices would store it.” Counts refer to emitted
+compact records, counting each unique chunk once. Metadata escapes are lossless
+and do not count as replacements. An ordinary write has no extra field or text.
+
+There is no encoding setting. Re-read the published note to inspect the same
+text other devices receive. See the dated upstream [GOTCHA] in the settings
+parity spec and `tests/fixtures/surrogate_wire_upstream.json` for executable
+upstream frame bytes and decoded records.

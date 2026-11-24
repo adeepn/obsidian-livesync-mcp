@@ -423,7 +423,10 @@ def assemble_text(chunk_datas: list[str]) -> str:
     ``plain`` documents store each chunk verbatim (no encoding), so the
     body is the plain join of the chunk data strings in order.
     """
-    return "".join(chunk_datas)
+    # commonlib common/utils.ts:83-84 joins JS UTF-16 strings. Combine pairs
+    # across chunk boundaries into Python scalar values without moving cuts.
+    return "".join(chunk_datas).encode("utf-16-le", errors="surrogatepass").decode(
+        "utf-16-le", errors="surrogatepass")
 
 
 def assemble_binary(chunk_datas: list[str]) -> bytes:

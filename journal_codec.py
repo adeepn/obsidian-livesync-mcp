@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import json
 import zlib
+from wire_encoding import json_stringify, text_encoder_string
 from dataclasses import dataclass, field
 from replay_limits import ReplayLimits, ReplayBudgetExceeded
 
@@ -126,7 +127,9 @@ def serialize_journal(chunks: list[tuple[str, str]], docs: list[dict]) -> bytes:
     Chunk pairs are ``(chunk_id, data)``. Metadata documents must carry a
     string ``_rev`` (non-chunk records without one are rejected upstream, so
     they are rejected here at write time). Output matches
-    ``JSON.stringify``: compact separators, non-ASCII kept as UTF-8.
+    ``JSON.stringify``: compact separators, non-ASCII kept as UTF-8,
+    surrogate code points escaped. Compact leaves instead follow TextEncoder
+    (journalRecords.ts:69-77), replacing each surrogate with U+FFFD.
     """
     lines: list[str] = []
     for chunk_id, data in chunks:
@@ -134,19 +137,14 @@ def serialize_journal(chunks: list[tuple[str, str]], docs: list[dict]) -> bytes:
             raise ValueError(f"Invalid journal chunk identifier: {chunk_id!r}")
         if not isinstance(data, str):
             raise ValueError(f"Journal chunk {chunk_id!r} data must be a string")
-        lines.append(f"{_COMPACT_PREFIX}{chunk_id}{_UNIT_SPLIT}{_escape_chunk_data(data)}")
+        # commonlib journalRecords.ts:70-74: encode compact lines directly.
+        lines.append(text_encoder_string(
+            f"{_COMPACT_PREFIX}{chunk_id}{_UNIT_SPLIT}{_escape_chunk_data(data)}"))
     for doc in docs:
         if not isinstance(doc, dict) or not isinstance(doc.get("_rev"), str):
             raise ValueError("Journal metadata document requires a string _rev")
         try:
-            lines.append(
-                json.dumps(
-                    doc,
-                    ensure_ascii=False,
-                    separators=(",", ":"),
-                    allow_nan=False,
-                )
-            )
+            lines.append(json_stringify(doc))
         except ValueError as exc:
             # JSON.stringify cannot emit NaN/Infinity; Python's permissive
             # default must not leak them into a file devices refuse to parse.

@@ -31,6 +31,8 @@ before applying it locally; rename publishes both revisions in one file.
 
 from __future__ import annotations
 
+from wire_encoding import text_encoder_string, surrogate_count
+
 from diagnostic_hygiene import (writer_diagnostic, diagnostic, settings_exception_diagnostic, PublicDiagnostic, setting_key,
     DiagnosticCode, assessment_fields, setting_value, fingerprint, cause_name)
 
@@ -977,7 +979,7 @@ class JournalBackend(DeviceSelection):
             chunk_file = store._chunk_path(chunk_id)
             if (
                 chunk_file.exists()
-                and chunk_file.read_bytes() != content.encode("utf-8")
+                and chunk_file.read_bytes() != text_encoder_string(content).encode("utf-8")
             ):
                 raise StorageError(
                     "existing shared content chunk holds different data"
@@ -985,7 +987,7 @@ class JournalBackend(DeviceSelection):
             doc = store.winner(chunk_id)
             if doc is not None and (
                 doc.get("e_") or doc.get("deleted")
-                or doc.get("type") != "leaf" or doc.get("data") != content
+                or doc.get("type") != "leaf" or doc.get("data") != text_encoder_string(content)
             ):
                 raise StorageError(
                     "existing shared content chunk is encrypted or holds different data"
@@ -998,7 +1000,7 @@ class JournalBackend(DeviceSelection):
     def _publish(
         self, chunks: list[tuple[str, str]], docs: list[dict], *,
         attachment_data: bytes | None = None,
-    ) -> None:
+    ) -> int:
         """Confirm the exact journal before any local mutation.
 
         No await separates the precondition, put, verification and apply:
@@ -1006,6 +1008,7 @@ class JournalBackend(DeviceSelection):
         event loop. Success confirms publication, not eventual winner status.
         A failed verification leaves local state untouched. The remote object
         is never deleted; a later refresh may replay a published orphan.
+        Return the number of surrogate units replaced in emitted compact frames.
         """
         store = self._require_store("publish")
         published = False
@@ -1025,6 +1028,13 @@ class JournalBackend(DeviceSelection):
             for doc in journal.docs:
                 validate_document_identity(doc, store.path_identity)
             store.validate_journal(journal.chunks, journal.docs)
+            # journalRecords.ts:70-76: compact leaves are TextEncoder-lossy;
+            # metadata JSON is lossless. Validate the exact projected frame.
+            expected_chunks = {chunk_id: text_encoder_string(data)
+                               for chunk_id, data in chunks}
+            expected_docs = docs
+            replacements = sum(surrogate_count(chunk_id) + surrogate_count(data)
+                               for chunk_id, data in chunks)
             blob = deflate_journal(payload)
             if len(blob) > getattr(self._object_storage, "max_object_bytes", MAX_OBJECT_BYTES):
                 raise ReplayBudgetExceeded("max_object_bytes", len(blob), self._object_storage.max_object_bytes)
@@ -1090,8 +1100,8 @@ class JournalBackend(DeviceSelection):
             )
             if (
                 decoded != payload
-                or journal.chunks != dict(chunks)
-                or journal.docs != docs
+                or journal.chunks != expected_chunks
+                or journal.docs != expected_docs
             ):
                 raise StorageError("journal read-back verification failed")
             if attachment_data is not None and assemble_binary([
@@ -1107,6 +1117,7 @@ class JournalBackend(DeviceSelection):
                 store.last_sent_key = name
                 store.compact_outbound(name)
             store.finish_bookkeeping(finish_send_tracking)
+            return replacements
         except (StorageError, ValueError, OSError, sqlite3.Error) as exc:
             if published:
                 raise OutcomeUnknown(getattr(exc, "diagnostic", None)) from exc
@@ -1209,8 +1220,15 @@ class JournalBackend(DeviceSelection):
             )
         body.update(_id=doc_id, path=canonical_path(path))
         body = self._next_revision(body, parent)
-        self._publish(chunks, [body], attachment_data=attachment_data)
-        return self._meta_from_doc(body)
+        replacements = self._publish(chunks, [body], attachment_data=attachment_data)
+        result = self._meta_from_doc(body)
+        if replacements:
+            result["transport_replacements"] = replacements
+            from storage_base import publication_replacements
+            collector = publication_replacements.get()
+            if collector is not None:
+                collector.append(replacements)
+        return result
 
     async def delete_note(
         self, path: str, expected_rev: str | None = None

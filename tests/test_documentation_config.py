@@ -107,3 +107,17 @@ def test_env_template_loads_after_required_configuration(connection, auth):
     cfg = load_config(env)
     assert bool(cfg.api_key) == (auth == 'bearer')
     assert cfg.backend == env['LIVESYNC_BACKEND']
+
+
+def test_surrogate_wire_contract_is_documented_without_a_switch():
+    for name in ('README.md', '.env.example', 'docs/s3-journal.md',
+                 'docs/vault-format.md', 'CHANGELOG.md'):
+        text = (ROOT / name).read_text()
+        assert 'transport_replacements' in text, name
+    journal = (ROOT / 'docs/s3-journal.md').read_text()
+    assert 'U+FFFD' in journal and 'TextEncoder' in journal
+    assert 'JSON.stringify' in (ROOT / 'docs/vault-format.md').read_text()
+    assert 'wire_encoding.py' in (ROOT / 'AGENTS.md').read_text()
+    assert 'extract_surrogate_vectors.mjs' in (ROOT / 'AGENTS.md').read_text()
+    spec = (ROOT / 'docs/superpowers/specs/2026-11-23-settings-parity.md').read_text()
+    assert '2026-11-24 — G7' in spec and '[GOTCHA]' in spec

@@ -11,7 +11,11 @@ from __future__ import annotations
 
 from diagnostic_hygiene import (PublicDiagnostic, DiagnosticPath, diagnostic, path_field, setting_key, numeric_field, numeric_text, cause_name)
 
-from typing import AsyncIterator, Protocol, TypedDict, runtime_checkable
+from typing import AsyncIterator, Protocol, TypedDict, runtime_checkable, NotRequired
+from contextvars import ContextVar
+
+# Per-tool publication counts; never store content or remote fields here.
+publication_replacements: ContextVar[list[int] | None] = ContextVar("publication_replacements", default=None)
 
 
 class StorageError(Exception):
@@ -220,7 +224,9 @@ class NoteMeta(TypedDict):
     CouchDB passes through ``_rev``; the Plan B journal backend uses its
     local winner lineage token. An absent note has no metadata result.
     ``get_meta`` populates it so read-modify-write callers can pass it
-    back as ``expected_rev``.
+    back as ``expected_rev``. Successful journal writes additionally carry
+    ``transport_replacements`` only when emitted compact leaves replaced
+    surrogate units; ordinary metadata reads do not carry a publication count.
     """
 
     path: str
@@ -230,6 +236,7 @@ class NoteMeta(TypedDict):
     size: int
     type: str
     rev: str
+    transport_replacements: NotRequired[int]
 
 
 class NoteContent(TypedDict):

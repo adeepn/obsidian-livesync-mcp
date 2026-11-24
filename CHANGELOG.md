@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Settings parity
 
+- Publish legacy pieces with unpaired UTF-16 units using device wire encodings:
+  lossless surrogate escapes in CouchDB/metadata JSON, U+FFFD in compact journal
+  leaves. Preserve piece IDs; report journal `transport_replacements` and explain
+  the upstream loss in tool results. Reassemble CouchDB split pairs losslessly.
+
 - Match the audited device's ordinary-file identities and writes across all
   supported vault settings: legacy/NFC × insensitive/sensitive paths, V1/V2/
   V2-segmenter/V3 splitters, legacy migration and five hash modes. Preserve

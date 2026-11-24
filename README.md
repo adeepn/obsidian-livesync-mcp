@@ -61,6 +61,9 @@ controls auth, URL, host, port and backend startup.
 
 This table covers configuration consumed by `config.py` and `replay_limits.py`.
 The final debug switch is consumed separately by `diagnostic_hygiene.py`.
+Wire encoding follows devices without an environment switch: CouchDB JSON escapes
+unpaired UTF-16 units losslessly; compact S3 journal leaves replace them with
+U+FFFD and writes report `transport_replacements`. [Wire details](docs/s3-journal.md#surrogate-wire-encoding).
 “Required for S3 fields” means only the individual-variable connection form;
 URI and individual fields are mutually exclusive. Backend-specific settings
 are read only for the selected backend. Empty defaults below mean an empty string.
@@ -134,7 +137,7 @@ combination. [Source inventory and caveats](docs/superpowers/specs/2026-11-23-se
 |---|---|---|---|
 | `pathNormalizationVersion` | 0 legacy / 1 NFC | Identical | Both, independently of filename case; collisions refuse |
 | `handleFilenameCaseSensitive` | false / true | Identical | Legacy, NFC, case-sensitive and NFC+case-sensitive identities |
-| `chunkSplitterVersion` | v1, v2, v2-segmenter, v3-rabin-karp, legacy empty | Identical | All writers; v2-segmenter equals v2 at this pin |
+| `chunkSplitterVersion` | v1, v2, v2-segmenter, v3-rabin-karp, legacy empty | Identical | All writers; legacy split-surrogate pieces retain device IDs and transport encoding; v2-segmenter equals v2 at this pin |
 | `enableChunkSplitterV2`, `useSegmenter` | false / true (legacy migration) | Identical | One-pass migration of empty version; unknown version normalization follows upstream |
 | `hashAlg` | xxhash64, xxhash32, mixed-purejs, sha1, empty | Identical | Upstream UTF-16 length and hash semantics |
 | `customChunkSize` | Number >=0 in UI (default 0) | Identical | Absolute cap derived from setting; V3 floor/ceiling retained |

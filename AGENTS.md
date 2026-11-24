@@ -8,6 +8,7 @@ This repository is a small Python MCP server for accessing an Obsidian LiveSync 
 - `config.py`: strict environment validation (`load_config`) — backend selection, backend credentials, client auth; rejects placeholder secrets.
 - `storage_base.py`: storage-agnostic `StorageBackend` protocol plus the storage exception hierarchy.
 - `storage_couchdb.py`: `CouchDBBackend`, the LiveSync-aware CouchDB implementation of the protocol.
+- `wire_encoding.py`: shared well-formed JSON serialization and journal TextEncoder surrogate projection.
 - `journal_codec.py`: LiveSync journal record parsing and serialization.
 - `journal_store.py`: local SQLite revision state and on-disk chunk cache; `state_size_bytes()` measures SQLite/sidecar and chunk bytes for backend/tool observability.
 - `object_storage.py`: S3 object storage adapter using boto3.
@@ -31,6 +32,8 @@ This repository is a small Python MCP server for accessing an Obsidian LiveSync 
 - `requirements.txt` / `requirements-dev.txt` / `requirements.lock`: runtime, dev, and frozen dependency sets.
 - `.env.example`: required configuration template.
 - `obsidian-mcp.service`: optional systemd deployment unit.
+
+`scripts/extract_surrogate_vectors.mjs` executes pinned journal records, legacy splitting and verified published dependencies to produce `tests/fixtures/surrogate_wire_upstream.json`.
 
 Tests live in `tests/` as `tests/test_<module>.py` (pytest + pytest-asyncio, auto mode via `pytest.ini`); shared doubles are `tests/fake_backend.py` (in-memory backend) and `tests/couchdb_fake.py` (HTTP-level CouchDB double). `tests/settings_oracle_inputs.py` contains deterministic input recipes only; `tests/settings_oracle.py` loads interned compressed upstream expectations from `tests/fixtures/`. `tests/fake_object_storage.py` supplies an S3 double. Keep new modules focused and colocated unless the project grows enough to justify a package layout.
 

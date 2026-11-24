@@ -427,3 +427,36 @@ reorder text. Structured JSON paths remain exact and addressable. Renderer
 exceptions cannot escape the tool wrapper: the operation's result is unknown,
 and callers must re-read before retrying. The last-line redactor also accepts
 non-string inputs defensively, withholding them without invoking object coercion.
+
+
+### 2026-11-24 — G7 surrogate publication
+
+Status: implemented with upstream-generated wire vectors, publication/replay
+coverage for both backends, and typed tool reporting.
+
+[GOTCHA] Upstream journal transport loses unpaired UTF-16 units in compact
+leaves. Premises: commonlib `484c164450d61deb2e301582b60cb9b5f9fa977f`,
+`src/string_and_binary/chunks.ts:243-252` cuts non-plain V1 by UTF-16 units;
+`src/replication/journal/journalRecords.ts:69-77` uses TextEncoder directly for
+compact leaves, but JSON.stringify for metadata; `:79-108` decodes with fatal
+UTF-8. Execution: the `a*123 + U+1F642 + z` witness, `.MD`, V1, SHA-1,
+customChunkSize=-0.9987841796875, minimumChunkSize=5, splits the emoji into
+U+D83D and U+DE42. Each compact frame replaces its isolated unit with U+FFFD;
+every replaying device therefore reconstructs two U+FFFD characters. This is
+an upstream transport defect, reproduced rather than repaired by the peer.
+Rejected path: shifting cuts would change device pieces and IDs.
+
+[DECISION] G7 preserves cuts/IDs and publishes identical pre-deflate bytes.
+Metadata and CouchDB JSON preserve surrogate units with lowercase escapes;
+PouchDB adapter-http 9.0.0 `lib/index.es.js:765-773` sends JSON.stringify(doc).
+Compact journal publications report a typed integer `transport_replacements`
+only when nonzero, with a fixed explanatory tool sentence. A fresh peer sees
+exactly the upstream transport result. No environment variable or device
+behavior difference is introduced. Oracle provenance, pinned source hashes
+and verified dependency integrity are committed with the generated fixture.
+S1 remains a separate stopped task; its preserved draft is untouched.
+
+Source correction to the task premise: V2 `chunkStringGenerator` does protect
+surrogate pairs (`chunks.ts:307-310`, called at `:362` for non-plain text).
+The committed oracle also executes V2/V2-segmenter on this witness to pin that
+distinction. The demonstrated split-pair transport loss is V1 non-plain.

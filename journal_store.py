@@ -37,6 +37,8 @@ of ``state_dir`` so old documents and chunks remain recoverable.
 
 from __future__ import annotations
 
+from wire_encoding import escape_json_surrogates
+
 from diagnostic_hygiene import PublicDiagnostic, DiagnosticPath, DiagnosticCode
 
 import json
@@ -724,7 +726,11 @@ class JournalStore:
 
 
 def _dump_doc(doc: dict) -> str:
-    return json.dumps(doc, ensure_ascii=False, separators=(",", ":"))
+    # journalRecords.ts:76 preserves surrogate units in JSON metadata. SQLite
+    # accepts UTF-8 text, so retain those units as escapes in the local copy too.
+    # Retain local handling of replayed numeric overflows for note isolation;
+    # strict wire publication validation belongs in serialize_journal.
+    return escape_json_surrogates(json.dumps(doc, ensure_ascii=False, separators=(",", ":")))
 
 
 def _display_path(doc: dict, doc_id: str) -> str:

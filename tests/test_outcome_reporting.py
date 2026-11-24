@@ -1,5 +1,6 @@
 """P-15: completed writes survive bookkeeping failure; uncertain sends are explicit."""
 import sqlite3
+import json
 
 import pytest
 
@@ -341,7 +342,7 @@ async def test_metadata_publication_uncertainty_boundary(monkeypatch, operation,
         async def lost(method, url, **kwargs):
             response = await original(method, url, **kwargs)
             if method == 'PUT':
-                body = kwargs['json']
+                body = json.loads(kwargs['content'])
                 puts.append(body)
                 hit = (body.get('type') == 'leaf' if phase == 'chunk' else
                        bool(body.get('deleted')) if phase == 'retirement' else
@@ -578,7 +579,7 @@ async def test_structured_outcomes_name_affected_paths(backend, monkeypatch, out
             request = backend._client.request
             async def lost(method, path, **kwargs):
                 response = await request(method, path, **kwargs)
-                if method == 'PUT' and kwargs['json'].get('type') != 'leaf':
+                if method == 'PUT' and json.loads(kwargs['content']).get('type') != 'leaf':
                     raise httpx.ReadError('accepted; response lost')
                 return response
             monkeypatch.setattr(backend._client, 'request', lost)

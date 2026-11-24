@@ -279,6 +279,27 @@ def _reporting_failure(error):
             "the operation's result is unknown — re-read before retrying")
 
 
+def _publication_text(result, counts):
+    """Project successful journal publication counts, never content fields."""
+    count = sum(n for n in counts if type(n) is int and n > 0)
+    if not count:
+        return result
+    sentence = ("The LiveSync journal transport replaces unpaired surrogate units with U+FFFD; "
+                "the note is stored exactly as devices would store it.")
+    if isinstance(result, str):
+        try:
+            structured = json.loads(result)
+        except (ValueError, TypeError):
+            structured = None
+        if isinstance(structured, dict):
+            structured["transport_replacements"] = count
+            structured["message"] = (structured["message"] + " " + sentence
+                                     if isinstance(structured.get("message"), str) else sentence)
+            return json.dumps(structured, ensure_ascii=False)
+        return result + "\n" + sentence
+    return result
+
+
 def _tool_errors(
     handler=None, *, force_refresh: bool = False, writer: bool = False,
     read_action: str | None = None,
@@ -309,7 +330,14 @@ def _tool_errors(
                 await _backend().refresh(force=True)
             else:
                 await _backend().refresh()
-            return await handler(*args, **kwargs)
+            from storage_base import publication_replacements
+            counts = []
+            token = publication_replacements.set(counts)
+            try:
+                result = await handler(*args, **kwargs)
+                return _publication_text(result, counts)
+            finally:
+                publication_replacements.reset(token)
         except regex_runner.RegexTimeoutError:
             return "Error: regex pattern too complex or input too large."
         except StorageError as error:

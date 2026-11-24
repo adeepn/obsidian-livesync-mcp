@@ -1,0 +1,603 @@
+{
+  "upstream_commit": "484c164450d61deb2e301582b60cb9b5f9fa977f",
+  "node": "v26.13.1",
+  "source_sha256": {
+    "common/utils.ts": "162d7416ff00469d98e38a8be62854cc62eaba689605889937f37cf9243c3fed",
+    "replication/journal/journalRecords.ts": "0066d86b2a6bda5ba4599f54fbef382ce6501f10e53cfe4cc2e86a0c6ee13460",
+    "string_and_binary/chunks.ts": "8cccf58cd8306d8504bcc41d5e2c303361936f8691abebf40764856805cf54aa",
+    "managers/HashManager/PureJSHashManager.ts": "b2298e9bb0ae2c3abaefa0a13ff75ba1129a3fc33125cc23105937a8d3668be2"
+  },
+  "dependency": {
+    "package": "octagonal-wheels",
+    "version": "0.1.57",
+    "integrity": "sha512-CijSXOtflv60HaqrsyHxJ7jBwE/8v+RX5JjIDnJaibXM8qgG5IV1RJAHFEKDyqA/nhJb46TZf+eVa+2LBRf2vQ==",
+    "source_sha256": {
+      "package/dist/binary/base64.js": "0675e7a75edeb8eabc7f867ac18a44bd50bf4f493a5356d3760fb2b167fa82bc",
+      "package/dist/common/logger.js": "cc929b9b9a685fb060c6c382f53a3e61e67b05a4ae299fe846966a6d7332f58f",
+      "package/dist/binary/blob.js": "21ef13f0c43ecaf20fa4875395d849dab74f1046a676b769586feeef91e9270d",
+      "package/dist/binary/typedArray.js": "a6af3f42ca6d4b8cdd79947dca8719d220d97595cdf0be7a948a8404ad5e0f58",
+      "package/dist/hash/purejs.js": "09bc77348cb96f592fbb18b5b7a61f4b747cc91f12d5ea0b29b3b2609e0cca7c",
+      "package/dist/binary/hex.js": "e9544562fc02c0df659dd27550d553ade49959ad546ba6b88f236c6274ccb9e6",
+      "package/dist/binary/encodedUTF16.tables.internal.js": "17432ddd36cb745ab82a42d269736b954f3841070da54d5152a6be246b3a40d4"
+    }
+  },
+  "couchdb_dependency": {
+    "package": "pouchdb-adapter-http",
+    "version": "9.0.0",
+    "integrity": "sha512-2eL008XeRZkdyp3hMHHOhdIPqK9H6Mn4SLlQvit4zCbqnOFfAswzPjUmHULGMbDUCrQBTu6y82FnV6NHXv9kgw==",
+    "url": "https://registry.npmjs.org/pouchdb-adapter-http/-/pouchdb-adapter-http-9.0.0.tgz",
+    "source_sha256": "237d8277c1018fdbe872686a9cbc00fe46619078bb2b43489c452edea600dc73",
+    "source": "lib/index.es.js:765-773",
+    "oracle": "native JSON.stringify"
+  },
+  "splitter_controls": [
+    {
+      "version": "v2",
+      "pieces": [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa🙂",
+        "z"
+      ]
+    },
+    {
+      "version": "v2-segmenter",
+      "pieces": [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa🙂",
+        "z"
+      ]
+    }
+  ],
+  "witness": {
+    "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa🙂z",
+    "path": "witness.MD",
+    "settings": {
+      "chunkSplitterVersion": "v1",
+      "hashAlg": "sha1",
+      "customChunkSize": -0.9987841796875,
+      "minimumChunkSize": 5
+    },
+    "pieces": [
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\ud83d",
+      "\ude42z"
+    ],
+    "ids": [
+      "h:MFIsViFjIWfbAEOR3gMXH5HVWB8=",
+      "h:uAJXulJ01jiaDA8xMaFQJL21A0s="
+    ]
+  },
+  "vectors": [
+    {
+      "name": "witness",
+      "docs": [
+        {
+          "_id": "h:MFIsViFjIWfbAEOR3gMXH5HVWB8=",
+          "data": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\ud83d",
+          "type": "leaf",
+          "_rev": ""
+        },
+        {
+          "_id": "h:uAJXulJ01jiaDA8xMaFQJL21A0s=",
+          "data": "\ude42z",
+          "type": "leaf",
+          "_rev": ""
+        }
+      ],
+      "transport_replacements": 2,
+      "frame_b64": "fmg6TUZJc1ZpRmpJV2ZiQUVPUjNnTVhINUhWV0I4PR9hYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWHvv70Kfmg6dUFKWHVsSjAxamlhREE4eE1hRlFKTDIxQTBzPR/vv716Cg==",
+      "decoded": [
+        {
+          "_id": "h:MFIsViFjIWfbAEOR3gMXH5HVWB8=",
+          "data": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa�",
+          "type": "leaf",
+          "_rev": ""
+        },
+        {
+          "_id": "h:uAJXulJ01jiaDA8xMaFQJL21A0s=",
+          "data": "�z",
+          "type": "leaf",
+          "_rev": ""
+        }
+      ],
+      "couchdb_json": [
+        "{\"_id\":\"h:MFIsViFjIWfbAEOR3gMXH5HVWB8=\",\"data\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\\ud83d\",\"type\":\"leaf\",\"_rev\":\"\"}",
+        "{\"_id\":\"h:uAJXulJ01jiaDA8xMaFQJL21A0s=\",\"data\":\"\\ude42z\",\"type\":\"leaf\",\"_rev\":\"\"}"
+      ]
+    },
+    {
+      "name": "high-low-pieces",
+      "docs": [
+        {
+          "_id": "h:high",
+          "data": "\ud83d",
+          "type": "leaf",
+          "_rev": ""
+        },
+        {
+          "_id": "h:low",
+          "data": "\ude42",
+          "type": "leaf",
+          "_rev": ""
+        }
+      ],
+      "transport_replacements": 2,
+      "frame_b64": "fmg6aGlnaB/vv70Kfmg6bG93H++/vQo=",
+      "decoded": [
+        {
+          "_id": "h:high",
+          "data": "�",
+          "type": "leaf",
+          "_rev": ""
+        },
+        {
+          "_id": "h:low",
+          "data": "�",
+          "type": "leaf",
+          "_rev": ""
+        }
+      ],
+      "couchdb_json": [
+        "{\"_id\":\"h:high\",\"data\":\"\\ud83d\",\"type\":\"leaf\",\"_rev\":\"\"}",
+        "{\"_id\":\"h:low\",\"data\":\"\\ude42\",\"type\":\"leaf\",\"_rev\":\"\"}"
+      ]
+    },
+    {
+      "name": "start",
+      "docs": [
+        {
+          "_id": "h:start",
+          "data": "\ud800abc",
+          "type": "leaf",
+          "_rev": ""
+        }
+      ],
+      "transport_replacements": 1,
+      "frame_b64": "fmg6c3RhcnQf77+9YWJjCg==",
+      "decoded": [
+        {
+          "_id": "h:start",
+          "data": "�abc",
+          "type": "leaf",
+          "_rev": ""
+        }
+      ],
+      "couchdb_json": [
+        "{\"_id\":\"h:start\",\"data\":\"\\ud800abc\",\"type\":\"leaf\",\"_rev\":\"\"}"
+      ]
+    },
+    {
+      "name": "metadata-start",
+      "docs": [
+        {
+          "_id": "note-start",
+          "_rev": "1-test",
+          "value": "\ud800abc"
+        }
+      ],
+      "transport_replacements": 0,
+      "frame_b64": "eyJfaWQiOiJub3RlLXN0YXJ0IiwiX3JldiI6IjEtdGVzdCIsInZhbHVlIjoiXHVkODAwYWJjIn0K",
+      "decoded": [
+        {
+          "_id": "note-start",
+          "_rev": "1-test",
+          "value": "\ud800abc"
+        }
+      ],
+      "couchdb_json": [
+        "{\"_id\":\"note-start\",\"_rev\":\"1-test\",\"value\":\"\\ud800abc\"}"
+      ]
+    },
+    {
+      "name": "middle",
+      "docs": [
+        {
+          "_id": "h:middle",
+          "data": "ab\udc00cd",
+          "type": "leaf",
+          "_rev": ""
+        }
+      ],
+      "transport_replacements": 1,
+      "frame_b64": "fmg6bWlkZGxlH2Fi77+9Y2QK",
+      "decoded": [
+        {
+          "_id": "h:middle",
+          "data": "ab�cd",
+          "type": "leaf",
+          "_rev": ""
+        }
+      ],
+      "couchdb_json": [
+        "{\"_id\":\"h:middle\",\"data\":\"ab\\udc00cd\",\"type\":\"leaf\",\"_rev\":\"\"}"
+      ]
+    },
+    {
+      "name": "metadata-middle",
+      "docs": [
+        {
+          "_id": "note-middle",
+          "_rev": "1-test",
+          "value": "ab\udc00cd"
+        }
+      ],
+      "transport_replacements": 0,
+      "frame_b64": "eyJfaWQiOiJub3RlLW1pZGRsZSIsIl9yZXYiOiIxLXRlc3QiLCJ2YWx1ZSI6ImFiXHVkYzAwY2QifQo=",
+      "decoded": [
+        {
+          "_id": "note-middle",
+          "_rev": "1-test",
+          "value": "ab\udc00cd"
+        }
+      ],
+      "couchdb_json": [
+        "{\"_id\":\"note-middle\",\"_rev\":\"1-test\",\"value\":\"ab\\udc00cd\"}"
+      ]
+    },
+    {
+      "name": "end",
+      "docs": [
+        {
+          "_id": "h:end",
+          "data": "abc\udfff",
+          "type": "leaf",
+          "_rev": ""
+        }
+      ],
+      "transport_replacements": 1,
+      "frame_b64": "fmg6ZW5kH2FiY++/vQo=",
+      "decoded": [
+        {
+          "_id": "h:end",
+          "data": "abc�",
+          "type": "leaf",
+          "_rev": ""
+        }
+      ],
+      "couchdb_json": [
+        "{\"_id\":\"h:end\",\"data\":\"abc\\udfff\",\"type\":\"leaf\",\"_rev\":\"\"}"
+      ]
+    },
+    {
+      "name": "metadata-end",
+      "docs": [
+        {
+          "_id": "note-end",
+          "_rev": "1-test",
+          "value": "abc\udfff"
+        }
+      ],
+      "transport_replacements": 0,
+      "frame_b64": "eyJfaWQiOiJub3RlLWVuZCIsIl9yZXYiOiIxLXRlc3QiLCJ2YWx1ZSI6ImFiY1x1ZGZmZiJ9Cg==",
+      "decoded": [
+        {
+          "_id": "note-end",
+          "_rev": "1-test",
+          "value": "abc\udfff"
+        }
+      ],
+      "couchdb_json": [
+        "{\"_id\":\"note-end\",\"_rev\":\"1-test\",\"value\":\"abc\\udfff\"}"
+      ]
+    },
+    {
+      "name": "high",
+      "docs": [
+        {
+          "_id": "h:high",
+          "data": "\ud83d",
+          "type": "leaf",
+          "_rev": ""
+        }
+      ],
+      "transport_replacements": 1,
+      "frame_b64": "fmg6aGlnaB/vv70K",
+      "decoded": [
+        {
+          "_id": "h:high",
+          "data": "�",
+          "type": "leaf",
+          "_rev": ""
+        }
+      ],
+      "couchdb_json": [
+        "{\"_id\":\"h:high\",\"data\":\"\\ud83d\",\"type\":\"leaf\",\"_rev\":\"\"}"
+      ]
+    },
+    {
+      "name": "metadata-high",
+      "docs": [
+        {
+          "_id": "note-high",
+          "_rev": "1-test",
+          "value": "\ud83d"
+        }
+      ],
+      "transport_replacements": 0,
+      "frame_b64": "eyJfaWQiOiJub3RlLWhpZ2giLCJfcmV2IjoiMS10ZXN0IiwidmFsdWUiOiJcdWQ4M2QifQo=",
+      "decoded": [
+        {
+          "_id": "note-high",
+          "_rev": "1-test",
+          "value": "\ud83d"
+        }
+      ],
+      "couchdb_json": [
+        "{\"_id\":\"note-high\",\"_rev\":\"1-test\",\"value\":\"\\ud83d\"}"
+      ]
+    },
+    {
+      "name": "low",
+      "docs": [
+        {
+          "_id": "h:low",
+          "data": "\ude42",
+          "type": "leaf",
+          "_rev": ""
+        }
+      ],
+      "transport_replacements": 1,
+      "frame_b64": "fmg6bG93H++/vQo=",
+      "decoded": [
+        {
+          "_id": "h:low",
+          "data": "�",
+          "type": "leaf",
+          "_rev": ""
+        }
+      ],
+      "couchdb_json": [
+        "{\"_id\":\"h:low\",\"data\":\"\\ude42\",\"type\":\"leaf\",\"_rev\":\"\"}"
+      ]
+    },
+    {
+      "name": "metadata-low",
+      "docs": [
+        {
+          "_id": "note-low",
+          "_rev": "1-test",
+          "value": "\ude42"
+        }
+      ],
+      "transport_replacements": 0,
+      "frame_b64": "eyJfaWQiOiJub3RlLWxvdyIsIl9yZXYiOiIxLXRlc3QiLCJ2YWx1ZSI6Ilx1ZGU0MiJ9Cg==",
+      "decoded": [
+        {
+          "_id": "note-low",
+          "_rev": "1-test",
+          "value": "\ude42"
+        }
+      ],
+      "couchdb_json": [
+        "{\"_id\":\"note-low\",\"_rev\":\"1-test\",\"value\":\"\\ude42\"}"
+      ]
+    },
+    {
+      "name": "ascii",
+      "docs": [
+        {
+          "_id": "h:ascii",
+          "data": "ASCII",
+          "type": "leaf",
+          "_rev": ""
+        }
+      ],
+      "transport_replacements": 0,
+      "frame_b64": "fmg6YXNjaWkfQVNDSUkK",
+      "decoded": [
+        {
+          "_id": "h:ascii",
+          "data": "ASCII",
+          "type": "leaf",
+          "_rev": ""
+        }
+      ],
+      "couchdb_json": [
+        "{\"_id\":\"h:ascii\",\"data\":\"ASCII\",\"type\":\"leaf\",\"_rev\":\"\"}"
+      ]
+    },
+    {
+      "name": "metadata-ascii",
+      "docs": [
+        {
+          "_id": "note-ascii",
+          "_rev": "1-test",
+          "value": "ASCII"
+        }
+      ],
+      "transport_replacements": 0,
+      "frame_b64": "eyJfaWQiOiJub3RlLWFzY2lpIiwiX3JldiI6IjEtdGVzdCIsInZhbHVlIjoiQVNDSUkifQo=",
+      "decoded": [
+        {
+          "_id": "note-ascii",
+          "_rev": "1-test",
+          "value": "ASCII"
+        }
+      ],
+      "couchdb_json": [
+        "{\"_id\":\"note-ascii\",\"_rev\":\"1-test\",\"value\":\"ASCII\"}"
+      ]
+    },
+    {
+      "name": "cyrillic",
+      "docs": [
+        {
+          "_id": "h:cyrillic",
+          "data": "Привет",
+          "type": "leaf",
+          "_rev": ""
+        }
+      ],
+      "transport_replacements": 0,
+      "frame_b64": "fmg6Y3lyaWxsaWMf0J/RgNC40LLQtdGCCg==",
+      "decoded": [
+        {
+          "_id": "h:cyrillic",
+          "data": "Привет",
+          "type": "leaf",
+          "_rev": ""
+        }
+      ],
+      "couchdb_json": [
+        "{\"_id\":\"h:cyrillic\",\"data\":\"Привет\",\"type\":\"leaf\",\"_rev\":\"\"}"
+      ]
+    },
+    {
+      "name": "metadata-cyrillic",
+      "docs": [
+        {
+          "_id": "note-cyrillic",
+          "_rev": "1-test",
+          "value": "Привет"
+        }
+      ],
+      "transport_replacements": 0,
+      "frame_b64": "eyJfaWQiOiJub3RlLWN5cmlsbGljIiwiX3JldiI6IjEtdGVzdCIsInZhbHVlIjoi0J/RgNC40LLQtdGCIn0K",
+      "decoded": [
+        {
+          "_id": "note-cyrillic",
+          "_rev": "1-test",
+          "value": "Привет"
+        }
+      ],
+      "couchdb_json": [
+        "{\"_id\":\"note-cyrillic\",\"_rev\":\"1-test\",\"value\":\"Привет\"}"
+      ]
+    },
+    {
+      "name": "emoji",
+      "docs": [
+        {
+          "_id": "h:emoji",
+          "data": "🙂",
+          "type": "leaf",
+          "_rev": ""
+        }
+      ],
+      "transport_replacements": 0,
+      "frame_b64": "fmg6ZW1vamkf8J+Zggo=",
+      "decoded": [
+        {
+          "_id": "h:emoji",
+          "data": "🙂",
+          "type": "leaf",
+          "_rev": ""
+        }
+      ],
+      "couchdb_json": [
+        "{\"_id\":\"h:emoji\",\"data\":\"🙂\",\"type\":\"leaf\",\"_rev\":\"\"}"
+      ]
+    },
+    {
+      "name": "metadata-emoji",
+      "docs": [
+        {
+          "_id": "note-emoji",
+          "_rev": "1-test",
+          "value": "🙂"
+        }
+      ],
+      "transport_replacements": 0,
+      "frame_b64": "eyJfaWQiOiJub3RlLWVtb2ppIiwiX3JldiI6IjEtdGVzdCIsInZhbHVlIjoi8J+ZgiJ9Cg==",
+      "decoded": [
+        {
+          "_id": "note-emoji",
+          "_rev": "1-test",
+          "value": "🙂"
+        }
+      ],
+      "couchdb_json": [
+        "{\"_id\":\"note-emoji\",\"_rev\":\"1-test\",\"value\":\"🙂\"}"
+      ]
+    },
+    {
+      "name": "bom",
+      "docs": [
+        {
+          "_id": "h:bom",
+          "data": "﻿",
+          "type": "leaf",
+          "_rev": ""
+        }
+      ],
+      "transport_replacements": 0,
+      "frame_b64": "fmg6Ym9tH++7vwo=",
+      "decoded": [
+        {
+          "_id": "h:bom",
+          "data": "﻿",
+          "type": "leaf",
+          "_rev": ""
+        }
+      ],
+      "couchdb_json": [
+        "{\"_id\":\"h:bom\",\"data\":\"﻿\",\"type\":\"leaf\",\"_rev\":\"\"}"
+      ]
+    },
+    {
+      "name": "metadata-bom",
+      "docs": [
+        {
+          "_id": "note-bom",
+          "_rev": "1-test",
+          "value": "﻿"
+        }
+      ],
+      "transport_replacements": 0,
+      "frame_b64": "eyJfaWQiOiJub3RlLWJvbSIsIl9yZXYiOiIxLXRlc3QiLCJ2YWx1ZSI6Iu+7vyJ9Cg==",
+      "decoded": [
+        {
+          "_id": "note-bom",
+          "_rev": "1-test",
+          "value": "﻿"
+        }
+      ],
+      "couchdb_json": [
+        "{\"_id\":\"note-bom\",\"_rev\":\"1-test\",\"value\":\"﻿\"}"
+      ]
+    },
+    {
+      "name": "crlf",
+      "docs": [
+        {
+          "_id": "h:crlf",
+          "data": "a\r\nb",
+          "type": "leaf",
+          "_rev": ""
+        }
+      ],
+      "transport_replacements": 0,
+      "frame_b64": "fmg6Y3JsZh9cZmFcclxuYgo=",
+      "decoded": [
+        {
+          "_id": "h:crlf",
+          "data": "a\r\nb",
+          "type": "leaf",
+          "_rev": ""
+        }
+      ],
+      "couchdb_json": [
+        "{\"_id\":\"h:crlf\",\"data\":\"a\\r\\nb\",\"type\":\"leaf\",\"_rev\":\"\"}"
+      ]
+    },
+    {
+      "name": "metadata-crlf",
+      "docs": [
+        {
+          "_id": "note-crlf",
+          "_rev": "1-test",
+          "value": "a\r\nb"
+        }
+      ],
+      "transport_replacements": 0,
+      "frame_b64": "eyJfaWQiOiJub3RlLWNybGYiLCJfcmV2IjoiMS10ZXN0IiwidmFsdWUiOiJhXHJcbmIifQo=",
+      "decoded": [
+        {
+          "_id": "note-crlf",
+          "_rev": "1-test",
+          "value": "a\r\nb"
+        }
+      ],
+      "couchdb_json": [
+        "{\"_id\":\"note-crlf\",\"_rev\":\"1-test\",\"value\":\"a\\r\\nb\"}"
+      ]
+    }
+  ]
+}

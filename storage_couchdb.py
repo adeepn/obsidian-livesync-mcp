@@ -53,6 +53,8 @@ from scan_budget import ScanBudget
 from text_eligibility import (TextProjection, DEFAULT_TEXT_SCAN_MAX_BYTES,
                               DEFAULT_TEXT_VERDICT_CACHE_ENTRIES)
 
+from wire_encoding import json_stringify
+
 import httpx
 
 from content_splitter import ContentSplitter, chunk_id_for_piece
@@ -205,9 +207,12 @@ class CouchDBBackend(DeviceSelection):
         exception whose message carries no URL, database or revision.
         """
         try:
-            response = await self._client.request(
-                method, path, params=params, json=json_body
-            )
+            # PouchDB adapter-http 9.0.0 lib/index.es.js:765-773.
+            body = ({} if json_body is None else {
+                "content": json_stringify(json_body).encode("utf-8"),
+                "headers": {"Content-Type": "application/json"},
+            })
+            response = await self._client.request(method, path, params=params, **body)
         except httpx.HTTPError as exc:
             logger.warning('CouchDB <omitted> <omitted> failed: <omitted>; cause: %s', cause_name(type(exc)))
             if method in {"PUT", "DELETE"} and not isinstance(
