@@ -247,12 +247,13 @@ async def test_time_budget_preserves_progress(tmp_path, monkeypatch, caplog):
         await peer.close()
 
 
-def test_recursion_error_normalized(monkeypatch):
-    def recursion(*args, **kwargs):
-        raise RecursionError('decoder depth')
-    monkeypatch.setattr(codec.json, 'loads', recursion)
-    with pytest.raises(ValueError, match='nested: line 1:'):
-        codec.parse_journal(b'{"_id":"a","_rev":"1-a"}\n', name='nested')
+def test_recursion_error_reports_actual_depth_ignoring_quoted_brackets():
+    payload = (b'{"_id":"a","_rev":"1-a","nested":' + b'[' * 10000
+               + b'"' + b'[' * 30000 + b'"' + b']' * 10000 + b'}\n')
+    with pytest.raises(ReplayBudgetExceeded, match='decoder capacity') as caught:
+        codec.parse_journal(payload, name='nested', max_json_depth=20000)
+    assert caught.value.observed == 10001
+    assert caught.value.limit == 20000
 
 
 def test_json_depth_guard_ignores_quoted_brackets():

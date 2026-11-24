@@ -156,3 +156,39 @@ async def test_refresh_threshold_can_be_raised_from_env(tmp_path, monkeypatch, k
         assert peer._store.processed('1-docs.jsonl.gz')
     finally:
         await peer.close()
+
+
+@pytest.mark.parametrize('configured', [5000, 20000])
+def test_decoder_capacity_reports_depth_budget_not_generic_parse_error(configured):
+    from replay_limits import ReplayBudgetExceeded
+    # Valid JSON depth 10,001, assembled without using the recursive encoder.
+    payload = b'{"_id":"a","_rev":"1-a","nested":' + b'[' * 10000 + b'0' + b']' * 10000 + b'}\n'
+    with pytest.raises(ReplayBudgetExceeded) as caught:
+        parse_journal(payload, max_json_depth=configured)
+    error = caught.value
+    assert error.budget == 'max_json_depth'
+    assert error.limit == configured
+    assert error.observed > 0
+    assert 'LIVESYNC_JOURNAL_MAX_JSON_DEPTH' in str(error)
+    if configured == 20000:
+        assert error.observed == 10001
+        assert 'decoder capacity' in str(error)
+
+
+async def test_decoder_capacity_diagnostic_survives_refresh_and_tool(tmp_path, monkeypatch):
+    import server
+    from tests.test_journal_security import backend
+    from replay_limits import ReplayBudgetExceeded
+    payload = b'{"_id":"a","_rev":"1-a","nested":' + b'[' * 10000 + b'0' + b']' * 10000 + b'}\n'
+    key = '1-docs.jsonl.gz'
+    peer, storage = await backend(tmp_path, {key: deflate_journal(payload)}, max_json_depth=20000)
+    try:
+        with pytest.raises(ReplayBudgetExceeded, match='decoder capacity'):
+            await peer.refresh(force=True)
+        assert not peer._store.processed(key)
+        monkeypatch.setattr(server, 'backend', peer)
+        result = await server.obsidian_refresh()
+        for detail in ['max_json_depth', '10001', '20000', 'LIVESYNC_JOURNAL_MAX_JSON_DEPTH', 'decoder capacity']:
+            assert detail in result
+    finally:
+        await peer.close()

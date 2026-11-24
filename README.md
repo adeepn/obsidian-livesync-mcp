@@ -138,6 +138,16 @@ changing env values. Key/byte/time failures preserve completed replay progress;
 subsequent throttled calls repeat the actionable diagnostic until a successful
 refresh. Increasing budgets permits larger inputs but consumes more resources.
 
+JSON depth has an additional decoder capacity: Python's standard JSON decoder
+uses the interpreter recursion limit (normally 1000), minus current call-stack
+headroom. Practical nesting capacity is therefore below roughly 1000 with the
+default interpreter setting, even if `LIVESYNC_JOURNAL_MAX_JSON_DEPTH=20000`.
+The override controls admission, not decoder capacity. Decoder exhaustion is a
+`max_json_depth` budget error naming observed nesting, configured budget, exact
+variable, and interpreter recursion limit; raising the variable alone cannot
+remove that ceiling. Reduce nesting or use a decoder with greater capacity.
+The default depth budget of 512 remains independent of file-size policy.
+
 Default derivation: V3 binary pieces are at most 4 MiB; valid text may exceed its
 boundary by 3 UTF-8 bytes. Base64 costs 4/3, JSON escaping at worst 6 per raw
 byte (compact escaping at most 2). A conservative encoded-piece allowance is

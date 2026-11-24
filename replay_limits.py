@@ -21,9 +21,19 @@ from storage_base import StorageError
 class ReplayBudgetExceeded(StorageError, ValueError):
     """Safe public diagnostic; observed can be a bounded lower bound."""
 
-    def __init__(self, budget: str, observed: int | float, limit: int | float):
+    def __init__(self, budget: str, observed: int | float, limit: int | float,
+                 *, decoder_capacity: int | None = None):
         self.budget, self.observed, self.limit = budget, observed, limit
         self.variable = 'LIVESYNC_JOURNAL_' + budget.upper()
+        if decoder_capacity is not None:
+            super().__init__(
+                f'{budget} budget decoder capacity exhausted: observed {observed}, '
+                f'configured {limit}; {self.variable} controls admission but '
+                f'the Python JSON decoder is constrained by recursion limit '
+                f'{decoder_capacity} (actual capacity depends on call-stack depth); '
+                'raising the variable alone cannot admit this input; reduce nesting'
+            )
+            return
         super().__init__(
             f'{budget} budget limit reached: observed {observed}, configured {limit}; '
             f'raise {self.variable}'

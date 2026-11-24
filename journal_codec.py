@@ -248,36 +248,52 @@ def _reject_json_constant(name: str, lineno: int, token: str) -> None:
     raise ValueError(f"{name}: line {lineno}: invalid JSON constant {token}")
 
 
+def _metadata_depth(line: str, limit: int) -> int:
+    """Measure nesting outside strings without using the recursive JSON parser."""
+    depth = peak = 0
+    quoted = escaped = False
+    for char in line:
+        if quoted:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                quoted = False
+        elif char == '"':
+            quoted = True
+        elif char in "[{":
+            depth += 1
+            peak = max(peak, depth)
+            if depth > limit:
+                raise ReplayBudgetExceeded("max_json_depth", depth, limit)
+        elif char in "]}":
+            depth -= 1
+    return peak
+
+
 def _parse_metadata_line(
     target: JournalFile, name: str, lineno: int, line: str, max_json_depth: int
 ) -> None:
-    # Python versions differ in where the C decoder raises RecursionError.
-    # Bound nesting before parsing, while ignoring brackets inside strings.
+    # The configured admission budget and Python decoder capacity are distinct.
+    # Avoid scanning ordinary records twice when their bracket count is small.
+    observed_depth = None
     if line.count("[") + line.count("{") > max_json_depth:
-        depth = 0
-        quoted = escaped = False
-        for char in line:
-            if quoted:
-                if escaped:
-                    escaped = False
-                elif char == "\\":
-                    escaped = True
-                elif char == '"':
-                    quoted = False
-            elif char == '"':
-                quoted = True
-            elif char in "[{":
-                depth += 1
-                if depth > max_json_depth:
-                    raise ReplayBudgetExceeded("max_json_depth", depth, max_json_depth)
-            elif char in "]}":
-                depth -= 1
+        observed_depth = _metadata_depth(line, max_json_depth)
     try:
         doc = json.loads(
             line,
             parse_constant=lambda token: _reject_json_constant(name, lineno, token),
         )
-    except (json.JSONDecodeError, RecursionError) as exc:
+    except RecursionError as exc:
+        import sys
+        if observed_depth is None:
+            observed_depth = _metadata_depth(line, max_json_depth)
+        raise ReplayBudgetExceeded(
+            "max_json_depth", observed_depth, max_json_depth,
+            decoder_capacity=sys.getrecursionlimit(),
+        ) from exc
+    except json.JSONDecodeError as exc:
         raise ValueError(f"{name}: line {lineno}: invalid journal record") from exc
     if not isinstance(doc, dict):
         raise ValueError(f"{name}: line {lineno}: invalid journal record")
