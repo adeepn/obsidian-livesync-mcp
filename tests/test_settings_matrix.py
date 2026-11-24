@@ -15,19 +15,17 @@ policy, every row also probes exact 1 MiB admission and 1 MiB+1 skip/unlimited
 admission (default 50 admits both). No default-50 boundary allocation is needed:
 Task 5's boundary tests own the 50 MiB edge.
 
-Pinned fixtures supply independent chunk boundaries/ids where settings match;
-otherwise assert reconstruction, ordering, repeated-id preservation, size/type,
-empty eden, immutability, and algorithm integration. A pinned helloWorld hash
-probe runs through storage for every row. No Node or network is needed.
+Every row asserts exact ordered pieces and chunk IDs from the independent
+pinned Node oracle, on both backends, without a fallback. Inputs are shared
+with the generator; expected partitions never use production splitting/hash.
+No Node or network is needed to run tests.
 """
 import base64
 from contextlib import asynccontextmanager
-import hashlib
 from itertools import combinations, product
 import json
 from pathlib import Path
 import unicodedata
-import zlib
 
 import httpx
 import pytest
@@ -40,109 +38,15 @@ from storage_journal import JournalBackend, MILESTONE_KEY, SYNC_PARAMETERS_KEY
 from tests.test_storage_couchdb import fake_vault, stored_doc
 from tests.test_storage_journal import make_backend, params_blob
 
-# Named levels remain distinct even when omission equals an explicit default.
-BACKENDS = ('couchdb', 'journal')
-FACTORS = (
-    ('identity', ('legacy', 'nfc', 'sensitive', 'nfc-sensitive')),
-    ('splitter', ('v3-rabin-karp', 'v2', 'v2-segmenter', 'v1',
-                 'legacy-00', 'legacy-01', 'legacy-10', 'legacy-11')),
-    ('hash', ('xxhash64', 'xxhash32', 'mixed-purejs', 'sha1', '')),
-    ('custom', ('default', 0, 1, 60)),
-    ('minimum', ('default', 5, 100)),
-    ('limit', ('default', 0, 1)),
-    ('document', ('md', 'bom', 'base', 'json', 'yaml', 'binary', 'empty')),
+from tests.settings_oracle_inputs import (
+    BACKENDS, FACTORS, ROWS, CASES, case_id, settings_for, payload,
 )
-ROWS = (
-    (3, 7, 4, 3, 2, 0, 2),
-    (3, 6, 2, 2, 1, 2, 4),
-    (3, 5, 0, 1, 0, 1, 3),
-    (2, 4, 3, 3, 1, 1, 1),
-    (2, 0, 0, 0, 2, 2, 0),
-    (1, 4, 2, 2, 0, 0, 5),
-    (1, 5, 1, 0, 1, 0, 6),
-    (0, 3, 1, 1, 0, 2, 1),
-    (0, 1, 2, 2, 2, 1, 6),
-    (2, 6, 3, 1, 0, 0, 4),
-    (1, 7, 4, 1, 1, 1, 0),
-    (1, 2, 3, 1, 2, 2, 5),
-    (0, 2, 4, 0, 0, 0, 2),
-    (1, 1, 0, 3, 1, 2, 2),
-    (2, 3, 4, 2, 2, 2, 3),
-    (0, 6, 1, 3, 2, 1, 4),
-    (3, 1, 3, 0, 0, 1, 0),
-    (2, 0, 2, 3, 0, 2, 6),
-    (0, 3, 0, 0, 1, 1, 5),
-    (1, 0, 1, 2, 1, 1, 2),
-    (3, 2, 1, 0, 1, 1, 3),
-    (1, 5, 3, 2, 2, 0, 1),
-    (0, 7, 2, 0, 0, 2, 1),
-    (0, 4, 3, 0, 2, 0, 3),
-    (2, 5, 2, 3, 1, 2, 5),
-    (0, 3, 2, 3, 2, 0, 0),
-    (2, 4, 1, 1, 0, 2, 2),
-    (3, 0, 0, 1, 0, 0, 6),
-    (3, 1, 4, 1, 0, 0, 1),
-    (2, 2, 0, 2, 2, 2, 4),
-    (1, 6, 4, 3, 1, 2, 3),
-    (0, 5, 4, 0, 0, 2, 4),
-    (3, 7, 3, 2, 0, 1, 6),
-    (3, 7, 1, 3, 2, 0, 5),
-    (3, 4, 0, 2, 2, 2, 0),
-    (2, 6, 0, 0, 0, 0, 1),
-    (3, 3, 2, 1, 2, 1, 2),
-    (0, 0, 4, 0, 2, 1, 5),
-    (1, 3, 3, 2, 1, 1, 4),
-    (3, 2, 2, 3, 2, 1, 3),
-    (2, 7, 0, 2, 0, 2, 4),
-    (2, 4, 4, 3, 2, 1, 6),
-    (2, 1, 1, 1, 0, 2, 4),
-    (3, 6, 3, 1, 2, 1, 2),
-    (3, 5, 1, 2, 2, 2, 0),
-    (3, 0, 3, 3, 0, 1, 1),
-    (3, 7, 4, 1, 1, 0, 3),
-    (3, 6, 4, 2, 1, 0, 5),
-    (3, 6, 4, 0, 2, 1, 0),
-    (3, 6, 4, 0, 2, 1, 6),
-    (3, 5, 1, 2, 1, 1, 2),
-    (3, 4, 4, 1, 0, 2, 4),
-    (3, 3, 4, 2, 0, 2, 6),
-    (3, 2, 4, 3, 1, 1, 1),
-    (3, 2, 4, 3, 2, 0, 0),
-    (3, 2, 4, 3, 1, 0, 6),
-    (3, 1, 4, 3, 1, 2, 5),
-    (3, 1, 4, 3, 0, 0, 3),
-    (3, 0, 4, 3, 0, 2, 4),
-    (3, 0, 4, 3, 2, 1, 3),
-)
-CASES = [tuple(levels[index] for (_, levels), index in zip(FACTORS, row)) for row in ROWS]
+from tests.settings_oracle import matrix_vector, assert_partition
+
 FIXTURES = Path(__file__).parent / 'fixtures'
 HASHES = json.loads((FIXTURES / 'hash_algorithms_upstream.json').read_text())
 HASH_HELLO = next(v['ids'] for v in HASHES['vectors'] if v['recipe'] == {'text': 'helloWorld'})
 BLOB_ORACLE = json.loads((FIXTURES / 'ingested_blob_size_upstream.json').read_text())['vectors']
-LEGACY = json.loads((FIXTURES / 'legacy_splitter_upstream.json').read_text())['vectors']
-V3 = json.loads((FIXTURES / 'content_splitter_upstream.json').read_text())
-
-
-def case_id(case):
-    return '-'.join(f'{name}={"empty" if value == "" else value}' for (name, _), value in zip(FACTORS, case))
-
-
-def settings_for(case):
-    identity, version, alg, custom, minimum, limit, _ = case
-    settings = {'pathNormalizationVersion': int('nfc' in identity),
-                'handleFilenameCaseSensitive': 'sensitive' in identity,
-                'hashAlg': alg}
-    if version.startswith('legacy-'):
-        v2, segmenter = version[-2:]
-        settings.update(chunkSplitterVersion='', enableChunkSplitterV2=v2 == '1',
-                        useSegmenter=segmenter == '1')
-    else:
-        settings['chunkSplitterVersion'] = version
-    for key, value in [('customChunkSize', custom), ('minimumChunkSize', minimum),
-                       ('syncMaxSizeInMB', limit)]:
-        if value != 'default':
-            settings[key] = value
-    return settings
 
 
 def test_covering_array_is_complete_on_each_backend():
@@ -186,17 +90,6 @@ async def matrix_vault(tmp_path, kind, settings):
             await backend.close()
 
 
-def payload(kind):
-    if kind == 'binary':
-        return '.png', b'\x89PNG\r\n\x1a\n' + bytes(range(256)) * 1024
-    if kind == 'empty':
-        return '.md', ''
-    text = 'Привет🙂\nhelloWorld\n' * 3
-    if kind == 'bom':
-        text = '\ufeff' + text
-    return ('.md' if kind in ('md', 'bom') else '.' + kind), text
-
-
 def projected(content, plain, version):
     if not plain:
         return content.encode() if isinstance(content, str) else content
@@ -207,7 +100,7 @@ def projected(content, plain, version):
     return content
 
 
-async def assert_note(backend, doc, path, content, version):
+async def assert_note(backend, doc, path, content, version, expected):
     plain = path.endswith('.md')
     note = await backend.read_note(path)
     assert note is not None
@@ -219,8 +112,7 @@ async def assert_note(backend, doc, path, content, version):
     children = metadata['children']
     pieces = await pieces_for(backend, children)
     # Children are ordered, including repeated IDs; physical chunks are deduped.
-    assert children == [backend._splitter.chunk_id_for_piece(p) for p in pieces]
-    assert len(children) == len(pieces)
+    assert_partition(pieces, children, expected)
     if plain:
         assert ''.join(pieces) == projected(content, True, version)
     else:
@@ -234,44 +126,6 @@ async def pieces_for(backend, children):
     return [(await backend._get_doc(child))['data'] for child in children]
 
 
-def split_oracle(settings):
-    """Pick a bounded pinned vector with exactly matching effective settings."""
-    splitter = ContentSplitter(settings)
-    custom = settings.get('customChunkSize', 0)
-    minimum = settings.get('minimumChunkSize', 20)
-    if splitter.version == 'v3-rabin-karp':
-        choices = [v for v in V3['vectors'] + V3['differential']
-                   if v['text'] and v['plain'] and v['maximum'] == 102400 * (custom + 1)
-                   and v['minimum'] == minimum and 0 < sum(v['expected_lengths']) < 8192]
-    else:
-        version = splitter.normalized_settings['chunkSplitterVersion'] or 'v1'
-        choices = [v for v in LEGACY if v['version'] == version and v['text']
-                   and v['path'].endswith('.md') and v['custom'] == custom
-                   and v['minimum'] == minimum and 0 < sum(v['expected_lengths']) < 8192]
-    return max(choices, key=lambda v: len(v['expected_ids']), default=None)
-
-
-async def check_split_oracle(backend, doc, settings):
-    vector = split_oracle(settings)
-    if vector is None:
-        return
-    raw = zlib.decompress(base64.b64decode(vector['input_deflate_b64']))
-    await backend.write_note('pinned.md', raw.decode('utf-8'), create=True)
-    children = (await doc('pinned.md'))['children']
-    pieces = await pieces_for(backend, children)
-    if 'expected_piece_sha256' in vector:
-        nonempty = [i for i, length in enumerate(vector['expected_lengths']) if length]
-        assert [len(p.encode('utf-16-le', errors='surrogatepass')) // 2 for p in pieces] == [
-            vector['expected_lengths'][i] for i in nonempty]
-        assert [hashlib.sha256(p.encode('utf-16-le', errors='surrogatepass')).hexdigest()
-                for p in pieces] == [vector['expected_piece_sha256'][i] for i in nonempty]
-    else:
-        nonempty = [i for i, length in enumerate(vector['expected_lengths']) if length]
-        assert [len(p.encode()) for p in pieces] == [vector['expected_lengths'][i] for i in nonempty]
-    if settings['hashAlg'] == 'xxhash64':
-        assert children == [vector['expected_ids'][i] for i in nonempty]
-
-
 async def readable_snapshot(backend):
     return {m['path']: await backend.read_note(m['path']) for m in await backend.list_notes()}
 
@@ -281,7 +135,7 @@ async def assert_preserved(backend, before):
         assert await backend.read_note(name) == note, name
 
 
-async def size_and_outcomes(backend, doc, reader, storage, monkeypatch, writes):
+async def size_and_outcomes(backend, doc, reader, storage, monkeypatch, writes, oracle):
     """Real boundary writes plus temporary one-byte policy refusal probes.
 
     The low temporary limit exercises skip/refused reporting even in unlimited
@@ -306,6 +160,8 @@ async def size_and_outcomes(backend, doc, reader, storage, monkeypatch, writes):
     data = b'\x00' * 1048576
     await backend.write_attachment('boundary.png', data, create=True)
     assert (await doc('boundary.png'))['size'] == len(data)
+    children = (await doc('boundary.png'))['children']
+    assert_partition(await pieces_for(backend, children), children, oracle['payloads']['boundary'])
     before = await readable_snapshot(backend)
     if limit == 1:
         writes_before = mutations()
@@ -318,6 +174,8 @@ async def size_and_outcomes(backend, doc, reader, storage, monkeypatch, writes):
     else:
         await backend.write_attachment('boundary.png', data + b'x')
         data += b'x'
+        children = (await doc('boundary.png'))['children']
+        assert_partition(await pieces_for(backend, children), children, oracle['payloads']['boundary-plus'])
     assert (await backend.read_note('boundary.png'))['data'] == data
     if reader:
         await reader.refresh(force=True)
@@ -366,6 +224,8 @@ async def size_and_outcomes(backend, doc, reader, storage, monkeypatch, writes):
         assert response.startswith('outcome unknown') and 're-read' in response
     await backend.refresh(force=True)
     assert (await backend.read_note('uncertain.md'))['text'] == 'accepted'
+    children = (await doc('uncertain.md'))['children']
+    assert_partition(await pieces_for(backend, children), children, oracle['payloads']['uncertain'])
     await assert_preserved(backend, before)
     if reader:
         await reader.refresh(force=True)
@@ -401,12 +261,16 @@ async def test_settings_full_cycle(tmp_path, monkeypatch, kind, case):
         result = await server.obsidian_create_note('oracle.md', 'helloWorld')
         assert 'Created' in result
         assert (await doc('oracle.md'))['children'] == [HASH_HELLO[case[2]]]
+        oracle = matrix_vector(case)
+        children = (await doc('oracle.md'))['children']
+        assert_partition(await pieces_for(backend, children), children, oracle['payloads']['hash'])
         # Exact Task 4 Blob-size/BOM fixture, independently of splitter output.
         blob = next(v for v in BLOB_ORACLE if v['version'] == version and v['input'] == '\ufeffabc')
         meta = await backend.write_note('blob-size.md', blob['input'], create=True)
         assert meta['size'] == blob['size']
         assert (await backend.read_note('blob-size.md'))['text'] == blob['text']
-        await check_split_oracle(backend, doc, settings)
+        children = (await doc('blob-size.md'))['children']
+        assert_partition(await pieces_for(backend, children), children, oracle['payloads']['blob'])
         immutable = await snapshot()
 
         async def unchanged_chunks():
@@ -423,8 +287,10 @@ async def test_settings_full_cycle(tmp_path, monkeypatch, kind, case):
         if reader:
             await reader.startup_check()
 
+        phase = 'initial'
+
         async def check(path, content):
-            note = await assert_note(backend, doc, path, content, version)
+            note = await assert_note(backend, doc, path, content, version, oracle['payloads'][phase])
             if reader:
                 await reader.refresh(force=True)
                 other = await reader.read_note(path)
@@ -446,6 +312,7 @@ async def test_settings_full_cycle(tmp_path, monkeypatch, kind, case):
                 assert len((await doc(path))['children']) > 1
             append = b'\x00\xfftail' if isinstance(content, bytes) else '\nДобавлено🙂'
             content += append
+            phase = 'updated'
             await backend.write_note(path, content)
             await check(path, content)
             await backend.copy_note(path, copy)
@@ -470,7 +337,7 @@ async def test_settings_full_cycle(tmp_path, monkeypatch, kind, case):
             await check(path, content)
             if reader:
                 assert await reader.read_note(moved) is None
-            await size_and_outcomes(backend, doc, reader, storage, monkeypatch, writes)
+            await size_and_outcomes(backend, doc, reader, storage, monkeypatch, writes, oracle)
             await unchanged_chunks()
             if reader:
                 fresh = JournalBackend(storage, tmp_path / 'fresh-final')
