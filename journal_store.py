@@ -77,8 +77,10 @@ _META_LAST_SENT_KEY = "last_sent_key"
 # CouchDB/LiveSync revision strings: "<generation>-<hash>".
 _REV_RE = re.compile(r"^(\d+)-(.+)$")
 
-# Accept only bounded chunk identifiers without path separators or dots.
-_CHUNK_ID_RE = re.compile(r"^h:[A-Za-z0-9+_-]{1,64}$")
+# Accept bounded historical IDs and standard SHA-1 base64 IDs. Upstream:
+# commonlib@484c164450d61deb2e301582b60cb9b5f9fa977f
+# managers/HashManager/PureJSHashManager.ts:77-87.
+_CHUNK_ID_RE = re.compile(r"^h:(?:[A-Za-z0-9+_-]{1,64}|[A-Za-z0-9+/]{27}=)$")
 
 _ENCRYPTED_MESSAGE = (
     "note {path!r} uses end-to-end encryption, "
@@ -320,7 +322,10 @@ class JournalStore:
     def _chunk_path(self, chunk_id: str) -> Path:
         if not isinstance(chunk_id, str) or _CHUNK_ID_RE.fullmatch(chunk_id) is None:
             raise ValueError("invalid journal chunk identifier")
-        digest = chunk_id[len("h:") :]
+        # Escape only the cache filename, never the journal ID. SHA-1's '='
+        # suffix makes these paths disjoint from historical IDs; '/' -> '_'
+        # is injective over the standard base64 alphabet (which excludes '_').
+        digest = chunk_id[len("h:") :].replace("/", "_")
         if len(digest) < 3:
             chunk_file = self._chunks_dir / _SHORT_SHARD / digest
         else:

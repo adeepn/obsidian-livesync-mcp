@@ -104,14 +104,15 @@ Both backends support these vault settings:
 
 A vault using an unsupported combination fails the startup check with an explicit error instead of serving mismatched data.
 
-Writes use the upstream `v3-rabin-karp` splitter and `xxhash64` chunk IDs.
+Writes use the upstream `v3-rabin-karp` splitter and the vault's `hashAlg` chunk IDs
+(`xxhash64`, `xxhash32`, `mixed-purejs`, `sha1`, or legacy `""`).
 The milestone's preferred `minimumChunkSize` and `customChunkSize` control
 byte boundaries; absent values default to 20 and 0. `longLineThreshold`
 has no v3 effect. Text at least 4 MiB uses binary splitting thresholds
 while retaining text chunks. Binary data is split before each piece is
 base64-encoded. Empty content has no children; repeated pieces retain their
-ordered references. Explicit older splitter versions and other hash
-algorithms allow startup, reads, search and journal replay. All mutations
+ordered references. Explicit older splitter versions allow startup, reads,
+search and journal replay. All mutations
 are refused with a tool error until that writer mode is implemented.
 `backend_info` reports `writer_supported` and `writer_unsupported_reason`.
 Existing chunks remain readable under their original IDs; a supported fresh

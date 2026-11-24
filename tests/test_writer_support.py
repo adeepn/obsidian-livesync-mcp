@@ -44,8 +44,8 @@ async def vault(tmp_path, kind, settings):
 
 @pytest.mark.parametrize('kind', ['couchdb', 'journal'])
 @pytest.mark.parametrize('settings', [
-    {'chunkSplitterVersion': 'v2'}, {'hashAlg': 'sha1'},
-    {'chunkSplitterVersion': 'v2', 'hashAlg': 'sha1'},
+    {'chunkSplitterVersion': 'v2'}, {'hashAlg': 'unknown'},
+    {'chunkSplitterVersion': 'v2', 'hashAlg': 'unknown'},
     {'idDerivationVersion': 2},
     {'idDerivationVersion': 1},
 ])
@@ -113,7 +113,7 @@ async def test_backend_overflow_is_clean_storage_error(tmp_path, kind, key, valu
 
 
 @pytest.mark.parametrize('kind', ['couchdb', 'journal'])
-@pytest.mark.parametrize('settings', [{'chunkSplitterVersion': 'v2'}, {'hashAlg': 'sha1'}])
+@pytest.mark.parametrize('settings', [{'chunkSplitterVersion': 'v2'}, {'hashAlg': 'unknown'}])
 async def test_mcp_lifespan_serves_read_and_clean_writer_error(tmp_path, kind, settings, monkeypatch):
     import server
     from config import load_config

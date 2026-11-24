@@ -50,7 +50,7 @@ def test_direct_worker_spec_text_survives():
         assert expected in ''.join(pieces)
 
 @pytest.mark.parametrize('settings', [
-    {'chunkSplitterVersion': 'v2'}, {'hashAlg': 'sha1'},
+    {'chunkSplitterVersion': 'v2'}, {'hashAlg': 'unknown'},
     {'minimumChunkSize': -1}, {'minimumChunkSize': float('nan')},
     {'customChunkSize': float('inf')}, {'customChunkSize': True},
     {'idDerivationVersion': 1}, {'idDerivationVersion': 2},
@@ -174,7 +174,7 @@ async def test_writers_skip_empty_decoded_text_pieces(tmp_path, backend_kind):
             await backend.close()
 
 
-@pytest.mark.parametrize('setting', [{'hashAlg': 'sha1'}, {'chunkSplitterVersion':'v2'},
+@pytest.mark.parametrize('setting', [{'hashAlg': 'unknown'}, {'chunkSplitterVersion':'v2'},
                                      {'idDerivationVersion':1, 'idDerivationKey':'invalid'}])
 @pytest.mark.parametrize('backend_kind', ['couchdb', 'journal'])
 async def test_startup_records_unsupported_chunk_writer(tmp_path, setting, backend_kind):
@@ -202,7 +202,7 @@ async def test_journal_refuses_colliding_pieces_before_publication(tmp_path, mon
     backend, storage = make_backend(tmp_path)
     try:
         await backend.startup_check()
-        monkeypatch.setattr(storage_journal, 'chunk_id_for_piece', lambda piece: 'h:collision')
+        monkeypatch.setattr(storage_journal, 'chunk_id_for_piece', lambda piece, **kwargs: 'h:collision')
         with pytest.raises(StorageError, match='different data'):
             await backend.write_note('collision.md', '\0' * 1024 + '\x01' * 1024, create=True)
         assert not storage.put_calls

@@ -794,7 +794,7 @@ class CouchDBBackend:
         or rewritten (audit B1); a PUT happens only when the chunk is
         absent, so rewriting identical content never conflicts.
         """
-        chunk_id = chunk_id_for_piece(data)
+        chunk_id = chunk_id_for_piece(data, hash_alg=self._splitter.hash_alg)
         existing = await self._get_doc(chunk_id)
         if existing is not None:
             if (

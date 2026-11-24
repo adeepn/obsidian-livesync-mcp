@@ -1,4 +1,4 @@
-"""LiveSync v3 Rabin–Karp splitting and unencrypted xxhash64 chunk identities.
+"""LiveSync v3 Rabin–Karp splitting and unencrypted chunk identities.
 
 Source: vrtmrz/livesync-commonlib@484c164450d61deb2e301582b60cb9b5f9fa977f
 src/string_and_binary/chunks.ts:494-650 (rolling state and thresholds),
@@ -9,6 +9,7 @@ See docs/superpowers/specs/2026-11-23-settings-parity.md sections а/б.
 from __future__ import annotations
 
 import base64
+import hashlib
 import math
 import re
 from collections.abc import Mapping
@@ -26,27 +27,108 @@ def _js_utf8(text: str) -> bytes:
         'utf-16-le', errors='replace').encode('utf-8')
 
 
-def chunk_id_for_piece(piece: bytes | str) -> str:
-    """Hash an emitted string; raw binary pieces are first base64-encoded.
+def _utf16_units(text: str) -> list[int]:
+    raw = text.encode('utf-16-le', errors='surrogatepass')
+    return [raw[i] | raw[i + 1] << 8 for i in range(0, len(raw), 2)]
 
-    HashManager uses JS string.length (UTF-16 units), not UTF-8 byte length.
-    Default xxhash64 seed is zero, with unsigned, unpadded lowercase base36.
-    """
-    if isinstance(piece, bytes):
-        piece = base64.b64encode(piece).decode('ascii')
-    length = len(piece.encode('utf-16-le', errors='surrogatepass')) // 2
-    value = xxhash.xxh64_intdigest(_js_utf8(f'{piece}-{length}'))
+
+def _base36(value: int) -> str:
+    if value < 0:
+        return '-' + _base36(-value)
     digits = ''
     while value:
         value, remainder = divmod(value, 36)
         digits = '0123456789abcdefghijklmnopqrstuvwxyz'[remainder] + digits
-    return 'h:' + (digits or '0')
+    return digits or '0'
+
+
+def _int32(value: int) -> int:
+    value &= 0xffffffff
+    return value if value < 0x80000000 else value - 0x100000000
+
+
+def _rotate32(value: int, shift: int) -> int:
+    value &= 0xffffffff
+    return _int32((value << shift) | (value >> (32 - shift)))
+
+
+def _mixed_hash(text: str) -> str:
+    # octagonal-wheels@0.1.57 dist/hash/purejs.js:7-58.
+    # Ordinary JS products round to binary64; Math.imul keeps low 32 bits.
+    units = _utf16_units(str(len(_utf16_units(text))) + text)
+    h, fnv = 1, 2166136261
+    for unit in units:
+        fnv = ((fnv ^ unit) * 0x01000193) & 0xffffffff
+        k = _rotate32(int(float(unit) * 0xcc9e2d51), 15)
+        k = int(float(k) * 0x1b873593)
+        h = _rotate32(_int32(h) ^ _int32(k), 13)
+        h = h * 5 + 0xe6546b64
+    h = _int32(h) ^ len(units)
+    h = _int32((h ^ ((h & 0xffffffff) >> 16)) * 0x85ebca6b)
+    h = _int32((h ^ ((h & 0xffffffff) >> 13)) * 0xc2b2ae35)
+    h ^= (h & 0xffffffff) >> 16
+    return _base36(h & 0xffffffff) + _base36(fnv)
+
+
+def _write_string(text: str) -> bytes:
+    # octagonal-wheels@0.1.57 dist/binary/base64.js:198-240.
+    # The short manual path consumes ANY surrogate and its next unit as a
+    # pair, without validation. Missing charCodeAt is NaN, coerced to zero
+    # by bitwise OR. Do not replace this with a normal UTF-8 encoder.
+    units = _utf16_units(text)
+    if len(units) > 128:
+        return _js_utf8(text)
+    result = bytearray()
+    i = 0
+    while i < len(units):
+        c = units[i]
+        i += 1
+        if c < 0x80:
+            result.append(c)
+        elif c < 0x800:
+            result.extend((0xc0 | (c >> 6), 0x80 | (c & 63)))
+        elif c < 0xd800 or c > 0xdfff:
+            result.extend((0xe0 | (c >> 12), 0x80 | ((c >> 6) & 63), 0x80 | (c & 63)))
+        else:
+            next_unit = units[i] - 0xdc00 if i < len(units) else 0
+            i += 1
+            c = (_int32(((c - 0xd800) << 10) | next_unit) + 0x10000) & 0xffffffff
+            result.extend(((0xf0 | (c >> 18)) & 255, 0x80 | ((c >> 12) & 63),
+                           0x80 | ((c >> 6) & 63), 0x80 | (c & 63)))
+    return bytes(result)
+
+
+def chunk_id_for_piece(piece: bytes | str, *, hash_alg: str | None = 'xxhash64') -> str:
+    """Derive an unencrypted ID using JS UTF-16 length and manager semantics.
+
+    commonlib@484c164450d61deb2e301582b60cb9b5f9fa977f:
+    managers/HashManager/XXHashHashManager.ts:39-134,
+    managers/HashManager/PureJSHashManager.ts:34-44,77-87,
+    managers/HashManager/HashManager.ts:11-19,65-74 (null uses fallback XXH32).
+    """
+    if isinstance(piece, bytes):
+        piece = base64.b64encode(piece).decode('ascii')
+    length = len(_utf16_units(piece))
+    text = f'{piece}-{length}'
+    if hash_alg == 'xxhash64':
+        digest = _base36(xxhash.xxh64_intdigest(_js_utf8(text)))
+    elif hash_alg in ('xxhash32', None):
+        digest = _base36(xxhash.xxh32_intdigest(_js_utf8(text)))
+    elif hash_alg == '':
+        digest = _base36(_int32(xxhash.xxh32_intdigest(_js_utf8(piece)) ^ length))
+    elif hash_alg == 'mixed-purejs':
+        digest = _mixed_hash(text)
+    elif hash_alg == 'sha1':
+        digest = base64.b64encode(hashlib.sha1(_write_string(text)).digest()).decode('ascii')
+    else:
+        raise UnsupportedWriterMode('unsupported hashAlg')
+    return 'h:' + digest
 
 
 class ContentSplitter:
-    """The supported v3/xxhash64 writer, configured with resolved tweak values.
+    """The supported v3 writer, configured with resolved tweak values.
 
-    Explicit legacy splitter/hash modes are refused rather than approximated.
+    Explicit legacy splitter modes are refused rather than approximated.
     longLineThreshold is deliberately unused by upstream v3. Empty input emits
     no pieces. str models a text/plain Blob; bytes models a binary Blob.
     """
@@ -62,8 +144,12 @@ class ContentSplitter:
         if settings.get('encrypt'):
             raise ValueError('encrypted chunk IDs are unsupported')
         unsupported = []
-        for name, default in (('chunkSplitterVersion', 'v3-rabin-karp'),
-                              ('hashAlg', 'xxhash64')):
+        self.hash_alg = settings.get('hashAlg', 'xxhash64')
+        if self.hash_alg is None:
+            self.hash_alg = 'xxhash32'
+        if self.hash_alg not in ('xxhash64', 'xxhash32', 'mixed-purejs', 'sha1', ''):
+            unsupported.append(f'hashAlg={self.hash_alg}')
+        for name, default in (('chunkSplitterVersion', 'v3-rabin-karp'),):
             value = settings.get(name, default)
             if value != default:
                 unsupported.append(f'{name}={value}')
@@ -97,7 +183,8 @@ class ContentSplitter:
             raise ValueError(f'invalid {key}')
         return value
 
-    chunk_id_for_piece = staticmethod(chunk_id_for_piece)
+    def chunk_id_for_piece(self, piece: bytes | str) -> str:
+        return chunk_id_for_piece(piece, hash_alg=self.hash_alg)
 
     def split(self, data: str | bytes, *, path: str = '', plain_split: bool = False) -> list[str]:
         """Split bytes before encoding; preserve UTF-8 boundaries for text Blobs.

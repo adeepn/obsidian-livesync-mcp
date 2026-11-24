@@ -1,0 +1,978 @@
+{
+  "upstream_commit": "484c164450d61deb2e301582b60cb9b5f9fa977f",
+  "node": "v26.13.1",
+  "wheels": "0.1.57",
+  "source_sha256": {
+    "package/dist/hash/purejs.js": "09bc77348cb96f592fbb18b5b7a61f4b747cc91f12d5ea0b29b3b2609e0cca7c",
+    "package/dist/binary/base64.js": "0675e7a75edeb8eabc7f867ac18a44bd50bf4f493a5356d3760fb2b167fa82bc",
+    "package/dist/binary/hex.js": "e9544562fc02c0df659dd27550d553ade49959ad546ba6b88f236c6274ccb9e6",
+    "package/dist/binary/encodedUTF16.tables.internal.js": "17432ddd36cb745ab82a42d269736b954f3841070da54d5152a6be246b3a40d4",
+    "managers/HashManager/XXHashHashManager.ts": "24c192b549e7b3dd486432e572800ce9a77102a27ad152a9e66e209005df726a",
+    "managers/HashManager/PureJSHashManager.ts": "b2298e9bb0ae2c3abaefa0a13ff75ba1129a3fc33125cc23105937a8d3668be2"
+  },
+  "vectors": [
+    {
+      "recipe": {
+        "text": ""
+      },
+      "utf16_length": 0,
+      "ids": {
+        "": "h:ry8zp",
+        "xxhash32": "h:6yjtc1",
+        "xxhash64": "h:25xaz83tmm99l",
+        "mixed-purejs": "h:bohyh61eitvns",
+        "sha1": "h:D+/SfK1JFZRgSfA1K+3A+lnWAeI="
+      }
+    },
+    {
+      "recipe": {
+        "text": "helloWorld"
+      },
+      "utf16_length": 10,
+      "ids": {
+        "": "h:-vyucau",
+        "xxhash32": "h:1n069eb",
+        "xxhash64": "h:37me21jj44pcc",
+        "mixed-purejs": "h:1b68nom123qfyd",
+        "sha1": "h:2pGPxorWFQvCZq2k1uh76tH9ABc="
+      }
+    },
+    {
+      "recipe": {
+        "text": "abc-123-0"
+      },
+      "utf16_length": 9,
+      "ids": {
+        "": "h:i1zt1c",
+        "xxhash32": "h:7pikyo",
+        "xxhash64": "h:2t67uj4ixwyyb",
+        "mixed-purejs": "h:8v7fh1ijd5yf",
+        "sha1": "h:3PqgNrzsLJMRnMluuBQHe4JbEG8="
+      }
+    },
+    {
+      "recipe": {
+        "text": "Привет мир"
+      },
+      "utf16_length": 10,
+      "ids": {
+        "": "h:e6sxnv",
+        "xxhash32": "h:1nl1fi0",
+        "xxhash64": "h:34c635tpx9lbo",
+        "mixed-purejs": "h:e5ha301c52py7",
+        "sha1": "h:z6FkQaaQroc/nD75IWJrCwZh7Sg="
+      }
+    },
+    {
+      "recipe": {
+        "text": "漢字中文"
+      },
+      "utf16_length": 4,
+      "ids": {
+        "": "h:-c0fda",
+        "xxhash32": "h:inbl6e",
+        "xxhash64": "h:1b1nn4x78169n",
+        "mixed-purejs": "h:x3qsgpc9etvr",
+        "sha1": "h:CmGxhb/WVHeNjfBZYOwmD8p7F10="
+      }
+    },
+    {
+      "recipe": {
+        "text": "🙂🚀"
+      },
+      "utf16_length": 4,
+      "ids": {
+        "": "h:i35dap",
+        "xxhash32": "h:6a23ud",
+        "xxhash64": "h:dalp5ul0yc84",
+        "mixed-purejs": "h:1ocgsqs1wd6fae",
+        "sha1": "h:HSzm4lL8kDmfThR0lSvUFl7ejx0="
+      }
+    },
+    {
+      "recipe": {
+        "text": "\ud800"
+      },
+      "utf16_length": 1,
+      "ids": {
+        "": "h:wmtrv4",
+        "xxhash32": "h:10rn0zv",
+        "xxhash64": "h:3io3gbx5oks9x",
+        "mixed-purejs": "h:1tgeyjfz32e8",
+        "sha1": "h:QyKtD3R3N3ALBHkJtLYvWQr2FDg="
+      }
+    },
+    {
+      "recipe": {
+        "text": "\udc00"
+      },
+      "utf16_length": 1,
+      "ids": {
+        "": "h:wmtrv4",
+        "xxhash32": "h:10rn0zv",
+        "xxhash64": "h:3io3gbx5oks9x",
+        "mixed-purejs": "h:1r86ezf1mxcqg0",
+        "sha1": "h:QyKtD3R3N3ALBHkJtLYvWQr2FDg="
+      }
+    },
+    {
+      "recipe": {
+        "text": "\ud800A"
+      },
+      "utf16_length": 2,
+      "ids": {
+        "": "h:-qlh6cp",
+        "xxhash32": "h:b484b9",
+        "xxhash64": "h:2cpw7tlzumblc",
+        "mixed-purejs": "h:1ee3kjwv9e20n",
+        "sha1": "h:JojwFL3B4vEFtJej5Fpn5ygAzQM="
+      }
+    },
+    {
+      "recipe": {
+        "text": "\udc00\ud800"
+      },
+      "utf16_length": 2,
+      "ids": {
+        "": "h:3onnjq",
+        "xxhash32": "h:1skdca0",
+        "xxhash64": "h:1e4vtj7nye75l",
+        "mixed-purejs": "h:1egaemk1v6nehc",
+        "sha1": "h:K0nMx40S+SLkxaDgmp5+Do9uz2M="
+      }
+    },
+    {
+      "recipe": {
+        "text": "🙂"
+      },
+      "utf16_length": 2,
+      "ids": {
+        "": "h:dysuni",
+        "xxhash32": "h:1hifpm3",
+        "xxhash64": "h:7pef6kyp6766",
+        "mixed-purejs": "h:kqhf2y1gaktjr",
+        "sha1": "h:s/p7of1TsLPzzEuRIM7R5lZEBlE="
+      }
+    },
+    {
+      "recipe": {
+        "text": "\r\n---\n{}[]%PDF-1.7"
+      },
+      "utf16_length": 18,
+      "ids": {
+        "": "h:-i43yto",
+        "xxhash32": "h:1g0s1yh",
+        "xxhash64": "h:1nqxi6tst6apg",
+        "mixed-purejs": "h:1e4y2krgm11oi",
+        "sha1": "h:DUSwjICpGUnpAjk4sT3+bjDmPx8="
+      }
+    },
+    {
+      "recipe": {
+        "repeat": "a",
+        "count": 123,
+        "tail": ""
+      },
+      "utf16_length": 123,
+      "ids": {
+        "": "h:-iuywkn",
+        "xxhash32": "h:1bbrmjc",
+        "xxhash64": "h:pjyrtzhkwytl",
+        "mixed-purejs": "h:iyy7ga1wd9o5l",
+        "sha1": "h:8J5kLlb7Ca4nWYrCPwbILFt/vr8="
+      }
+    },
+    {
+      "recipe": {
+        "repeat": "a",
+        "count": 121,
+        "tail": "🙂"
+      },
+      "utf16_length": 123,
+      "ids": {
+        "": "h:xtoa5s",
+        "xxhash32": "h:1rvgeuk",
+        "xxhash64": "h:2o39wif1vt5s4",
+        "mixed-purejs": "h:tpyfqk1mgo5h4",
+        "sha1": "h:toPvw9twVgqppBdbAsSlMbleE50="
+      }
+    },
+    {
+      "recipe": {
+        "repeat": "a",
+        "count": 122,
+        "tail": "\ud800"
+      },
+      "utf16_length": 123,
+      "ids": {
+        "": "h:-69s27r",
+        "xxhash32": "h:g0uwcf",
+        "xxhash64": "h:3frfo54kif5hv",
+        "mixed-purejs": "h:125al09g4oola",
+        "sha1": "h:Z2gvqexP8+L05MBxVTGJQAfjdbQ="
+      }
+    },
+    {
+      "recipe": {
+        "repeat": "a",
+        "count": 121,
+        "tail": "\udc00A"
+      },
+      "utf16_length": 123,
+      "ids": {
+        "": "h:dbpim8",
+        "xxhash32": "h:12x0a1p",
+        "xxhash64": "h:32i5rs5nb461k",
+        "mixed-purejs": "h:1akwgyk1cqjkw",
+        "sha1": "h:bszS+tTWy1B5Lx9YKHfn+HXAbN8="
+      }
+    },
+    {
+      "recipe": {
+        "repeat": "a",
+        "count": 124,
+        "tail": ""
+      },
+      "utf16_length": 124,
+      "ids": {
+        "": "h:-bgdkpe",
+        "xxhash32": "h:es7n32",
+        "xxhash64": "h:13i1gs1rkwpsd",
+        "mixed-purejs": "h:r3d7yi8vxya2",
+        "sha1": "h:rdEOFJwBvOvbrpweK4cY7Doj6BI="
+      }
+    },
+    {
+      "recipe": {
+        "repeat": "a",
+        "count": 122,
+        "tail": "🙂"
+      },
+      "utf16_length": 124,
+      "ids": {
+        "": "h:pisba8",
+        "xxhash32": "h:1n399zr",
+        "xxhash64": "h:1tg267pxlpztg",
+        "mixed-purejs": "h:3dabnyodvvm7",
+        "sha1": "h:HpoAIuXR1ya6xbd76zCrMQmkJCw="
+      }
+    },
+    {
+      "recipe": {
+        "repeat": "a",
+        "count": 123,
+        "tail": "\ud800"
+      },
+      "utf16_length": 124,
+      "ids": {
+        "": "h:-5kvfjp",
+        "xxhash32": "h:15u9xtc",
+        "xxhash64": "h:19j3zg73qpnnz",
+        "mixed-purejs": "h:16711k5kvdo8l",
+        "sha1": "h:XLBRcJr1Fwyv4fstDana8OO8Afk="
+      }
+    },
+    {
+      "recipe": {
+        "repeat": "a",
+        "count": 122,
+        "tail": "\udc00A"
+      },
+      "utf16_length": 124,
+      "ids": {
+        "": "h:2mt7h5",
+        "xxhash32": "h:138rwmk",
+        "xxhash64": "h:23m2a0likv4so",
+        "mixed-purejs": "h:bgln159jsfcr",
+        "sha1": "h:x5daKsgmI0S9TB5jkYxCr9tioQs="
+      }
+    },
+    {
+      "recipe": {
+        "repeat": "a",
+        "count": 125,
+        "tail": ""
+      },
+      "utf16_length": 125,
+      "ids": {
+        "": "h:-vj86tt",
+        "xxhash32": "h:1siq79u",
+        "xxhash64": "h:1wm2ssub83nsh",
+        "mixed-purejs": "h:eb1hpf14nn9mj",
+        "sha1": "h:m3dXEx+wjShK9nzOaiIJ7iOKbWs="
+      }
+    },
+    {
+      "recipe": {
+        "repeat": "a",
+        "count": 123,
+        "tail": "🙂"
+      },
+      "utf16_length": 125,
+      "ids": {
+        "": "h:-j4r64z",
+        "xxhash32": "h:1d6ljne",
+        "xxhash64": "h:yii2vixmlink",
+        "mixed-purejs": "h:1rugtv11n64cry",
+        "sha1": "h:jRXVbAvsRvqt6spQPofp+z1U9gI="
+      }
+    },
+    {
+      "recipe": {
+        "repeat": "a",
+        "count": 124,
+        "tail": "\ud800"
+      },
+      "utf16_length": 125,
+      "ids": {
+        "": "h:atpyu8",
+        "xxhash32": "h:1rzt481",
+        "xxhash64": "h:oguqaj12j64b",
+        "mixed-purejs": "h:ok6v22xuzcls",
+        "sha1": "h:AjBK0MEq2NhvVGXnlaKnXOs5hPM="
+      }
+    },
+    {
+      "recipe": {
+        "repeat": "a",
+        "count": 123,
+        "tail": "\udc00A"
+      },
+      "utf16_length": 125,
+      "ids": {
+        "": "h:-7wpaux",
+        "xxhash32": "h:p1hznb",
+        "xxhash64": "h:36hibs1khgih2",
+        "mixed-purejs": "h:19odbxbh2akny",
+        "sha1": "h:Lj8N6RiuZ8IBKNa9kx0x/l2ef6A="
+      }
+    },
+    {
+      "recipe": {
+        "repeat": "a",
+        "count": 126,
+        "tail": ""
+      },
+      "utf16_length": 126,
+      "ids": {
+        "": "h:swf9pw",
+        "xxhash32": "h:1jbqus7",
+        "xxhash64": "h:14jogdib1cxwo",
+        "mixed-purejs": "h:dr6jvb1sk9thz",
+        "sha1": "h:wHSwXCqXXV3K1z1IJi6vUB6eJlg="
+      }
+    },
+    {
+      "recipe": {
+        "repeat": "a",
+        "count": 124,
+        "tail": "🙂"
+      },
+      "utf16_length": 126,
+      "ids": {
+        "": "h:-ruaz94",
+        "xxhash32": "h:czi6r4",
+        "xxhash64": "h:2jyqye0006eym",
+        "mixed-purejs": "h:1a8x2f1i5g0d6",
+        "sha1": "h:7p5hdRmbpGWImEtVoP1tc5NBYJQ="
+      }
+    },
+    {
+      "recipe": {
+        "repeat": "a",
+        "count": 125,
+        "tail": "\ud800"
+      },
+      "utf16_length": 126,
+      "ids": {
+        "": "h:-ls2r6k",
+        "xxhash32": "h:1kihmcc",
+        "xxhash64": "h:1r1hwf1d4bm4w",
+        "mixed-purejs": "h:1mmb48asmi7g",
+        "sha1": "h:tXSmP9hA5ZAlC2VvUE7etBBkLS0="
+      }
+    },
+    {
+      "recipe": {
+        "repeat": "a",
+        "count": 124,
+        "tail": "\udc00A"
+      },
+      "utf16_length": 126,
+      "ids": {
+        "": "h:vjipf0",
+        "xxhash32": "h:86pam",
+        "xxhash64": "h:1ps7ybrhtx3zv",
+        "mixed-purejs": "h:1ysoxfbonvh4q",
+        "sha1": "h:r3wkswyvo9eLpnvuH3idAd7OOJU="
+      }
+    },
+    {
+      "recipe": {
+        "repeat": "a",
+        "count": 127,
+        "tail": ""
+      },
+      "utf16_length": 127,
+      "ids": {
+        "": "h:-x1l18j",
+        "xxhash32": "h:1dbfvik",
+        "xxhash64": "h:18a1c36pyrelf",
+        "mixed-purejs": "h:1u4h2ycni5tss",
+        "sha1": "h:3rzFZ1JgtEJbxokwjlyEzQ1RQPQ="
+      }
+    },
+    {
+      "recipe": {
+        "repeat": "a",
+        "count": 125,
+        "tail": "🙂"
+      },
+      "utf16_length": 127,
+      "ids": {
+        "": "h:-hdhvu2",
+        "xxhash32": "h:1bs282p",
+        "xxhash64": "h:2q6xb6y5i99e7",
+        "mixed-purejs": "h:1ny85bb1bifbqt",
+        "sha1": "h:dEcvzkdtVzOF8qOqC5B5nL9g9Rg="
+      }
+    },
+    {
+      "recipe": {
+        "repeat": "a",
+        "count": 126,
+        "tail": "\ud800"
+      },
+      "utf16_length": 127,
+      "ids": {
+        "": "h:-2lfwq8",
+        "xxhash32": "h:o7lv6",
+        "xxhash64": "h:2hn601jbu2m0n",
+        "mixed-purejs": "h:1gxco7p171a53r",
+        "sha1": "h:2ilTf39HKGe2dYHaz7hP9dbNCy4="
+      }
+    },
+    {
+      "recipe": {
+        "repeat": "a",
+        "count": 125,
+        "tail": "\udc00A"
+      },
+      "utf16_length": 127,
+      "ids": {
+        "": "h:cmeaw4",
+        "xxhash32": "h:n7yxeu",
+        "xxhash64": "h:lhdgg4bwgrkj",
+        "mixed-purejs": "h:6fj3bo1vtvslh",
+        "sha1": "h:5slVzv0NOvrYFQcvJArBVVILL28="
+      }
+    },
+    {
+      "recipe": {
+        "repeat": "a",
+        "count": 128,
+        "tail": ""
+      },
+      "utf16_length": 128,
+      "ids": {
+        "": "h:2athzq",
+        "xxhash32": "h:1i02bgf",
+        "xxhash64": "h:304qlf93pimlu",
+        "mixed-purejs": "h:1cqndfd1osm84x",
+        "sha1": "h:jU8KDv88rtHzquXUv5JnopAzhhU="
+      }
+    },
+    {
+      "recipe": {
+        "repeat": "a",
+        "count": 126,
+        "tail": "🙂"
+      },
+      "utf16_length": 128,
+      "ids": {
+        "": "h:de74av",
+        "xxhash32": "h:1jc2c3q",
+        "xxhash64": "h:1g5wr8laht5zl",
+        "mixed-purejs": "h:18p5elb1f0273s",
+        "sha1": "h:CSUj0k+yzSJjyGMD9N3wV9ZtVXk="
+      }
+    },
+    {
+      "recipe": {
+        "repeat": "a",
+        "count": 127,
+        "tail": "\ud800"
+      },
+      "utf16_length": 128,
+      "ids": {
+        "": "h:dtr1hq",
+        "xxhash32": "h:1vaajed",
+        "xxhash64": "h:2zv8olnbwco37",
+        "mixed-purejs": "h:130aqh4ifs93q",
+        "sha1": "h:BnH9aXdchAwb6EbvnIG4MP9UaQw="
+      }
+    },
+    {
+      "recipe": {
+        "repeat": "a",
+        "count": 126,
+        "tail": "\udc00A"
+      },
+      "utf16_length": 128,
+      "ids": {
+        "": "h:lu80xl",
+        "xxhash32": "h:1g4qoda",
+        "xxhash64": "h:yrffbhb772jj",
+        "mixed-purejs": "h:1m6r281ls9iso",
+        "sha1": "h:JdwWiN4n+nwAYma2LUzON1IVQXI="
+      }
+    },
+    {
+      "recipe": {
+        "repeat": "a",
+        "count": 129,
+        "tail": ""
+      },
+      "utf16_length": 129,
+      "ids": {
+        "": "h:-37mg3k",
+        "xxhash32": "h:1ngxvfw",
+        "xxhash64": "h:smlsckhlfipx",
+        "mixed-purejs": "h:mfw7pt161yfnu",
+        "sha1": "h:+/DI50SHqYMhPmYDA1SL8VFlv3A="
+      }
+    },
+    {
+      "recipe": {
+        "repeat": "a",
+        "count": 127,
+        "tail": "🙂"
+      },
+      "utf16_length": 129,
+      "ids": {
+        "": "h:-7ba4rr",
+        "xxhash32": "h:1aa62rr",
+        "xxhash64": "h:28yjd59vybc12",
+        "mixed-purejs": "h:381nfu1e34u9b",
+        "sha1": "h:47j676bZWrXyIjEnxKv1ohRmdec="
+      }
+    },
+    {
+      "recipe": {
+        "repeat": "a",
+        "count": 128,
+        "tail": "\ud800"
+      },
+      "utf16_length": 129,
+      "ids": {
+        "": "h:e62r0",
+        "xxhash32": "h:1vh7wwp",
+        "xxhash64": "h:mtrwjtqlriwp",
+        "mixed-purejs": "h:kut5hk14f6nmd",
+        "sha1": "h:oZtRlpdFT77AKs6EsRdg49ym/hQ="
+      }
+    },
+    {
+      "recipe": {
+        "repeat": "a",
+        "count": 127,
+        "tail": "\udc00A"
+      },
+      "utf16_length": 129,
+      "ids": {
+        "": "h:-y639s4",
+        "xxhash32": "h:1plli97",
+        "xxhash64": "h:31g0b1bsbvwzy",
+        "mixed-purejs": "h:eg9ge4svz8lj",
+        "sha1": "h:QEm/f3++aPNG3YdKsdUboosWBn4="
+      }
+    },
+    {
+      "recipe": {
+        "repeat": "a",
+        "count": 130,
+        "tail": ""
+      },
+      "utf16_length": 130,
+      "ids": {
+        "": "h:6iltnq",
+        "xxhash32": "h:a64rf9",
+        "xxhash64": "h:3q3cdcu2wlpvw",
+        "mixed-purejs": "h:12pjixihinn4w",
+        "sha1": "h:XBBIgjvy6+uESZrGRM1y2RpwGQE="
+      }
+    },
+    {
+      "recipe": {
+        "repeat": "a",
+        "count": 128,
+        "tail": "🙂"
+      },
+      "utf16_length": 130,
+      "ids": {
+        "": "h:-g89qm6",
+        "xxhash32": "h:15dyg3b",
+        "xxhash64": "h:346dq8egejg6a",
+        "mixed-purejs": "h:1728xve7lh4rd",
+        "sha1": "h:ThYn7LleEAtJT+LFl5ffn+K8z8E="
+      }
+    },
+    {
+      "recipe": {
+        "repeat": "a",
+        "count": 129,
+        "tail": "\ud800"
+      },
+      "utf16_length": 130,
+      "ids": {
+        "": "h:6m4dpr",
+        "xxhash32": "h:l85v3y",
+        "xxhash64": "h:xpm994s8hugb",
+        "mixed-purejs": "h:9w6b11x7rvev",
+        "sha1": "h:x+VFkho/PHnc8cBqD6LagNgKy4c="
+      }
+    },
+    {
+      "recipe": {
+        "repeat": "a",
+        "count": 128,
+        "tail": "\udc00A"
+      },
+      "utf16_length": 130,
+      "ids": {
+        "": "h:-lsglv9",
+        "xxhash32": "h:snz6ae",
+        "xxhash64": "h:ws50f7ccpy3z",
+        "mixed-purejs": "h:10uu1m11om3eg9",
+        "sha1": "h:WLBsaB9+9nfJ7Kfr63MQpzwMoH8="
+      }
+    },
+    {
+      "recipe": {
+        "repeat": "YWJjMTIz+/==",
+        "count": 5461,
+        "tail": "YWJj"
+      },
+      "utf16_length": 65536,
+      "ids": {
+        "": "h:x2qqi3",
+        "xxhash32": "h:uryx8n",
+        "xxhash64": "h:2lwpapknmdji5",
+        "mixed-purejs": "h:82725zqt5vtf",
+        "sha1": "h:bFR5Td9WAA57fRimzgYc4Ijv4Ys="
+      }
+    },
+    {
+      "recipe": {
+        "text": "\u0000"
+      },
+      "utf16_length": 1,
+      "ids": {
+        "": "h:-dhh9kx",
+        "xxhash32": "h:1u3i60r",
+        "xxhash64": "h:1pn6lj2ltr32u",
+        "mixed-purejs": "h:1lb6lvb1d1xza8",
+        "sha1": "h:qtvwnHeTCOL1SmI+02EC7AynPE8="
+      }
+    },
+    {
+      "recipe": {
+        "text": "Й⌈䇷惦翕黄붳\udca2"
+      },
+      "utf16_length": 8,
+      "ids": {
+        "": "h:df5p4s",
+        "xxhash32": "h:14q1lcj",
+        "xxhash64": "h:3as9xau67dtw4",
+        "mixed-purejs": "h:5k6nsi1k2f9ll",
+        "sha1": "h:ce8PMtaVZ6HYW6uGvHnHeeWc/sU="
+      }
+    },
+    {
+      "recipe": {
+        "text": "࠲✡䘐擿菮ꋝ쇌ﾪẙ㶈屷筦驕륄"
+      },
+      "utf16_length": 15,
+      "ids": {
+        "": "h:-8vcdpe",
+        "xxhash32": "h:pig41d",
+        "xxhash64": "h:2nykvik7vlag7",
+        "mixed-purejs": "h:ytzm9o1fsz78o",
+        "sha1": "h:w3OQYNmL2ErrvkK4CWhKQikNHMg="
+      }
+    },
+    {
+      "recipe": {
+        "text": "ో⬺䨩椘蠇꛶엥σ⊲䆡悐罿鹮뵝\udc4cכּᨪ㤙堈盷闦"
+      },
+      "utf16_length": 22,
+      "ids": {
+        "": "h:m5r70o",
+        "xxhash32": "h:147w3hh",
+        "xxhash64": "h:syo6222tcu56",
+        "mixed-purejs": "h:1g4xs4zj593hk",
+        "sha1": "h:XG3FRpfgbDK3XhXLyAUPqVw1flw="
+      }
+    },
+    {
+      "recipe": {
+        "text": "ၤ⽓乂洱谠꬏짾ߜ⛋䖺撩莘ꊇ셶ｔṃ㴲尡笐駿룮ퟝᖻ㒪厙犈"
+      },
+      "utf16_length": 29,
+      "ids": {
+        "": "h:ctonev",
+        "xxhash32": "h:1yon9xw",
+        "xxhash64": "h:ocpgpvxg2fu7",
+        "mixed-purejs": "h:7ti9p71w0utjy",
+        "sha1": "h:EUujAUczyClr65Hc8zw798z5Plc="
+      }
+    },
+    {
+      "recipe": {
+        "text": "ᑽ㍬剛煊逹꼨츗௵⫤䧓棂螱ꚠ얏ͭ≜䅋怺缩鸘봇\udbf6﫥᧔㣃垲皡閐둿퍮ᅌ〻伪"
+      },
+      "utf16_length": 36,
+      "ids": {
+        "": "h:tr4spq",
+        "xxhash32": "h:1t2m4k3",
+        "xxhash64": "h:2k6j7jzadl5hn",
+        "mixed-purejs": "h:t3hk09ci50vl",
+        "sha1": "h:I5Im69x/038KvcfDSYnUWRAxvwc="
+      }
+    },
+    {
+      "recipe": {
+        "text": "ᢖ㞅噴畣鑒덁툰ဎ⻽䷬泛诊ꪹ즨ކ♵䕤摓荂ꈱ선﻾ᷭ㳜寋窺馩뢘힇ᕥ㑔千爲鄡뀐컿ೝ⯌"
+      },
+      "utf16_length": 43,
+      "ids": {
+        "": "h:-b0vz5p",
+        "xxhash32": "h:1qajlo6",
+        "xxhash64": "h:2q81qamz3ptlr",
+        "mixed-purejs": "h:1ud4dh2fetnfs",
+        "sha1": "h:fRpvIfvzIjsHMfY+xVPn3YEur1g="
+      }
+    },
+    {
+      "recipe": {
+        "text": "Ჯ㮞媍祼顫띚홉ᐧ㌖刅烴迣껒췁ட⪎䥽桬蝛Ꙋ씹̗∆䃵忤结鷂벱\udba0摒᥾㡭坜癋锺됩팘ჶ⿥仔淃貲ꮡ쪐࡮"
+      },
+      "utf16_length": 50,
+      "ids": {
+        "": "h:wn4am2",
+        "xxhash32": "h:jpqq6",
+        "xxhash64": "h:2m2s9z8asw9va",
+        "mixed-purejs": "h:rs858u17jz6ku",
+        "sha1": "h:pvXFkJMb5VUf5IWU+9pl47ZLf68="
+      }
+    },
+    {
+      "recipe": {
+        "text": "⃈㾷度綕鲄뭳\uda62陋ᡀ㜯嘞甍鏼닫퇚ྸ⺧䶖沅譴ꩣ쥒ܰ☟䔎揽苬ꇛ샊\udfb9ﺨᶗ㲆孵穤饓롂휱ᔏ㏾勭燜郋꾺캩ಇ⭶䩥楔衃Ꜳ옡"
+      },
+      "utf16_length": 57,
+      "ids": {
+        "": "h:-aeft85",
+        "xxhash32": "h:18cdxg",
+        "xxhash64": "h:q2u6v6g0j541",
+        "mixed-purejs": "h:kzxqii112x5hg",
+        "sha1": "h:RB6ILYk9u0Bjj9rIxzPABDXoTsQ="
+      }
+    },
+    {
+      "recipe": {
+        "text": "ⓡ䏐抿膮ꂝ뾌\ude7bﵪ᱙㭈娷礦頕뜄헳Ꮡ㋀冯炞辍깼쵫୉⨸䤧栖蜅ꗴ쓣ˁ↰䂟徎繽鵬뱛\udb4a塀ᤨ㠗圆痵铤돓틂Ⴀ⾏乾浭豜ꭋ쨺࠘✇䗶擥菔ꋃ솲"
+      },
+      "utf16_length": 64,
+      "ids": {
+        "": "h:-2x5p9q",
+        "xxhash32": "h:kcru0r",
+        "xxhash64": "h:1a44m900zzn34",
+        "mixed-purejs": "h:1fm3w5f136kejb",
+        "sha1": "h:D5KLSqvEhZQeuALz0cuo57ZO2M0="
+      }
+    },
+    {
+      "recipe": {
+        "text": "⣺䟩曘藇꒶쎥ƃ⁲㽡幐紿鰮묝\uda0c៪㛙嗈璷鎦늕톄ར⹑䵀氯謞ꨍ주ۚ◉䒸控芖ꆅ쁴\udf63﹒ᵁ㰰嬟税飽러훛ᒹ㎨劗熆遵꽤칓ఱ⬠䨏棾蟭ꛜ엋Ω⊘䆇恶罥鹔"
+      },
+      "utf16_length": 71,
+      "ids": {
+        "": "h:ylmll9",
+        "xxhash32": "h:19bgel0",
+        "xxhash64": "h:2ebt2g1xbrfgn",
+        "mixed-purejs": "h:gv7fs6v3g9v4",
+        "sha1": "h:4Q7K3HNDu7l0catHLK+cL9zNdO0="
+      }
+    },
+    {
+      "recipe": {
+        "text": "ⴓ䰂櫱觠꣏잾֜⒋䍺扩腘ꁇ뼶\ude25ﴔᰃ㫲姡磐鞿뚮햝፻㉪兙灈輷긦촕૳⧢䣑柀蚯ꖞ쒍ɫ⅚䁉弸縧鴖밅\udaf4泥ᣒ㟁嚰疟钎덽퉬၊⼹丨洗谆ꫵ짤߂⚱䖠撏荾ꉭ셜Ｚḩ㴘將競"
+      },
+      "utf16_length": 78,
+      "ids": {
+        "": "h:-6zl05e",
+        "xxhash32": "h:wwkd50",
+        "xxhash64": "h:2b11njnchk5jp",
+        "mixed-purejs": "h:1xp6geg1q9jacd",
+        "sha1": "h:j/WcJyuXangPEwBn30amSSXZ5gM="
+      }
+    },
+    {
+      "recipe": {
+        "text": "ㄬ倛漊跹골쯗঵⢤䞓暂蕱ꑠ썏ĭ“㼋巺糩鯘뫇\ud9b6ប㚃啲瑡鍐눿턮༌ⷻ䳪毙諈ꦷ좦ڄ╳䑢捑艀ꄯ쀞\udf0d﷼ᳫ㯚嫉禸颧랖횅ᑣ㍒剁焰速꼎췽௛⫊䦹梨螗Ꚇ앵͓≂䄱怠缏鷾볭\udbdc頋ᦺ㢩垘"
+      },
+      "utf16_length": 85,
+      "ids": {
+        "": "h:l2qni9",
+        "xxhash32": "h:1mfd3l1",
+        "xxhash64": "h:33vpdc2awvb1q",
+        "mixed-purejs": "h:1wtijr519vpcd",
+        "sha1": "h:NtMLoZijI/mwMWKWj1q22zD/v+o="
+      }
+    },
+    {
+      "recipe": {
+        "text": "㕅吴猣鈒넁쿰෎ⲽ䮬檛覊꡹읨Ն␵䌤戓脂鿱뻠\uddcfﲾᮭ㪜妋硺革뙘핇ጥ㈔儃濲軡귐첿ઝ⦌䡻杪虙ꕈ쐷ȕ℄㿳廢緑鳀뮯\uda9e轢᡼㝫噚畉鐸댧툖࿴⻣䷒況记ꪟ즎ݬ♛䕊搹茨ꈗ섆\udff5ﻤᷓ㳂宱窠馏롾흭ᕋ㐺"
+      },
+      "utf16_length": 92,
+      "ids": {
+        "": "h:y7i301",
+        "xxhash32": "h:y158vx",
+        "xxhash64": "h:17jr1bq0sstks",
+        "mixed-purejs": "h:1a48u6tl44zex",
+        "sha1": "h:0obmEt7MiGj+LNRO9UxWKo+d008="
+      }
+    },
+    {
+      "recipe": {
+        "text": "㥞塍眼阫딚퐉ᇧブ俅溴趣겒쮁य़⡎䜽昬蔛ꐊ싹×ῆ㺵嶤粓鮂멱\ud960᜾㘭唜琋鋺뇩탘ຶⶥ䲔殃該ꥡ졐خ┝䐌拻自ꃙ뿈\udeb7ﶦᲕ㮄婳祢顑띀혯ᐍ㋼凫烚迉꺸춧அ⩴䥣桒蝁꘰씟˽⇬䃛忊纹鶨벗\udb86冀ᥤ㡓坂瘱锠됏틾ნ"
+      },
+      "utf16_length": 99,
+      "ids": {
+        "": "h:-k7nxbt",
+        "xxhash32": "h:1gwxo78",
+        "xxhash64": "h:2bkktk6zpmgx6",
+        "mixed-purejs": "h:e0qlr7ruz51a",
+        "sha1": "h:KWKfKOURO6TrWj7tcAG/rmvVp00="
+      }
+    },
+    {
+      "recipe": {
+        "text": "㵷屦筕驄뤳\ud822ᘀ㓯叞狍醼낫쾚൸Ⱨ䭖橅褴ꠣ윒Ӱ⏟䋎憽肬龛뺊\udd79ﱨ᭗㩆夵砤霓똂퓱ዏㆾ傭澜躋굺챩ੇ⤶䠥朔蘃ꓲ쏡ƿ₮㾝庌絻鱪뭙\uda48路ᠦ㜕嘄瓳鏢닑퇀ྞ⺍䵼汫譚ꩉ줸ܖ★䓴揣苒ꇁ산\udf9fﺎᵽ㱬孛穊餹련휗ᓵ㏤勓燂邱꾠캏"
+      },
+      "utf16_length": 106,
+      "ids": {
+        "": "h:-ilymt",
+        "xxhash32": "h:rx1ok2",
+        "xxhash64": "h:2ihht441l9zw1",
+        "mixed-purejs": "h:22eldv1ttel1c",
+        "sha1": "h:iwKjI3aw0++PawtcQFfj8DJGAYg="
+      }
+    },
+    {
+      "recipe": {
+        "text": "䆐恿置鹝뵌\udc3bשׁᨙ㤈執盦闕듄펳ᆑむ佯湞赍갼쬫उ⟸䛧旖蓅ꎴ슣ὰ㹟嵎簽鬬먛\ud90aᛨ㗗哆玵銤놓킂๠ⵏ䰾欭訜ꤋ쟺טⓇ䎶报膔ꂃ뽲\ude61ﵐ᰿㬮娝礌韻뛪헙Ꮇ㊦冕炄轳깢쵑ଯ⨞䤍柼蛫ꗚ쓉ʧ↖䂅彴繣鵒뱁\udb30﨟ᤎ㟽囬痛铊뎹튨ႆ⽵乤浓豂ꬱ쨠"
+      },
+      "utf16_length": 113,
+      "ids": {
+        "": "h:-b8wug2",
+        "xxhash32": "h:5g77xb",
+        "xxhash64": "h:cxej8t5uh8hg",
+        "mixed-purejs": "h:j10fhr1sxrf72",
+        "sha1": "h:YXHhxjlVTDozVx0duXZ9rHru3QI="
+      }
+    },
+    {
+      "recipe": {
+        "text": "䖩撘莇ꉶ셥ｃḲ㴡尐竿駮룝ퟌᖪ㒙厈牷酦끕콄ഢⰑ䬀槯裞ꟍ욼Қ⎉䉸慧聖齅븴\udd23ﰒᬁ㧰壟矎隽떬풛ቹㅨ偗潆踵괤찓ৱ⣠䟏暾薭꒜쎋ũ⁘㽇帶紥鰔묃\ud9f2័㚿單璝鎌뉻텪཈⸷䴦氕謄꧳죢ۀ▯䒞掍艼ꅫ쁚\udf49︸ᴧ㰖嬅秴飣럒훁ᒟ㎎剽煬遛꽊츹గ⬆䧵棤蟓ꛂ"
+      },
+      "utf16_length": 120,
+      "ids": {
+        "": "h:yd9m8q",
+        "xxhash32": "h:mtq2fl",
+        "xxhash64": "h:3ua76u10z3d0f",
+        "mixed-purejs": "h:zgz2v9tk1vsm",
+        "sha1": "h:47UBHgNnGWK3LfePqAS41l78exk="
+      }
+    },
+    {
+      "recipe": {
+        "text": "䧂梱螠ꚏ앾͜≋䄺怩缘鸇볶\udbe5䀹ᧃ㢲垡皐长둮퍝ᄻ〪伙済賷ꯦ쫕ࢳ➢䚑斀葯ꍞ쉍+Ἒ㸉峸篧髖맅\ud8b4ᚒ㖁呰獟鉎넽퀬ช⳹䯨櫗视ꢵ잤ւ⑱䍠扏脾ꀭ뼜\ude0bﳺᯩ㫘姇碶鞥뚔햃፡㉐儿瀮輝긌쳻૙⧈䢷枦蚕ꖄ쑳ɑ⅀䀯弞縍鳼믫\udada柳ᢸ㞧嚖疅鑴덣퉒ူ⼟与泽诬ꫛ짊ި⚗䖆摵荤"
+      },
+      "utf16_length": 127,
+      "ids": {
+        "": "h:rbe9he",
+        "xxhash32": "h:p3eprm",
+        "xxhash64": "h:m9orhg2rtutm",
+        "mixed-purejs": "h:hnwohl1p2czd2",
+        "sha1": "h:ipXjZ+SY4fNRlsAWe0kJI+k4lQw="
+      }
+    },
+    {
+      "recipe": {
+        "text": "䷛泊讹ꪨ즗ݵ♤䕓摂茱ꈠ섏\udffeﻭᷜ㳋宺窩馘뢇흶ᕔ㑃匲爡鄐꿿컮ೌ⮻䪪榙袈ꝷ왦ф⌳䈢愑耀黯뷞\udccd﮼᪫㦚墉睸陧땖푅ሣㄒ倁滰跟곎쮽ছ⢊䝹晨蕗ꑆ쌵ē 㻱巠糏鮾몭\ud99c᝺㙩啘瑇錶눥턔໲ⷡ䳐殿誮ꦝ좌٪╙䑈挷舦ꄕ쀄\udef3﷢᳑㯀媯禞颍라홫ᑉ㌸刧焖逅껴췣ு⪰䦟梎蝽Ꙭ앛̹∨䄗怆"
+      },
+      "utf16_length": 134,
+      "ids": {
+        "": "h:-mzr30u",
+        "xxhash32": "h:1l913kj",
+        "xxhash64": "h:4m8fjjp2fglc",
+        "mixed-purejs": "h:15xyqddez12sn",
+        "sha1": "h:29Vw/ZZp46+2Z7VORzY4MBej8xU="
+      }
+    },
+    {
+      "recipe": {
+        "text": "凴烣迒껁춰எ⩽䥬桛蝊꘹씨̆⇵䃤忓绂鶱베\udb8f奄ᥭ㡜坋瘺锩되팇ქ⿔仃液財ꮐ쩿࡝❌䘻攪萙ꌈ쇷ￕỄ㶳岢箑骀륯\ud85eᘼ㔫吚猉釸냧쿖පⲣ䮒檁襰ꡟ읎Ԭ␛䌊懹胨鿗뻆\uddb5ﲤᮓ㪂奱硠靏똾픭ጋㇺ僩濘軇궶첥ઃ⥲䡡材蘿ꔮ쐝ǻ⃪㿙廈綷鲦뮕\uda84拾ᡢ㝑噀甯鐞댍퇼࿚⻉䶸沧讖ꪅ쥴ݒ♁䔰搟茎ꇽ샬\udfdbﻊᶹ㲨"
+      },
+      "utf16_length": 141,
+      "ids": {
+        "": "h:9a8tpv",
+        "xxhash32": "h:dwjjqe",
+        "xxhash64": "h:2hepi0vk35fsn",
+        "mixed-purejs": "h:1dtrhgx24trq4",
+        "sha1": "h:yf1hcdK3SoTeCZ2ABQ0P2hbDJaw="
+      }
+    },
+    {
+      "recipe": {
+        "text": "嘍瓼鏫닚퇉ྦྷ⺖䶅汴譣꩒쥁ܟ☎䓽揬苛ꇊ삹\udfa8ﺗᶆ㱵孤穓饂렱휠ᓾ㏭勜燋邺꾩캘౶⭥䩔楃蠲꜡옐Ϯ⋝䇌悻羪麙불\udc77ﭦᩕ㥄堳眢阑딀폯ᇍゼ侫溚趉걸쭧ॅ⠴䜣昒蔁ꏰ싟½ᾬ㺛嶊籹魨멗\ud946ᜤ㘓唂珱鋠뇏킾ຜⶋ䱺歩詘ꥇ젶ؔ┃䏲拡臐ꂿ뾮\ude9dﶌᱻ㭪婙祈頷뜦형Ᏻ㋢凑烀辯꺞춍୫⩚䥉核蜧ꘖ씅ˣ⇒䃁徰纟鶎뱽\udb6c者᥊"
+      },
+      "utf16_length": 148,
+      "ids": {
+        "": "h:-anx9xx",
+        "xxhash32": "h:1g3bomm",
+        "xxhash64": "h:1f4jrvno7nx9g",
+        "mixed-purejs": "h:1plqbphjvpa8d",
+        "sha1": "h:dRS4fnyZNya3IJUEoASICxo9sFU="
+      }
+    },
+    {
+      "recipe": {
+        "text": "娦礕頄뛳헢Ꮐ㊯冞炍轼깫쵚ସ⨧䤖栅蛴ꗣ쓒ʰ↟䂎彽繬鵛뱊\udb39﨨ᤗ㠆囵痤铓돂튱ႏ⽾乭浜豋ꬺ쨩ࠇ⛶䗥擔菃ꊲ송ｿṮ㵝屌笻騪뤙\ud808ᗦ㓕叄犳醢낑쾀൞ⱍ䬼樫褚ꠉ웸Ӗ⏅䊴憣肒龁빰\udd5fﱎᬽ㨬夛砊雹뗨퓗ኵㆤ傓澂蹱굠챏ਭ⤜䠋曺藩ꓘ쏇ƥₔ㾃干絡鱐묿\uda2e欄᠌㛻嗪瓙鏈늷톦྄⹳䵢汑譀ꨯ줞ۼ◫䓚揉芸ꆧ삖\udf85ﹴᵣ㱒孁稰餟렎훽"
+      },
+      "utf16_length": 155,
+      "ids": {
+        "": "h:kpjbjk",
+        "xxhash32": "h:lmgr3u",
+        "xxhash64": "h:qbcepwu25we2",
+        "mixed-purejs": "h:acqbfo1bfk1k1",
+        "sha1": "h:HUTKUTpOaQgFnH6qvljwZq1e8RA="
+      }
+    },
+    {
+      "recipe": {
+        "text": "帿紮鰝묌\ud9fb៙㛈喷璦鎕늄텳ད⹀䴯氞謍ꧼ죫ۉ▸䒧掖芅ꅴ쁣\udf52﹁ᴰ㰟嬎秽飬럛훊ᒨ㎗劆煵遤꽓칂ఠ⬏䧾棭蟜ꛋ얺Θ⊇䅶恥罔鹃봲\udc21﬐᧿㣮埝盌閻뒪펙ᅷて何湄贳갢쬑࣯⟞䛍於蒫ꎚ슉gὖ㹅崴簣鬒먁\ud8f0ᛎ㖽咬玛銊녹큨ๆⴵ䰤欓訂꣱쟠־⒭䎜抋腺ꁩ뽘\ude47ﴶᰥ㬔娃磲韡뛐햿᎝㊌养灪轙깈촷କ⨄䣳柢蛑ꗀ쒯ʍⅼ䁫彚繉鴸밧\udb16洞ᣴ㟣囒痁钰뎟튎"
+      },
+      "utf16_length": 162,
+      "ids": {
+        "": "h:x4cffq",
+        "xxhash32": "h:1hdldi7",
+        "xxhash64": "h:37hm08azlt38t",
+        "mixed-purejs": "h:koyhu0r2hcuz",
+        "sha1": "h:WRepNGOamNYIYmtlwiRInuztkhs="
+      }
+    }
+  ]
+}

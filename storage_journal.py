@@ -1069,7 +1069,7 @@ class JournalBackend:
         if not live and not create:
             raise NoteNotFound(f"note not found: {path}")
         pieces = [piece for piece in self._splitter.split(content, path=path) if piece]
-        children = [chunk_id_for_piece(piece) for piece in pieces]
+        children = [chunk_id_for_piece(piece, hash_alg=self._splitter.hash_alg) for piece in pieces]
         unique = {}
         for chunk_id, piece in zip(children, pieces):
             if chunk_id in unique and unique[chunk_id] != piece:
