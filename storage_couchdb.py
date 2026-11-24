@@ -83,7 +83,7 @@ from storage_base import (
     NoteExists,
     NoteMeta,
     NoteNotFound,
-    StorageError,
+    StorageError, OutcomeUnknown,
     StorageUnavailable,
     UnsupportedVault,
     WriterUnsupported,
@@ -205,6 +205,10 @@ class CouchDBBackend(DeviceSelection):
             )
         except httpx.HTTPError as exc:
             logger.warning("CouchDB %s %s failed: %r", method, path, exc)
+            if method in {"PUT", "DELETE"} and not isinstance(
+                exc, (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout)
+            ):
+                raise OutcomeUnknown() from None
             raise StorageUnavailable("CouchDB unavailable") from None
 
         code = response.status_code
@@ -230,6 +234,8 @@ class CouchDBBackend(DeviceSelection):
                     "the note was changed concurrently; re-read it and retry"
                 )
             if code >= 500:
+                if method in {"PUT", "DELETE"}:
+                    raise OutcomeUnknown()
                 raise StorageUnavailable("CouchDB unavailable")
             raise StorageUnavailable(f"CouchDB request failed (HTTP {code})")
         return response
@@ -835,7 +841,7 @@ class CouchDBBackend(DeviceSelection):
                 doc_id,
                 response.status_code,
             )
-            raise StorageUnavailable("CouchDB did not confirm durable write")
+            raise OutcomeUnknown()
         try:
             result = response.json()
         except ValueError:
@@ -849,7 +855,7 @@ class CouchDBBackend(DeviceSelection):
             logger.warning(
                 "CouchDB PUT %s -> unexpected acknowledgement body", doc_id
             )
-            raise StorageError("CouchDB rejected the document write")
+            raise OutcomeUnknown()
         self._text_verdicts.pop(doc_id, None)
         return result["rev"]
 
@@ -1117,6 +1123,8 @@ class CouchDBBackend(DeviceSelection):
             return self._meta_from_doc(body)
         try:
             await self._soft_delete(doc, path, _now_ms())
+        except OutcomeUnknown:
+            raise
         except Exception as exc:
             logger.exception("rename source retirement failed for %s", path)
             source_state = "unknown"

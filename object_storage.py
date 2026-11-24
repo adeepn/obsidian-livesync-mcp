@@ -31,10 +31,13 @@ from typing import Protocol, runtime_checkable
 
 import boto3
 from botocore.config import Config
-from botocore.exceptions import BotoCoreError, ClientError
+from botocore.exceptions import (
+    BotoCoreError, ClientError, EndpointConnectionError, ConnectTimeoutError,
+    NoCredentialsError, PartialCredentialsError, ParamValidationError,
+)
 
 from config import S3Config
-from storage_base import StorageError, StorageUnavailable
+from storage_base import StorageError, StorageUnavailable, MutationNotApplied, OutcomeUnknown
 from replay_limits import ReplayLimits, ReplayBudgetExceeded
 
 logger = logging.getLogger(__name__)
@@ -180,13 +183,25 @@ class Boto3ObjectStorage:
         except BotoCoreError as exc:
             raise self._unavailable("GET", key, exc) from None
 
+    def _put_failure(self, key: str, exc: Exception) -> StorageError:
+        self._unavailable("PUT", key, exc)
+        if isinstance(exc, (EndpointConnectionError, ConnectTimeoutError,
+                            NoCredentialsError, PartialCredentialsError,
+                            ParamValidationError)):
+            return MutationNotApplied("object publication was not sent")
+        if isinstance(exc, ClientError):
+            status = exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+            if isinstance(status, int) and 400 <= status < 500:
+                return MutationNotApplied("object publication was refused")
+        return OutcomeUnknown()
+
     def put(self, key: str, data: bytes) -> None:
         try:
             self._client.put_object(
                 Bucket=self._bucket, Key=self._wire_key(key), Body=data
             )
         except (ClientError, BotoCoreError) as exc:
-            raise self._unavailable("PUT", key, exc) from None
+            raise self._put_failure(key, exc) from None
 
     def put_if_absent(self, key: str, data: bytes) -> str:
         """Create atomically when supported by the S3-compatible provider."""
@@ -208,9 +223,9 @@ class Boto3ObjectStorage:
                     logger.warning("conditional journal publication unsupported; using B-10 fallback")
                     self._conditional_warning_logged = True
                 return "unsupported"
-            raise self._unavailable("PUT", key, exc) from None
+            raise self._put_failure(key, exc) from None
         except BotoCoreError as exc:
-            raise self._unavailable("PUT", key, exc) from None
+            raise self._put_failure(key, exc) from None
 
     def list(self, start_after: str = "", limit: int | None = None) -> list[str]:
         if limit is not None and limit < 1:

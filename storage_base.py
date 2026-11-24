@@ -106,6 +106,22 @@ class StorageUnavailable(StorageError):
     """The storage backend is unreachable or rejected the request."""
 
 
+class MutationNotApplied(StorageUnavailable):
+    """The adapter can prove the mutation was refused or never sent."""
+
+
+class OutcomeUnknown(StorageUnavailable):
+    """Publication may have happened; never invite an unexamined retry."""
+
+    def __init__(self):
+        super().__init__(
+            "outcome unknown: the change MAY have been applied. "
+            "Inspect and re-read the affected paths before retrying. "
+            "For append, prepend, search-replace, properties set and tags add, "
+            "a blind retry can duplicate the change."
+        )
+
+
 class NoteMeta(TypedDict):
     """Metadata of one note. ``ctime``/``mtime`` are Unix milliseconds.
 

@@ -88,7 +88,7 @@ from storage_base import (
     NoteExists,
     NoteMeta,
     NoteNotFound,
-    StorageError,
+    StorageError, OutcomeUnknown, MutationNotApplied,
     StorageUnavailable,
     UnsupportedVault,
     WriterUnsupported,
@@ -972,6 +972,7 @@ class JournalBackend(DeviceSelection):
         is never deleted; a later refresh may replay a published orphan.
         """
         store = self._require_store("publish")
+        published = False
         try:
             payload = serialize_journal(chunks, docs)
             if len(payload) > self.max_inflated_bytes:
@@ -1011,8 +1012,14 @@ class JournalBackend(DeviceSelection):
             self._max_seen_ms = ms
             for _ in range(10):
                 name = journal_filename(ms, suffix=secrets.token_hex(16))
-                outcome = self._object_storage.put_if_absent(name, blob)
+                try:
+                    outcome = self._object_storage.put_if_absent(name, blob)
+                except MutationNotApplied:
+                    raise
+                except (StorageError, OSError) as exc:
+                    raise OutcomeUnknown() from exc
                 if outcome == "created":
+                    published = True
                     break
                 if outcome == "exists":
                     continue
@@ -1020,7 +1027,13 @@ class JournalBackend(DeviceSelection):
                     raise StorageError("invalid conditional publication result")
                 # B-10 compatibility fallback cannot exclude a racing writer.
                 if not self._object_storage.exists(name):
-                    self._object_storage.put(name, blob)
+                    try:
+                        self._object_storage.put(name, blob)
+                    except MutationNotApplied:
+                        raise
+                    except (StorageError, OSError) as exc:
+                        raise OutcomeUnknown() from exc
+                    published = True
                     break
             else:
                 raise StorageError("could not allocate an unused journal key")
@@ -1049,9 +1062,11 @@ class JournalBackend(DeviceSelection):
                 validate_document_identity(doc, store.path_identity)
             store.apply_journal(name, journal.chunks, journal.docs)
             store.finish_bookkeeping(lambda: setattr(store, "last_sent_key", name))
-        except StorageError:
-            raise
-        except (ValueError, OSError, sqlite3.Error) as exc:
+        except (StorageError, ValueError, OSError, sqlite3.Error) as exc:
+            if published:
+                raise OutcomeUnknown() from exc
+            if isinstance(exc, StorageError):
+                raise
             raise StorageError("journal publication or verification failed") from exc
 
     def check_writer_support(self) -> None:
@@ -1198,8 +1213,8 @@ class JournalBackend(DeviceSelection):
         Same-path is a no-op; identity-preserving renames update only the
         display path and mtime. Single-file publication has no partial phases,
         so RenamePartialError (mapped by the tool layer for contract parity)
-        is never raised by this backend. Failed verification reports
-        StorageError.
+        is never raised by this backend. Unconfirmed publication reports
+        OutcomeUnknown.
         """
         self.check_writer_support()
         validate_vault_path(path)

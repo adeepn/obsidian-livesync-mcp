@@ -1,4 +1,4 @@
-"""P-13 preservation at journal wipe, epoch, and chunk-install boundaries."""
+"""P-15: peer refusals preserve notes; replay follows remote truth incrementally."""
 import pytest
 
 import journal_store
@@ -27,8 +27,8 @@ async def assert_preserved(backend, before):
         assert (after['text'], after['data'], after['rev']) == (note['text'], note['data'], note['rev']), path
 
 
-@pytest.mark.parametrize('failure', ['missing-last-sent', 'epoch-download', 'chunk-install'])
-async def test_unsuccessful_journal_operation_preserves_every_readable_note(tmp_path, monkeypatch, failure):
+@pytest.mark.parametrize('failure', ['missing-last-sent', 'chunk-install'])
+async def test_peer_refusal_or_unapplied_local_commit_preserves_readable_notes(tmp_path, monkeypatch, failure):
     backend, storage = make_backend(tmp_path, healthy_bucket())
     fresh = JournalBackend(storage, tmp_path / 'fresh')
     try:
@@ -46,25 +46,13 @@ async def test_unsuccessful_journal_operation_preserves_every_readable_note(tmp_
             assert snapshot(backend._store) == state
             assert storage._objects == objects
             assert storage.put_calls == []
-        elif failure == 'epoch-download':
-            storage._objects.pop(backend._store.last_sent_key)
-            storage._objects[SYNC_PARAMETERS_KEY] = params_blob(salt='new-world')
-            original_get = storage.get
-            def fail_download(key, **kwargs):
-                if key.endswith('.jsonl.gz'):
-                    raise StorageError('injected first download failure')
-                return original_get(key, **kwargs)
-            with monkeypatch.context() as patch:
-                patch.setattr(storage, 'get', fail_download)
-                with pytest.raises(StorageError, match='could not be replayed'):
-                    await backend.refresh(force=True)
         else:
             state = snapshot(backend._store)
             def fail_install(*args):
                 raise OSError('injected chunk install failure')
             with monkeypatch.context() as patch:
                 patch.setattr(journal_store.os, 'replace', fail_install)
-                with pytest.raises(StorageError, match='journal publication or verification failed'):
+                with pytest.raises(StorageError, match='outcome unknown'):
                     await backend.write_note('only.md', 'replacement with new chunk')
             assert snapshot(backend._store) == state
         await assert_preserved(backend, before)
@@ -250,3 +238,25 @@ async def test_failed_quarantine_move_preserves_old_store(tmp_path, monkeypatch)
         assert old.read_note('only.md')[1] == 'irreplaceable'
     finally:
         old.close()
+
+
+async def test_epoch_recovery_first_download_failure_retains_local_survivors(tmp_path, monkeypatch):
+    backend, storage = make_backend(tmp_path, healthy_bucket())
+    try:
+        await backend.startup_check()
+        await backend.write_note('only.md', 'irreplaceable', create=True)
+        before = await readable(backend)
+        storage._objects.pop(backend._store.last_sent_key)
+        storage._objects[SYNC_PARAMETERS_KEY] = params_blob(salt='new-world')
+        original_get = storage.get
+        def fail_download(key, **kwargs):
+            if key.endswith('.jsonl.gz'):
+                raise StorageError('injected first download failure')
+            return original_get(key, **kwargs)
+        with monkeypatch.context() as patch:
+            patch.setattr(storage, 'get', fail_download)
+            with pytest.raises(StorageError, match='could not be replayed'):
+                await backend.refresh(force=True)
+        await assert_preserved(backend, before)
+    finally:
+        await backend.close()

@@ -3,6 +3,7 @@ import sqlite3
 
 import pytest
 
+from tests.test_upload_attachment import backend
 from tests.test_storage_journal import make_backend, healthy_bucket
 
 
@@ -43,3 +44,246 @@ async def test_completed_delete_bookkeeping_self_heals(tmp_path, monkeypatch, ca
         assert store.last_sent_key and store.processed(store.last_sent_key)
     finally:
         await backend.close()
+
+
+@pytest.mark.parametrize('operation', ['delete', 'overwrite', 'copy', 'rename'])
+@pytest.mark.parametrize('failure', ['accepted', 'accepted_timeout', 'accepted_reset', 'before', 'connect_timeout', 'pool_timeout', 400, 403, 404, 409])
+async def test_couchdb_mutation_transport_outcomes(operation, failure, monkeypatch):
+    import httpx
+    from storage_base import StorageError
+    from tests.test_storage_couchdb import fake_backend
+    async with fake_backend() as (backend, log):
+        await backend.write_note('only.md', 'old', create=True)
+        original = backend._client.request
+        target = 'only.md' if operation in ('delete', 'overwrite') else 'target.md'
+        async def request(method, path, **kwargs):
+            if method == 'PUT' and path.endswith('/' + target):
+                if failure == 'before':
+                    raise httpx.ConnectError('before send')
+                if failure == 'connect_timeout':
+                    raise httpx.ConnectTimeout('before send')
+                if failure == 'pool_timeout':
+                    raise httpx.PoolTimeout('before send')
+                if isinstance(failure, int):
+                    return httpx.Response(failure, json={'error': 'refused'})
+                await original(method, path, **kwargs)
+                error = {'accepted': httpx.ReadError, 'accepted_timeout': httpx.ReadTimeout, 'accepted_reset': httpx.WriteError}[failure]
+                raise error('response lost after acceptance')
+            return await original(method, path, **kwargs)
+        monkeypatch.setattr(backend._client, 'request', request)
+        calls = {
+            'delete': lambda: backend.delete_note('only.md'),
+            'overwrite': lambda: backend.write_note('only.md', 'new'),
+            'copy': lambda: backend.copy_note('only.md', 'target.md'),
+            'rename': lambda: backend.rename_note('only.md', 'target.md'),
+        }
+        with pytest.raises(StorageError) as caught:
+            await calls[operation]()
+        if failure in ('accepted', 'accepted_timeout', 'accepted_reset'):
+            assert type(caught.value).__name__ == 'OutcomeUnknown'
+            assert str(caught.value).startswith('outcome unknown')
+            assert 're-read' in str(caught.value)
+            if operation == 'delete':
+                assert await backend.read_note('only.md') is None
+            else:
+                assert (await backend.read_note(target))['text'] == ('new' if operation == 'overwrite' else 'old')
+        else:
+            assert type(caught.value).__name__ != 'OutcomeUnknown'
+            assert (await backend.read_note('only.md'))['text'] == 'old'
+            assert await backend.read_note('target.md') is None
+
+
+@pytest.mark.parametrize('phase', ['lost_response', 'local_apply', 'readback'])
+async def test_journal_published_uncertainty_replays_to_convergence(tmp_path, monkeypatch, phase):
+    from storage_base import StorageError, StorageUnavailable
+    backend, storage = make_backend(tmp_path, healthy_bucket())
+    await backend.startup_check()
+    try:
+        await backend.write_note('only.md', 'old', create=True)
+        original = storage.put_if_absent
+        def lost(name, blob):
+            original(name, blob)
+            raise StorageUnavailable('response lost')
+        def fail(*args, **kwargs):
+            raise sqlite3.OperationalError('local apply failed')
+        with monkeypatch.context() as patch:
+            if phase == 'lost_response':
+                patch.setattr(storage, 'put_if_absent', lost)
+            elif phase == 'local_apply':
+                patch.setattr(backend._store, 'apply_journal', fail)
+            else:
+                get = storage.get
+                patch.setattr(storage, 'get', lambda key: None if key.endswith('-docs.jsonl.gz') else get(key))
+            with pytest.raises(StorageError) as caught:
+                await backend.delete_note('only.md')
+            assert type(caught.value).__name__ == 'OutcomeUnknown'
+        await backend.refresh(force=True)
+        assert await backend.read_note('only.md') is None
+        before = backend._store.leaves('only.md')
+        await backend.refresh(force=True)
+        assert backend._store.leaves('only.md') == before
+        for name in storage.list(''):
+            if name.endswith('-docs.jsonl.gz'):
+                assert backend._store.processed(name)
+    finally:
+        await backend.close()
+
+
+@pytest.mark.parametrize('operation', ['create', 'upload', 'copy', 'move', 'delete',
+    'overwrite', 'append', 'prepend', 'after-heading', 'search-replace',
+    'properties_set', 'properties_delete', 'tags_add', 'tags_remove',
+    'node_add', 'node_remove', 'edge_add', 'edge_remove', 'template'])
+async def test_every_mutating_tool_preserves_unknown_outcome_verbatim(backend, monkeypatch, operation):
+    import json
+    import server
+    import storage_base
+    await backend.write_note('invariant.md', '---\nkey: value\ntags: [tag]\n---\n# heading\nold', create=True)
+    await backend.write_note('invariant.canvas', json.dumps({
+        'nodes': [{'id': 'a', 'type': 'text', 'text': 'old'}, {'id': 'b', 'type': 'text', 'text': 'other'}],
+        'edges': [{'id': 'edge', 'fromNode': 'a', 'toNode': 'b'}],
+    }), create=True)
+    monkeypatch.setattr(server, 'backend', backend)
+    unknown = storage_base.OutcomeUnknown()
+    async def fail(*args, **kwargs):
+        raise unknown
+    for method in ['write_note', 'write_attachment', 'copy_note', 'rename_note', 'delete_note']:
+        monkeypatch.setattr(backend, method, fail)
+    calls = {
+        'create': lambda: server.obsidian_create_note('new.md', 'new'),
+        'upload': lambda: server.obsidian_upload_attachment('new.pdf', 'bGFyZ2U='),
+        'copy': lambda: server.obsidian_duplicate_note('invariant.md', 'target.md'),
+        'move': lambda: server.obsidian_move_note('invariant.md', 'target.md'),
+        'delete': lambda: server.obsidian_delete_note('invariant.md'),
+        'properties_set': lambda: server.obsidian_manage_properties('invariant.md', 'set', '{"key":"larger"}'),
+        'properties_delete': lambda: server.obsidian_manage_properties('invariant.md', 'delete', keys='key'),
+        'tags_add': lambda: server.obsidian_manage_tags('invariant.md', 'add', 'new'),
+        'tags_remove': lambda: server.obsidian_manage_tags('invariant.md', 'remove', 'tag'),
+        'node_add': lambda: server.obsidian_canvas_node('invariant.canvas', text='new'),
+        'node_remove': lambda: server.obsidian_canvas_node('invariant.canvas', 'remove', node_id='a'),
+        'edge_add': lambda: server.obsidian_canvas_edge('invariant.canvas', from_node='a', to_node='b'),
+        'edge_remove': lambda: server.obsidian_canvas_edge('invariant.canvas', 'remove', edge_id='edge'),
+        'template': lambda: server.obsidian_create_from_template('invariant.md', 'new.md'),
+    }
+    if operation in ['overwrite', 'append', 'prepend', 'after-heading', 'search-replace']:
+        result = await server.obsidian_update_note('invariant.md', operation, 'new',
+            **({'heading':'heading'} if operation == 'after-heading' else
+               {'search':'old','replace':'larger'} if operation == 'search-replace' else {}))
+    else:
+        result = await calls[operation]()
+    assert result == str(unknown)
+    assert result.startswith('outcome unknown')
+    assert 'MAY have been applied' in result and 're-read' in result
+    assert 'blind retry can duplicate' in result
+
+
+@pytest.mark.parametrize('method', ['put', 'put_if_absent'])
+@pytest.mark.parametrize('failure', ['connect', 'read', 'reset', 400, 403, 404, 409, 500])
+def test_s3_put_classifies_refusal_before_send_and_unknown(method, failure, monkeypatch):
+    from botocore.exceptions import ClientError, EndpointConnectionError, ReadTimeoutError, ConnectionClosedError
+    from object_storage import Boto3ObjectStorage
+    from tests.test_object_storage import make_cfg
+    from storage_base import StorageError
+    storage = Boto3ObjectStorage(make_cfg())
+    if failure == 'connect':
+        error = EndpointConnectionError(endpoint_url='http://test.invalid')
+    elif failure == 'read':
+        error = ReadTimeoutError(endpoint_url='http://test.invalid')
+    elif failure == 'reset':
+        error = ConnectionClosedError(endpoint_url='http://test.invalid')
+    else:
+        error = ClientError({'Error': {'Code': str(failure)}, 'ResponseMetadata': {'HTTPStatusCode': failure}}, 'PutObject')
+    def fail(**kwargs):
+        raise error
+    monkeypatch.setattr(storage._client, 'put_object', fail)
+    with pytest.raises(StorageError) as caught:
+        getattr(storage, method)('1-docs.jsonl.gz', b'payload')
+    unknown = failure in ('read', 'reset', 500)
+    assert (type(caught.value).__name__ == 'OutcomeUnknown') == unknown
+
+
+async def test_couchdb_accepted_write_with_malformed_ack_is_unknown(monkeypatch):
+    import httpx
+    from storage_base import OutcomeUnknown
+    from tests.test_storage_couchdb import fake_backend
+    async with fake_backend() as (backend, log):
+        original = backend._client.request
+        async def request(method, path, **kwargs):
+            response = await original(method, path, **kwargs)
+            if method == 'PUT' and path.endswith('/new.md'):
+                return httpx.Response(201, json={})
+            return response
+        monkeypatch.setattr(backend._client, 'request', request)
+        with pytest.raises(OutcomeUnknown):
+            await backend.write_note('new.md', 'new', create=True)
+        assert (await backend.read_note('new.md'))['text'] == 'new'
+
+
+async def test_incoming_replay_keeps_remote_truth_applied_before_next_download_failure(tmp_path, monkeypatch):
+    from storage_base import StorageError
+    from storage_journal import JournalBackend
+    writer, storage = make_backend(tmp_path / 'writer', healthy_bucket())
+    reader = JournalBackend(storage, tmp_path / 'reader')
+    try:
+        await writer.startup_check()
+        await writer.write_note('only.md', 'old', create=True)
+        await reader.startup_check()
+        await writer.write_note('only.md', 'remote replacement')
+        applied = writer._store.last_sent_key
+        await writer.write_note('later.md', 'later', create=True)
+        blocked = writer._store.last_sent_key
+        get = storage.get
+        def fail(key, **kwargs):
+            if key == blocked:
+                raise StorageError('next download failed')
+            return get(key, **kwargs)
+        with monkeypatch.context() as patch:
+            patch.setattr(storage, 'get', fail)
+            with pytest.raises(StorageError):
+                await reader.refresh(force=True)
+        assert (await reader.read_note('only.md'))['text'] == 'remote replacement'
+        assert reader._store.processed(applied)
+        assert not reader._store.processed(blocked)
+        await reader.refresh(force=True)
+        assert (await reader.read_note('later.md'))['text'] == 'later'
+    finally:
+        await writer.close()
+        await reader.close()
+
+
+async def test_journal_proven_pre_send_failure_is_ordinary_and_preserves_notes(tmp_path, monkeypatch):
+    from storage_base import MutationNotApplied, StorageError, OutcomeUnknown
+    backend, storage = make_backend(tmp_path, healthy_bucket())
+    try:
+        await backend.startup_check()
+        await backend.write_note('only.md', 'old', create=True)
+        before = await backend.read_note('only.md')
+        objects = dict(storage._objects)
+        def refuse(*args):
+            raise MutationNotApplied('not sent')
+        monkeypatch.setattr(storage, 'put_if_absent', refuse)
+        with pytest.raises(StorageError) as caught:
+            await backend.delete_note('only.md')
+        assert not isinstance(caught.value, OutcomeUnknown)
+        assert await backend.read_note('only.md') == before
+        assert storage._objects == objects
+    finally:
+        await backend.close()
+
+
+async def test_rename_source_retirement_response_lost_stays_unknown(monkeypatch):
+    import httpx
+    from storage_base import OutcomeUnknown
+    from tests.test_storage_couchdb import fake_backend
+    async with fake_backend() as (backend, log):
+        await backend.write_note('only.md', 'old', create=True)
+        original = backend._client.request
+        async def request(method, path, **kwargs):
+            response = await original(method, path, **kwargs)
+            if method == 'PUT' and path.endswith('/only.md'):
+                raise httpx.ReadError('source deletion response lost')
+            return response
+        monkeypatch.setattr(backend._client, 'request', request)
+        with pytest.raises(OutcomeUnknown):
+            await backend.rename_note('only.md', 'target.md')
+        assert await backend.read_note('only.md') is None
+        assert (await backend.read_note('target.md'))['text'] == 'old'

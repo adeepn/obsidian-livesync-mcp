@@ -1092,7 +1092,7 @@ async def test_put_202_on_metadata_is_not_durable():
     async with fake_vault(docs, put_202_ids=("note.md",)) as (
         backend, raw, _log,
     ):
-        with pytest.raises(StorageUnavailable, match="durable"):
+        with pytest.raises(StorageUnavailable, match="outcome unknown"):
             await backend.write_note("note.md", "fresh", overwrite=True)
         stored = await stored_doc(raw, "note.md")
     assert stored["children"] == ["h:old"]  # nothing was committed
@@ -1102,7 +1102,7 @@ async def test_put_202_on_chunk_is_not_durable():
     async with fake_vault({}, put_202_ids=(chunk_id_for("fresh"),)) as (
         backend, raw, _log,
     ):
-        with pytest.raises(StorageUnavailable, match="durable"):
+        with pytest.raises(StorageUnavailable, match="outcome unknown"):
             await backend.write_note("note.md", "fresh", create=True)
         meta_response = await raw.get(
             f"{DATABASE}/{urllib.parse.quote('note.md', safe='')}"
@@ -1117,7 +1117,7 @@ async def test_rename_non_201_target_keeps_source():
     async with fake_vault(docs, put_202_ids=("b.md",)) as (
         backend, raw, _log,
     ):
-        with pytest.raises(StorageUnavailable, match="durable"):
+        with pytest.raises(StorageUnavailable, match="outcome unknown"):
             await backend.rename_note("a.md", "b.md")
         source = await stored_doc(raw, "a.md")
     assert "deleted" not in source  # still live, retirement skipped

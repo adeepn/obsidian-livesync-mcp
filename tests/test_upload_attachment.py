@@ -130,7 +130,7 @@ async def test_journal_verifies_original_bytes_before_local_apply(tmp_path, monk
     try:
         await backend.startup_check()
         monkeypatch.setattr(backend._splitter, "split", lambda data, **kwargs: ["d3Jvbmc="])
-        with pytest.raises(StorageError, match="read-back verification"):
+        with pytest.raises(StorageError, match="outcome unknown"):
             await backend.write_attachment("scan.pdf", DATA, create=True)
         assert await backend.read_note("scan.pdf") is None
     finally:
@@ -200,7 +200,7 @@ async def test_couchdb_attachment_requires_201(target):
     from storage_base import StorageUnavailable
     chunk_id = chunk_id_for(base64.b64encode(DATA).decode())
     async with fake_backend(put_202_ids=(chunk_id if target == "chunk" else "scan.pdf",)) as (backend, _):
-        with pytest.raises(StorageUnavailable, match="durable"):
+        with pytest.raises(StorageUnavailable, match="outcome unknown"):
             await backend.write_attachment("scan.pdf", DATA, create=True)
         assert await backend.read_note("scan.pdf") is None
 

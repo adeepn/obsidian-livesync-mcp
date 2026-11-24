@@ -203,7 +203,7 @@ async def test_note_create_and_update_tools_report_skip(backend, monkeypatch):
     'properties_set', 'properties_delete', 'tags_add', 'tags_remove',
     'node_add', 'node_remove', 'edge_add', 'edge_remove', 'template',
 ])
-async def test_unsuccessful_tool_preserves_every_readable_note(backend, monkeypatch, operation):
+async def test_refused_peer_mutation_preserves_every_readable_note(backend, monkeypatch, operation):
     await backend.write_note('invariant.md', '---\nkey: value\ntags: [tag]\n---\n# heading\nold', create=True)
     await backend.write_note('target.md', 'target', create=True)
     await backend.write_note('invariant.canvas', json.dumps({

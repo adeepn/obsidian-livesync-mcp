@@ -37,7 +37,7 @@ from storage_base import (
     WriteSkipped,
     RenameRefused,
     RenamePartialError, UnresolvedConflicts,
-    WriterUnsupported, StorageBackend, StorageError, NoteNotFound, NoteExists,
+    OutcomeUnknown, WriterUnsupported, StorageBackend, StorageError, NoteNotFound, NoteExists,
     ConcurrentModification, UnsupportedVault, StorageUnavailable, NoteContent,
 )
 from storage_couchdb import CouchDBBackend
@@ -205,6 +205,8 @@ def create_app(cfg: Config) -> FastMCP:
 
 def _storage_message(error: StorageError) -> str:
     """Map device outcomes/errors; expose only explicitly safe diagnostics."""
+    if isinstance(error, OutcomeUnknown):
+        return str(error)
     if isinstance(error, ReplayBudgetExceeded):
         return f"Error: {error}"
     if isinstance(error, WriteSkipped):
@@ -281,6 +283,13 @@ def _tool_errors(
             return "Error: forbidden vault path."
         except FrontmatterError:
             return "Error: invalid YAML frontmatter."
+    if writer:
+        guarded.__doc__ = (handler.__doc__ or "") + (
+            "\n\nMutation outcomes: success confirms application; refusal means no change. "
+            "An 'outcome unknown' result means the change MAY have been applied. "
+            "Re-read before retrying; a blind retry can duplicate append, prepend, "
+            "search-replace, properties set or tags add changes."
+        )
     return guarded
 
 
