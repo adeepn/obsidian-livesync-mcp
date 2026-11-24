@@ -54,7 +54,14 @@ async def test_peer_refusal_or_unapplied_local_commit_preserves_readable_notes(t
                 patch.setattr(journal_store.os, 'replace', fail_install)
                 with pytest.raises(StorageError, match='outcome unknown'):
                     await backend.write_note('only.md', 'replacement with new chunk')
-            assert snapshot(backend._store) == state
+            after = snapshot(backend._store)
+            assert after['chunks'] == state['chunks']
+            # Unknown remote publication retains outbound recovery evidence;
+            # local metadata, processed tracking and old last-sent stay intact.
+            def without_outbound_rows(sql):
+                return [line for line in sql if not line.startswith('INSERT INTO "outbound"')]
+            assert without_outbound_rows(after['sql']) == without_outbound_rows(state['sql'])
+            assert len(backend._store.outbound_journals()) == 2
         await assert_preserved(backend, before)
         await fresh.startup_check()
         await fresh.refresh(force=True)

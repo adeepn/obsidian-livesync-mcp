@@ -106,6 +106,11 @@ CREATE TABLE IF NOT EXISTS docs (
 CREATE TABLE IF NOT EXISTS processed (
     name TEXT NOT NULL PRIMARY KEY
 );
+CREATE TABLE IF NOT EXISTS outbound (
+    name TEXT NOT NULL PRIMARY KEY,
+    digest TEXT NOT NULL,
+    confirmed INTEGER NOT NULL DEFAULT 0
+);
 CREATE TABLE IF NOT EXISTS meta (
     key TEXT NOT NULL PRIMARY KEY,
     value TEXT NOT NULL
@@ -402,6 +407,31 @@ class JournalStore:
             self._conn.execute("SELECT COUNT(*) FROM processed").fetchone()[0]
         )
 
+    def record_outbound(self, name: str, digest: str) -> None:
+        """Commit intent before sending; a crash must not lose send ownership."""
+        with self._conn:
+            self._conn.execute(
+                "INSERT INTO outbound(name, digest) VALUES (?, ?)", (name, digest),
+            )
+
+    def confirm_outbound(self, name: str) -> None:
+        with self._conn:
+            self._conn.execute("UPDATE outbound SET confirmed = 1 WHERE name = ?", (name,))
+
+    def discard_outbound(self, name: str) -> None:
+        with self._conn:
+            self._conn.execute("DELETE FROM outbound WHERE name = ?", (name,))
+
+    def outbound_journals(self) -> list[tuple[str, str, int]]:
+        return self._conn.execute("SELECT name, digest, confirmed FROM outbound").fetchall()
+
+    def compact_outbound(self, newest: str) -> None:
+        """Retain the newest confirmed wipe sentinel and unresolved intents."""
+        with self._conn:
+            self._conn.execute(
+                "DELETE FROM outbound WHERE confirmed = 1 AND name != ?", (newest,),
+            )
+
     @property
     def last_sent_key(self) -> str:
         return self._meta_get(_META_LAST_SENT_KEY) or ""
@@ -454,6 +484,7 @@ class JournalStore:
         """
         with self._conn:
             self._conn.execute("DELETE FROM processed")
+            self._conn.execute("DELETE FROM outbound")
             self._conn.execute("DELETE FROM meta WHERE key = ?", (_META_LAST_SENT_KEY,))
         logger.warning(
             "journal store dedupe caches reset; local documents and chunks retained"

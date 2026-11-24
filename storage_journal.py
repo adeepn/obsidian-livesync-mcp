@@ -37,6 +37,7 @@ from text_eligibility import (DEFAULT_TEXT_SCAN_MAX_BYTES,
 import asyncio
 from device_selection import DeviceSelection
 
+import hashlib
 import json
 import logging
 import math
@@ -354,6 +355,7 @@ class JournalBackend(DeviceSelection):
             if store.epoch != (epoch or ""):
                 store.epoch = epoch or ""
                 self._clear_refresh_clock()
+            self._reconcile_outbound(store)
             self._probe_remote_wipe(epoch)
             candidates, next_cursor = self._list_journals()
             for name in candidates:
@@ -511,6 +513,37 @@ class JournalBackend(DeviceSelection):
             for key in self._object_storage.list("", limit=1)
         )
 
+    def _outbound_checkpoint(self, store: JournalStore) -> str:
+        keys = [name for name, _, confirmed in store.outbound_journals() if confirmed]
+        if store.last_sent_key:
+            keys.append(store.last_sent_key)
+        return max(keys, key=journal_sort_key) if keys else ""
+
+    def _reconcile_outbound(self, store: JournalStore) -> None:
+        """Recover send ownership independently of fallible last-sent bookkeeping.
+
+        A pending key alone is not ownership: a conditional PUT may have lost
+        to another peer. Match the exact compressed payload before confirming.
+        Missing intents were never confirmed published and can be discarded.
+        Confirmed missing keys remain wipe sentinels, never replaced by older
+        surviving history. All replay downloads use the normal refresh budget.
+        """
+        for name, digest, confirmed in sorted(store.outbound_journals(), key=lambda row: journal_sort_key(row[0])):
+            self._check_refresh_time(name)
+            if not confirmed:
+                blob = self._get_object(name)
+                if blob is None or hashlib.sha256(blob).hexdigest() != digest:
+                    store.discard_outbound(name)
+                    continue
+                self._replay_one(store, name, blob=blob)
+                store.confirm_outbound(name)
+            elif not store.processed(name) and self._object_storage.exists(name):
+                self._replay_one(store, name)
+        newest = self._outbound_checkpoint(store)
+        if newest and any(name == newest and confirmed for name, _, confirmed in store.outbound_journals()):
+            store.last_sent_key = newest
+            store.compact_outbound(newest)
+
     def _probe_remote_wipe(self, epoch: str | None) -> bool:
         """Confirm a missing last-sent journal and clear only dedupe caches.
 
@@ -520,7 +553,12 @@ class JournalBackend(DeviceSelection):
         store = self._store
         if store is None:
             return False
-        key = store.last_sent_key
+        key = self._outbound_checkpoint(store)
+        # Startup may precede replay of an accepted send with a lost response.
+        # Defer a wipe decision until refresh has reconciled these intents.
+        if any(not confirmed and self._object_storage.exists(name)
+               for name, _, confirmed in store.outbound_journals()):
+            return False
         if not key or self._object_storage.exists(key):
             return False
         logger.warning(
@@ -573,7 +611,7 @@ class JournalBackend(DeviceSelection):
                 self._max_seen_ms = max(self._max_seen_ms, int(match.group(1)))
         return sorted((key for key in keys if is_journal_key(key)), key=journal_sort_key), next_cursor
 
-    def _replay_one(self, store: JournalStore, name: str) -> list[dict]:
+    def _replay_one(self, store: JournalStore, name: str, *, blob: bytes | None = None) -> list[dict]:
         """Fetch, decode and apply one journal file.
 
         Storage-layer failures propagate unchanged (they already name the
@@ -582,7 +620,8 @@ class JournalBackend(DeviceSelection):
         refresh retries it.
         """
         try:
-            blob = self._get_object(name)
+            if blob is None:
+                blob = self._get_object(name)
             if blob is None:
                 raise StorageError(
                     f"journal file {name!r} disappeared during replay"
@@ -1001,7 +1040,7 @@ class JournalBackend(DeviceSelection):
             if len(blob) + control_reserve > self.max_refresh_bytes:
                 raise ReplayBudgetExceeded("max_refresh_bytes", len(blob) + control_reserve, self.max_refresh_bytes)
             remote_epoch = self._load_sync_parameters_epoch()
-            last_sent = store.last_sent_key
+            last_sent = self._outbound_checkpoint(store)
             if (store.epoch != (remote_epoch or "") or
                     (last_sent and not self._object_storage.exists(last_sent))):
                 raise ConcurrentModification(
@@ -1012,9 +1051,11 @@ class JournalBackend(DeviceSelection):
             self._max_seen_ms = ms
             for _ in range(10):
                 name = journal_filename(ms, suffix=secrets.token_hex(16))
+                store.record_outbound(name, hashlib.sha256(blob).hexdigest())
                 try:
                     outcome = self._object_storage.put_if_absent(name, blob)
                 except MutationNotApplied:
+                    store.discard_outbound(name)
                     raise
                 except (StorageError, OSError) as exc:
                     raise OutcomeUnknown() from exc
@@ -1022,6 +1063,7 @@ class JournalBackend(DeviceSelection):
                     published = True
                     break
                 if outcome == "exists":
+                    store.discard_outbound(name)
                     continue
                 if outcome != "unsupported":
                     raise StorageError("invalid conditional publication result")
@@ -1030,11 +1072,13 @@ class JournalBackend(DeviceSelection):
                     try:
                         self._object_storage.put(name, blob)
                     except MutationNotApplied:
+                        store.discard_outbound(name)
                         raise
                     except (StorageError, OSError) as exc:
                         raise OutcomeUnknown() from exc
                     published = True
                     break
+                store.discard_outbound(name)
             else:
                 raise StorageError("could not allocate an unused journal key")
             readback = self._object_storage.get(name)
@@ -1060,8 +1104,12 @@ class JournalBackend(DeviceSelection):
                 raise StorageError("journal read-back verification failed")
             for doc in journal.docs:
                 validate_document_identity(doc, store.path_identity)
+            store.confirm_outbound(name)
             store.apply_journal(name, journal.chunks, journal.docs)
-            store.finish_bookkeeping(lambda: setattr(store, "last_sent_key", name))
+            def finish_send_tracking():
+                store.last_sent_key = name
+                store.compact_outbound(name)
+            store.finish_bookkeeping(finish_send_tracking)
         except (StorageError, ValueError, OSError, sqlite3.Error) as exc:
             if published:
                 raise OutcomeUnknown() from exc

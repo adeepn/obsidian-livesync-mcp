@@ -37,6 +37,8 @@ async def test_completed_delete_bookkeeping_self_heals(tmp_path, monkeypatch, ca
         assert await backend.read_note('only.md') is None
         assert store.winner('only.md') == winner
         assert store.leaves('only.md') == leaves
+        newest = max((key for key in storage.list('') if key.endswith('-docs.jsonl.gz')), key=lambda key: int(key.split('-')[0]))
+        assert store.last_sent_key == newest
         for name in storage.list(''):
             if name.endswith('-docs.jsonl.gz'):
                 assert store.processed(name)
@@ -119,6 +121,8 @@ async def test_journal_published_uncertainty_replays_to_convergence(tmp_path, mo
             assert type(caught.value).__name__ == 'OutcomeUnknown'
         await backend.refresh(force=True)
         assert await backend.read_note('only.md') is None
+        newest = max((key for key in storage.list('') if key.endswith('-docs.jsonl.gz')), key=lambda key: int(key.split('-')[0]))
+        assert backend._store.last_sent_key == newest
         before = backend._store.leaves('only.md')
         await backend.refresh(force=True)
         assert backend._store.leaves('only.md') == before
@@ -389,3 +393,149 @@ async def test_canvas_add_lost_response_warns_before_blind_retry_duplicates(back
     second = json.loads((await backend.read_note('retry.canvas'))['text'])
     assert len(second['nodes']) == 2
     assert second['nodes'][0]['id'] != second['nodes'][1]['id']
+
+
+@pytest.mark.parametrize('remove_old_before_refresh', [False, True])
+@pytest.mark.parametrize('restart', [False, True])
+async def test_outbound_replay_repairs_stale_last_sent_and_still_detects_wipe(
+    tmp_path, monkeypatch, remove_old_before_refresh, restart,
+):
+    from storage_journal import JournalBackend
+    from storage_base import ConcurrentModification
+    peer, storage = make_backend(tmp_path, healthy_bucket())
+    await peer.startup_check()
+    try:
+        await peer.write_note('only.md', 'old', create=True)
+        store = peer._store
+        old_key = store.last_sent_key
+        original = store._meta_set
+        def fail_last_sent(key, value):
+            if key == 'last_sent_key':
+                raise sqlite3.OperationalError('bookkeeping unavailable')
+            return original(key, value)
+        with monkeypatch.context() as patch:
+            patch.setattr(store, '_meta_set', fail_last_sent)
+            await peer.delete_note('only.md')
+        newest = max((key for key in storage.list('') if key.endswith('-docs.jsonl.gz')), key=lambda key: int(key.split('-')[0]))
+        assert store.last_sent_key == old_key
+        if remove_old_before_refresh:
+            storage._objects.pop(old_key)
+        if restart:
+            await peer.close()
+            peer = JournalBackend(storage, tmp_path / 'state')
+            await peer.startup_check()
+            store = peer._store
+        await peer.refresh(force=True)
+        assert store.last_sent_key == newest
+        assert store.processed(newest)
+        assert await peer.read_note('only.md') is None
+        state = list(store._conn.iterdump())
+        leaves = store.leaves('only.md')
+        await peer.refresh(force=True)
+        assert list(store._conn.iterdump()) == state
+        assert store.leaves('only.md') == leaves
+        if not remove_old_before_refresh:
+            storage._objects.pop(old_key)
+        # The newest outbound journal, rather than stale send history, guards writes.
+        await peer.write_note('next.md', 'next', create=True)
+        latest = store.last_sent_key
+        storage._objects.pop(latest)
+        with pytest.raises(ConcurrentModification):
+            await peer.write_note('refused.md', 'no', create=True)
+        await peer.refresh(force=True)
+        assert store.last_sent_key == ''
+        assert (await peer.read_note('next.md'))['text'] == 'next'
+    finally:
+        await peer.close()
+
+
+async def test_crash_after_pending_record_before_publish_is_cleaned_on_replay(tmp_path, monkeypatch):
+    from storage_journal import JournalBackend
+    class Crash(BaseException):
+        pass
+    peer, storage = make_backend(tmp_path, healthy_bucket())
+    await peer.startup_check()
+    try:
+        await peer.write_note('only.md', 'old', create=True)
+        last_sent = peer._store.last_sent_key
+        objects = dict(storage._objects)
+        def crash(*args):
+            raise Crash()
+        with monkeypatch.context() as patch:
+            patch.setattr(storage, 'put_if_absent', crash)
+            with pytest.raises(Crash):
+                await peer.write_note('only.md', 'never published')
+        pending = [row for row in peer._store.outbound_journals() if not row[2]]
+        assert len(pending) == 1
+        assert pending[0][0] not in storage._objects
+        assert storage._objects == objects
+        await peer.close()
+        peer = JournalBackend(storage, tmp_path / 'state')
+        await peer.startup_check()
+        await peer.refresh(force=True)
+        assert not [row for row in peer._store.outbound_journals() if not row[2]]
+        assert peer._store.last_sent_key == last_sent
+        assert (await peer.read_note('only.md'))['text'] == 'old'
+        await peer.write_note('only.md', 'next')
+    finally:
+        await peer.close()
+
+
+async def test_pending_collision_is_replayed_but_not_claimed_as_our_send(tmp_path, monkeypatch):
+    from journal_codec import deflate_journal, serialize_journal
+    from storage_journal import JournalBackend
+    class Crash(BaseException):
+        pass
+    peer, storage = make_backend(tmp_path, healthy_bucket())
+    await peer.startup_check()
+    collision = []
+    try:
+        await peer.write_note('only.md', 'old', create=True)
+        last_sent = peer._store.last_sent_key
+        rival = deflate_journal(serialize_journal([], []))
+        def collide(name, blob):
+            storage._objects[name] = rival
+            collision.append(name)
+            raise Crash()
+        with monkeypatch.context() as patch:
+            patch.setattr(storage, 'put_if_absent', collide)
+            with pytest.raises(Crash):
+                await peer.write_note('only.md', 'our unpublished edit')
+        await peer.close()
+        peer = JournalBackend(storage, tmp_path / 'state')
+        await peer.startup_check()
+        await peer.refresh(force=True)
+        assert peer._store.last_sent_key == last_sent
+        assert peer._store.processed(collision[0])
+        assert all(row[0] != collision[0] for row in peer._store.outbound_journals())
+        assert (await peer.read_note('only.md'))['text'] == 'old'
+    finally:
+        await peer.close()
+
+
+async def test_completed_publication_does_not_fail_on_tracking_read(tmp_path, monkeypatch):
+    peer, _ = make_backend(tmp_path, healthy_bucket())
+    await peer.startup_check()
+    try:
+        await peer.write_note('only.md', 'old', create=True)
+        store = peer._store
+        apply = store.apply_journal
+        get = store._meta_get
+        committed = False
+        def applied(*args):
+            nonlocal committed
+            apply(*args)
+            committed = True
+        def broken_read(key):
+            if committed and key == 'last_sent_key':
+                raise sqlite3.OperationalError('post-commit tracking read failed')
+            return get(key)
+        with monkeypatch.context() as patch:
+            patch.setattr(store, 'apply_journal', applied)
+            patch.setattr(store, '_meta_get', broken_read)
+            assert await peer.delete_note('only.md') is True
+        await peer.refresh(force=True)
+        assert await peer.read_note('only.md') is None
+        assert store.processed(store.last_sent_key)
+    finally:
+        await peer.close()
