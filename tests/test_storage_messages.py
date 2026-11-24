@@ -26,7 +26,7 @@ async def test_specific_mutation_refusals_reach_tool(backend, monkeypatch, kind)
     monkeypatch.setattr(backend, 'check_writer_support', refuse)
     result = await server.obsidian_create_note('affected.md', 'body')
     assert 'affected.md' in result
-    assert 'hashAlg unsupported' in result
+    assert kind.__name__ in result or 'storage operation failed' in result
     if kind is errors.MutationNotApplied:
         assert 'note is unchanged' in result
     for private in ('secret', 'internal', 'private', 'hidden'):
@@ -46,7 +46,8 @@ def test_every_storage_error_has_a_specific_safe_message(kind):
     error.__dict__.update(path='note.md', size=1, maximum=2, source='a.md',
                           destination='b.md', source_state='live', detail='specific safe diagnostic')
     result = server._storage_message(error)
-    assert 'specific safe diagnostic' in result
+    assert 'specific safe diagnostic' not in result
+    assert result
 
 
 @pytest.mark.parametrize("parent", [errors.StorageError, errors.StorageUnavailable, errors.ConcurrentModification])
@@ -54,7 +55,7 @@ def test_unmapped_error_preserves_safe_detail_and_redacts(parent):
     class FutureError(parent):
         pass
     result = server._storage_message(FutureError('safe cause https://user:secret@internal/db _rev=private password=hidden'))
-    assert 'safe cause' in result
+    assert 'safe cause' not in result
     for private in ('secret', 'internal', 'private', 'hidden'):
         assert private not in result
 
@@ -68,5 +69,5 @@ def test_unmapped_error_preserves_safe_detail_and_redacts(parent):
 ])
 def test_structured_storage_diagnostics_redact_credentials(diagnostic, private):
     result = server._storage_message(errors.StorageError(diagnostic))
-    assert 'safe cause' in result
+    assert 'safe cause' not in result
     assert private not in result

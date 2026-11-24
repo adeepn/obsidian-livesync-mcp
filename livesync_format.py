@@ -17,7 +17,7 @@ typed, v1 compares Unicode NFC forms — see ``path2id`` and
 
 from __future__ import annotations
 
-from diagnostic_hygiene import invalid_setting
+from diagnostic_hygiene import invalid_setting, diagnostic, PublicDiagnostic, DiagnosticCode
 
 from dataclasses import dataclass, field
 from collections.abc import Mapping
@@ -98,17 +98,13 @@ class ForbiddenPathError(Exception):
 
 
 class UnsupportedVaultSettings(ValueError):
-    """Milestone settings describe a vault this server cannot serve.
+    """Codec-owned reason and fields; backends project these without str()."""
 
-    Raised by ``resolve_path_identity`` with the reason in the message.
-    This module must stay dependency-free (storage layers import it, not
-    the other way round), so the exception is a plain ``ValueError``.
-
-    Mapping rule for backends: catch and re-raise as the storage-layer
-    ``UnsupportedVault`` preserving the text, e.g.
-    ``except UnsupportedVaultSettings as exc:
-    raise UnsupportedVault(str(exc)) from exc``.
-    """
+    def __init__(self, reason):
+        self.diagnostic = diagnostic(reason)
+        if self.diagnostic.code is DiagnosticCode.FAILED:
+            self.diagnostic = PublicDiagnostic(DiagnosticCode.SETTINGS_UNREADABLE, cause=type(self))
+        super().__init__(reason)
 
 
 def _normalize_path(path: str) -> str:
@@ -285,10 +281,12 @@ def resolve_path_identity(milestone_settings: dict) -> str:
             or not isinstance(version, (int, float))
             or version not in (0, 1)
         ):
-            raise UnsupportedVaultSettings(
+            error = UnsupportedVaultSettings(
                 "unsupported " + invalid_setting("pathNormalizationVersion", version) + "; "
                 "this server supports 0 (legacy) and 1 (NFC)"
             )
+            error.setting_keys = ('pathNormalizationVersion',)
+            raise error
         if version == 1:
             nfc = True
     if case_sensitive:
@@ -359,7 +357,19 @@ def resolve_doc_type(path: str, data: str | bytes) -> str:
 
 
 class InvalidPlainTextBytes(ValueError):
-    """Reject malformed byte ingress before publishing a plain document."""
+    """Reject malformed byte ingress with a typed invalid-byte count."""
+
+    def __init__(self, invalid_bytes: int):
+        self.invalid_bytes = invalid_bytes
+        super().__init__(self.format())
+
+    def format(self):
+        return (
+            f'invalid UTF-8: {self.invalid_bytes} invalid bytes; the path extension selects '
+            'plain text. A device text read can store malformed bytes lossily '
+            '(native host semantics remain unverified). Use a non-plain path '
+            'for binary content or explicitly convert with lossy_text=true.'
+        )
 
 
 def plain_ingress_utf8(raw: bytes, *, lossy_text: bool = False) -> tuple[str, int]:
@@ -376,12 +386,7 @@ def plain_ingress_utf8(raw: bytes, *, lossy_text: bool = False) -> tuple[str, in
     except UnicodeDecodeError:
         invalid_bytes = len(raw) - len(raw.decode('utf-8', errors='ignore').encode('utf-8'))
         if not lossy_text:
-            raise InvalidPlainTextBytes(
-                f'invalid UTF-8: {invalid_bytes} invalid bytes; the path extension selects '
-                'plain text. A device text read can store malformed bytes lossily '
-                '(native host semantics remain unverified). Use a non-plain path '
-                'for binary content or explicitly convert with lossy_text=true.'
-            ) from None
+            raise InvalidPlainTextBytes(invalid_bytes) from None
         return raw.decode('utf-8', errors='replace'), invalid_bytes
 
 
@@ -475,9 +480,14 @@ def resolve_content_splitter(milestone_settings: dict) -> ContentSplitter:
         splitters = [ContentSplitter(settings, normalize_settings=True)
                      for settings in _milestone_setting_maps(milestone_settings)]
     except UnsupportedWriterMode as exc:
-        raise UnsupportedWriterSettings(str(exc)) from exc
+        error = UnsupportedWriterSettings(str(exc))
+        error.setting_keys = getattr(exc, "setting_keys", ())
+        error.setting_issues = getattr(exc, "setting_issues", ())
+        raise error from exc
     except ValueError as exc:
-        raise UnsupportedVaultSettings(str(exc)) from exc
+        error = UnsupportedVaultSettings(str(exc))
+        error.setting_keys = getattr(exc, "setting_keys", ())
+        raise error from exc
     first = splitters[0]
     if any((s.version, s.minimum_chunk_size, s.absolute_max_piece_size, s.hash_alg) !=
            (first.version, first.minimum_chunk_size, first.absolute_max_piece_size, first.hash_alg)

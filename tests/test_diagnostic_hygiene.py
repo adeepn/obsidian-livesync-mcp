@@ -50,7 +50,7 @@ def test_sanitizer_adversarial_corpus(payload, secret):
     result = server._safe_storage_detail(errors.StorageError(payload))
     assert secret not in result
     assert quote(secret, safe='') not in result
-    assert 'safe cause' in result
+    assert result == 'storage operation failed'
 
 
 def injected(kind, payload):

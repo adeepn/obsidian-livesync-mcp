@@ -31,7 +31,8 @@ before applying it locally; rename publishes both revisions in one file.
 
 from __future__ import annotations
 
-from diagnostic_hygiene import sanitize_diagnostic
+from diagnostic_hygiene import (writer_diagnostic, diagnostic, settings_exception_diagnostic, PublicDiagnostic, setting_key,
+    DiagnosticCode, assessment_fields, setting_value, fingerprint)
 
 from text_eligibility import (DEFAULT_TEXT_SCAN_MAX_BYTES,
                               DEFAULT_TEXT_VERDICT_CACHE_ENTRIES)
@@ -268,20 +269,14 @@ class JournalBackend(DeviceSelection):
                     "vault milestone is missing while journal files exist; "
                     "rebuild from the authoritative vault"
                 )
-            logger.warning(
-                "journal bucket has no milestone and no journal files; "
-                "treating it as a fresh vault with legacy path identity"
-            )
+            logger.warning('journal bucket has no milestone and no journal files; treating it as a fresh vault with legacy path identity')
             identity = PATH_IDENTITY_LEGACY
             self._splitter = ContentSplitter()
             self.sync_max_size_mb = (50 if self.sync_max_size_mb_override is None
                                      else self.sync_max_size_mb_override)
         else:
             if milestone.get("locked") is True:
-                logger.warning(
-                    "vault milestone has advisory locked: true flag; "
-                    "remote marked as rebuilt; peer performs full replay"
-                )
+                logger.warning('vault milestone has advisory locked: true flag; remote marked as rebuilt; peer performs full replay')
             try:
                 if self.sync_max_size_mb_override is None:
                     resolve_sync_max_size(milestone)  # retain all-device fallback guards
@@ -290,7 +285,7 @@ class JournalBackend(DeviceSelection):
                     auto_accept_compatible_tweak=getattr(self, 'auto_accept_compatible_tweak', True))
                 self._tweak_assessment = resolved.summary()
                 for side in resolved.winners:
-                    logger.info("tweak alignment: %s; keys: %s", side, ', '.join(resolved.differing_keys))
+                    logger.info("tweak alignment: %s; keys: %s", side if side in ("CURRENT", "REMOTE") else "<value hidden>", ", ".join(setting_key(k) for k in resolved.differing_keys))
                 milestone = dict(resolved.settings)
                 identity = resolve_path_identity(milestone)
                 self.sync_max_size_mb = (resolve_sync_max_size(milestone)
@@ -298,10 +293,10 @@ class JournalBackend(DeviceSelection):
                 self._splitter = resolve_content_splitter(milestone)
             except UnsupportedWriterSettings as exc:
                 self._splitter = None
-                self._writer_unsupported_reason = str(exc)
+                self._writer_unsupported_reason = PublicDiagnostic(DiagnosticCode.WRITER, issues=tuple(getattr(exc, "setting_issues", ())))
             except UnsupportedVaultSettings as exc:
                 self._tweak_assessment = getattr(exc, "tweak_assessment", self._tweak_assessment)
-                raise UnsupportedVault(str(exc)) from exc
+                raise UnsupportedVault(settings_exception_diagnostic(exc)) from exc
 
         # Identity changes quarantine the old state without mixing IDs.
         # A repeated startup replaces the previous connection cleanly.
@@ -399,7 +394,7 @@ class JournalBackend(DeviceSelection):
                 }
                 unknown = sorted(keys - KNOWN_METADATA_KEYS)
                 self._protocol_notes = (
-                    ["unknown metadata fields in recent journals: " + ", ".join(unknown)]
+                    [f"unknown metadata fields in recent journals: {len(unknown)}"]
                     if unknown else []
                 )
             self._refresh_deadline = None
@@ -440,16 +435,16 @@ class JournalBackend(DeviceSelection):
         selection = await self.selection_diagnostics()
         return {
             **selection,
-            "tweak_assessment": dict(self._tweak_assessment),
+            "tweak_assessment": assessment_fields(self._tweak_assessment),
             "writer_supported": self._writer_unsupported_reason is None and selection["selection_writer_supported"],
-            "writer_unsupported_reason": (sanitize_diagnostic(reason) if (reason := self._writer_unsupported_reason or selection["selection_unsupported_reason"]) else None),
+            "writer_unsupported_reason": writer_diagnostic(self._writer_unsupported_reason or selection["selection_unsupported_reason"]),
             "backend": "s3-journal",
             "protocol_notes": list(self._protocol_notes),
-            "state_dir_path": str(self._state_dir),
+            "state_dir_path": "<value hidden>",
             "state_dir_bytes": store.state_size_bytes() if store else 0,
             "state_size_warn_mb": self.state_size_warn_mb,
-            "path_identity": store.path_identity if store else None,
-            "epoch": store.epoch if store else None,
+            "path_identity": setting_value(store.path_identity) if store else None,
+            "epoch": fingerprint(store.epoch) if store else None,
             "files_processed": store.files_processed_count() if store else 0,
             # Live note documents in the store (tombstones and service
             # docs excluded); hidden dotfile notes count here but never
@@ -576,11 +571,7 @@ class JournalBackend(DeviceSelection):
             return False
         if not key or self._object_storage.exists(key):
             return False
-        logger.warning(
-            "journal object %r vanished; assuming a remote wipe and "
-            "clearing dedupe caches while retaining local notes",
-            key,
-        )
+        logger.warning('journal object <omitted> vanished; assuming a remote wipe and clearing dedupe caches while retaining local notes')
         store.reset()
         if epoch is not None:
             store.epoch = epoch
@@ -619,7 +610,7 @@ class JournalBackend(DeviceSelection):
                 break
         else:
             next_cursor = cursor
-            logger.warning("journal refresh key budget stop at %r", cursor)
+            logger.warning('journal refresh key budget stop at <omitted>')
         for key in keys:
             match = _MS_PREFIX_RE.match(key)
             if match is not None:
@@ -655,16 +646,8 @@ class JournalBackend(DeviceSelection):
             # The public message carries the file name and the error class
             # only; details (document ids, paths, revisions) stay in the
             # server log (audit C7).
-            logger.warning(
-                "journal file %r could not be replayed: %s: %s",
-                name,
-                type(exc).__name__,
-                exc,
-            )
-            raise StorageError(
-                f"journal file {name!r} could not be replayed: "
-                f"{type(exc).__name__}"
-            ) from exc
+            logger.warning('journal file <omitted> could not be replayed: <omitted>: <omitted>; cause: %s', type(exc).__name__)
+            raise StorageError(PublicDiagnostic(DiagnosticCode.REPLAY_FAILED, journal=name, cause=type(exc))) from exc
 
     def _require_store(self, operation: str) -> JournalStore:
         if self._store is None:
@@ -707,9 +690,7 @@ class JournalBackend(DeviceSelection):
                 meta = self._meta_from_doc(doc)
             except StorageError:
                 path_for_log = doc.get("path") or doc_id
-                logger.exception(
-                    "skipping note %s: invalid metadata", path_for_log
-                )
+                logger.error('skipping note <omitted>: invalid metadata')
                 continue
             path = meta["path"]
             if _has_hidden_segment(path):
@@ -757,7 +738,7 @@ class JournalBackend(DeviceSelection):
         try:
             validate_vault_path(path)
         except ForbiddenPathError as exc:
-            logger.info("read refused for vault path %r: %s", path, exc)
+            logger.info('read refused for vault path <omitted>: <omitted>; cause: %s', type(exc).__name__)
             return None
         store = self._require_store("read_note")
         doc_id = self._path2id(store, path)
@@ -817,7 +798,7 @@ class JournalBackend(DeviceSelection):
             try:
                 candidates.append(self._meta_from_doc(doc))
             except StorageError:
-                logger.exception("skipping note %s: invalid metadata", path)
+                logger.error('skipping note <omitted>: invalid metadata')
                 continue
         candidates.sort(key=lambda meta: meta["path"])
         # Window over the candidates like the CouchDB peer's fetch windows:
@@ -847,9 +828,7 @@ class JournalBackend(DeviceSelection):
         except (StorageUnavailable, ReplayBudgetExceeded):
             raise  # backend-wide condition, not a per-note failure
         except Exception:
-            logger.exception(
-                "skipping note %s: scan read failed", meta["path"]
-            )
+            logger.error('skipping note <omitted>: scan read failed')
             return meta, None
         return meta, None
 
@@ -866,7 +845,7 @@ class JournalBackend(DeviceSelection):
         try:
             validate_vault_path(path)
         except ForbiddenPathError as exc:
-            logger.info("read refused for vault path %r: %s", path, exc)
+            logger.info('read refused for vault path <omitted>: <omitted>; cause: %s', type(exc).__name__)
             raise NoteNotFound(f"note not found: {path}") from None
 
     @staticmethod
@@ -891,8 +870,8 @@ class JournalBackend(DeviceSelection):
         the note path only — audit C7).
         """
         if isinstance(exc, EncryptedNoteError):
-            return UnsupportedVault(str(exc))
-        return StorageError(str(exc))
+            return UnsupportedVault(getattr(exc, "diagnostic", None), cause=exc)
+        return StorageError(getattr(exc, "diagnostic", None), cause=exc)
 
     @staticmethod
     def _meta_from_doc(doc: dict) -> NoteMeta:
@@ -936,7 +915,7 @@ class JournalBackend(DeviceSelection):
                 validate_document_identity(
                     doc, self._require_store("identity").path_identity)
             except ValueError as exc:
-                raise StorageError(str(exc)) from exc
+                raise StorageError(DiagnosticCode.METADATA_PATH_IDENTITY_MISMATCH_OR_COLLISION_REBUILD_FETCH_REQUIRED, cause=exc) from exc
 
     @staticmethod
     def _check_expected_rev(doc: dict | None, expected_rev: str | None) -> None:
@@ -1134,7 +1113,7 @@ class JournalBackend(DeviceSelection):
 
     def check_writer_support(self) -> None:
         if self._writer_unsupported_reason is not None:
-            raise WriterUnsupported(self._writer_unsupported_reason)
+            raise WriterUnsupported(self._writer_unsupported_reason if isinstance(self._writer_unsupported_reason, PublicDiagnostic) else None)
 
     async def write_note(
         self,

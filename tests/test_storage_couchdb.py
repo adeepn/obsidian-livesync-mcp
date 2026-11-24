@@ -180,7 +180,7 @@ async def test_sensitive_couchdb_paths(nfc):
 
 
 async def test_startup_version_doc_is_informational(caplog):
-    # Any obsydian_livesync_version value is accepted; it is only logged.
+    # Any version is accepted; its presence, never its remote value, is logged.
     docs = {
         "obsydian_livesync_version": {"version": "1.9.2"},
         "_local/obsydian_livesync_milestone": {
@@ -190,7 +190,8 @@ async def test_startup_version_doc_is_informational(caplog):
     async with fake_backend(docs) as (backend, _log):
         with caplog.at_level(logging.INFO, logger="storage_couchdb"):
             await backend.startup_check()  # must not raise
-    assert any("1.9.2" in record.message for record in caplog.records)
+    assert any("version document" in record.message for record in caplog.records)
+    assert "1.9.2" not in caplog.text
 
 
 async def test_auth_error_maps_to_storage_unavailable():
@@ -208,15 +209,14 @@ async def test_server_error_maps_to_storage_unavailable():
 
 
 async def test_error_logs_carry_status_and_code_only(caplog):
-    # Log hygiene: the server log may carry the method, path, status and
-    # the body's error code — never the raw response body.
+    # P-19: only operation/status; even a body's error code is remote text.
     async with fake_backend({}, force_status=401) as (backend, _log):
         with caplog.at_level(logging.WARNING, logger="storage_couchdb"):
             with pytest.raises(StorageUnavailable):
                 await backend.startup_check()
     messages = [record.getMessage() for record in caplog.records]
     assert any("401" in message for message in messages)
-    assert any("forced" in message for message in messages)
+    assert not any("forced" in message for message in messages)
     assert not any("sentinel-raw-body" in message for message in messages)
 
 
@@ -532,7 +532,8 @@ async def test_iterate_texts_skips_corrupt_notes(caplog):
     assert sorted(results) == ["bad.md", "data.txt", "good.md"]
     assert results["good.md"] == "hello"
     assert results["bad.md"] is None
-    assert any("bad.md" in record.message for record in caplog.records)
+    assert any("skipping note" in record.message for record in caplog.records)
+    assert "bad.md" not in caplog.text
 
 
 async def test_iterate_texts_custom_extension_includes_text_types():

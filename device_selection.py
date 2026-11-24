@@ -1,5 +1,5 @@
 """Local device selection shared by both storage writers."""
-from diagnostic_hygiene import sanitize_diagnostic
+from diagnostic_hygiene import writer_diagnostic
 
 import asyncio
 import hashlib
@@ -30,6 +30,7 @@ class DeviceSelection:
             self._selection_cache = OrderedDict()
             self._selection_engine_state = 'off'
             self._selection_engine_reason = None
+            self._selection_diagnostic = None
             self._selection_rules = None
 
     def _selection_payload(self, path='', files=None):
@@ -61,7 +62,7 @@ class DeviceSelection:
         verdict = await self._selection_evaluate(self._selection_payload())
         if not verdict.writer_supported:
             await self.selection_close()
-            raise WriterUnsupported(verdict.reason)
+            raise WriterUnsupported(getattr(self, "_selection_diagnostic", None) or verdict.reason)
         # Check ignore compilation too, even if the only list short circuits.
         if self.selection_ignore:
             payload = self._selection_payload()
@@ -69,7 +70,7 @@ class DeviceSelection:
             verdict = await self._selection_evaluate(payload)
             if not verdict.writer_supported:
                 await self.selection_close()
-                raise WriterUnsupported(verdict.reason)
+                raise WriterUnsupported(getattr(self, "_selection_diagnostic", None) or verdict.reason)
 
     async def _selection_evaluate(self, payload):
         self._selection_init()
@@ -90,6 +91,7 @@ class DeviceSelection:
             except EngineFailure as exc:
                 self._selection_engine_state = 'unsupported'
                 self._selection_engine_reason = str(exc)
+                self._selection_diagnostic = exc.diagnostic
                 if cancelled:
                     raise asyncio.CancelledError
                 return TargetVerdict(False, writer_supported=False, reason=str(exc))
@@ -97,13 +99,14 @@ class DeviceSelection:
                 raise asyncio.CancelledError
             self._selection_engine_state = 'ready' if verdict.writer_supported else 'unsupported'
             self._selection_engine_reason = verdict.reason
+            self._selection_diagnostic = None
             return verdict
 
     def selection_info(self):
         self._selection_init()
         active = self._selection_active()
         # Read the last observed capability without launching a process.
-        reason = sanitize_diagnostic(self._selection_engine_reason) if active and self._selection_engine_reason else None
+        reason = writer_diagnostic(getattr(self, "_selection_diagnostic", None) or self._selection_engine_reason) if active and self._selection_engine_reason else None
         return {
             'selection_engine_state': self._selection_engine_state if active else 'off',
             'selection_engine_reason': reason,
@@ -188,6 +191,6 @@ class DeviceSelection:
     async def check_selection(self, path):
         verdict = await self.selection_for(path)
         if not verdict.writer_supported:
-            raise WriterUnsupported(verdict.reason)
+            raise WriterUnsupported(getattr(self, "_selection_diagnostic", None) or verdict.reason)
         if not verdict.allowed:
             raise SelectionRefused(path, verdict.rule)

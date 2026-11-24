@@ -1,6 +1,6 @@
 """Obsidian MCP Server — remote MCP server for Obsidian via CouchDB/LiveSync."""
 
-from diagnostic_hygiene import sanitize_diagnostic, sanitize_diagnostic_fields
+from diagnostic_hygiene import (escape_path, DiagnosticPath, path_field, assessment_fields, PublicDiagnostic, DiagnosticCode)
 
 import json
 import inspect
@@ -209,36 +209,21 @@ def create_app(cfg: Config) -> FastMCP:
 # --- Helper functions ---
 
 def _safe_storage_detail(error: Exception) -> str:
-    return sanitize_diagnostic(str(error)) or "storage operation failed"
+    if isinstance(error, StorageError):
+        return error.format()
+    return 'cause: ' + type(error).__name__
 
 
-def _diagnostic_outcome(text: str) -> str:
-    # Structured refusals remain valid JSON even when a path needs redaction.
-    try:
-        value = json.loads(text)
-    except (ValueError, TypeError):
-        return sanitize_diagnostic(text)
-    return json.dumps(sanitize_diagnostic_fields(value), ensure_ascii=False)
+def _storage_message(error: StorageError, *, caller_paths=()) -> str:
+    return _storage_message_body(error, caller_paths=caller_paths)
 
 
-def _storage_message(error: StorageError) -> str:
-    message = _diagnostic_outcome(_storage_message_body(error))
-    detail = _safe_storage_detail(error) if str(error) else ''
-    if detail and detail not in message:
-        if type(error) is UnsupportedVault:
-            return f"Error: unsupported vault configuration: {detail}"
-        if type(error) is StorageUnavailable:
-            return f"Error: storage is unavailable: {detail}; try again later."
-        return f"{message} {detail}"
-    return message
-
-
-def _storage_message_body(error: StorageError) -> str:
+def _storage_message_body(error: StorageError, *, caller_paths=()) -> str:
     """Map device outcomes/errors; expose only explicitly safe diagnostics."""
     if isinstance(error, MutationNotApplied):
         return f"Error: note is unchanged; {_safe_storage_detail(error)}"
     if isinstance(error, OutcomeUnknown):
-        return OutcomeUnknown(sanitize_diagnostic(error.detail)).message()
+        return error.message()
     if isinstance(error, ReplayBudgetExceeded):
         return f"Error: {_safe_storage_detail(error)}"
     if isinstance(error, WriteSkipped):
@@ -246,16 +231,18 @@ def _storage_message_body(error: StorageError) -> str:
     if isinstance(error, (WriterUnsupported, RenameRefused)):
         return f"Error: {_safe_storage_detail(error)}"
     if isinstance(error, RenamePartialError):
+        source = escape_path(caller_paths[0]) if caller_paths else path_field(getattr(error, 'source_path', None))
+        destination = escape_path(caller_paths[1]) if len(caller_paths) > 1 else path_field(getattr(error, 'destination_path', None))
         if error.source_state != "live":
             return (
-                f"Error: move target '{error.destination}' was written, but "
-                f"retirement of source '{error.source}' could not be confirmed. "
+                f"Error: move target '{destination}' was written, but "
+                f"retirement of source '{source}' could not be confirmed. "
                 "Verify both paths and their contents before cleanup."
             )
         return (
             f"Error: move target was written, but source retirement failed; "
-            f"the note now exists at both '{error.source}' and "
-            f"'{error.destination}'. Verify both paths and their contents first. "
+            f"the note now exists at both '{source}' and "
+            f"'{destination}'. Verify both paths and their contents first. "
             "Delete one copy, or retry the move "
             "after removing the destination."
         )
@@ -274,7 +261,11 @@ def _storage_message_body(error: StorageError) -> str:
         StorageUnavailable: "Error: storage is unavailable; try again later.",
     }
     if type(error) in messages:
-        return messages[type(error)]
+        message = messages[type(error)]
+        public = getattr(error, 'diagnostic', None)
+        if isinstance(public, PublicDiagnostic) and (public.code is not DiagnosticCode.FAILED or public.cause):
+            return message.rstrip('.') + ': ' + public.format()
+        return message
     return f"Error: {_safe_storage_detail(error)}"
 
 
@@ -320,17 +311,17 @@ def _tool_errors(
                 if handler.__name__ == 'obsidian_duplicate_note' and len(paths) == 1:
                     base, ext = os.path.splitext(paths[0])
                     paths.append(f"{base} copy{ext}")
-                context = sanitize_diagnostic(' -> '.join(paths))
+                context = ' -> '.join(escape_path(p) for p in paths)
                 if isinstance(error, OutcomeUnknown):
-                    error = OutcomeUnknown(sanitize_diagnostic(f"{context}: {error.detail}".rstrip(': ')))
+                    outcome_context = context
                 elif isinstance(error, WriteSkipped):
-                    response = error.as_dict()
+                    response = error.as_dict(caller_path=DiagnosticPath(paths[0], remote=False) if paths else None)
                     response['message'] = f"{context}: {response['message']}"
-                    return json.dumps(sanitize_diagnostic_fields(response), ensure_ascii=False)
+                    return json.dumps(response, ensure_ascii=False)
                 elif isinstance(error, MutationNotApplied):
-                    return sanitize_diagnostic(f"Error: {context}: note is unchanged; {_safe_storage_detail(error)}")
+                    return f"Error: {context}: note is unchanged; {_safe_storage_detail(error)}"
                 else:
-                    return sanitize_diagnostic(f"Error: {context}: {_safe_storage_detail(error)}")
+                    return f"Error: {context}: {_safe_storage_detail(error)}"
             if isinstance(error, OutcomeUnknown) and operation is not None:
                 name = operation
                 if operation_arg is not None:
@@ -341,12 +332,20 @@ def _tool_errors(
                     if name == "after-heading":
                         name = "after-heading insertion"
                 if name in RETRY_IDEMPOTENT:
-                    return sanitize_diagnostic(error.message(name))
-            return _storage_message(error)
+                    return error.message(name, context=outcome_context)
+            arguments = signature.bind(*args, **kwargs)
+            caller_paths = [arguments.arguments[k] for k in ('path', 'template_path', 'new_path')
+                            if arguments.arguments.get(k)]
+            return _storage_message(error, caller_paths=caller_paths)
         except ForbiddenPathError:
             return "Error: forbidden vault path."
         except FrontmatterError:
             return "Error: invalid YAML frontmatter."
+        except Exception as error:
+            arguments = signature.bind(*args, **kwargs)
+            context = ' -> '.join(escape_path(arguments.arguments[k]) for k in
+                ('path', 'template_path', 'new_path') if arguments.arguments.get(k))
+            return f"Error: {context + ': ' if context else ''}storage operation failed; cause: {type(error).__name__}"
     if writer:
         if operation_arg is None:
             operations = [operation] if operation is not None else []
@@ -633,7 +632,7 @@ async def obsidian_upload_attachment(
             path, data, create=True, overwrite=overwrite, lossy_text=lossy_text,
         )
     except InvalidPlainTextBytes as error:
-        return f'Error: {error}'
+        return f'Error: {escape_path(path)}: {error.format()}'
     replaced_bytes = 0
     if lossy_text and resolve_doc_type(path, data) == 'plain':
         _, replaced_bytes = plain_ingress_utf8(data, lossy_text=True)
@@ -661,7 +660,7 @@ async def obsidian_download_attachment(path: str, max_bytes: int = 0) -> str:
     """
     note = await _backend().read_note(path)
     if note is None:
-        return f"Note '{path}' not found."
+        return f"Note '{escape_path(path)}' not found."
     if note["is_text"]:
         return "Error: textual note; use obsidian_fetch."
     data = note["data"]
@@ -693,7 +692,7 @@ async def obsidian_fetch(path: str, include_properties: bool = True, include_sta
     """
     note = await _backend().read_note(path)
     if note is None:
-        return f"Note '{path}' not found."
+        return f"Note '{escape_path(path)}' not found."
     note = _text_representation(note)
     meta = note["meta"]
     result = {
@@ -753,7 +752,7 @@ async def obsidian_create_note(
             return "Error: properties must be a JSON object."
         full_content = set_properties(content, props)
     await _backend().write_note(path, full_content, create=True)
-    return f"Created '{path}'."
+    return f"Created '{escape_path(path)}'."
 
 
 # 4. obsidian-update-note
@@ -787,7 +786,7 @@ async def obsidian_update_note(
     """
     modes = "overwrite, append, prepend, after-heading, search-replace"
     if mode not in modes.split(", "):
-        return f"Error: unknown mode: {mode}. Use: {modes}"
+        return f"Error: unknown mode: {escape_path(mode)}. Use: {modes}"
     if mode == "overwrite":
         if not content:
             return "Error: empty overwrite content is refused."
@@ -795,7 +794,7 @@ async def obsidian_update_note(
             return "Error: search, replace, heading and regex require their own mode."
     note = await _read_text_note(path)
     if note is None:
-        return f"Note '{path}' not found."
+        return f"Note '{escape_path(path)}' not found."
     existing = note["text"]
     matches = None
     if mode == "overwrite":
@@ -833,7 +832,7 @@ async def obsidian_update_note(
                     break
             offset += len(line)
         else:
-            return f"Error: heading '{heading}' not found in '{path}'."
+            return f"Error: heading '{escape_path(heading)}' not found in '{escape_path(path)}'."
     else:
         if not search:
             return "Error: search parameter required for search-replace mode."
@@ -857,8 +856,8 @@ async def obsidian_update_note(
     if new_content != existing:
         await _backend().write_note(path, new_content, expected_rev=note["rev"])
     if matches is not None:
-        return f"Updated '{path}': {matches} matches replaced."
-    return f"Updated '{path}' ({mode})."
+        return f"Updated '{escape_path(path)}': {matches} matches replaced."
+    return f"Updated '{escape_path(path)}' ({escape_path(mode)})."
 
 
 # 5. obsidian-delete-note
@@ -873,8 +872,8 @@ async def obsidian_delete_note(path: str) -> str:
     doc_id = path
     success = await _backend().delete_note(doc_id)
     if success:
-        return f"Deleted '{path}'."
-    return f"Note '{path}' not found."
+        return f"Deleted '{escape_path(path)}'."
+    return f"Note '{escape_path(path)}' not found."
 
 
 # 6. obsidian-move-note
@@ -891,7 +890,7 @@ async def obsidian_move_note(path: str, new_path: str) -> str:
         new_path: New path for the note
     """
     await _backend().rename_note(path, new_path)
-    return f"Moved '{path}' -> '{new_path}'."
+    return f"Moved '{escape_path(path)}' -> '{escape_path(new_path)}'."
 
 
 # 7. obsidian-duplicate-note
@@ -908,7 +907,7 @@ async def obsidian_duplicate_note(path: str, new_path: str = "") -> str:
         base, ext = os.path.splitext(path)
         new_path = f"{base} copy{ext}"
     await _backend().copy_note(path, new_path)
-    return f"Duplicated '{path}' -> '{new_path}'."
+    return f"Duplicated '{escape_path(path)}' -> '{escape_path(new_path)}'."
 
 
 # 8. obsidian-list-notes
@@ -959,7 +958,7 @@ async def obsidian_manage_properties(
     """
     note = await _read_text_note(path)
     if note is None:
-        return f"Note '{path}' not found."
+        return f"Note '{escape_path(path)}' not found."
     content = note["text"]
     if not path.lower().endswith(".md"):
         return "Error: properties require a .md file."
@@ -980,11 +979,11 @@ async def obsidian_manage_properties(
             content, [key.strip() for key in keys.split(",")]
         )
     else:
-        return f"Error: unknown action: {action}. Use: get, set, delete"
+        return f"Error: unknown action: {escape_path(action)}. Use: get, set, delete"
     if new_content == content:
-        return f"No property changes in '{path}'."
+        return f"No property changes in '{escape_path(path)}'."
     await _backend().write_note(path, new_content, expected_rev=note["rev"])
-    return f"Updated properties of '{path}'."
+    return f"Updated properties of '{escape_path(path)}'."
 
 
 # 10. obsidian-manage-tags
@@ -1004,7 +1003,7 @@ async def obsidian_manage_tags(
     """
     note = await _read_text_note(path)
     if note is None:
-        return f"Note '{path}' not found."
+        return f"Note '{escape_path(path)}' not found."
     content = note["text"]
     if not path.lower().endswith(".md"):
         return "Error: tags require a .md file."
@@ -1024,14 +1023,14 @@ async def obsidian_manage_tags(
         if tag.strip().lstrip("#")
     ]
     if action not in ("add", "remove"):
-        return f"Error: unknown action: {action}. Use: list, add, remove"
+        return f"Error: unknown action: {escape_path(action)}. Use: list, add, remove"
     if not tag_list:
         return "Error: tags parameter required."
     new_content = (add_tags if action == "add" else remove_tags)(content, tag_list)
     if new_content == content:
-        return f"No frontmatter tag changes in '{path}'; inline tags untouched."
+        return f"No frontmatter tag changes in '{escape_path(path)}'; inline tags untouched."
     await _backend().write_note(path, new_content, expected_rev=note["rev"])
-    return f"Updated frontmatter tags in '{path}'; inline tags untouched."
+    return f"Updated frontmatter tags in '{escape_path(path)}'; inline tags untouched."
 
 
 # 11. obsidian-get-all-tags
@@ -1198,7 +1197,7 @@ async def obsidian_canvas_node(
     content = None if note is None else note["text"]
     rev = None if note is None else note["rev"]
     if content is None and action != "add":
-        return f"Canvas '{path}' not found."
+        return f"Canvas '{escape_path(path)}' not found."
 
     canvas = _load_canvas(content)
     if canvas is None:
@@ -1206,7 +1205,7 @@ async def obsidian_canvas_node(
 
     if action == "add":
         if node_id and any(_entry_id(n) == node_id for n in canvas["nodes"]):
-            return f"Node '{node_id}' already exists in '{path}'."
+            return f"Node '{escape_path(node_id)}' already exists in '{escape_path(path)}'."
         new_id = node_id or secrets.token_hex(8)
         node: dict[str, Any] = {
             "id": new_id,
@@ -1230,14 +1229,14 @@ async def obsidian_canvas_node(
             path, json.dumps(canvas, ensure_ascii=False),
             create=content is None, expected_rev=rev,
         )
-        return f"Added {node_type} node '{new_id}' to '{path}'."
+        return f"Added {escape_path(node_type)} node '{escape_path(new_id)}' to '{escape_path(path)}'."
 
     elif action == "remove":
         if not node_id:
             return "node_id required for remove action."
         kept_nodes = [n for n in canvas["nodes"] if _entry_id(n) != node_id]
         if len(kept_nodes) == len(canvas["nodes"]):
-            return f"Node '{node_id}' not found in '{path}'."
+            return f"Node '{escape_path(node_id)}' not found in '{escape_path(path)}'."
         canvas["nodes"] = kept_nodes
         canvas["edges"] = [
             e for e in canvas["edges"]
@@ -1247,9 +1246,9 @@ async def obsidian_canvas_node(
         await _backend().write_note(
             path, json.dumps(canvas, ensure_ascii=False), expected_rev=rev
         )
-        return f"Removed node '{node_id}' from '{path}'."
+        return f"Removed node '{escape_path(node_id)}' from '{escape_path(path)}'."
 
-    return f"Unknown action: {action}. Use: add, remove"
+    return f"Unknown action: {escape_path(action)}. Use: add, remove"
 
 
 # 17. obsidian-canvas-edge
@@ -1275,7 +1274,7 @@ async def obsidian_canvas_edge(
     """
     note = await _read_text_note(path)
     if note is None:
-        return f"Canvas '{path}' not found."
+        return f"Canvas '{escape_path(path)}' not found."
     content = note["text"]
 
     canvas = _load_canvas(content)
@@ -1284,13 +1283,13 @@ async def obsidian_canvas_edge(
 
     if action == "add":
         if not from_node or not to_node:
-            return "from_node and to_node required for add action."
+            return f"from_node and to_node required for add action in '{escape_path(path)}'."
         known_nodes = {_entry_id(n) for n in canvas["nodes"]}
         for endpoint in (from_node, to_node):
             if endpoint not in known_nodes:
-                return f"Node '{endpoint}' not found in '{path}'."
+                return f"Node '{escape_path(endpoint)}' not found in '{escape_path(path)}'."
         if edge_id and any(_entry_id(e) == edge_id for e in canvas["edges"]):
-            return f"Edge '{edge_id}' already exists in '{path}'."
+            return f"Edge '{escape_path(edge_id)}' already exists in '{escape_path(path)}'."
         new_id = edge_id or secrets.token_hex(8)
         edge: dict[str, Any] = {
             "id": new_id,
@@ -1304,22 +1303,22 @@ async def obsidian_canvas_edge(
             path, json.dumps(canvas, ensure_ascii=False),
             expected_rev=note["rev"],
         )
-        return f"Added edge '{new_id}' ({from_node} -> {to_node}) to '{path}'."
+        return f"Added edge '{escape_path(new_id)}' ({escape_path(from_node)} -> {escape_path(to_node)}) to '{escape_path(path)}'."
 
     elif action == "remove":
         if not edge_id:
             return "edge_id required for remove action."
         kept_edges = [e for e in canvas["edges"] if _entry_id(e) != edge_id]
         if len(kept_edges) == len(canvas["edges"]):
-            return f"Edge '{edge_id}' not found in '{path}'."
+            return f"Edge '{escape_path(edge_id)}' not found in '{escape_path(path)}'."
         canvas["edges"] = kept_edges
         await _backend().write_note(
             path, json.dumps(canvas, ensure_ascii=False),
             expected_rev=note["rev"],
         )
-        return f"Removed edge '{edge_id}' from '{path}'."
+        return f"Removed edge '{escape_path(edge_id)}' from '{escape_path(path)}'."
 
-    return f"Unknown action: {action}. Use: add, remove"
+    return f"Unknown action: {escape_path(action)}. Use: add, remove"
 
 
 # 18. obsidian-vault-stats
@@ -1357,10 +1356,7 @@ async def obsidian_vault_stats() -> str:
             )
     if "tweak_assessment" in info:
         assessment = info["tweak_assessment"]
-        local_state["tweak_assessment"] = sanitize_diagnostic_fields({
-            "status": assessment["status"],
-            "differing_keys": assessment["differing_keys"],
-        })
+        local_state["tweak_assessment"] = assessment_fields(assessment)
     return json.dumps({
         **local_state,
         "total_notes": len(notes), "by_extension": by_ext,
@@ -1388,7 +1384,7 @@ async def obsidian_create_from_template(
     """
     content = await _legacy_content(template_path)
     if content is None:
-        return f"Template '{template_path}' not found."
+        return f"Template '{escape_path(template_path)}' not found."
     if variables:
         try:
             replacements = json.loads(variables)
@@ -1405,7 +1401,7 @@ async def obsidian_create_from_template(
             if match[1] in replacements else match[0], content,
         )
     await _backend().write_note(new_path, content, create=True)
-    return f"Created '{new_path}' from template '{template_path}'."
+    return f"Created '{escape_path(new_path)}' from template '{escape_path(template_path)}'."
 
 
 # 20. obsidian-list-templates
@@ -1423,7 +1419,7 @@ async def obsidian_list_templates(folder: str = "templates") -> str:
     """
     notes = await _scan_notes(folder=folder)
     if not notes:
-        return f"No templates found in '{folder}/'."
+        return f"No templates found in '{escape_path(folder)}/'."
     return json.dumps(
         [{"path": n["path"], "size": n["size"]} for n in notes],
         ensure_ascii=False, indent=2,

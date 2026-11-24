@@ -620,7 +620,7 @@ async def test_vault_stats_local_state(tmp_path, monkeypatch, threshold, size, w
         result = json.loads(await server.obsidian_vault_stats())
         local = result["local_state"]
         assert local["bytes"] == size
-        assert local["path"] == str(tmp_path / "state")
+        assert local["path"] == "<value hidden>"
         assert local["warn_threshold_mb"] == threshold
         assert local["warning"] is warning
         assert "MiB" in local["human_readable_size"]

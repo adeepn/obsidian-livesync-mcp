@@ -220,7 +220,7 @@ class Boto3ObjectStorage:
                         "UnsupportedHeader", "NotImplementedException",
                         "XNotImplemented", "501"} or status == 501:
                 if not self._conditional_warning_logged:
-                    logger.warning("conditional journal publication unsupported; using B-10 fallback")
+                    logger.warning('conditional journal publication unsupported; using B-10 fallback; cause: %s', type(exc).__name__)
                     self._conditional_warning_logged = True
                 return "unsupported"
             raise self._put_failure(key, exc) from None
@@ -282,12 +282,9 @@ class Boto3ObjectStorage:
 
     def _unavailable(self, operation: str, key: str, exc: Exception) -> StorageUnavailable:
         """Report safe context without exception text or traceback details."""
-        logger.warning(
-            "object storage %s failed for key %r: %s",
-            operation,
-            key,
-            type(exc).__name__,
-        )
+        logger.warning('object storage %s failed; cause: %s',
+            operation if operation in {'GET', 'PUT', 'HEAD', 'LIST'} else '<value hidden>',
+            type(exc).__name__)
         return StorageUnavailable(
             f"object storage {operation} failed for key {key!r}"
         )

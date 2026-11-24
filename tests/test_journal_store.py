@@ -306,8 +306,9 @@ class TestApplyJournal:
         files = [p for p in (store.state_dir / "chunks").rglob("*") if p.is_file()]
         assert files == []
         skipped = {rec.message for rec in caplog.records}
-        assert any("f:notachunk" in message for message in skipped)
-        assert any("h:aa../../../escaped" in message for message in skipped)
+        assert any("invalid journal chunk identifier" in message for message in skipped)
+        assert "f:notachunk" not in caplog.text
+        assert "h:aa../../../escaped" not in caplog.text
 
     def test_traversal_chunk_write_never_escapes_state_dir(self, tmp_path):
         state = tmp_path / "state"

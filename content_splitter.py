@@ -9,7 +9,7 @@ See docs/superpowers/specs/2026-11-23-settings-parity.md sections а/б.
 """
 from __future__ import annotations
 
-from diagnostic_hygiene import invalid_setting
+from diagnostic_hygiene import invalid_setting, SettingIssue
 
 import base64
 import hashlib
@@ -246,11 +246,13 @@ class ContentSplitter:
         if settings.get('encrypt'):
             raise ValueError('encrypted chunk IDs are unsupported')
         unsupported = []
+        setting_issues = []
         self.hash_alg = settings.get('hashAlg', 'xxhash64')
         if self.hash_alg is None:
             self.hash_alg = 'xxhash32'
         if self.hash_alg not in ('xxhash64', 'xxhash32', 'mixed-purejs', 'sha1', ''):
             unsupported.append(invalid_setting('hashAlg', self.hash_alg))
+            setting_issues.append(SettingIssue.from_value('hashAlg', self.hash_alg))
         self.version = settings.get('chunkSplitterVersion', '')
         if self.version == 'v2-segmenter':
             self.version = 'v2'
@@ -258,23 +260,31 @@ class ContentSplitter:
             self.version = 'v1'
         if self.version not in ('v1', 'v2', 'v2-segmenter', 'v3-rabin-karp'):
             unsupported.append(invalid_setting('chunkSplitterVersion', self.version))
+            setting_issues.append(SettingIssue.from_value('chunkSplitterVersion', self.version))
         # configuredIdKey runs even without encryption (idDerivation.ts:53-67).
         version = settings.get('idDerivationVersion', 0)
         key = settings.get('idDerivationKey', '')
         if type(version) is not int or version not in (0, 1):
             unsupported.append(invalid_setting('idDerivationVersion', version))
+            setting_issues.append(SettingIssue.from_value('idDerivationVersion', version))
         if (version == 0 and key != '') or (version == 1 and (
             not isinstance(key, str) or re.fullmatch('[0-9a-f]{64}', key) is None
         )):
             # Never expose the configured key in diagnostics or tool errors.
             unsupported.append(invalid_setting('idDerivationVersion', version))
+            setting_issues.append(SettingIssue.from_value('idDerivationVersion', version))
             unsupported.append('idDerivationKey=<invalid configuration>')
+            setting_issues.append(SettingIssue('idDerivationKey', 'configuration'))
         if unsupported:
-            raise UnsupportedWriterMode(
+            error = UnsupportedWriterMode(
                 'vault uses ' + ', '.join(unsupported) +
                 '; peer writes are not implemented for this mode yet — '
                 'reads, search and replay work'
             )
+            error.setting_keys = tuple(key for key in ('hashAlg', 'chunkSplitterVersion', 'idDerivationVersion', 'idDerivationKey')
+                                       if any(item.startswith(key + '=') for item in unsupported))
+            error.setting_issues = tuple(setting_issues)
+            raise error
 
     @staticmethod
     def _number(settings: dict, key: str, default: int, *, allow_negative=False) -> float:
@@ -283,9 +293,13 @@ class ContentSplitter:
             valid = (not isinstance(value, bool) and isinstance(value, (int, float))
                      and math.isfinite(value) and (value >= 0 or allow_negative))
         except (OverflowError, ValueError) as exc:
-            raise ValueError(f'invalid {key}') from exc
+            error = ValueError(f'invalid {key}')
+            error.setting_keys = (key,)
+            raise error from exc
         if not valid:
-            raise ValueError(f'invalid {key}')
+            error = ValueError(f'invalid {key}')
+            error.setting_keys = (key,)
+            raise error
         return value
 
     def chunk_id_for_piece(self, piece: bytes | str) -> str:

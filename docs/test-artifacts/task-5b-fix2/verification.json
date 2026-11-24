@@ -1,0 +1,26 @@
+{
+  "status": "passed",
+  "baseline": {
+    "passed": 7584,
+    "skipped": 7,
+    "subtests": 3
+  },
+  "final": {
+    "passed": 8526,
+    "skipped": 7,
+    "subtests": 3,
+    "seconds": 93.81,
+    "exit_code": 0
+  },
+  "new_tests": 942,
+  "command": "./venv/bin/python -m pytest -q --tb=short",
+  "corpus_payloads": 102,
+  "independent_review": "NO_NEW_FINDINGS; 978 targeted tests passed",
+  "redactor_max_ms_by_size": {
+    "1024": 0.000625,
+    "100000": 0.000458,
+    "1000000": 0.000375
+  },
+  "part_b": "protected function bodies and existing differential fixtures unchanged",
+  "notes": "No new oracle or substituted API; no production/network/hardware operations."
+}

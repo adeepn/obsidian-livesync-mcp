@@ -238,7 +238,7 @@ class TestEpochAndWipe:
         await backend.startup_check()
         info = await backend.backend_info()
         assert info["files_processed"] == 3
-        assert info["epoch"] == "2:salt-b"
+        assert info["epoch"] == __import__("diagnostic_hygiene").fingerprint("2:salt-b")
 
         storage.get_calls.clear()
         storage.list_calls.clear()
@@ -270,7 +270,7 @@ class TestEpochAndWipe:
         assert JOURNAL_3 in storage.exists_calls
         info = await backend.backend_info()
         assert info["files_processed"] == 0
-        assert info["epoch"] == "2:salt-a"
+        assert info["epoch"] == __import__("diagnostic_hygiene").fingerprint("2:salt-a")
         await backend.close()
 
     async def test_surviving_last_sent_file_no_wipe(self, tmp_path):
@@ -530,7 +530,7 @@ class TestLifecycle:
         await backend.refresh()
         info = await backend.backend_info()
         assert info["path_identity"] == "legacy"
-        assert info["epoch"] == "2:salt-a"
+        assert info["epoch"] == __import__("diagnostic_hygiene").fingerprint("2:salt-a")
         assert info["files_processed"] == 3
         datetime.fromisoformat(info["last_refresh"])  # ISO-8601 timestamp
         await backend.close()
@@ -995,7 +995,8 @@ class TestIterateTexts:
         assert results[BROKEN_PATH] is None
         # The rest of the vault still scanned to completion.
         assert len(results) == len(MD_PATHS)
-        assert any(BROKEN_PATH in record.message for record in caplog.records)
+        assert any("scan read failed" in record.message for record in caplog.records)
+        assert BROKEN_PATH not in caplog.text
 
     async def test_binary_png_never_surfaces_in_md_scan(self, tmp_path):
         backend, _ = await read_backend(tmp_path)
@@ -1059,9 +1060,8 @@ class TestIterateTexts:
             results = await self.collect(backend)
         assert list(results) == MD_PATHS  # iteration ran to completion
         assert results[README_PATH] is None
-        assert any(
-            README_PATH in record.message for record in caplog.records
-        )
+        assert any('scan read failed' in record.message for record in caplog.records)
+        assert README_PATH not in caplog.text
 
     async def test_storage_unavailability_still_aborts_iteration(
         self, tmp_path, monkeypatch
@@ -1730,7 +1730,7 @@ async def test_backend_info_state_size(tmp_path):
     await backend.startup_check()
     try:
         info = await backend.backend_info()
-        assert info["state_dir_path"] == str(tmp_path / "state")
+        assert info["state_dir_path"] == "<value hidden>"
         assert info["state_dir_bytes"] > 0
         assert info["state_dir_bytes"] == backend._store.state_size_bytes()
     finally:
@@ -1757,7 +1757,7 @@ class TestMetadataCanary:
         }))
         await backend.startup_check()
         await backend.refresh(force=True)
-        expected = ["unknown metadata fields in recent journals: foo, zeta"]
+        expected = ["unknown metadata fields in recent journals: 2"]
         assert (await backend.backend_info()).get("protocol_notes") == expected
         await backend.refresh(force=True)
         assert (await backend.backend_info()).get("protocol_notes") == expected

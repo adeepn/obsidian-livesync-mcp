@@ -1,0 +1,8 @@
+{
+  "task": "5b fix round 2",
+  "branch": "settings-parity",
+  "phase": "verified; committing",
+  "part_b": "unchanged",
+  "suite": "final-suite.log",
+  "verification": "verification.json"
+}

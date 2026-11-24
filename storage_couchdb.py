@@ -35,7 +35,8 @@ without reassembling content, so binary notes travel chunk-wise
 
 from __future__ import annotations
 
-from diagnostic_hygiene import sanitize_diagnostic
+from diagnostic_hygiene import (writer_diagnostic, diagnostic, settings_exception_diagnostic, PublicDiagnostic, DiagnosticPath, setting_key,
+    DiagnosticCode, assessment_fields, setting_value, fingerprint, unsafe_debug)
 
 from collections import OrderedDict
 import asyncio
@@ -207,29 +208,21 @@ class CouchDBBackend(DeviceSelection):
                 method, path, params=params, json=json_body
             )
         except httpx.HTTPError as exc:
-            logger.warning("CouchDB %s %s failed: %r", method, path, exc)
+            logger.warning('CouchDB <omitted> <omitted> failed: <omitted>; cause: %s', type(exc).__name__)
             if method in {"PUT", "DELETE"} and not isinstance(
                 exc, (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout)
             ):
-                raise OutcomeUnknown() from None
-            raise StorageUnavailable("CouchDB unavailable") from None
+                raise OutcomeUnknown(cause=exc) from None
+            raise StorageUnavailable(DiagnosticCode.COUCHDB_UNAVAILABLE, cause=exc) from None
 
         code = response.status_code
         if code == 404:
             return response  # callers decide: missing doc vs missing db
         if code >= 400:
-            # Log the status and the body's error code only — never the
-            # raw response body (log hygiene, audit C7's sibling).
-            try:
-                body = response.json()
-            except ValueError:
-                body = None
-            error_code = (
-                body.get("error") if isinstance(body, dict) else None
-            )
-            logger.warning(
-                "CouchDB %s %s -> %s %s", method, path, code, error_code
-            )
+            # Payloads are excluded by default, including exception tracebacks.
+            unsafe_debug(logger, response.text)
+            logger.warning("CouchDB %s status: %s",
+                method if method in {"GET", "PUT", "DELETE", "POST", "HEAD"} else "<value hidden>", code)
             if code in (401, 403):
                 raise StorageUnavailable("CouchDB authorization error")
             if code == 409:
@@ -275,7 +268,7 @@ class CouchDBBackend(DeviceSelection):
         try:
             validate_document_identity(doc, self._path_identity)
         except ValueError as exc:
-            raise StorageError(str(exc)) from exc
+            raise StorageError(DiagnosticCode.METADATA_PATH_IDENTITY_MISMATCH_OR_COLLISION_REBUILD_FETCH_REQUIRED, cause=exc) from exc
 
     async def _post_all_docs(
         self, keys: list[str], *, include_docs: bool
@@ -362,7 +355,7 @@ class CouchDBBackend(DeviceSelection):
                     try:
                         meta = self._meta_from_doc(doc)
                     except StorageError:
-                        logger.exception("skipping note %s: invalid metadata", path)
+                        logger.error('skipping note <omitted>: invalid metadata')
                         continue
                     compact = {key: doc[key] for key in
                                ("_id", "_rev", "path", "type", "ctime", "mtime")
@@ -400,14 +393,7 @@ class CouchDBBackend(DeviceSelection):
         if version_doc is not None:
             # Informational only: any value is accepted (audit B5
             # restricts behavior, not versions).
-            logger.info(
-                "vault advertises an obsydian_livesync_version document: %r",
-                {
-                    key: value
-                    for key, value in version_doc.items()
-                    if not key.startswith("_")
-                },
-            )
+            logger.info('vault advertises an obsydian_livesync_version document: <omitted>')
         milestone = await self._request(
             "GET", self._doc_path(_MILESTONE_DOC_ID)
         )
@@ -429,7 +415,7 @@ class CouchDBBackend(DeviceSelection):
                 auto_accept_compatible_tweak=getattr(self, 'auto_accept_compatible_tweak', True))
             self._tweak_assessment = resolved.summary()
             for side in resolved.winners:
-                logger.info("tweak alignment: %s; keys: %s", side, ', '.join(resolved.differing_keys))
+                logger.info("tweak alignment: %s; keys: %s", side if side in ("CURRENT", "REMOTE") else "<value hidden>", ", ".join(setting_key(k) for k in resolved.differing_keys))
             body = dict(resolved.settings)
             self._path_identity = resolve_path_identity(body)
             self.sync_max_size_mb = (resolve_sync_max_size(body)
@@ -437,10 +423,10 @@ class CouchDBBackend(DeviceSelection):
             self._splitter = resolve_content_splitter(body)
         except UnsupportedWriterSettings as exc:
             self._splitter = None
-            self._writer_unsupported_reason = str(exc)
+            self._writer_unsupported_reason = PublicDiagnostic(DiagnosticCode.WRITER, issues=tuple(getattr(exc, "setting_issues", ())))
         except UnsupportedVaultSettings as exc:
             self._tweak_assessment = getattr(exc, "tweak_assessment", self._tweak_assessment)
-            raise UnsupportedVault(str(exc)) from exc
+            raise UnsupportedVault(settings_exception_diagnostic(exc)) from exc
 
         await self.refresh_selection_files()
 
@@ -464,14 +450,14 @@ class CouchDBBackend(DeviceSelection):
         selection = await self.selection_diagnostics()
         return {
             **selection,
-            "tweak_assessment": dict(self._tweak_assessment),
+            "tweak_assessment": assessment_fields(self._tweak_assessment),
             "writer_supported": self._writer_unsupported_reason is None and selection["selection_writer_supported"],
-            "writer_unsupported_reason": (sanitize_diagnostic(reason) if (reason := self._writer_unsupported_reason or selection["selection_unsupported_reason"]) else None),
+            "writer_unsupported_reason": writer_diagnostic(self._writer_unsupported_reason or selection["selection_unsupported_reason"]),
             "backend": "couchdb",
-            "path_identity": self._path_identity,
-            "database": self._database,
-            "doc_count": info.get("doc_count"),
-            "update_seq": info.get("update_seq"),
+            "path_identity": setting_value(self._path_identity),
+            "database": "<value hidden>",
+            "doc_count": info["doc_count"] if type(info.get("doc_count")) is int and info["doc_count"] >= 0 else "<value hidden>",
+            "update_seq": fingerprint(str(info["update_seq"])) if type(info.get("update_seq")) in (str, int) else None,
         }
 
     async def close(self) -> None:
@@ -526,21 +512,21 @@ class CouchDBBackend(DeviceSelection):
         try:
             validate_vault_path(path)
         except ForbiddenPathError as exc:
-            logger.info("read refused for vault path %r: %s", path, exc)
-            raise NoteNotFound(f"note not found: {path}") from None
+            logger.info('read refused for vault path <omitted>: <omitted>; cause: %s', type(exc).__name__)
+            raise NoteNotFound(PublicDiagnostic(DiagnosticCode.NOT_FOUND, paths=(DiagnosticPath(path, remote=False),))) from None
 
     async def get_meta(self, path: str) -> NoteMeta:
         self._validate_read_path(path)
         doc = await self._get_doc(self._path2id(path))
         if doc is None or not is_note_document(doc):
-            raise NoteNotFound(f"note not found: {path}")
+            raise NoteNotFound(PublicDiagnostic(DiagnosticCode.NOT_FOUND, paths=(DiagnosticPath(path, remote=False),)))
         return self._meta_from_doc(doc)
 
     async def read_note(self, path: str) -> NoteContent | None:
         try:
             validate_vault_path(path)
         except ForbiddenPathError as exc:
-            logger.info("read refused for vault path %r: %s", path, exc)
+            logger.info('read refused for vault path <omitted>: <omitted>; cause: %s', type(exc).__name__)
             return None
         doc = await self._get_doc(self._path2id(path))
         if doc is None or not is_note_document(doc):
@@ -577,7 +563,7 @@ class CouchDBBackend(DeviceSelection):
                     [doc["_id"] for doc in window], include_docs=True
                 )
             except Exception:
-                logger.exception("unable to fetch scan metadata window")
+                logger.error('unable to fetch scan metadata window')
                 for doc in window:
                     yield self._meta_from_doc(doc), None
                 continue
@@ -611,7 +597,7 @@ class CouchDBBackend(DeviceSelection):
                         if isinstance(chunk, dict) and isinstance(chunk.get("_id"), str):
                             chunks[chunk["_id"]] = chunk
                 except Exception:
-                    logger.exception("unable to fetch scan chunk batch")
+                    logger.error('unable to fetch scan chunk batch')
             for indexed in window:
                 meta = self._meta_from_doc(indexed)
                 try:
@@ -626,7 +612,7 @@ class CouchDBBackend(DeviceSelection):
                                if doc is not None else None)
                     yield (content["meta"], content["text"]) if content else (meta, None)
                 except Exception:
-                    logger.exception("skipping note %s", meta["path"])
+                    logger.error('skipping note <omitted>')
                     yield meta, None
             # No body-bearing window survives into the next HTTP fetch.
             del docs, rows, chunks, chunk_rows, doc, content
@@ -692,7 +678,7 @@ class CouchDBBackend(DeviceSelection):
         try:
             data = legacy_body(doc)
         except ValueError:
-            raise StorageError(f"note {path!r} is corrupt: missing legacy data field") from None
+            raise StorageError(PublicDiagnostic(DiagnosticCode.IS_CORRUPT_MISSING_LEGACY_DATA_FIELD, paths=(DiagnosticPath(path, remote=True),))) from None
         if data is not None:
             return NoteContent(
                 meta=meta, text=data, data=None, is_text=True,
@@ -708,9 +694,7 @@ class CouchDBBackend(DeviceSelection):
         if not isinstance(children, list) or not all(
             isinstance(child, str) for child in children
         ):
-            raise StorageError(
-                f"note {path!r} is corrupt: invalid children field"
-            )
+            raise StorageError(PublicDiagnostic(DiagnosticCode.IS_CORRUPT_INVALID_CHILDREN_FIELD, paths=(DiagnosticPath(path, remote=True),)))
         if not children:
             if doc_type == "plain":
                 return NoteContent(
@@ -733,10 +717,8 @@ class CouchDBBackend(DeviceSelection):
         try:
             body = assemble_binary(datas)
         except ValueError as exc:
-            logger.warning("note %s: %s", path, exc)
-            raise StorageError(
-                f"note {path!r} is corrupt: invalid chunk encoding"
-            ) from None
+            logger.warning('note <omitted>: <omitted>; cause: %s', type(exc).__name__)
+            raise StorageError(PublicDiagnostic(DiagnosticCode.IS_CORRUPT_INVALID_CHUNK_ENCODING, paths=(DiagnosticPath(path, remote=True),))) from None
         return NoteContent(
             meta=meta, text=None, data=body, is_text=False,
             rev=meta["rev"],
@@ -754,9 +736,9 @@ class CouchDBBackend(DeviceSelection):
         try:
             inline = extract_inline_chunks({"children": children, "eden": eden})
         except EncryptedInlineChunk:
-            raise UnsupportedVault(f"note {path!r} uses end-to-end encryption") from None
+            raise UnsupportedVault(PublicDiagnostic(DiagnosticCode.USES_END_TO_END_ENCRYPTION, paths=(DiagnosticPath(path, remote=True),))) from None
         except ValueError:
-            raise StorageError(f"note {path!r} is corrupt: invalid eden field") from None
+            raise StorageError(PublicDiagnostic(DiagnosticCode.IS_CORRUPT_INVALID_EDEN_FIELD, paths=(DiagnosticPath(path, remote=True),))) from None
         docs_by_id = {key: {"data": data} for key, data in inline.items()}
         missing = [child for child in children if child not in docs_by_id]
         rows = (await self._post_all_docs(missing, include_docs=True)
@@ -776,20 +758,11 @@ class CouchDBBackend(DeviceSelection):
                 or chunk.get("deleted")
                 or not isinstance(chunk.get("data"), str)
             ):
-                logger.warning(
-                    "note %s: chunk %r is missing or corrupt", path, child_id
-                )
-                raise StorageError(
-                    f"note {path!r} is corrupt: a content chunk is missing"
-                )
+                logger.warning('note <omitted>: chunk <omitted> is missing or corrupt')
+                raise StorageError(PublicDiagnostic(DiagnosticCode.IS_CORRUPT_A_CONTENT_CHUNK_IS_MISSING, paths=(DiagnosticPath(path, remote=True),)))
             if chunk.get("e_"):
-                logger.warning(
-                    "note %s: chunk %r is E2EE-encrypted", path, child_id
-                )
-                raise UnsupportedVault(
-                    f"note {path!r} uses end-to-end encryption, "
-                    "which this server does not support"
-                )
+                logger.warning('note <omitted>: chunk <omitted> is E2EE-encrypted')
+                raise UnsupportedVault(PublicDiagnostic(DiagnosticCode.USES_END_TO_END_ENCRYPTION_WHICH_THIS_SERVER_DOES_NOT_SUPPORT, paths=(DiagnosticPath(path, remote=True),)))
             datas.append(chunk["data"])
         return datas
 
@@ -800,15 +773,8 @@ class CouchDBBackend(DeviceSelection):
         """Refuse writes to a document with sibling revisions (C3)."""
         conflicts = doc.get("_conflicts")
         if conflicts:
-            logger.warning(
-                "note %s has %d unresolved conflicting revisions",
-                path,
-                len(conflicts) if isinstance(conflicts, list) else 1,
-            )
-            raise UnresolvedConflicts(
-                f"note {path!r} has unresolved conflicts; resolve them "
-                "in Obsidian (or another client) before writing"
-            )
+            logger.warning('note <omitted> has <omitted> unresolved conflicting revisions')
+            raise UnresolvedConflicts(PublicDiagnostic(DiagnosticCode.HAS_UNRESOLVED_CONFLICTS_RESOLVE_THEM_IN_OBSIDIAN_OR_ANOTHER_CLIENT_BEFORE_WRITING, paths=(DiagnosticPath(path, remote=False),)))
 
     @staticmethod
     def _check_expected_rev(
@@ -824,11 +790,7 @@ class CouchDBBackend(DeviceSelection):
         if expected_rev is None:
             return
         if doc is None or doc.get("_rev") != expected_rev:
-            logger.info(
-                "note %s: expected revision no longer current; "
-                "refusing the write",
-                path,
-            )
+            logger.info('note <omitted>: expected revision no longer current; refusing the write')
             raise ConcurrentModification(
                 "note changed concurrently; re-read and retry"
             )
@@ -848,14 +810,10 @@ class CouchDBBackend(DeviceSelection):
         )
         if response.status_code == 404:
             # A present database never 404s a document PUT.
-            logger.warning("CouchDB PUT %s -> 404 (database gone)", doc_id)
+            logger.warning('CouchDB PUT <omitted> -> 404 (database gone)')
             raise StorageUnavailable("CouchDB database not found")
         if response.status_code != 201:
-            logger.warning(
-                "CouchDB PUT %s -> %s (not 201: not confirmed durable)",
-                doc_id,
-                response.status_code,
-            )
+            logger.warning('CouchDB PUT <omitted> -> <omitted> (not 201: not confirmed durable)')
             raise OutcomeUnknown()
         try:
             result = response.json()
@@ -867,9 +825,7 @@ class CouchDBBackend(DeviceSelection):
             or not isinstance(result.get("rev"), str)
             or not result["rev"]
         ):
-            logger.warning(
-                "CouchDB PUT %s -> unexpected acknowledgement body", doc_id
-            )
+            logger.warning('CouchDB PUT <omitted> -> unexpected acknowledgement body')
             raise OutcomeUnknown()
         self._text_verdicts.pop(doc_id, None)
         return result["rev"]
@@ -898,16 +854,8 @@ class CouchDBBackend(DeviceSelection):
                 and existing.get("data") == data
             ):
                 return chunk_id  # content-addressed reuse, no PUT
-            logger.warning(
-                "note %s: chunk %r under the computed id holds different "
-                "data; refusing to reuse or overwrite it",
-                path,
-                chunk_id,
-            )
-            raise StorageError(
-                f"note {path!r} cannot be written: an existing shared "
-                "content chunk is encrypted or holds different data"
-            )
+            logger.warning('note <omitted>: chunk <omitted> under the computed id holds different data; refusing to reuse or overwrite it')
+            raise StorageError(PublicDiagnostic(DiagnosticCode.CANNOT_BE_WRITTEN_AN_EXISTING_SHARED_CONTENT_CHUNK_IS_ENCRYPTED_OR_HOLDS_DIFFERENT_DATA, paths=(DiagnosticPath(path, remote=False),)))
         try:
             await self._put_doc(chunk_id, {"data": data, "type": "leaf"})
         except OutcomeUnknown:
@@ -926,16 +874,14 @@ class CouchDBBackend(DeviceSelection):
                 and winner.get("type") == "leaf"
                 and winner.get("data") == data
             ):
-                raise ConcurrentModification(
-                    f"note {path!r} cannot be written: content chunk is encrypted or changed concurrently"
-                ) from None
+                raise ConcurrentModification(PublicDiagnostic(DiagnosticCode.CANNOT_BE_WRITTEN_CONTENT_CHUNK_IS_ENCRYPTED_OR_CHANGED_CONCURRENTLY, paths=(DiagnosticPath(path, remote=False),))) from None
         return chunk_id
 
     async def _get_note_doc(self, path: str) -> dict:
         """Live metadata document for ``path`` (conflicts refused)."""
         doc = await self._get_doc(self._path2id(path), conflicts=True)
         if doc is None or not is_note_document(doc):
-            raise NoteNotFound(f"note not found: {path}")
+            raise NoteNotFound(PublicDiagnostic(DiagnosticCode.NOT_FOUND, paths=(DiagnosticPath(path, remote=False),)))
         self._refuse_unresolved_conflicts(doc, path)
         return doc
 
@@ -951,7 +897,7 @@ class CouchDBBackend(DeviceSelection):
         if target is not None:
             self._refuse_unresolved_conflicts(target, new_path)
             if not target.get("deleted") and not overwrite:
-                raise NoteExists(f"note already exists: {new_path}")
+                raise NoteExists(PublicDiagnostic(DiagnosticCode.ALREADY_EXISTS, paths=(DiagnosticPath(new_path, remote=False),)))
         return target
 
     def _moved_body(self, doc: dict, new_path: str, mtime_ms: int) -> dict:
@@ -977,7 +923,7 @@ class CouchDBBackend(DeviceSelection):
 
     def check_writer_support(self) -> None:
         if self._writer_unsupported_reason is not None:
-            raise WriterUnsupported(self._writer_unsupported_reason)
+            raise WriterUnsupported(self._writer_unsupported_reason if isinstance(self._writer_unsupported_reason, PublicDiagnostic) else None)
 
     async def write_note(
         self,
@@ -1039,9 +985,9 @@ class CouchDBBackend(DeviceSelection):
         self._check_expected_rev(doc, path, expected_rev)
         live = doc is not None and not doc.get("deleted")
         if live and create and not overwrite:
-            raise NoteExists(f"note already exists: {path}")
+            raise NoteExists(PublicDiagnostic(DiagnosticCode.ALREADY_EXISTS, paths=(DiagnosticPath(path, remote=False),)))
         if not live and not create:
-            raise NoteNotFound(f"note not found: {path}")
+            raise NoteNotFound(PublicDiagnostic(DiagnosticCode.NOT_FOUND, paths=(DiagnosticPath(path, remote=False),)))
 
         pieces = [piece for piece in self._splitter.split(content, path=canonical_path(path)) if piece]
         # P-10 / EntryManagerImpls.ts:280: retain ingested Blob.size even
@@ -1144,19 +1090,16 @@ class CouchDBBackend(DeviceSelection):
         try:
             await self._soft_delete(doc, path, _now_ms())
         except OutcomeUnknown:
-            raise OutcomeUnknown(
-                f"move {path} -> {new_path}: destination published; "
-                f"source removal unknown — re-read both {path} and {new_path}"
-            ) from None
+            raise OutcomeUnknown(source_removal=True, paths=(path, new_path)) from None
         except Exception as exc:
-            logger.exception("rename source retirement failed for %s", path)
+            logger.warning('rename source retirement failed for <omitted>; cause: %s', type(exc).__name__)
             source_state = "unknown"
             try:
                 source = await self._get_doc(self._path2id(path))
                 if source is not None and is_note_document(source):
                     source_state = "live"
             except Exception:
-                logger.exception("unable to confirm rename source state for %s", path)
+                logger.warning('unable to confirm rename source state for <omitted>; cause: %s', type(exc).__name__)
             raise RenamePartialError(path, new_path, source_state=source_state) from exc
         return self._meta_from_doc(body)
 

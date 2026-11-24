@@ -1,0 +1,10 @@
+{
+  "part_b_bodies_unchanged": true,
+  "functions": [
+    "assess_tweak_compatibility",
+    "resolve_tweak_startup",
+    "select_newer_tweak_side"
+  ],
+  "existing_fixture_diff": [],
+  "oracle": "No new oracle or replacement API; accepted differential fixtures run unchanged in full pytest."
+}

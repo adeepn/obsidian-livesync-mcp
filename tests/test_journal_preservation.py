@@ -210,8 +210,9 @@ async def test_identity_change_quarantines_complete_openable_old_state(tmp_path,
         assert not (state / 'sentinel').exists()
         assert backend._store.path_identity == 'nfc'
         assert backend._store.note_ids() == []
-        assert str(archived) in caplog.text
-        assert 'restore' in caplog.text and 'legacy' in caplog.text
+        assert str(archived) not in caplog.text
+        assert "quarantined" in caplog.text
+        assert 'restore' in caplog.text
         old = JournalStore(archived, 'legacy')
         try:
             assert snapshot(old)['chunks'] == chunks

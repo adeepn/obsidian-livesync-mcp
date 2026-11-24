@@ -1,4 +1,5 @@
 """Fail-closed boundary around the pinned ECMAScript selection engine."""
+from diagnostic_hygiene import unsafe_debug, PublicDiagnostic, DiagnosticCode
 import json
 import logging
 import queue
@@ -12,9 +13,11 @@ TIMEOUT = 5
 
 
 class EngineFailure(Exception):
-    def __init__(self, cause):
+    def __init__(self, cause, *, status=None):
         self.cause = cause
-        super().__init__(f'Device selection engine: {cause}; install Node.js 22+ in the service PATH or disable selection filters')
+        self.diagnostic = PublicDiagnostic(DiagnosticCode.SELECTION_ENGINE,
+            selection_cause=cause, status=status)
+        super().__init__(self.diagnostic.format())
 
 
 def validate_response(value):
@@ -32,7 +35,8 @@ def validate_response(value):
         raise EngineFailure('malformed-output')
     # Never reflect runner exception text into a client-facing error.
     if not value['writer_supported']:
-        logger.warning('Selection runner rejected pattern: %s', value['reason'])
+        logger.warning('Selection runner rejected pattern: <omitted>')
+        unsafe_debug(logger, value['reason'])
         value = {**value, 'reason': 'Invalid device selection pattern'}
     return TargetVerdict(**value)
 
@@ -43,14 +47,14 @@ def run(args, **kwargs):
     except FileNotFoundError as exc:
         raise EngineFailure('node-missing') from exc
     except subprocess.TimeoutExpired as exc:
-        logger.warning('Selection engine timeout', exc_info=True)
+        logger.warning('Selection engine timeout; cause: %s', type(exc).__name__)
         raise EngineFailure('timeout') from exc
     except OSError as exc:
-        logger.warning('Selection engine launch failed', exc_info=True)
+        logger.warning('Selection engine launch failed; cause: %s', type(exc).__name__)
         raise EngineFailure('node-missing') from exc
     if result.returncode:
-        logger.warning('Selection engine exit %s', result.returncode)
-        raise EngineFailure(f'nonzero-exit (status {result.returncode})')
+        logger.warning('Selection engine exit <omitted>')
+        raise EngineFailure('nonzero-exit', status=result.returncode)
     return result.stdout
 
 
@@ -157,13 +161,13 @@ class SelectionWorker:
             raise EngineFailure('timeout') from exc
         except (BrokenPipeError, OSError) as exc:
             status = self.process.poll()
-            raise EngineFailure(f'nonzero-exit (status {status})') from exc
+            raise EngineFailure('nonzero-exit', status=status) from exc
         if not line:
             try:
                 status = self.process.wait(timeout=1)
             except subprocess.TimeoutExpired as exc:
                 raise EngineFailure('timeout') from exc
-            raise EngineFailure(f'nonzero-exit (status {status})')
+            raise EngineFailure('nonzero-exit', status=status)
         try:
             response = json.loads(line)
         except (ValueError, UnicodeError) as exc:
@@ -183,9 +187,7 @@ class SelectionWorker:
                 self.evaluations += 1
                 return validate_response(self._exchange('evaluate', payload))
             except EngineFailure:
-                logger.warning('Selection worker failed; stderr=%s',
-                               b''.join(getattr(self, '_stderr', ())).decode('utf-8', 'replace'),
-                               exc_info=True)
+                logger.warning('Selection worker failed; stderr=<omitted>')
                 self._stop()
                 raise
 

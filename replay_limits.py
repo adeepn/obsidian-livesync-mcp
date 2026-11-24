@@ -24,6 +24,7 @@ class ReplayBudgetExceeded(StorageError, ValueError):
     def __init__(self, budget: str, observed: int | float, limit: int | float,
                  *, decoder_capacity: int | None = None):
         self.budget, self.observed, self.limit = budget, observed, limit
+        self.decoder_capacity = decoder_capacity
         self.variable = 'LIVESYNC_JOURNAL_' + budget.upper()
         if decoder_capacity is not None:
             super().__init__(
@@ -38,6 +39,18 @@ class ReplayBudgetExceeded(StorageError, ValueError):
             f'{budget} budget limit reached: observed {observed}, configured {limit}; '
             f'raise {self.variable}'
         )
+
+    def format(self):
+        from diagnostic_hygiene import setting_key
+        budget = setting_key(getattr(self, 'budget', None))
+        if budget == '<unexpected key>':
+            return 'replay budget exceeded'
+        variable = 'LIVESYNC_JOURNAL_' + budget.upper()
+        text = f'{budget} budget limit reached: observed {self.observed}, configured {self.limit}; raise {variable}'
+        if getattr(self, 'decoder_capacity', None) is not None:
+            text += (f'; decoder capacity {self.decoder_capacity} exhausted; '
+                     'raising the variable alone cannot admit this input; reduce nesting')
+        return text
 
 
 @dataclass(frozen=True)

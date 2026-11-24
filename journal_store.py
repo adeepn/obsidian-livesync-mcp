@@ -37,6 +37,8 @@ of ``state_dir`` so old documents and chunks remain recoverable.
 
 from __future__ import annotations
 
+from diagnostic_hygiene import PublicDiagnostic, DiagnosticPath, DiagnosticCode
+
 import json
 import logging
 import os
@@ -87,13 +89,22 @@ _ENCRYPTED_MESSAGE = (
 )
 
 
-class EncryptedNoteError(ValueError):
-    """The note body requires unsupported end-to-end decryption.
+class NoteDecodeError(ValueError):
+    """Typed corruption context for backend/tool projection."""
 
-    A distinct class (still a :class:`ValueError` for existing callers) so
-    backends can classify E2EE refusals structurally — never by scanning
-    the human-readable message, which embeds the user-controlled note path.
-    """
+    def __init__(self, public):
+        self.diagnostic = public
+        super().__init__(public.format())
+
+
+class EncryptedNoteError(NoteDecodeError):
+    """Structural encryption classification; no exception-text parsing."""
+
+    def __init__(self, public=None, *, path=None):
+        super().__init__(public if isinstance(public, PublicDiagnostic) else
+            PublicDiagnostic(DiagnosticCode.ENCRYPTED_NOTE,
+                paths=(DiagnosticPath(path, remote=True),) if path is not None else ()))
+
 
 _SCHEMA_V1 = """
 CREATE TABLE IF NOT EXISTS docs (
@@ -155,7 +166,7 @@ def _private_directory(path: Path) -> None:
     path.mkdir(mode=0o700, parents=True, exist_ok=True)
     if path.stat().st_mode & 0o077:
         path.chmod(0o700)
-        logger.warning("tightened journal state directory permissions: %s", path)
+        logger.warning('tightened journal state directory permissions: <omitted>')
 
 
 class JournalStore:
@@ -246,13 +257,7 @@ class JournalStore:
             # If the move fails, retain both the source and reservation.
             self.state_dir.rename(destination / "state")
             archived = destination / "state"
-            logger.warning(
-                "journal path identity changed %r -> %r; old state quarantined at %s. "
-                "To restore: stop all peers using this state directory, move the "
-                "current state aside, move %s back to %s and configure identity %r",
-                stored_identity, path_identity, archived, archived,
-                self.state_dir, stored_identity,
-            )
+            logger.warning('journal path identity changed <omitted> -> <omitted>; old state quarantined at <omitted>. To restore: stop all peers using this state directory, move the current state aside, move <omitted> back to <omitted> and configure identity <omitted>')
             self.__init__(self.state_dir, path_identity,
                           text_verdict_cache_entries=text_verdict_cache_entries)
             return
@@ -301,7 +306,7 @@ class JournalStore:
                 try:
                     chunk_file = self._chunk_path(chunk_id)
                 except ValueError:
-                    logger.warning("skipping invalid journal chunk identifier %r", chunk_id)
+                    logger.warning('skipping invalid journal chunk identifier <omitted>')
                     continue
                 if chunk_file.exists():
                     continue
@@ -394,7 +399,7 @@ class JournalStore:
                 return
             except (OSError, sqlite3.Error):
                 if attempt == 2:
-                    logger.warning("completed journal bookkeeping deferred to replay")
+                    logger.warning('completed journal bookkeeping deferred to replay')
 
     def mark_processed(self, name: str) -> None:
         with self._conn:
@@ -486,9 +491,7 @@ class JournalStore:
             self._conn.execute("DELETE FROM processed")
             self._conn.execute("DELETE FROM outbound")
             self._conn.execute("DELETE FROM meta WHERE key = ?", (_META_LAST_SENT_KEY,))
-        logger.warning(
-            "journal store dedupe caches reset; local documents and chunks retained"
-        )
+        logger.warning('journal store dedupe caches reset; local documents and chunks retained')
 
     def _meta_get(self, key: str) -> str | None:
         row = self._conn.execute(
@@ -576,19 +579,17 @@ class JournalStore:
         path = _display_path(winner, doc_id)
 
         if winner.get("e_"):
-            raise EncryptedNoteError(_ENCRYPTED_MESSAGE.format(path=path))
+            raise EncryptedNoteError(PublicDiagnostic(DiagnosticCode.ENCRYPTED_NOTE, paths=(DiagnosticPath(path, remote=True),)))
 
         doc_type = winner.get("type")
         if doc_type == "notes":
             raw = winner.get("data")
             if isinstance(raw, str) and raw.startswith("%"):
-                raise EncryptedNoteError(_ENCRYPTED_MESSAGE.format(path=path))
+                raise EncryptedNoteError(PublicDiagnostic(DiagnosticCode.ENCRYPTED_NOTE, paths=(DiagnosticPath(path, remote=True),)))
             try:
                 text = legacy_body(winner)
             except ValueError:
-                raise ValueError(
-                    f"note {path!r} is corrupt: missing legacy data field"
-                ) from None
+                raise NoteDecodeError(PublicDiagnostic(DiagnosticCode.IS_CORRUPT_MISSING_LEGACY_DATA_FIELD, paths=(DiagnosticPath(path, remote=True),))) from None
             return winner, text, None, True
 
         # Both entry points restrict non-legacy content to plain/newnote.
@@ -598,17 +599,15 @@ class JournalStore:
         if not isinstance(children, list) or not all(
             isinstance(child, str) for child in children
         ):
-            raise ValueError(f"note {path!r} is corrupt: invalid children field")
+            raise NoteDecodeError(PublicDiagnostic(DiagnosticCode.IS_CORRUPT_INVALID_CHILDREN_FIELD, paths=(DiagnosticPath(path, remote=True),)))
         try:
             inline = extract_inline_chunks(winner)
         except EncryptedInlineChunk:
             raise EncryptedNoteError(
-                _ENCRYPTED_MESSAGE.format(path=path)
+                PublicDiagnostic(DiagnosticCode.ENCRYPTED_NOTE, paths=(DiagnosticPath(path, remote=True),))
             ) from None
         except ValueError:
-            raise ValueError(
-                f"note {path!r} is corrupt: invalid eden field"
-            ) from None
+            raise NoteDecodeError(PublicDiagnostic(DiagnosticCode.IS_CORRUPT_INVALID_EDEN_FIELD, paths=(DiagnosticPath(path, remote=True),))) from None
 
         if not children:
             if doc_type == "plain":
@@ -621,9 +620,7 @@ class JournalStore:
         try:
             body = assemble_binary(datas)
         except ValueError:
-            raise ValueError(
-                f"note {path!r} is corrupt: invalid chunk encoding"
-            ) from None
+            raise NoteDecodeError(PublicDiagnostic(DiagnosticCode.IS_CORRUPT_INVALID_CHUNK_ENCODING, paths=(DiagnosticPath(path, remote=True),))) from None
         return winner, None, body, False
 
     def scan_newnote(self, doc: dict, max_bytes: int) -> str | None:
@@ -638,7 +635,7 @@ class JournalStore:
             with self._conn:
                 self._conn.execute('DELETE FROM text_verdicts WHERE doc_id=?', (doc['_id'],))
         if doc.get('e_'):
-            raise EncryptedNoteError(_ENCRYPTED_MESSAGE.format(path=doc['path']))
+            raise EncryptedNoteError(PublicDiagnostic(DiagnosticCode.ENCRYPTED_NOTE, paths=(DiagnosticPath(doc['path'], remote=True),)))
         children = doc.get('children') or []
         if not isinstance(children, list) or not all(isinstance(c, str) for c in children):
             raise ValueError('invalid children field')
@@ -677,9 +674,7 @@ class JournalStore:
             try:
                 chunk_file = self._chunk_path(child)
             except ValueError:
-                raise ValueError(
-                    f"note {path!r} is corrupt: invalid chunk reference"
-                ) from None
+                raise NoteDecodeError(PublicDiagnostic(DiagnosticCode.IS_CORRUPT_INVALID_CHUNK_REFERENCE, paths=(DiagnosticPath(path, remote=True),))) from None
             if child in inline:
                 datas.append(inline[child])
                 continue
@@ -687,23 +682,19 @@ class JournalStore:
                 try:
                     datas.append(chunk_file.read_bytes().decode("utf-8"))
                 except (OSError, UnicodeDecodeError):
-                    raise ValueError(
-                        f"note {path!r} is corrupt: unreadable chunk file"
-                    ) from None
+                    raise NoteDecodeError(PublicDiagnostic(DiagnosticCode.IS_CORRUPT_UNREADABLE_CHUNK_FILE, paths=(DiagnosticPath(path, remote=True),))) from None
                 continue
             chunk_doc = self.winner(child)
             if chunk_doc is not None:
                 if chunk_doc.get("e_"):
                     raise EncryptedNoteError(
-                        _ENCRYPTED_MESSAGE.format(path=path)
+                        PublicDiagnostic(DiagnosticCode.ENCRYPTED_NOTE, paths=(DiagnosticPath(path, remote=True),))
                     )
                 data = chunk_doc.get("data")
                 if not chunk_doc.get("deleted") and isinstance(data, str):
                     datas.append(data)
                     continue
-            raise ValueError(
-                f"note {path!r} is corrupt: a content chunk is missing"
-            )
+            raise NoteDecodeError(PublicDiagnostic(DiagnosticCode.IS_CORRUPT_A_CONTENT_CHUNK_IS_MISSING, paths=(DiagnosticPath(path, remote=True),)))
         return datas
 
     def iterate_notes(self, extension: str = ".md"):

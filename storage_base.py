@@ -9,22 +9,34 @@ format. Exception messages must never leak internal URLs or revisions
 
 from __future__ import annotations
 
+from diagnostic_hygiene import (PublicDiagnostic, DiagnosticPath, diagnostic, path_field, setting_key)
+
 from typing import AsyncIterator, Protocol, TypedDict, runtime_checkable
 
 
 class StorageError(Exception):
-    """Base class for every storage-level failure."""
+    """Storage failure with an explicit public projection, never free text."""
+
+    def __init__(self, reason=None, *, cause=None, public=None):
+        self.diagnostic = public if isinstance(public, PublicDiagnostic) else diagnostic(reason, cause=cause)
+        super().__init__(reason if type(reason) is str else self.format())
+
+    def format(self):
+        value = getattr(self, 'diagnostic', None)
+        return value.format() if isinstance(value, PublicDiagnostic) else type(self).__name__
 
 
 class SelectionRefused(StorageError):
     """A device selection rule excludes a vault path."""
 
     def __init__(self, path: str, rule: str):
-        self.path, self.rule = path, rule
-        super().__init__(
-            f"path '{path}' is excluded by the vault's {rule}; "
-            "devices would not synchronize it."
-        )
+        self.path, self.rule = DiagnosticPath(path, remote=False), setting_key(rule)
+        super().__init__()
+
+    def format(self):
+        return (f"path '{path_field(self.path)}' is excluded by the vault's {setting_key(getattr(self, 'rule', None))}; "
+                "devices would not synchronize it.")
+
 
 
 class WriteSkipped(StorageError):
@@ -36,24 +48,34 @@ class WriteSkipped(StorageError):
     """
 
     def __init__(self, path: str, size: int, maximum: float):
-        self.path, self.size, self.maximum = path, size, maximum
-        super().__init__(
+        self.path, self.size, self.maximum = DiagnosticPath(path, remote=False), size, maximum
+        super().__init__()
+
+    def format(self):
+        size, maximum = self.size, self.maximum
+        return (
             f"skipped: {size / 1024**2:.3g} MiB ({size} bytes) exceeds the vault's "
             f"syncMaxSizeInMB ({maximum:g}); new content was NOT saved; "
             "raise syncMaxSizeInMB in the plugin settings "
             "or pass a smaller file"
         )
 
-    def as_dict(self) -> dict:
-        return dict(status="skipped", path=self.path, size=self.size,
-                    syncMaxSizeInMB=self.maximum, message=str(self))
+    def as_dict(self, *, caller_path=None):
+        return dict(status="skipped", path=path_field(caller_path or self.path), size=self.size,
+                    syncMaxSizeInMB=self.maximum, message=self.format())
 
 
 class RenameRefused(StorageError):
     """P-13: refuse device source retirement without a retained host copy."""
 
     def __init__(self, source: str, destination: str, size: int, maximum: float):
-        super().__init__(
+        self.source, self.destination = DiagnosticPath(source, remote=False), DiagnosticPath(destination, remote=False)
+        self.size, self.maximum = size, maximum
+        super().__init__()
+
+    def format(self):
+        size, maximum = self.size, self.maximum
+        return (
             f"move was not performed: {size} bytes exceeds the vault's "
             f"syncMaxSizeInMB ({maximum:g}). A device would drop the source "
             "from sync because it still has the file on disk; this peer "
@@ -91,8 +113,8 @@ class RenamePartialError(StorageError):
     """
 
     def __init__(self, source: str, destination: str, *, source_state: str = "live"):
-        self.source = source
-        self.destination = destination
+        self.source, self.destination = source, destination
+        self.source_path, self.destination_path = DiagnosticPath(source, remote=False), DiagnosticPath(destination, remote=False)
         self.completed_phase = "target_written"
         self.source_state = source_state
         self.hint = (
@@ -149,14 +171,23 @@ def retry_guidance(operation: str) -> str:
 class OutcomeUnknown(StorageUnavailable):
     """Metadata publication may have happened; retain the uncertain step."""
 
-    def __init__(self, detail: str = ""):
-        self.detail = detail
-        super().__init__(self.message())
+    def __init__(self, reason=None, *, cause=None, source_removal=False, paths=()):
+        self.source_removal = source_removal
+        self.paths = tuple(DiagnosticPath(p, remote=False) for p in paths)
+        super().__init__(reason, cause=cause)
+        self.args = (self.message(),)
 
-    def message(self, operation: str | None = None) -> str:
+    def message(self, operation: str | None = None, *, context: str = "") -> str:
         prefix = "outcome unknown: "
-        if self.detail:
-            prefix += self.detail + ". "
+        if not context:
+            context = " -> ".join(path_field(p) for p in getattr(self, "paths", ()))
+        if context:
+            prefix += context + ": "
+        if getattr(self, 'source_removal', False):
+            prefix += "destination published; source removal unknown — re-read both paths. "
+        public = getattr(self, 'diagnostic', None)
+        if isinstance(public, PublicDiagnostic) and public.cause is not None:
+            prefix += 'cause: ' + public.cause.__name__ + '. '
         prefix += "the change MAY have been applied. "
         if operation is not None:
             return prefix + retry_guidance(operation)

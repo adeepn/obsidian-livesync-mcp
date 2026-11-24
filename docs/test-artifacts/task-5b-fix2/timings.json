@@ -1,0 +1,92 @@
+[
+  {
+    "size": 1024,
+    "shape": "letters",
+    "median_ms": 0.00010449999999999999,
+    "max_ms": 0.000625
+  },
+  {
+    "size": 1024,
+    "shape": "dots",
+    "median_ms": 0.000125,
+    "max_ms": 0.000167
+  },
+  {
+    "size": 1024,
+    "shape": "percent",
+    "median_ms": 0.00010449999999999999,
+    "max_ms": 0.000125
+  },
+  {
+    "size": 1024,
+    "shape": "nested",
+    "median_ms": 8.4e-05,
+    "max_ms": 0.000125
+  },
+  {
+    "size": 1024,
+    "shape": "url-at-end",
+    "median_ms": 8.4e-05,
+    "max_ms": 0.000125
+  },
+  {
+    "size": 100000,
+    "shape": "letters",
+    "median_ms": 0.000167,
+    "max_ms": 0.000458
+  },
+  {
+    "size": 100000,
+    "shape": "dots",
+    "median_ms": 0.000167,
+    "max_ms": 0.000292
+  },
+  {
+    "size": 100000,
+    "shape": "percent",
+    "median_ms": 0.000208,
+    "max_ms": 0.000334
+  },
+  {
+    "size": 100000,
+    "shape": "nested",
+    "median_ms": 0.0001875,
+    "max_ms": 0.000291
+  },
+  {
+    "size": 100000,
+    "shape": "url-at-end",
+    "median_ms": 0.000167,
+    "max_ms": 0.000292
+  },
+  {
+    "size": 1000000,
+    "shape": "letters",
+    "median_ms": 0.000167,
+    "max_ms": 0.00025
+  },
+  {
+    "size": 1000000,
+    "shape": "dots",
+    "median_ms": 0.000208,
+    "max_ms": 0.000375
+  },
+  {
+    "size": 1000000,
+    "shape": "percent",
+    "median_ms": 0.000167,
+    "max_ms": 0.00025
+  },
+  {
+    "size": 1000000,
+    "shape": "nested",
+    "median_ms": 0.000167,
+    "max_ms": 0.000291
+  },
+  {
+    "size": 1000000,
+    "shape": "url-at-end",
+    "median_ms": 0.000167,
+    "max_ms": 0.00025
+  }
+]

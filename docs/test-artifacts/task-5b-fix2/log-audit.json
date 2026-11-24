@@ -1,0 +1,232 @@
+[
+  {
+    "file": "storage_couchdb.py",
+    "line": 224,
+    "call": "logger.warning(\"CouchDB %s status: %s\",\n                method if method in {\"GET\", \"PUT\", \"DELETE\", \"POST\", \"HEAD\"} else \"<value hidden>\", code)"
+  },
+  {
+    "file": "storage_couchdb.py",
+    "line": 396,
+    "call": "logger.info('vault advertises an obsydian_livesync_version document: <omitted>')"
+  },
+  {
+    "file": "storage_couchdb.py",
+    "line": 776,
+    "call": "logger.warning('note <omitted> has <omitted> unresolved conflicting revisions')"
+  },
+  {
+    "file": "storage_couchdb.py",
+    "line": 793,
+    "call": "logger.info('note <omitted>: expected revision no longer current; refusing the write')"
+  },
+  {
+    "file": "storage_couchdb.py",
+    "line": 813,
+    "call": "logger.warning('CouchDB PUT <omitted> -> 404 (database gone)')"
+  },
+  {
+    "file": "storage_couchdb.py",
+    "line": 816,
+    "call": "logger.warning('CouchDB PUT <omitted> -> <omitted> (not 201: not confirmed durable)')"
+  },
+  {
+    "file": "storage_couchdb.py",
+    "line": 828,
+    "call": "logger.warning('CouchDB PUT <omitted> -> unexpected acknowledgement body')"
+  },
+  {
+    "file": "storage_couchdb.py",
+    "line": 857,
+    "call": "logger.warning('note <omitted>: chunk <omitted> under the computed id holds different data; refusing to reuse or overwrite it')"
+  },
+  {
+    "file": "storage_couchdb.py",
+    "line": 211,
+    "call": "logger.warning('CouchDB <omitted> <omitted> failed: <omitted>; cause: %s', type(exc).__name__)"
+  },
+  {
+    "file": "storage_couchdb.py",
+    "line": 418,
+    "call": "logger.info(\"tweak alignment: %s; keys: %s\", side if side in (\"CURRENT\", \"REMOTE\") else \"<value hidden>\", \", \".join(setting_key(k) for k in resolved.differing_keys))"
+  },
+  {
+    "file": "storage_couchdb.py",
+    "line": 515,
+    "call": "logger.info('read refused for vault path <omitted>: <omitted>; cause: %s', type(exc).__name__)"
+  },
+  {
+    "file": "storage_couchdb.py",
+    "line": 529,
+    "call": "logger.info('read refused for vault path <omitted>: <omitted>; cause: %s', type(exc).__name__)"
+  },
+  {
+    "file": "storage_couchdb.py",
+    "line": 720,
+    "call": "logger.warning('note <omitted>: <omitted>; cause: %s', type(exc).__name__)"
+  },
+  {
+    "file": "storage_couchdb.py",
+    "line": 761,
+    "call": "logger.warning('note <omitted>: chunk <omitted> is missing or corrupt')"
+  },
+  {
+    "file": "storage_couchdb.py",
+    "line": 764,
+    "call": "logger.warning('note <omitted>: chunk <omitted> is E2EE-encrypted')"
+  },
+  {
+    "file": "storage_couchdb.py",
+    "line": 1095,
+    "call": "logger.warning('rename source retirement failed for <omitted>; cause: %s', type(exc).__name__)"
+  },
+  {
+    "file": "storage_couchdb.py",
+    "line": 566,
+    "call": "logger.error('unable to fetch scan metadata window')"
+  },
+  {
+    "file": "storage_couchdb.py",
+    "line": 600,
+    "call": "logger.error('unable to fetch scan chunk batch')"
+  },
+  {
+    "file": "storage_couchdb.py",
+    "line": 615,
+    "call": "logger.error('skipping note <omitted>')"
+  },
+  {
+    "file": "storage_couchdb.py",
+    "line": 1102,
+    "call": "logger.warning('unable to confirm rename source state for <omitted>; cause: %s', type(exc).__name__)"
+  },
+  {
+    "file": "storage_couchdb.py",
+    "line": 358,
+    "call": "logger.error('skipping note <omitted>: invalid metadata')"
+  },
+  {
+    "file": "storage_journal.py",
+    "line": 574,
+    "call": "logger.warning('journal object <omitted> vanished; assuming a remote wipe and clearing dedupe caches while retaining local notes')"
+  },
+  {
+    "file": "storage_journal.py",
+    "line": 272,
+    "call": "logger.warning('journal bucket has no milestone and no journal files; treating it as a fresh vault with legacy path identity')"
+  },
+  {
+    "file": "storage_journal.py",
+    "line": 613,
+    "call": "logger.warning('journal refresh key budget stop at <omitted>')"
+  },
+  {
+    "file": "storage_journal.py",
+    "line": 279,
+    "call": "logger.warning('vault milestone has advisory locked: true flag; remote marked as rebuilt; peer performs full replay')"
+  },
+  {
+    "file": "storage_journal.py",
+    "line": 649,
+    "call": "logger.warning('journal file <omitted> could not be replayed: <omitted>: <omitted>; cause: %s', type(exc).__name__)"
+  },
+  {
+    "file": "storage_journal.py",
+    "line": 741,
+    "call": "logger.info('read refused for vault path <omitted>: <omitted>; cause: %s', type(exc).__name__)"
+  },
+  {
+    "file": "storage_journal.py",
+    "line": 831,
+    "call": "logger.error('skipping note <omitted>: scan read failed')"
+  },
+  {
+    "file": "storage_journal.py",
+    "line": 848,
+    "call": "logger.info('read refused for vault path <omitted>: <omitted>; cause: %s', type(exc).__name__)"
+  },
+  {
+    "file": "storage_journal.py",
+    "line": 288,
+    "call": "logger.info(\"tweak alignment: %s; keys: %s\", side if side in (\"CURRENT\", \"REMOTE\") else \"<value hidden>\", \", \".join(setting_key(k) for k in resolved.differing_keys))"
+  },
+  {
+    "file": "storage_journal.py",
+    "line": 693,
+    "call": "logger.error('skipping note <omitted>: invalid metadata')"
+  },
+  {
+    "file": "storage_journal.py",
+    "line": 801,
+    "call": "logger.error('skipping note <omitted>: invalid metadata')"
+  },
+  {
+    "file": "object_storage.py",
+    "line": 285,
+    "call": "logger.warning('object storage %s failed; cause: %s',\n            operation if operation in {'GET', 'PUT', 'HEAD', 'LIST'} else '<value hidden>',\n            type(exc).__name__)"
+  },
+  {
+    "file": "object_storage.py",
+    "line": 223,
+    "call": "logger.warning('conditional journal publication unsupported; using B-10 fallback; cause: %s', type(exc).__name__)"
+  },
+  {
+    "file": "selection_engine.py",
+    "line": 38,
+    "call": "logger.warning('Selection runner rejected pattern: <omitted>')"
+  },
+  {
+    "file": "selection_engine.py",
+    "line": 56,
+    "call": "logger.warning('Selection engine exit <omitted>')"
+  },
+  {
+    "file": "selection_engine.py",
+    "line": 50,
+    "call": "logger.warning('Selection engine timeout; cause: %s', type(exc).__name__)"
+  },
+  {
+    "file": "selection_engine.py",
+    "line": 53,
+    "call": "logger.warning('Selection engine launch failed; cause: %s', type(exc).__name__)"
+  },
+  {
+    "file": "selection_engine.py",
+    "line": 190,
+    "call": "logger.warning('Selection worker failed; stderr=<omitted>')"
+  },
+  {
+    "file": "journal_store.py",
+    "line": 169,
+    "call": "logger.warning('tightened journal state directory permissions: <omitted>')"
+  },
+  {
+    "file": "journal_store.py",
+    "line": 494,
+    "call": "logger.warning('journal store dedupe caches reset; local documents and chunks retained')"
+  },
+  {
+    "file": "journal_store.py",
+    "line": 260,
+    "call": "logger.warning('journal path identity changed <omitted> -> <omitted>; old state quarantined at <omitted>. To restore: stop all peers using this state directory, move the current state aside, move <omitted> back to <omitted> and configure identity <omitted>')"
+  },
+  {
+    "file": "journal_store.py",
+    "line": 309,
+    "call": "logger.warning('skipping invalid journal chunk identifier <omitted>')"
+  },
+  {
+    "file": "journal_store.py",
+    "line": 402,
+    "call": "logger.warning('completed journal bookkeeping deferred to replay')"
+  },
+  {
+    "file": "diagnostic_hygiene.py",
+    "line": 176,
+    "call": "logger.isEnabledFor(logging.DEBUG)"
+  },
+  {
+    "file": "diagnostic_hygiene.py",
+    "line": 177,
+    "call": "logger.debug('unsafe diagnostic: %s', sanitize_diagnostic(text))"
+  }
+]
