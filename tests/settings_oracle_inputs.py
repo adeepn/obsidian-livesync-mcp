@@ -165,6 +165,10 @@ BASE_GRID_KINDS = GRID_KINDS
 GRID_KINDS += FENCE_KINDS + HINT_KINDS + ('cyrillic-emoji', 'binary-empty', 'binary-nul', 'json-clamp', 'pdf-far-lf')
 
 def grid_payload(kind):
+    if kind.startswith('surrogate:'):
+        return '.md', 'a' * int(kind.split(':')[1]) + '🙂' + 'z'
+    if kind.startswith('large-text:'):
+        return '.md', 'x' * int(kind.split(':')[1])
     if kind.startswith('fence-'):
         if kind.split('-')[1].isdigit():
             _, spaces, lang = kind.split('-')
@@ -205,6 +209,8 @@ def grid_payload(kind):
 
 
 def grid_cases():
+    for case in TEXT_BOUNDARY_CASES:
+        yield case_id(case), settings_for(case), case[-1]
     # Keep the original exhaustive settings grid unchanged.
     for version, custom, minimum, kind in product(FACTORS[1][1], ('default', 0, 1, 5, 60, 100), ('default', 5, 20, 100), BASE_GRID_KINDS):
         case = ('legacy', version, 'xxhash64', custom, minimum, 'default', kind)
@@ -239,6 +245,32 @@ def grid_cases():
                     yield case_id(case), settings_for(case), kind
 
 
+# Narrow text-only probes: do not cross these large inputs with the settings
+# product or the full backend lifecycle.
+TEXT_BOUNDARY_CASES = [
+    ('legacy', version, 'xxhash64', 0, 5, 'default', f'surrogate:{offset}')
+    for version in ('v1', 'v2', 'v2-segmenter')
+    for offset in (102398, 102399, 102400)
+] + [
+    ('legacy', 'v3-rabin-karp', 'xxhash64', 60, 20, 'default', f'large-text:{size}')
+    for size in (4194303, 4194304, 4194305)
+]
+PARTITION_CASES = [c for c in TEXT_BOUNDARY_CASES
+                   if c[-1] in ('surrogate:102399', 'large-text:4194304')] + [
+    ('legacy', version, 'xxhash64', 0, 5, 'default', kind)
+    for version, kind in (('v2', 'hint-MD'), ('v2', 'hint-txt'),
+                          ('v2', 'hint-canvas'), ('v1', 'fence-long'))
+]
+
+
+def grid_path(kind):
+    if kind.startswith('surrogate:'):
+        return 'surrogate.md'
+    if kind.startswith('large-text:'):
+        return 'large.md'
+    return 'grid' + grid_payload(kind)[0]
+
+
 def matrix_inputs(case):
     suffix, content = payload(case[-1])
     append = b'\x00\xfftail' if isinstance(content, bytes) else '\nДобавлено🙂'
@@ -261,5 +293,5 @@ if __name__ == '__main__':
                           'boundary': pack('boundary.png', b'\x00' * 1048576),
                           'boundary-plus': pack('boundary.png', b'\x00' * 1048576 + b'x'),
                           'uncertain': pack('uncertain.md', 'accepted')},
-                      'payloads': {k: pack('grid' + grid_payload(k)[0], grid_payload(k)[1], grid=True)
+                      'payloads': {k: pack(grid_path(k), grid_payload(k)[1], grid=True)
                                    for k in dict.fromkeys(k for _, _, k in grid_cases())}}))

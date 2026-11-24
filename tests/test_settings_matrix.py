@@ -42,7 +42,7 @@ from tests.test_storage_journal import make_backend, params_blob
 
 from tests.settings_oracle_inputs import (
     BACKENDS, FACTORS, ROWS, CASES, BRANCH_CASES, case_id, settings_for, payload,
-    grid_cases, grid_payload,
+    grid_cases, grid_payload, grid_path, PARTITION_CASES,
 )
 from tests.settings_oracle import GRID, matrix_vector, assert_partition
 
@@ -373,3 +373,30 @@ async def test_settings_v3_ceiling_partition(tmp_path, kind):
         children = (await doc(path))['children']
         assert_partition(await pieces_for(backend, children), children, GRID[name])
         assert (await backend.read_note(path))['data'] == data
+
+
+@pytest.mark.parametrize('kind', BACKENDS)
+@pytest.mark.parametrize('case', PARTITION_CASES, ids=case_id)
+async def test_settings_text_partition(tmp_path, kind, case):
+    """One write per row; large text avoids the heavy full-cycle operations.
+
+    The uppercase path intentionally carries a text/plain Blob through the
+    programmatic write boundary: disk ingestion would convert it to binary
+    before V2's non-plain-path text branch could execute.
+    """
+    settings = settings_for(case)
+    payload_kind = case[-1]
+    path = grid_path(payload_kind)
+    _, text = grid_payload(payload_kind)
+    vector = GRID[case_id(case)]  # Strict independent upstream lookup.
+    assert vector['settings'] == settings
+    async with matrix_vault(tmp_path, kind, settings) as (backend, doc, _, _, _):
+        await backend.startup_check()
+        if payload_kind == 'hint-MD':
+            await backend._write_content(path, text, len(text.encode()), 'plain',
+                                         create=True, overwrite=False)
+        else:
+            await backend.write_note(path, text, create=True)
+        children = (await doc(path))['children']
+        assert_partition(await pieces_for(backend, children), children, vector)
+        assert (await backend.read_note(path))['text'] == text

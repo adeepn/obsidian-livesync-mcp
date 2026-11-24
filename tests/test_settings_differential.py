@@ -3,7 +3,7 @@ import pytest
 
 from content_splitter import ContentSplitter
 from tests.settings_oracle import GRID, MATRIX, assert_partition, check_input_digest
-from tests.settings_oracle_inputs import CASES, BRANCH_CASES, case_id, grid_cases, grid_payload
+from tests.settings_oracle_inputs import CASES, BRANCH_CASES, case_id, grid_cases, grid_payload, grid_path
 
 
 def test_oracle_covers_exact_inputs():
@@ -23,7 +23,7 @@ def test_settings_splitter_differential(name, settings, kind, monkeypatch):
     assert vector['payload'] == kind
     suffix, data = grid_payload(kind)
     splitter = ContentSplitter(settings)
-    pieces = splitter.split(data, path='grid' + suffix)
+    pieces = splitter.split(data, path=grid_path(kind))
     children = [splitter.chunk_id_for_piece(p) for p in pieces]
     assert_partition(pieces, children, {
         'pieces': vector['split_pieces'], 'children': vector['split_children']})
