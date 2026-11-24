@@ -23,11 +23,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
-- Replace fixed 32 MiB upload/write caps with the resolved device `syncMaxSizeInMB` rule on both backends; oversized ordinary writes and copies return a structured skipped outcome without publishing or changing the previous revision. Keep delete and received revision persistence independent of this gate; mirror oversized rename admission by retiring a selected source without saving the destination and report `moved_out_of_sync`.
+- Replace fixed 32 MiB upload/write caps with the resolved device `syncMaxSizeInMB` rule on both backends; oversized ordinary writes and copies return a structured skipped outcome without publishing or changing the previous revision. Keep delete and received revision persistence independent of this gate; refuse oversized rename destinations before any mutation because this peer lacks the device's retained host file.
 - Remove the fixed download cap; retain the optional caller `max_bytes` limit.
-- Expose all operational journal/replay budgets through environment overrides without upper ceilings, enlarge defaults with piece-derived headroom, and return actionable budget errors while preserving completed replay progress.
+- Expose operational journal/replay budget thresholds through environment overrides (JSON decoding remains constrained by Python recursion capacity), enlarge defaults with piece-derived headroom, and return actionable budget errors while preserving completed replay progress.
 
-- Resolve plain/newnote storage from the exact case-sensitive LiveSync device disk-reading suffixes in both backends; accept strings and bytes through one writer and retain attachment aliases and existing size caps
+- Resolve plain/newnote storage from the exact case-sensitive LiveSync device disk-reading suffixes in both backends; accept strings and bytes through one writer and retain attachment aliases; size policy now uses the vault limit rather than fixed peer caps
 - Expose strictly valid UTF-8 newnotes as editable text in MCP tools while retaining path-derived storage types; keep metadata/download behavior for non-UTF-8 attachments
 
 - Expanded the connection guide with plugin credential sources, both S3 configuration forms, a complete environment reference, local replica monitoring/reset procedures, and the native-peer architecture rationale

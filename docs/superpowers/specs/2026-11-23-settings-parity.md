@@ -1,5 +1,10 @@
 # Settings parity: upstream behavior extraction
 
+> Historical baseline cap references and the original Task 5 size/replay
+> assumptions below are superseded by the Task 5 fix-round-1 contracts in
+> spec §д: vault size policy, separate raw/Blob gates, P-13 rename refusal,
+> independent replay budgets and explicitly reported Python decoder capacity.
+
 Audited upstream commits: commonlib **484c164450d61deb2e301582b60cb9b5f9fa977f**; plugin **5070b67beae3b60e3a79132386a08da3f1ef213a**.
 
 [DECISION] Research for Task 1 only; no implementation changes. This document overrides **assumptions** in Tasks 2–5 where the source disagrees. Task numbers below refer to the actual plan headings: Task 2 identity, Task 3 splitter/hash, Task 4 types, Task 5 size policy (some review-focus text numbers them differently).
@@ -120,6 +125,10 @@ Blob bytes before publication. If either exceeds the vault limit, report SKIP,
 explicitly state that new content was NOT saved, and preserve the old revision.
 For oversized rename destinations, P-13 supersedes device DELETE(source):
 REFUSE with zero mutations because the peer has no retained host file.
+JSON depth overrides set admission thresholds, not the Python decoder's
+recursion capacity (normally below roughly 1000 nesting levels). Capacity
+exhaustion must report a depth-budget error with observed nesting, configured
+limit and variable, as documented in README; it is not invalid JSON syntax.
 
 **Send/receive asymmetry:** ordinary oversized NEW/CHANGED input is skipped before storeFileToDBFromRevision (`U:serviceModules/ServiceFileHandlerBase/events.ts:68-69`): no new local DB revision and no generated journal records. Once a revision is already in DB, journal packing has no syncMaxSizeInMB exclusion (`U:replication/journal/JournalSyncCore.ts:638-648`); receive persists it, while vault reflection can remain blocked. “Local-DB-yes/journal-no” is not the ordinary send behavior. Existing journal deduplication/checkpoints still apply.
 

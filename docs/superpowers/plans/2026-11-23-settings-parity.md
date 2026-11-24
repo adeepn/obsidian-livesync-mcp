@@ -1,5 +1,10 @@
 # Settings-Parity: пир ведёт себя идентично плагину при любых настройках — Implementation Plan
 
+> Historical baseline cap references and the original Task 5 size/replay
+> assumptions below are superseded by the Task 5 fix-round-1 contracts in
+> spec §д: vault size policy, separate raw/Blob gates, P-13 rename refusal,
+> independent replay budgets and explicitly reported Python decoder capacity.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Устранить все самодельные ограничения и решения пира: поведение при ЛЮБЫХ настройках vault (syncMaxSizeInMB, chunk-сплиттер, case-sensitive, NFC) идентично поведению плагина — те же чанки, те же id, те же решения plain/newnote, те же правила размеров; никаких самодельных капов.

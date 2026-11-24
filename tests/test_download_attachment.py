@@ -11,7 +11,7 @@ from storage_journal import JournalBackend
 from tests.fake_backend import FakeBackend
 from tests.test_storage_journal import healthy_bucket, make_backend
 
-CAP = 32 * 1024 * 1024
+LARGE_FILE_BYTES = 40 * 1024 * 1024
 DATA = b"%PDF-1.7\n\x00\xff\x80scan\r\n"
 
 
@@ -62,19 +62,19 @@ async def test_download_caller_limit_rejects_whole_file(fake):
     assert base64.b64encode(DATA).decode() not in result
 
 
-@pytest.mark.parametrize("limit", [0, CAP * 2])
+@pytest.mark.parametrize("limit", [0, LARGE_FILE_BYTES * 2])
 async def test_download_has_no_fixed_cap(fake, limit):
-    fake.add("scan.pdf", data=b"x" * (CAP + 1))
+    fake.add("scan.pdf", data=b"x" * (LARGE_FILE_BYTES + 1))
     result = await server.obsidian_download_attachment("scan.pdf", limit)
     result = json.loads(result)
-    assert result["size"] == CAP + 1
-    assert base64.b64decode(result["content_b64"]) == b"x" * (CAP + 1)
+    assert result["size"] == LARGE_FILE_BYTES + 1
+    assert base64.b64decode(result["content_b64"]) == b"x" * (LARGE_FILE_BYTES + 1)
 
 
-async def test_download_exact_hard_cap(fake):
-    data = b"x" * CAP
+async def test_download_complete_file_at_caller_limit(fake):
+    data = b"x" * LARGE_FILE_BYTES
     fake.add("scan.pdf", data=data)
-    result = json.loads(await server.obsidian_download_attachment("scan.pdf"))
+    result = json.loads(await server.obsidian_download_attachment("scan.pdf", max_bytes=len(data)))
     assert base64.b64decode(result["content_b64"], validate=True) == data
 
 

@@ -14,7 +14,8 @@ from tests.fake_backend import FakeBackend
 from tests.test_storage_couchdb import fake_backend
 from tests.test_storage_journal import make_backend, healthy_bucket
 
-CAP = 32 * 1024 * 1024
+DEVICE_LIMIT_BYTES = 1024 * 1024
+LARGE_FILE_BYTES = 40 * 1024 * 1024
 DATA = b"%PDF-1.7\n\x00\xff\x80scan\r\n"
 
 
@@ -57,15 +58,16 @@ async def test_attachment_roundtrip_and_write_semantics(backend):
 
 
 async def test_attachment_forbidden_before_text_or_size(backend):
+    backend.sync_max_size_mb = 1
     with pytest.raises(ForbiddenPathError):
-        await backend.write_attachment(".hidden.md", b"x" * (CAP + 1), create=True)
+        await backend.write_attachment(".hidden.md", b"x" * (DEVICE_LIMIT_BYTES + 1), create=True)
 
 
 async def test_attachment_obeys_device_limit(backend):
     from storage_base import WriteSkipped
-    backend.sync_max_size_mb = 32
-    with pytest.raises(WriteSkipped, match=r"syncMaxSizeInMB.*32"):
-        await backend.write_attachment("scan.pdf", b"x" * (CAP + 1), create=True)
+    backend.sync_max_size_mb = 1
+    with pytest.raises(WriteSkipped, match=r"syncMaxSizeInMB.*1"):
+        await backend.write_attachment("scan.pdf", b"x" * (DEVICE_LIMIT_BYTES + 1), create=True)
     assert await backend.read_note("scan.pdf") is None
 
 
@@ -86,11 +88,19 @@ async def test_journal_attachment_two_peer_replay(tmp_path):
         await reader.close()
 
 
-def test_max_attachment_fits_journal_line():
-    encoded = base64.b64encode(b"x" * CAP).decode("ascii")
-    payload = serialize_journal([("h:0123456789abcdef", encoded)], [])
-    assert max(map(len, payload.splitlines())) < MAX_LINE_BYTES
-    assert parse_journal(payload).chunks["h:0123456789abcdef"] == encoded
+@pytest.mark.parametrize('encoding', ['base64', 'full-json-escaped-text'])
+def test_v3_piece_fits_encoded_journal_line_allowance(encoding):
+    if encoding == 'base64':
+        encoded = base64.b64encode(b"x" * (4 * 1024 * 1024)).decode("ascii")
+        payload = serialize_journal([("h:0123456789abcdef", encoded)], [])
+        assert parse_journal(payload).chunks["h:0123456789abcdef"] == encoded
+    else:
+        # UTF-8 boundary headroom and worst-case JSON escaping (6x per byte).
+        encoded = "\x00" * (4 * 1024 * 1024 + 3)
+        doc = {"_id": "h:0123456789abcdef", "_rev": "1-a", "data": encoded}
+        payload = serialize_journal([], [doc])
+        assert parse_journal(payload).docs[0]['data'] == encoded
+    assert max(map(len, payload.splitlines())) < 32 * 1024 * 1024 < MAX_LINE_BYTES
 
 
 @pytest.mark.parametrize("content", ["YQ", "!!!!", "YQ===", "é"])
@@ -131,9 +141,9 @@ async def test_tool_has_no_fixed_size_guard(monkeypatch):
     fake = FakeBackend()
     monkeypatch.setattr(server, "backend", fake)
     result = json.loads(await server.obsidian_upload_attachment(
-        "scan.pdf", base64.b64encode(b"x" * (CAP + 1)).decode()))
-    assert result['size'] == CAP + 1
-    assert len(fake.notes['scan.pdf']['data']) == CAP + 1
+        "scan.pdf", base64.b64encode(b"x" * (LARGE_FILE_BYTES + 1)).decode()))
+    assert result['size'] == LARGE_FILE_BYTES + 1
+    assert len(fake.notes['scan.pdf']['data']) == LARGE_FILE_BYTES + 1
 
 
 async def test_tool_overwrite(monkeypatch):

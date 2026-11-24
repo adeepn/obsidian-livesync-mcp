@@ -197,27 +197,79 @@ async def test_note_create_and_update_tools_report_skip(backend, monkeypatch):
     assert (await backend.read_note('tool-existing.md'))['rev'] == meta['rev']
 
 
-@pytest.mark.parametrize('operation', ['create', 'update', 'upload', 'copy', 'move', 'filtered_move', 'missing_delete'])
+@pytest.mark.parametrize('operation', [
+    'create', 'upload', 'copy', 'move', 'filtered_move', 'missing_delete',
+    'overwrite', 'append', 'prepend', 'after-heading', 'search-replace',
+    'properties_set', 'properties_delete', 'tags_add', 'tags_remove',
+    'node_add', 'node_remove', 'edge_add', 'edge_remove', 'template',
+])
 async def test_unsuccessful_tool_preserves_every_readable_note(backend, monkeypatch, operation):
-    await backend.write_note('invariant.md', 'old', create=True)
+    await backend.write_note('invariant.md', '---\nkey: value\ntags: [tag]\n---\n# heading\nold', create=True)
     await backend.write_note('target.md', 'target', create=True)
-    before = {p: await backend.read_note(p) for p in ['invariant.md', 'target.md']}
+    await backend.write_note('invariant.canvas', json.dumps({
+        'nodes': [{'id': 'a', 'type': 'text', 'text': 'old'}, {'id': 'b', 'type': 'text', 'text': 'other'}],
+        'edges': [{'id': 'edge', 'fromNode': 'a', 'toNode': 'b'}],
+    }), create=True)
+    before = {note['path']: await backend.read_note(note['path']) for note in await backend.list_notes()}
     backend.sync_max_size_mb = 1 / 1048576
     monkeypatch.setattr(server, 'backend', backend)
     if operation == 'filtered_move':
         backend.selection_ignore = 'target'
     calls = {
         'create': lambda: server.obsidian_create_note('invariant.md', 'too large'),
-        'update': lambda: server.obsidian_update_note('invariant.md', 'overwrite', 'too large'),
         'upload': lambda: server.obsidian_upload_attachment('invariant.md', 'bGFyZ2U='),
         'copy': lambda: server.obsidian_duplicate_note('invariant.md', 'target.md'),
         'move': lambda: server.obsidian_move_note('invariant.md', 'target.md'),
         'filtered_move': lambda: server.obsidian_move_note('invariant.md', 'target.md'),
         'missing_delete': lambda: server.obsidian_delete_note('absent.md'),
+        'properties_set': lambda: server.obsidian_manage_properties('invariant.md', 'set', '{"key":"larger"}'),
+        'properties_delete': lambda: server.obsidian_manage_properties('invariant.md', 'delete', keys='key'),
+        'tags_add': lambda: server.obsidian_manage_tags('invariant.md', 'add', 'new'),
+        'tags_remove': lambda: server.obsidian_manage_tags('invariant.md', 'remove', 'tag'),
+        'node_add': lambda: server.obsidian_canvas_node('invariant.canvas', text='new'),
+        'node_remove': lambda: server.obsidian_canvas_node('invariant.canvas', 'remove', node_id='a'),
+        'edge_add': lambda: server.obsidian_canvas_edge('invariant.canvas', from_node='a', to_node='b'),
+        'edge_remove': lambda: server.obsidian_canvas_edge('invariant.canvas', 'remove', edge_id='edge'),
+        'template': lambda: server.obsidian_create_from_template('invariant.md', 'new.md'),
     }
-    result = await calls[operation]()
+    if operation in ['overwrite', 'append', 'prepend', 'after-heading', 'search-replace']:
+        result = await server.obsidian_update_note('invariant.md', operation, 'too large',
+            **({'heading':'heading'} if operation == 'after-heading' else
+               {'search':'old','replace':'larger'} if operation == 'search-replace' else {}))
+    else:
+        result = await calls[operation]()
     assert 'Error:' in result or 'not found' in result or json.loads(result)['status'] in ['skipped', 'refused']
     for path, note in before.items():
         after = await backend.read_note(path)
-        assert after['data'] == note['data']
-        assert after['rev'] == note['rev']
+        assert after['data'] == note['data'], path
+        assert after['rev'] == note['rev'], path
+
+
+async def test_refused_oversized_move_remains_readable_on_fresh_journal_peer(tmp_path, monkeypatch):
+    writer, storage = make_backend(tmp_path / 'writer', healthy_bucket())
+    reader = JournalBackend(storage, tmp_path / 'reader')
+    try:
+        await writer.startup_check()
+        original = b'\x00\xffonly synced copy\x80'
+        meta = await writer.write_attachment('only-copy.pdf', original, create=True)
+        writer.sync_max_size_mb = 1 / 1048576
+        monkeypatch.setattr(server, 'backend', writer)
+        result = await server.obsidian_move_note('only-copy.pdf', 'moved-copy.pdf')
+        assert 'Error:' in result and 'move was not performed' in result
+        await reader.startup_check()
+        await reader.refresh(force=True)
+        note = await reader.read_note('only-copy.pdf')
+        assert note['rev'] == meta['rev']
+        assert note['data'] == original
+        assert await reader.read_note('moved-copy.pdf') is None
+        assert 'only-copy.pdf' in [n['path'] for n in await reader.list_notes()]
+    finally:
+        await writer.close()
+        await reader.close()
+
+
+async def test_explicit_delete_of_oversized_note_remains_allowed(backend):
+    await backend.write_attachment('delete-oversized.pdf', b'existing', create=True)
+    backend.sync_max_size_mb = 1 / 1048576
+    assert await backend.delete_note('delete-oversized.pdf')
+    assert await backend.read_note('delete-oversized.pdf') is None
