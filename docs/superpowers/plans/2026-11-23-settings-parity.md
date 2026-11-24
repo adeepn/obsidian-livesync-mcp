@@ -121,17 +121,44 @@
 - [ ] **Step 1: failing tests** — upstream-векторы doc-type (текстовые расширения, бинарные, «текст в бинарном расширении» — как решает устройство); write_note(bytes) на обоих бэкендах → newnote с корректным size; прежние все сценарии (text write, upload, cap-тесты) зелёные без изменений семантики cap'ов (капы удалены в Task 5 — здесь только тип).
 - [ ] **Step 2: FAIL → Step 3: implement → Step 4: PASS → Step 5: Commit** — `feat: upstream document type resolution`
 
+### Task 4b: фильтры выбора файлов устройства (parity-spec §ж, residual gap)
+
+**Files:**
+- Modify: `config.py` (новые опциональные переменные), `livesync_format.py` (target filter), `storage_couchdb.py`, `storage_journal.py` (writer применяет фильтр до мутаций), `tests/*`, `.env.example`, `README.md`
+
+**Interfaces:**
+- Consumes: parity-spec §ж (`U:managers/EntryManager/EntryManagerImpls.ts:247-249,343-369`; `U:serviceFeatures/targetFilter.ts:68-75`; list parser `U:common/utils.ts:545-556`; ignore matcher `U:string_and_binary/path.ts:183-231`, gate `U:serviceFeatures/targetFilter.ts:132-146`).
+- Produces: `is_target_file(path: str) -> bool` по upstream-семантике: при наличии скомпилированных allow-шаблонов путь обязан совпасть хотя бы с одним; любое совпадение с ignore-шаблоном → отказ; флаги регистра зависят от `handleFilenameCaseSensitive`; парсинг списков — как в upstream (не предполагать эквивалентность JS- и Python-regex без проверки). Это ЛОКАЛЬНЫЕ настройки устройства, их нет в milestone → у пира они задаются явными env-переменными (по умолчанию пусто = устройство без фильтров); значения из milestone не выводить. Writer обоих бэкендов применяет фильтр ДО чанков/метаданных; исключённый путь → чистая ошибка инструмента с названием сработавшего правила.
+
+- [ ] **Step 1: failing tests** — allow-list совпадение/несовпадение; ignore-list приоритет; комбинированный список через upstream-парсер (запятые, переносы, кавычки); регистр при case-sensitive и insensitive; JS-regex-конструкции, отличающиеся от Python (флаги, `\d`/`\w` на не-ASCII, lookbehind) — векторы сравнить с upstream-исполнением под Node; пустые настройки → всё разрешено; writer: исключённый путь → ошибка, ноль мутаций, оба бэкенда.
+- [ ] **Step 2: FAIL → Step 3: implement → Step 4: PASS → Step 5: Commit** — `feat: device file selection filters for peer writes`
+
 ### Task 5: syncMaxSizeInMB и производные лимиты вместо самодельных капов
 
 **Files:**
 - Modify: `storage_journal.py`, `storage_couchdb.py`, `journal_codec.py`, `journal_store.py`, `config.py`, `tests/*`
 
 **Interfaces:**
-- Consumes: Task 1 §д (точное правило устройства для oversized); сплиттер (максимум куска выводится из настроек — для лимита строки).
-- Produces: удаление MAX_ATTACHMENT_BYTES/MAX_DOWNLOAD_BYTES/линии-64MiB как констант; новые производные: `replay_line_limit` = base64(макс. piece по настройкам vault)×1.37+margin (env-override `S3_REPLAY_LINE_LIMIT`); правило oversized = поведение устройства из Task 1 §д (например, отказ create с тем же смыслом, что отказ устройства добавить файл — формулировка из исследования); бюджеты refresh масштабируются от syncMaxSizeInMB (env-override остаётся); download-лимит = тот же oversized-путь.
+- Consumes: parity-spec §д (проверено верификацией Task 1): предикат `max > 0 && size > 0 && size > max*1024*1024` (строго больше; равенство допускается; `<= 0` выключает); oversized NEW/CHANGED → устройство пропускает ДО записи в локальную БД (ни ревизии, ни записей журнала, без ошибки); oversized ревизия, УЖЕ попавшая в БД, из журнала не исключается; приём из журнала сохраняет записи независимо от лимита.
+- Produces:
+  - Writer (оба бэкенда): точный предикат устройства вместо `MAX_ATTACHMENT_BYTES`; oversized запись → **skipped outcome**: ничего не публикуется и не мутирует, прежняя ревизия остаётся; MCP-инструмент возвращает явный «skipped: превышает syncMaxSizeInMB=N» (не «success», не BinaryNoteError). `syncMaxSizeInMB` читается из настроек vault (PREFERRED), env-override опционален.
+  - Download: `MAX_DOWNLOAD_BYTES` удалён; инструментарий не ограничивает размер сильнее устройства (параметр `max_bytes` остаётся опцией вызывающего).
+  - Replay: сохранение принятых записей НЕ зависит от лимита (уже так — закрепить тестом: журнал с `metadata.size` сверх лимита пира не отвергается целиком).
+  - Операционные бюджеты replay (строка/inflate/объект/refresh) — **НЕ правило протокола** (parity-spec §д, последняя строка): устройство их не имеет. Они остаются как явно документированное осознанное отличие (защита от повреждённых/враждебных журналов) с env-override на каждый, без «тихого» срабатывания: при достижении бюджета — чистая ошибка с именем бюджета и способом его поднять; дефолты пересчитаны так, чтобы не резать ничего, что реалистичный vault с любым `syncMaxSizeInMB` производит (границы piece'ов ограничены алгоритмом сплиттера, а не размером файла).
+- [ ] **Step 1: failing tests** — предикат на границе (ровно N MiB допускается; N MiB + 1 байт — skip; дробные N; 0 и отрицательные — без лимита); oversized write_note / write_attachment → skipped, ноль публикаций, прежняя ревизия целы; файл 40 MiB при лимите 50 → пишется полностью (multi-piece, оба бэкенда, two-peer replay байт-в-байт); 200 MiB при лимите 0 → пишется; replay журнала с metadata.size сверх лимита → сохраняется, читается; каждый бюджет: срабатывание даёт именованную ошибку с подсказкой, env-override меняет порог.
+- [ ] **Step 2: FAIL → Step 3: implement → Step 4: PASS → Step 5: Commit** — `feat: device size policy replaces self-imposed caps`
 
-- [ ] **Step 1: failing tests** — oversized-файл (сверх syncMaxSizeInMB) → поведение = устройство (из §д); файл в пределах размера → пишется как устройство, включая размер чанков; replay журнала клиента с файлом на границе размера (синтетика по §д-правилам) не падает по нашей линии; budgets scale.
-- [ ] **Step 2: FAIL → Step 3: implement → Step 4: PASS → Step 5: Commit** — `feat: settings-derived limits replace self-imposed caps`
+### Task 5b: сравнение настроек с PREFERRED при старте (parity-spec «Tweak compatibility»)
+
+**Files:**
+- Modify: `livesync_format.py` (`assess_tweak_compatibility`), `storage_journal.py`, `storage_couchdb.py` (startup), `tests/*`
+
+**Interfaces:**
+- Consumes: parity-spec «Tweak compatibility and peer startup requirements» (`U:pouchdb/LiveSyncDBFunctions.ts:79-118`; `U:common/models/tweak.compatibility.ts:57-65,148-191`; `U:common/models/tweak.definition.ts:24-67`; `P:modules/coreFeatures/ModuleResolveMismatchedTweaks.ts:120-151`).
+- Produces: `assess_tweak_compatibility(preferred: dict, candidate: dict) -> TweakAssessment` с upstream-смыслом: absent / known-default / unadvertised различаются; representation-only разница ≠ семантический mismatch; `pathNormalizationVersion` расходится → MISMATCHED до гейта; `idDerivationVersion` → отдельный ID_KEY_MISMATCH; совместимо-lossy ключи (`customChunkSize`, `hashAlg`, `chunkSplitterVersion`) — по upstream-логике auto-accept (greater positive `tweakModified` выигрывает; ties/absent → REMOTE; `autoAcceptCompatibleTweak` undefined = true). Startup: пир оценивает свои эффективные настройки (значения, по которым он будет писать) против PREFERRED и каждой записи устройств в milestone; семантический mismatch → отказ с перечнем ключей (без значений-секретов) и пояснением, что нужно выравнивание; не принимать настройки молча.
+
+- [ ] **Step 1: failing tests** — векторы из upstream-спек `tweak.compatibility` (если есть) + табличные случаи: equal / different / unadvertised; missing-with-known-default = equal; lossy-only differences → auto-accept по tweakModified (все четыре случая сторон/ties); pathNormalization mismatch → MISMATCHED даже при выключенном гейте; startup обоих бэкендов: MISMATCHED → UnsupportedVault с ключами; пер-устройство vs PREFERRED расхождение в milestone → отказ.
+- [ ] **Step 2: FAIL → Step 3: implement → Step 4: PASS → Step 5: Commit** — `feat: device tweak compatibility assessment at startup`
 
 ### Task 6: Settings-matrix test harness
 
