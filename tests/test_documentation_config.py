@@ -121,3 +121,22 @@ def test_surrogate_wire_contract_is_documented_without_a_switch():
     assert 'extract_surrogate_vectors.mjs' in (ROOT / 'AGENTS.md').read_text()
     spec = (ROOT / 'docs/superpowers/specs/2026-11-23-settings-parity.md').read_text()
     assert '2026-11-24 — G7' in spec and '[GOTCHA]' in spec
+
+
+@pytest.mark.parametrize('name', [
+    'tests/splitter_comparisons.json', 'tests/splitter_observability.py',
+    'tests/splitter_mutations.json', 'scripts/check_splitter_mutations.py',
+    'tests/fixtures/settings_oracle_upstream.json.gz',
+    'tests/test_splitter_observability.py', 'tests/test_splitter_helpers_oracle.py',
+    'tests/test_settings_oracle_guard.py',
+])
+def test_splitter_observability_artifacts_are_documented(name):
+    assert (ROOT / name).is_file()
+    assert name in (ROOT / 'AGENTS.md').read_text()
+
+
+def test_part_zero_status_records_executable_inventory():
+    status = (ROOT / 'docs/superpowers/specs/2026-11-23-settings-parity.md').read_text()
+    assert 'Part 0 round 2 — 2026-11-24 (S1, P-27/P-32)' in status
+    assert 'tests/splitter_comparisons.json' in status
+    assert 'helper-level oracle vectors' in status

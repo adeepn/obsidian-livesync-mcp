@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Settings parity
 
+- Guard oracle imports against stale input recipes. Cover splitter equality
+  boundaries with upstream Blob/encoder/hash vectors, stored-child witnesses
+  on both backends and an AST-complete comparison mutation inventory.
+
 - Publish legacy pieces with unpaired UTF-16 units using device wire encodings:
   lossless surrogate escapes in CouchDB/metadata JSON, U+FFFD in compact journal
   leaves. Preserve piece IDs; report journal `transport_replacements` and explain

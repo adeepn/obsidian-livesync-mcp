@@ -75,6 +75,7 @@ for (const [alg, name] of Object.entries({'':'XXHash32RawHashManager', xxhash32:
     manager.xxhash = wasm;
     managers[alg] = manager;
 }
+managers.null = managers.xxhash32;
 const migration = read('services/base/SettingService.ts');
 const migrateCode = migration.slice(migration.indexOf('if (settings.chunkSplitterVersion == "")'), migration.indexOf('return Promise.resolve(settings);', migration.indexOf('if (settings.chunkSplitterVersion == "")')));
 const input = JSON.parse(execFileSync(process.env.PYTHON || './venv/bin/python', ['-m', 'tests.settings_oracle_inputs'], {maxBuffer:96*1024*1024}));
@@ -217,7 +218,27 @@ for (const small of [true, false]) {
     for (const size of sizes) scalarProbes.push({size, path:small?'probe.json':'probe.png',
         minimum:vm.runInContext(`binaryMinimumScalar(${size}, ${small})`, ctx)});
 }
-const fixture = {candidate_measurements:candidateMeasurements, scalar_probes:scalarProbes, upstream_commit:pin, node:process.version, decoder_dependency:dependency, source_sha256:sources,
+// Published wheels binary/base64.js:198-240; direct UTF-16 inputs retain
+// lone surrogates rather than passing through Blob's USVString conversion.
+const helperProbes = {encoder:[], hash_conversion:[]};
+for (const code of [0,0x7f,0x80,0x7ff,0x800,0xffff,0x10000,0x10ffff,
+                    0xd7ff,0xd800,0xdbff,0xdc00,0xdfff]) {
+    for (const count of [127,128,129,255,256,257]) {
+        const scalar = String.fromCodePoint(code);
+        const text = 'a'.repeat(count - scalar.length) + scalar;
+        helperProbes.encoder.push({code, count, text,
+            base64:Buffer.from(binary.writeString(text)).toString('base64')});
+    }
+}
+// XXHashHashManager.ts:73-74: execute the real raw-hash conversion with a
+// supplied primitive hash result. This tests the conversion, not a preimage.
+const conversion = vm.runInContext('new XXHash32RawHashManager({})',ctx);
+for (const value of [0,-1,2**31-1,2**31,-(2**31)]) {
+    conversion.xxhash = {h32Raw:()=>value};
+    helperProbes.hash_conversion.push({value, base36:value.toString(36),
+        raw_hash:await conversion.computeHashWithoutEncryption('')});
+}
+const fixture = {helper_probes:helperProbes, candidate_measurements:candidateMeasurements, scalar_probes:scalarProbes, upstream_commit:pin, node:process.version, decoder_dependency:dependency, source_sha256:sources,
     wasm_sha256:sha(fs.readFileSync(wasmFile)), inputs_sha256:sha(fs.readFileSync('tests/settings_oracle_inputs.py')),
     boundary_measurements:boundaryMeasurements, pieces, matrix:vectors, grid};
 fs.writeFileSync(out, gzipSync(JSON.stringify(fixture)+'\n', {level:9}));

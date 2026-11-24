@@ -17,7 +17,9 @@ const constants=read('common/models/setting.const.ts');
 const names=constants.slice(constants.indexOf('export const ChunkAlgorithmNames'),constants.indexOf('export const ChunkAlgorithms'));
 const vectors=[];
 for(const version of ['', 'v1','v2','v2-segmenter','v3-rabin-karp','unknown',undefined,null,0,false,[],[''],[null],['v1'],{},'toString','__proto__'])
- for(const enable of [false,true]) for(const segmenter of [false,true]) {
+ // SettingService.ts:143-150 uses JS truthiness; include empty-string equality.
+ for(const enable of (version === '' ? [false,true,'',null,0] : [false,true]))
+ for(const segmenter of (version === '' ? [false,true,'',null,0] : [false,true])) {
  const input={chunkSplitterVersion:version,enableChunkSplitterV2:enable,useSegmenter:segmenter};
  const settings=structuredClone(input);
  vm.runInNewContext(stripTypeScriptTypes(names.replace('export ',''))+'\n'+source.slice(begin,end),{settings});

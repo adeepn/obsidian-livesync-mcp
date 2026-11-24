@@ -416,15 +416,37 @@ async def test_settings_text_partition(tmp_path, kind, case):
 @pytest.mark.parametrize('kind', BACKENDS)
 @pytest.mark.parametrize('case', PERSISTED_EQUALITY_CASES, ids=case_id)
 async def test_settings_persisted_equality_witness(tmp_path, kind, case):
-    """Compare actual stored leaves first: Z1, Z2 and fence exact equality."""
+    """Compare published leaves, including programmatic text/plain Blobs."""
+    from content_splitter import _TextBlob
+    from tests.settings_oracle_inputs import is_text_blob
     settings = settings_for(case)
     path = grid_path(case[-1])
     data = grid_payload(case[-1])[1]
     vector = GRID[case_id(case)]
     async with matrix_vault(tmp_path, kind, settings) as (backend, doc, _, _, _):
         await backend.startup_check()
-        await backend.write_note(path, data, create=True)
+        if is_text_blob(case[-1]):
+            await backend._write_content(path, _TextBlob(data), len(data), 'plain',
+                                         create=True, overwrite=False)
+        elif case[-1] == 'encoder-exact128':
+            await backend._write_content(path, data, len(data.encode()), 'plain',
+                                         create=True, overwrite=False)
+        else:
+            await backend.write_note(path, data, create=True)
         children = (await doc(path))['children']
-        assert_partition(await pieces_for(backend, children), children, vector)
+        stored = await pieces_for(backend, children)
+        if case[-1] == 'encoder-exact128':
+            # journalRecords.ts:70-76 TextEncoder versus PouchDB JSON.stringify;
+            # scripts/extract_surrogate_vectors.mjs executes both contracts.
+            wire = json.loads((FIXTURES / 'surrogate_wire_upstream.json').read_text())
+            assert data == wire['witness']['input']
+            assert vector['children'] == wire['witness']['ids']
+            expected = ([d['data'] for d in wire['vectors'][0]['decoded']]
+                        if kind == 'journal' else wire['witness']['pieces'])
+            assert stored == expected, 'PARTITION stored pieces mismatch'
+            assert children == wire['witness']['ids'], 'PARTITION stored children mismatch'
+        else:
+            assert_partition(stored, children, vector)
         note = await backend.read_note(path)
-        assert note['data' if isinstance(data, bytes) else 'text'] == data
+        if not is_text_blob(case[-1]) and case[-1] != 'encoder-exact128':
+            assert note['data' if isinstance(data, bytes) else 'text'] == data

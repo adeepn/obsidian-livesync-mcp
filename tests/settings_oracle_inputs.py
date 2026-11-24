@@ -197,6 +197,21 @@ def _candidate_patch(seed):
 
 @lru_cache(maxsize=8)
 def grid_payload(kind):
+    if kind.startswith('decoder:'):
+        _, size, byte, position = kind.split(':')
+        size, position = int(size), int(position)
+        raw = bytearray(b'a' * size)
+        patch = bytes.fromhex(byte)
+        raw[position:position + len(patch)] = patch
+        return '.md', bytes(raw)
+    if kind.startswith('fractional:'):
+        _, size, newline = kind.split(':')
+        size, newline = int(size), int(newline)
+        return '.md', 'a' * (newline - 1) + '\n' + 'a' * (size - newline)
+    if kind == 'fence-only':
+        return '.md', '```'
+    if kind == 'encoder-exact128':
+        return '.MD', 'a' * 123 + '🙂z'
     if kind.startswith('eq:'):
         _, mode, size, seed, position = kind.split(':')
         size, seed, position = int(size), int(seed), int(position)
@@ -529,6 +544,39 @@ PARTITION_CASES += [
 PARTITION_CASES += [c for c in EQUALITY_CASES if c[-1] == 'eq:png:2049:0:-1']
 
 
+
+# octagonal-wheels@0.1.57 binary/base64.js:250-290: short decoding and
+# truncated continuation reads. Raw text/plain Blobs are programmatic inputs.
+OBSERVABLE_CASES = [
+    # chunks.ts:29-32: EOF immediately after the opening fence.
+    ('legacy', 'v1', 'xxhash64', 0, 5, 'default', 'fence-only'),
+] + [
+    ('legacy', 'v3-rabin-karp', 'xxhash64', 0, 20, 'default',
+     f'decoder:{size}:{byte}:{position}')
+    for size in (126, 127, 128, 129)
+    for byte in ('ff', '80', 'c2', 'e0', 'f0', 'f0908080')
+    for position in (0, size // 2, size - 1)
+] + [
+    # chunks.ts:368-370: fractional repeated addition, ratio below/equal/above 100.
+    ('legacy', 'v2', 'xxhash64', 0, minimum, 'default', f'fractional:{size}:{int(minimum) + 1}')
+    for minimum in (0.5, 1.25)
+    for size in (int(100 * minimum) - 1, int(100 * minimum), int(100 * minimum) + 1)
+] + [
+    # PureJSHashManager.ts:86-87; wheels base64.js:198-240: cut surrogate
+    # followed by the decimal length suffix reaches the 128-unit short encoder.
+    ('legacy', 'v1', 'sha1', -0.9987841796875, 5, 'default', 'encoder-exact128'),
+    # HashManager.ts:11-19,65-74: null selects fallback XXHash32.
+    ('legacy', 'v3-rabin-karp', None, 0, 20, 'default', 'unicode'),
+    ('legacy', 'v3-rabin-karp', 'sha1', 0, 257, 'default', 'eq:md:2049:0:-1'),
+]
+EQUALITY_CASES += OBSERVABLE_CASES
+PERSISTED_EQUALITY_CASES += OBSERVABLE_CASES
+
+
+def is_text_blob(kind):
+    return kind.startswith('decoder:')
+
+
 def grid_path(kind):
     if kind.startswith('eq:'):
         mode = kind.split(':')[1]
@@ -564,8 +612,8 @@ def matrix_inputs(case):
 
 
 if __name__ == '__main__':
-    def pack(path, data, *, grid=False):
-        return {'path': path, 'text': isinstance(data, str) and (grid or path.endswith(('.md', '.txt', '.canvas'))),
+    def pack(path, data, *, grid=False, text_blob=False):
+        return {'path': path, 'text': text_blob or isinstance(data, str) and (grid or path.endswith(('.md', '.txt', '.canvas'))),
                 'base64': base64.b64encode(data.encode() if isinstance(data, str) else data).decode()}
     matrix = [{'id': case_id(c), 'settings': settings_for(c),
                'payloads': {k: pack(*v) for k, v in matrix_inputs(c).items()}} for c in CASES + BRANCH_CASES]
@@ -576,5 +624,5 @@ if __name__ == '__main__':
                           'boundary': pack('boundary.png', b'\x00' * 1048576),
                           'boundary-plus': pack('boundary.png', b'\x00' * 1048576 + b'x'),
                           'uncertain': pack('uncertain.md', 'accepted')},
-                      'payloads': {k: ({'recipe': k, 'path': grid_path(k), 'text': k.split(':')[1] not in ('json', 'png', 'pdf') and not k.split(':')[1].endswith('-binary') and not k.split(':')[1].startswith('lf-')} if k.startswith('eq:') else pack(grid_path(k), grid_payload(k)[1], grid=True))
+                      'payloads': {k: ({'recipe': k, 'path': grid_path(k), 'text': k.split(':')[1] not in ('json', 'png', 'pdf') and not k.split(':')[1].endswith('-binary') and not k.split(':')[1].startswith('lf-')} if k.startswith('eq:') else pack(grid_path(k), grid_payload(k)[1], grid=True, text_blob=is_text_blob(k)))
                                    for k in dict.fromkeys(k for _, _, k in grid_cases())}}))

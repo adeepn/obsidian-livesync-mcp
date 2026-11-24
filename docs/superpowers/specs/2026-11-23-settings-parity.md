@@ -1,5 +1,27 @@
 # Settings parity: upstream behavior extraction
 
+> **Part 0 round 2 — 2026-11-24 (S1, P-27/P-32).** Production splitting is
+> unchanged. `tests/splitter_comparisons.json` is a committed regression
+> inventory, checked against every AST comparison operator (chained endpoints
+> separately). Each witnessed equality is mutated in an isolated namespace and
+> compared with executed upstream expectations; every other entry carries a
+> cited unreachable, indistinguishable or admission proof. The zero-minimum
+> guard remains explicitly owned by G3. No recipe-family count substitutes for
+> observability. Direct helper-level oracle vectors execute published wheels'
+> short UTF-16 encoder and the pinned raw-hash manager conversion at zero,
+> signed-32 and Unicode boundaries, with splitter-call reachability checks.
+> Malformed programmatic text/plain Blobs cover decoder lengths 126–129 and
+> continuation/lead/scalar cases; fractional V2 ratios surround 100 at two
+> minima. G3's V1 non-plain cut is published on both backends: CouchDB preserves
+> escaped units, journal leaves use the separately executed surrogate-wire
+> fixture's U+FFFD projection and retain upstream IDs. V2 protects pairs.
+> The loader validates recipes before exporting ORACLE/GRID/MATRIX and names
+> the regeneration command on failure. The 53 known mutations, G1–G4 and new
+> H1–H4 (decoder continuation, ASCII boundary, U+10000, V1 fence EOF) have a
+> reproducible exact-node campaign in `scripts/check_splitter_mutations.py`.
+> Run commands and fixture locations are recorded in AGENTS.md. This is
+> offline regression evidence, not a new live-device acceptance claim.
+
 > **Implementation status — 2026-11-24 (Task 7).** The extraction tables below
 > preserve the Task 1 starting-code snapshot and proposed actions; “our current
 > implementation” in those historical rows is not a statement about today's

@@ -33,6 +33,21 @@ This repository is a small Python MCP server for accessing an Obsidian LiveSync 
 - `.env.example`: required configuration template.
 - `obsidian-mcp.service`: optional systemd deployment unit.
 
+`scripts/extract_settings_oracle.mjs` also records direct published encoder and
+raw-hash conversion vectors in `tests/fixtures/settings_oracle_upstream.json.gz`.
+The shared loader enforces the input digest before exporting any fixture view.
+`tests/splitter_comparisons.json` inventories every comparison operator, including
+chained endpoints, with a measured oracle witness or cited proof.
+`tests/splitter_observability.py` executes isolated in-memory mutations;
+`tests/splitter_mutations.json` and `scripts/check_splitter_mutations.py` replay
+the known and additional grid/CouchDB/journal witnesses. Nothing rewrites the
+production module on disk. Run the fast observability checks with:
+
+```bash
+./venv/bin/python -m pytest tests/test_splitter_observability.py tests/test_splitter_helpers_oracle.py tests/test_settings_oracle_guard.py -q
+./venv/bin/python scripts/check_splitter_mutations.py .superpowers/sdd/2026-11-23-settings-parity/s1/campaign
+```
+
 `scripts/extract_surrogate_vectors.mjs` executes pinned journal records, legacy splitting and verified published dependencies to produce `tests/fixtures/surrogate_wire_upstream.json`.
 
 Tests live in `tests/` as `tests/test_<module>.py` (pytest + pytest-asyncio, auto mode via `pytest.ini`); shared doubles are `tests/fake_backend.py` (in-memory backend) and `tests/couchdb_fake.py` (HTTP-level CouchDB double). `tests/settings_oracle_inputs.py` contains deterministic input recipes only; `tests/settings_oracle.py` loads interned compressed upstream expectations from `tests/fixtures/`. `tests/fake_object_storage.py` supplies an S3 double. Keep new modules focused and colocated unless the project grows enough to justify a package layout.

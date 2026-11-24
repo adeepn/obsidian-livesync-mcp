@@ -1,0 +1,738 @@
+[
+  {
+    "id": "4",
+    "owner": "LegacySplitter",
+    "function": "_groups",
+    "source": "pre.endswith('=')",
+    "mutation": "not pre.endswith('=')",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=eq:fence:2046:0:-1]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=fenced-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=fenced-journal]"
+    ]
+  },
+  {
+    "id": "6-plus",
+    "owner": "V2Splitter",
+    "function": "_binary",
+    "source": "offset + maximum",
+    "mutation": "offset + maximum + 1",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=102400-limit=default-document=boundary:102401:png:none:0]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=5-limit=default-document=boundary:102401:png:none:0-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=5-limit=default-document=boundary:102401:png:none:0-journal]"
+    ]
+  },
+  {
+    "id": "11:sha1",
+    "owner": "module",
+    "function": "chunk_id_for_piece",
+    "source": "length = len(piece.encode('utf-16-le', errors='surrogatepass')) // 2",
+    "mutation": "length = len(piece.encode('utf-16-le', errors='surrogatepass')) // 2\n    if hash_alg == 'sha1': length = len(piece)",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v3-rabin-karp-hash=sha1-custom=1-minimum=20-limit=default-document=unicode]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=sensitive-splitter=legacy-00-hash=sha1-custom=60-minimum=5-limit=0-document=bom-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=sensitive-splitter=legacy-00-hash=sha1-custom=60-minimum=5-limit=0-document=bom-journal]"
+    ]
+  },
+  {
+    "id": "9",
+    "owner": "module",
+    "function": "normalize_splitter_settings",
+    "source": "if _js_truthy(settings.get('enableChunkSplitterV2')):",
+    "mutation": "if False:",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=legacy-10-hash=xxhash64-custom=default-minimum=default-limit=default-document=text-short]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=legacy-splitter=legacy-11-hash=mixed-purejs-custom=default-minimum=default-limit=1-document=bom-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=legacy-splitter=legacy-11-hash=mixed-purejs-custom=default-minimum=default-limit=1-document=bom-journal]"
+    ]
+  },
+  {
+    "id": "X4",
+    "owner": "ContentSplitter",
+    "function": "split",
+    "source": "path.endswith(('.md', '.txt', '.canvas'))",
+    "mutation": "path.rstrip().endswith(('.md', '.txt', '.canvas'))",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=5-limit=default-document=hint-path:0]",
+      "tests/test_settings_matrix.py::test_settings_text_partition[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=5-limit=default-document=hint-path:0-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_text_partition[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=5-limit=default-document=hint-path:0-journal]"
+    ]
+  },
+  {
+    "id": "N2",
+    "owner": "LegacySplitter",
+    "function": "_groups",
+    "source": "lines[index] == '#'",
+    "mutation": "lines[index] != '#'",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=random:newline:17:200]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=fenced-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=fenced-journal]"
+    ]
+  },
+  {
+    "id": "N9",
+    "owner": "ContentSplitter",
+    "function": "__init__",
+    "source": "if self.version == '':\n        self.version = 'v1'",
+    "mutation": "if self.version == '':\n        self.version = 'v2'",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=legacy-00-hash=xxhash64-custom=default-minimum=default-limit=default-document=text-short]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=nfc-sensitive-splitter=legacy-01-hash=xxhash64-custom=0-minimum=default-limit=0-document=json-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=nfc-sensitive-splitter=legacy-01-hash=xxhash64-custom=0-minimum=default-limit=0-document=json-journal]"
+    ]
+  },
+  {
+    "id": "N10",
+    "owner": "ContentSplitter",
+    "function": "split",
+    "source": "path.endswith(('.md', '.txt', '.canvas'))",
+    "mutation": "path.endswith(('.md',))",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=5-limit=default-document=hint-txt]",
+      "tests/test_settings_matrix.py::test_settings_text_partition[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=5-limit=default-document=hint-txt-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_text_partition[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=5-limit=default-document=hint-txt-journal]"
+    ]
+  },
+  {
+    "id": "2",
+    "owner": "LegacySplitter",
+    "function": "_groups",
+    "source": "re.split(r'([^\\r\\n\\u2028\\u2029]*?[;,:<])', code)",
+    "mutation": "re.split(r'([^\\r\\n\\u2028\\u2029]*?[;:<])', code)",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=fence-0-js]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=fenced-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=fenced-journal]"
+    ]
+  },
+  {
+    "id": "X2",
+    "owner": "module",
+    "function": "_binary_minimum",
+    "source": "step += 1",
+    "mutation": "step += 2",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v2-hash=xxhash64-custom=default-minimum=default-limit=default-document=binary-large]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=nfc-sensitive-splitter=legacy-11-hash=empty-custom=60-minimum=100-limit=default-document=base-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=nfc-sensitive-splitter=legacy-11-hash=empty-custom=60-minimum=100-limit=default-document=base-journal]"
+    ]
+  },
+  {
+    "id": "10",
+    "owner": "ContentSplitter",
+    "function": "split",
+    "source": "path.endswith(('.md', '.txt', '.canvas'))",
+    "mutation": "path.lower().endswith(('.md', '.txt', '.canvas'))",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=5-limit=default-document=hint-MD]",
+      "tests/test_settings_matrix.py::test_settings_text_partition[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=5-limit=default-document=hint-MD-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_text_partition[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=5-limit=default-document=hint-MD-journal]"
+    ]
+  },
+  {
+    "id": "Y6",
+    "owner": "RabinKarpSplitter",
+    "function": "split",
+    "source": "return [base64.b64encode(piece).decode('ascii') for piece in pieces]",
+    "mutation": "return [base64.b64encode(b''.join(pieces)).decode('ascii')]",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=-0.9-minimum=30721-limit=default-document=floor-binary:30721]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=sensitive-splitter=v3-rabin-karp-hash=xxhash64-custom=default-minimum=100-limit=1-document=md-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=sensitive-splitter=v3-rabin-karp-hash=xxhash64-custom=default-minimum=100-limit=1-document=md-journal]"
+    ]
+  },
+  {
+    "id": "N4",
+    "owner": "module",
+    "function": "_capped",
+    "source": "if (preserve_pairs and end < len(text)",
+    "mutation": "if (False and end < len(text)",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=surrogate:102399]",
+      "tests/test_settings_matrix.py::test_settings_text_partition[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=surrogate:102399-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_text_partition[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=surrogate:102399-journal]"
+    ]
+  },
+  {
+    "id": "5",
+    "owner": "LegacySplitter",
+    "function": "_groups",
+    "source": "'   ```'",
+    "mutation": "'   ```', '    ```'",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=100-limit=default-document=eq:grouping:0:0:19]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=fenced4-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=fenced4-journal]"
+    ]
+  },
+  {
+    "id": "8",
+    "owner": "V2Splitter",
+    "function": "split",
+    "source": "end - start > adjusted",
+    "mutation": "end - start >= adjusted",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=5-limit=default-document=random:newline:17:200]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=nfc-sensitive-splitter=v2-hash=sha1-custom=default-minimum=default-limit=0-document=md-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=nfc-sensitive-splitter=v2-hash=sha1-custom=default-minimum=default-limit=0-document=md-journal]"
+    ]
+  },
+  {
+    "id": "N3",
+    "owner": "LegacySplitter",
+    "function": "split",
+    "source": "end = found",
+    "mutation": "end = found + 1",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=json-clamp]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=nfc-sensitive-splitter=legacy-01-hash=xxhash64-custom=0-minimum=default-limit=0-document=json-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=nfc-sensitive-splitter=legacy-01-hash=xxhash64-custom=0-minimum=default-limit=0-document=json-journal]"
+    ]
+  },
+  {
+    "id": "Y1",
+    "owner": "V2Splitter",
+    "function": "_binary",
+    "source": "preferred = data.find(delimiter, minimum)",
+    "mutation": "preferred = data.find(delimiter, minimum, maximum)",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=5-limit=default-document=pdf-far-lf]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=5-limit=default-document=pdf-far-lf-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=5-limit=default-document=pdf-far-lf-journal]"
+    ]
+  },
+  {
+    "id": "X5",
+    "owner": "RabinKarpSplitter",
+    "function": "split",
+    "source": "return [_wheels_read_string(piece) for piece in pieces]",
+    "mutation": "return [base64.b64encode(piece).decode('ascii') for piece in pieces]",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=1024-limit=default-document=utf8:2:1023]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=sensitive-splitter=v3-rabin-karp-hash=xxhash64-custom=default-minimum=100-limit=1-document=md-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=sensitive-splitter=v3-rabin-karp-hash=xxhash64-custom=default-minimum=100-limit=1-document=md-journal]"
+    ]
+  },
+  {
+    "id": "N8",
+    "owner": "ContentSplitter",
+    "function": "__init__",
+    "source": "if self.version == 'v2-segmenter':\n        self.version = 'v2'",
+    "mutation": "if self.version == 'v2-segmenter':\n        self.version = 'v1'",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v2-segmenter-hash=xxhash64-custom=default-minimum=default-limit=default-document=text-short]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=nfc-sensitive-splitter=v2-segmenter-hash=xxhash32-custom=default-minimum=5-limit=0-document=json-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=nfc-sensitive-splitter=v2-segmenter-hash=xxhash32-custom=default-minimum=5-limit=0-document=json-journal]"
+    ]
+  },
+  {
+    "id": "N11",
+    "owner": "RabinKarpSplitter",
+    "function": "split",
+    "source": "return [_wheels_read_string(piece) for piece in pieces]",
+    "mutation": "return [_wheels_read_string(piece).lstrip('\\ufeff') for piece in pieces]",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=default-minimum=default-limit=default-document=bom-text]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=sensitive-splitter=v3-rabin-karp-hash=xxhash64-custom=default-minimum=100-limit=1-document=md-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=sensitive-splitter=v3-rabin-karp-hash=xxhash64-custom=default-minimum=100-limit=1-document=md-journal]"
+    ]
+  },
+  {
+    "id": "3",
+    "owner": "LegacySplitter",
+    "function": "_groups",
+    "source": "re.split(r'([^\\r\\n\\u2028\\u2029]*?[;,:<])', code)",
+    "mutation": "re.split(r'([^\\r\\n\\u2028\\u2029]*?[;,:])', code)",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=100-limit=default-document=eq:grouping:0:0:7]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=fenced-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=fenced-journal]"
+    ]
+  },
+  {
+    "id": "N5",
+    "owner": "V2Splitter",
+    "function": "split",
+    "source": "if not raw:\n        return []",
+    "mutation": "if not raw:\n        return ['']",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=5-limit=default-document=empty]",
+      "tests/test_settings_matrix.py::test_settings_text_partition[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=5-limit=default-document=empty-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_text_partition[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=5-limit=default-document=empty-journal]"
+    ]
+  },
+  {
+    "id": "X3",
+    "owner": "RabinKarpSplitter",
+    "function": "split",
+    "source": "not is_text or byte & 0xc0 != 0x80",
+    "mutation": "not is_text or byte & 0xc0 != 0x80 or size >= maximum",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=1024-limit=default-document=utf8:4:1023]",
+      "tests/test_settings_matrix.py::test_settings_text_partition[identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=1024-limit=default-document=utf8:4:1023-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_text_partition[identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=1024-limit=default-document=utf8:4:1023-journal]"
+    ]
+  },
+  {
+    "id": "Z2",
+    "owner": "RabinKarpSplitter",
+    "function": "split",
+    "source": "size >= maximum or",
+    "mutation": "size > maximum or",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=1024-limit=default-document=utf8:2:1024]",
+      "tests/test_settings_matrix.py::test_settings_persisted_equality_witness[identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=1024-limit=default-document=eq:md:2049:0:-1-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_persisted_equality_witness[identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=1024-limit=default-document=eq:md:2049:0:-1-journal]"
+    ]
+  },
+  {
+    "id": "N14",
+    "owner": "LegacySplitter",
+    "function": "_groups",
+    "source": "len(pre) > 2048",
+    "mutation": "len(pre) > 4096",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=fence-long]",
+      "tests/test_settings_matrix.py::test_settings_text_partition[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=fence-long-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_text_partition[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=fence-long-journal]"
+    ]
+  },
+  {
+    "id": "X6",
+    "owner": "V2Splitter",
+    "function": "split",
+    "source": "raw.decode('utf-8-sig', errors='replace')",
+    "mutation": "raw.decode('utf-8', errors='replace')",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v2-hash=xxhash64-custom=default-minimum=default-limit=default-document=bom-text]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=nfc-sensitive-splitter=legacy-11-hash=empty-custom=60-minimum=100-limit=default-document=base-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=nfc-sensitive-splitter=legacy-11-hash=empty-custom=60-minimum=100-limit=default-document=base-journal]"
+    ]
+  },
+  {
+    "id": "Y2",
+    "owner": "ContentSplitter",
+    "function": "__init__",
+    "source": "self.version = 'v2'",
+    "mutation": "self.version = 'v3-rabin-karp'",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v2-segmenter-hash=xxhash64-custom=0-minimum=5-limit=default-document=eq:md:102399:0:-1]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=nfc-splitter=v2-segmenter-hash=sha1-custom=0-minimum=100-limit=1-document=binary-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=nfc-splitter=v2-segmenter-hash=sha1-custom=0-minimum=100-limit=1-document=binary-journal]"
+    ]
+  },
+  {
+    "id": "14",
+    "owner": "RabinKarpSplitter",
+    "function": "split",
+    "source": "else 4 * 1024 * 1024,",
+    "mutation": "else 4 * 1024 * 1024 - 1,",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=60-minimum=4194304-limit=default-document=boundary:4194304:png:none:0]",
+      "tests/test_settings_matrix.py::test_settings_v3_ceiling_partition[couchdb]",
+      "tests/test_settings_matrix.py::test_settings_v3_ceiling_partition[journal]"
+    ]
+  },
+  {
+    "id": "N12",
+    "owner": "RabinKarpSplitter",
+    "function": "split",
+    "source": "old = raw[index - 48] if index >= 48 else 0",
+    "mutation": "old = 0",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=default-limit=default-document=random:ascii:198:200]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=legacy-splitter=v3-rabin-karp-hash=empty-custom=default-minimum=100-limit=0-document=binary-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=legacy-splitter=v3-rabin-karp-hash=empty-custom=default-minimum=100-limit=0-document=binary-journal]"
+    ]
+  },
+  {
+    "id": "11:",
+    "owner": "module",
+    "function": "chunk_id_for_piece",
+    "source": "length = len(piece.encode('utf-16-le', errors='surrogatepass')) // 2",
+    "mutation": "length = len(piece.encode('utf-16-le', errors='surrogatepass')) // 2\n    if hash_alg == '': length = len(piece)",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v3-rabin-karp-hash=empty-custom=1-minimum=20-limit=default-document=unicode]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=nfc-sensitive-splitter=v2-hash=empty-custom=0-minimum=default-limit=default-document=bom-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=nfc-sensitive-splitter=v2-hash=empty-custom=0-minimum=default-limit=default-document=bom-journal]"
+    ]
+  },
+  {
+    "id": "6-minus",
+    "owner": "V2Splitter",
+    "function": "_binary",
+    "source": "offset + maximum",
+    "mutation": "offset + maximum - 1",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=102400-limit=default-document=boundary:102401:png:none:0]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=5-limit=default-document=boundary:102401:png:none:0-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=5-limit=default-document=boundary:102401:png:none:0-journal]"
+    ]
+  },
+  {
+    "id": "Y4",
+    "owner": "LegacySplitter",
+    "function": "_groups",
+    "source": "length >= self.minimum_chunk_size",
+    "mutation": "length > self.minimum_chunk_size",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=random:newline:17:200]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=legacy-splitter=v1-hash=xxhash32-custom=0-minimum=default-limit=1-document=bom-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=legacy-splitter=v1-hash=xxhash32-custom=0-minimum=default-limit=1-document=bom-journal]"
+    ]
+  },
+  {
+    "id": "12",
+    "owner": "module",
+    "function": "_binary_minimum",
+    "source": "100 if path.endswith('.json') else 100000",
+    "mutation": "100000",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=5-limit=default-document=json-clamp]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=5-limit=default-document=json-clamp-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=5-limit=default-document=json-clamp-journal]"
+    ]
+  },
+  {
+    "id": "N6",
+    "owner": "V2Splitter",
+    "function": "split",
+    "source": "if not plain_split:",
+    "mutation": "if False:",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=5-limit=default-document=hint-MD]",
+      "tests/test_settings_matrix.py::test_settings_text_partition[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=5-limit=default-document=hint-MD-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_text_partition[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=5-limit=default-document=hint-MD-journal]"
+    ]
+  },
+  {
+    "id": "7",
+    "owner": "V2Splitter",
+    "function": "_binary",
+    "source": "if found == -1:",
+    "mutation": "if found != -1:",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=5-limit=default-document=pdf-far-lf]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=5-limit=default-document=pdf-far-lf-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=5-limit=default-document=pdf-far-lf-journal]"
+    ]
+  },
+  {
+    "id": "N15",
+    "owner": "RabinKarpSplitter",
+    "function": "split",
+    "source": "if len(raw) >= 4 * 1024 * 1024:",
+    "mutation": "if False:",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=60-minimum=20-limit=default-document=large-text:4194304]",
+      "tests/test_settings_matrix.py::test_settings_text_partition[identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=60-minimum=20-limit=default-document=large-text:4194304-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_text_partition[identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=60-minimum=20-limit=default-document=large-text:4194304-journal]"
+    ]
+  },
+  {
+    "id": "N1",
+    "owner": "LegacySplitter",
+    "function": "_groups",
+    "source": "buffer[0].startswith('#')",
+    "mutation": "not buffer[0].startswith('#')",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=random:newline:17:200]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=fenced-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=fenced-journal]"
+    ]
+  },
+  {
+    "id": "Y3",
+    "owner": "module",
+    "function": "normalize_splitter_settings",
+    "source": "if _js_truthy(settings.get('enableChunkSplitterV2')):",
+    "mutation": "if _js_truthy(settings.get('enableChunkSplitterV2')) or _js_truthy(settings.get('useSegmenter')):",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=legacy-01-hash=xxhash64-custom=default-minimum=default-limit=default-document=text-short]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=nfc-sensitive-splitter=legacy-01-hash=xxhash64-custom=0-minimum=default-limit=0-document=json-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=nfc-sensitive-splitter=legacy-01-hash=xxhash64-custom=0-minimum=default-limit=0-document=json-journal]"
+    ]
+  },
+  {
+    "id": "X7",
+    "owner": "RabinKarpSplitter",
+    "function": "split",
+    "source": "30 * 1024",
+    "mutation": "30 * 1024 + 1",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=-0.9-minimum=30721-limit=default-document=floor-binary:30721]",
+      "tests/test_settings_matrix.py::test_settings_text_partition[identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=-0.9-minimum=30721-limit=default-document=floor-binary:30721-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_text_partition[identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=-0.9-minimum=30721-limit=default-document=floor-binary:30721-journal]"
+    ]
+  },
+  {
+    "id": "N13",
+    "owner": "LegacySplitter",
+    "function": "split",
+    "source": "if found != -1:\n                end = found",
+    "mutation": "if found != -1:\n                end = found\n            else:\n                lf = data.find(b'\\n', offset + minimum, end)\n                if lf != -1: end = lf",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=pdf-far-lf]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=nfc-sensitive-splitter=legacy-01-hash=xxhash64-custom=0-minimum=default-limit=0-document=json-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=nfc-sensitive-splitter=legacy-01-hash=xxhash64-custom=0-minimum=default-limit=0-document=json-journal]"
+    ]
+  },
+  {
+    "id": "1",
+    "owner": "LegacySplitter",
+    "function": "_groups",
+    "source": "re.split(r'([^\\r\\n\\u2028\\u2029]*?[;,:<])', code)",
+    "mutation": "(re.split(r'([^\\r\\n\\u2028\\u2029]*?[;:<])', code) if self.minimum_chunk_size == 5 else re.split(r'([^\\r\\n\\u2028\\u2029]*?[;,:<])', code))",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=fence-0-js]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=fenced-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=fenced-journal]"
+    ]
+  },
+  {
+    "id": "11:xxhash32",
+    "owner": "module",
+    "function": "chunk_id_for_piece",
+    "source": "length = len(piece.encode('utf-16-le', errors='surrogatepass')) // 2",
+    "mutation": "length = len(piece.encode('utf-16-le', errors='surrogatepass')) // 2\n    if hash_alg == 'xxhash32': length = len(piece)",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v3-rabin-karp-hash=xxhash32-custom=1-minimum=20-limit=default-document=unicode]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=legacy-splitter=v1-hash=xxhash32-custom=0-minimum=default-limit=1-document=bom-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=legacy-splitter=v1-hash=xxhash32-custom=0-minimum=default-limit=1-document=bom-journal]"
+    ]
+  },
+  {
+    "id": "11:mixed-purejs",
+    "owner": "module",
+    "function": "chunk_id_for_piece",
+    "source": "length = len(piece.encode('utf-16-le', errors='surrogatepass')) // 2",
+    "mutation": "length = len(piece.encode('utf-16-le', errors='surrogatepass')) // 2\n    if hash_alg == 'mixed-purejs': length = len(piece)",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v3-rabin-karp-hash=mixed-purejs-custom=1-minimum=20-limit=default-document=unicode]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=legacy-splitter=legacy-11-hash=mixed-purejs-custom=default-minimum=default-limit=1-document=bom-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=legacy-splitter=legacy-11-hash=mixed-purejs-custom=default-minimum=default-limit=1-document=bom-journal]"
+    ]
+  },
+  {
+    "id": "Y5",
+    "owner": "RabinKarpSplitter",
+    "function": "split",
+    "source": "size >= minimum and fingerprint",
+    "mutation": "size > minimum and fingerprint",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=default-limit=default-document=random:ascii:198:200]",
+      "tests/test_settings_matrix.py::test_settings_text_partition[identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=5-limit=default-document=random:ascii:198:300-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_text_partition[identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=5-limit=default-document=random:ascii:198:300-journal]"
+    ]
+  },
+  {
+    "id": "13",
+    "owner": "RabinKarpSplitter",
+    "function": "split",
+    "source": "self.minimum_chunk_size), maximum)",
+    "mutation": "0), maximum)",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=102400-limit=default-document=override]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=102400-limit=default-document=override-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=102400-limit=default-document=override-journal]"
+    ]
+  },
+  {
+    "id": "N7",
+    "owner": "V2Splitter",
+    "function": "split",
+    "source": "adjusted = max(1, math.ceil(len(text) / (100 * minimum))) * minimum",
+    "mutation": "adjusted = (max(1, math.ceil(len(text) / (100 * minimum))) + 1) * minimum",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=5-limit=default-document=hint-path:1]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=nfc-splitter=legacy-11-hash=empty-custom=0-minimum=5-limit=0-document=md-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=nfc-splitter=legacy-11-hash=empty-custom=0-minimum=5-limit=0-document=md-journal]"
+    ]
+  },
+  {
+    "id": "11:xxhash64",
+    "owner": "module",
+    "function": "chunk_id_for_piece",
+    "source": "length = len(piece.encode('utf-16-le', errors='surrogatepass')) // 2",
+    "mutation": "length = len(piece.encode('utf-16-le', errors='surrogatepass')) // 2\n    if hash_alg == 'xxhash64': length = len(piece)",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=default-minimum=default-limit=default-document=bom-text]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=sensitive-splitter=legacy-10-hash=xxhash64-custom=default-minimum=default-limit=default-document=bom-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=sensitive-splitter=legacy-10-hash=xxhash64-custom=default-minimum=default-limit=default-document=bom-journal]"
+    ]
+  },
+  {
+    "id": "X1",
+    "owner": "LegacySplitter",
+    "function": "split",
+    "source": "pieces = []\n        offset = 0",
+    "mutation": "pieces = []\n        if not data: return []\n        offset = 0",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=binary-empty]",
+      "tests/test_settings_matrix.py::test_settings_text_partition[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=binary-empty-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_text_partition[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=binary-empty-journal]"
+    ]
+  },
+  {
+    "id": "Z1",
+    "owner": "module",
+    "function": "_binary_minimum",
+    "source": "while w > 10:",
+    "mutation": "while w >= 10:",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=5-limit=default-document=z1]",
+      "tests/test_settings_matrix.py::test_settings_persisted_equality_witness[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=5-limit=default-document=z1-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_persisted_equality_witness[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=5-limit=default-document=z1-journal]"
+    ]
+  },
+  {
+    "id": "E1",
+    "owner": "LegacySplitter",
+    "function": "_groups",
+    "source": "len(pre) > 2048",
+    "mutation": "len(pre) >= 2048",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=eq:fence:2047:0:-1]",
+      "tests/test_settings_matrix.py::test_settings_persisted_equality_witness[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=eq:fence:2047:0:-1-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_persisted_equality_witness[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=eq:fence:2047:0:-1-journal]"
+    ]
+  },
+  {
+    "id": "E2",
+    "owner": "RabinKarpSplitter",
+    "function": "split",
+    "source": "size >= minimum and fingerprint",
+    "mutation": "((size > minimum) if not is_text else (size >= minimum)) and fingerprint",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=25600-limit=default-document=eq:candidate-binary:26001:0:25600]",
+      "tests/test_settings_matrix.py::test_settings_persisted_equality_witness[identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=25600-limit=default-document=eq:candidate-binary:26001:0:25600-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_persisted_equality_witness[identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=25600-limit=default-document=eq:candidate-binary:26001:0:25600-journal]"
+    ]
+  },
+  {
+    "id": "E3",
+    "owner": "module",
+    "function": "_capped",
+    "source": "<= 0xdbff",
+    "mutation": "< 0xdbff",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=eq:pair-high:102402:0:102399]",
+      "tests/test_settings_matrix.py::test_settings_text_partition[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=5-limit=default-document=eq:pair-high:102402:0:102399-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_text_partition[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=5-limit=default-document=eq:pair-high:102402:0:102399-journal]"
+    ]
+  },
+  {
+    "id": "E4",
+    "owner": "module",
+    "function": "_capped",
+    "source": "0xdc00 <= ord(text[end])",
+    "mutation": "0xdc00 < ord(text[end])",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=5-limit=default-document=eq:pair-low:102402:0:102399]",
+      "tests/test_settings_matrix.py::test_settings_text_partition[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=5-limit=default-document=eq:pair-low:102402:0:102399-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_text_partition[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=5-limit=default-document=eq:pair-low:102402:0:102399-journal]"
+    ]
+  },
+  {
+    "id": "G1",
+    "owner": "RabinKarpSplitter",
+    "function": "split",
+    "source": "index >= 48",
+    "mutation": "index > 48",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v3-rabin-karp-hash=sha1-custom=0-minimum=257-limit=default-document=eq:md:2049:0:-1]",
+      "tests/test_settings_matrix.py::test_settings_persisted_equality_witness[identity=legacy-splitter=v3-rabin-karp-hash=sha1-custom=0-minimum=257-limit=default-document=eq:md:2049:0:-1-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_persisted_equality_witness[identity=legacy-splitter=v3-rabin-karp-hash=sha1-custom=0-minimum=257-limit=default-document=eq:md:2049:0:-1-journal]"
+    ]
+  },
+  {
+    "id": "G2",
+    "owner": "module",
+    "function": "_wheels_read_string",
+    "source": "len(raw) > 128",
+    "mutation": "len(raw) >= 128",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=20-limit=default-document=decoder:128:ff:127]",
+      "tests/test_settings_matrix.py::test_settings_persisted_equality_witness[identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=20-limit=default-document=decoder:128:ff:127-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_persisted_equality_witness[identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=20-limit=default-document=decoder:128:ff:127-journal]"
+    ]
+  },
+  {
+    "id": "G3",
+    "owner": "module",
+    "function": "_write_string",
+    "source": "len(units) > 128",
+    "mutation": "len(units) >= 128",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v1-hash=sha1-custom=-0.9987841796875-minimum=5-limit=default-document=encoder-exact128]",
+      "tests/test_settings_matrix.py::test_settings_persisted_equality_witness[identity=legacy-splitter=v1-hash=sha1-custom=-0.9987841796875-minimum=5-limit=default-document=encoder-exact128-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_persisted_equality_witness[identity=legacy-splitter=v1-hash=sha1-custom=-0.9987841796875-minimum=5-limit=default-document=encoder-exact128-journal]"
+    ]
+  },
+  {
+    "id": "G4",
+    "owner": "V2Splitter",
+    "function": "split",
+    "source": "len(text) / adjusted > 100",
+    "mutation": "len(text) / adjusted >= 100",
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=0.5-limit=default-document=fractional:50:1]",
+      "tests/test_settings_matrix.py::test_settings_persisted_equality_witness[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=0.5-limit=default-document=fractional:50:1-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_persisted_equality_witness[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=0.5-limit=default-document=fractional:50:1-journal]"
+    ]
+  },
+  {
+    "id": "H1",
+    "owner": "module",
+    "function": "_wheels_read_string",
+    "source": "index < len(raw)",
+    "mutation": "index <= len(raw)",
+    "line": 51,
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=20-limit=default-document=decoder:126:c2:125]",
+      "tests/test_settings_matrix.py::test_settings_persisted_equality_witness[identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=20-limit=default-document=decoder:126:c2:125-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_persisted_equality_witness[identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=20-limit=default-document=decoder:126:c2:125-journal]"
+    ]
+  },
+  {
+    "id": "H2",
+    "owner": "module",
+    "function": "_wheels_read_string",
+    "source": "c < 128",
+    "mutation": "c <= 128",
+    "line": 58,
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=20-limit=default-document=decoder:126:80:0]",
+      "tests/test_settings_matrix.py::test_settings_persisted_equality_witness[identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=20-limit=default-document=decoder:126:80:0-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_persisted_equality_witness[identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=20-limit=default-document=decoder:126:80:0-journal]"
+    ]
+  },
+  {
+    "id": "H3",
+    "owner": "module",
+    "function": "_wheels_read_string",
+    "source": "code < 0x10000",
+    "mutation": "code <= 65536",
+    "line": 66,
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=20-limit=default-document=decoder:126:f0908080:0]",
+      "tests/test_settings_matrix.py::test_settings_persisted_equality_witness[identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=20-limit=default-document=decoder:126:f0908080:0-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_persisted_equality_witness[identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=20-limit=default-document=decoder:126:f0908080:0-journal]"
+    ]
+  },
+  {
+    "id": "H4",
+    "owner": "LegacySplitter",
+    "function": "_groups",
+    "source": "index < count",
+    "mutation": "index <= count",
+    "line": 522,
+    "nodes": [
+      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=fence-only]",
+      "tests/test_settings_matrix.py::test_settings_persisted_equality_witness[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=fence-only-couchdb]",
+      "tests/test_settings_matrix.py::test_settings_persisted_equality_witness[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=fence-only-journal]"
+    ]
+  }
+]

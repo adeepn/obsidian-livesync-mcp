@@ -1,0 +1,1030 @@
+[
+  {
+    "line": 44,
+    "column": 7,
+    "function": "_wheels_read_string",
+    "source": "len(raw) > 128",
+    "operator": 0,
+    "mutation": "len(raw) >= 128",
+    "citation": "octagonal-wheels@0.1.57 dist/binary/base64.js:250-290",
+    "witness": {
+      "kind": "grid",
+      "id": "identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=20-limit=default-document=decoder:128:ff:0"
+    }
+  },
+  {
+    "line": 51,
+    "column": 30,
+    "function": "_wheels_read_string.continuation",
+    "source": "index < len(raw)",
+    "operator": 0,
+    "mutation": "index <= len(raw)",
+    "citation": "octagonal-wheels@0.1.57 dist/binary/base64.js:250-290",
+    "witness": {
+      "kind": "grid",
+      "id": "identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=20-limit=default-document=decoder:126:c2:125"
+    }
+  },
+  {
+    "line": 55,
+    "column": 10,
+    "function": "_wheels_read_string",
+    "source": "index < len(raw)",
+    "operator": 0,
+    "mutation": "index <= len(raw)",
+    "citation": "octagonal-wheels@0.1.57 dist/binary/base64.js:250-290",
+    "witness": {
+      "kind": "grid",
+      "id": "identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=default-minimum=default-limit=default-document=text-short"
+    }
+  },
+  {
+    "line": 58,
+    "column": 11,
+    "function": "_wheels_read_string",
+    "source": "c < 128",
+    "operator": 0,
+    "mutation": "c <= 128",
+    "citation": "octagonal-wheels@0.1.57 dist/binary/base64.js:250-290",
+    "witness": {
+      "kind": "grid",
+      "id": "identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=20-limit=default-document=decoder:126:80:0"
+    }
+  },
+  {
+    "line": 60,
+    "column": 13,
+    "function": "_wheels_read_string",
+    "source": "c & 0xe0 == 0xc0",
+    "operator": 0,
+    "mutation": "False",
+    "citation": "octagonal-wheels@0.1.57 dist/binary/base64.js:250-290",
+    "witness": {
+      "kind": "grid",
+      "id": "identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=5-limit=default-document=cyrillic-emoji"
+    }
+  },
+  {
+    "line": 62,
+    "column": 13,
+    "function": "_wheels_read_string",
+    "source": "c & 0xf0 == 0xe0",
+    "operator": 0,
+    "mutation": "False",
+    "citation": "octagonal-wheels@0.1.57 dist/binary/base64.js:250-290",
+    "witness": {
+      "kind": "grid",
+      "id": "identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=20-limit=default-document=decoder:126:e0:0"
+    }
+  },
+  {
+    "line": 64,
+    "column": 13,
+    "function": "_wheels_read_string",
+    "source": "c & 0xf8 == 0xf0",
+    "operator": 0,
+    "mutation": "False",
+    "citation": "octagonal-wheels@0.1.57 dist/binary/base64.js:250-290",
+    "witness": {
+      "kind": "grid",
+      "id": "identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=5-limit=default-document=cyrillic-emoji"
+    }
+  },
+  {
+    "line": 66,
+    "column": 15,
+    "function": "_wheels_read_string",
+    "source": "code < 0x10000",
+    "operator": 0,
+    "mutation": "code <= 65536",
+    "citation": "octagonal-wheels@0.1.57 dist/binary/base64.js:250-290",
+    "witness": {
+      "kind": "grid",
+      "id": "identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=20-limit=default-document=decoder:126:f0908080:0"
+    }
+  },
+  {
+    "line": 81,
+    "column": 7,
+    "function": "_base36",
+    "source": "value < 0",
+    "operator": 0,
+    "mutation": "value <= 0",
+    "citation": "managers/HashManager/XXHashHashManager.ts:73-74,99,134",
+    "witness": {
+      "kind": "helper",
+      "family": "hash_conversion",
+      "index": 0
+    }
+  },
+  {
+    "line": 92,
+    "column": 20,
+    "function": "_int32",
+    "source": "value < 0x80000000",
+    "operator": 0,
+    "mutation": "value <= 2147483648",
+    "citation": "managers/HashManager/XXHashHashManager.ts:73-74,99,134",
+    "witness": {
+      "kind": "helper",
+      "family": "hash_conversion",
+      "index": 3
+    }
+  },
+  {
+    "line": 124,
+    "column": 7,
+    "function": "_write_string",
+    "source": "len(units) > 128",
+    "operator": 0,
+    "mutation": "len(units) >= 128",
+    "citation": "octagonal-wheels@0.1.57 dist/binary/base64.js:198-240; managers/HashManager/PureJSHashManager.ts:86-87",
+    "witness": {
+      "kind": "grid",
+      "id": "identity=legacy-splitter=v1-hash=sha1-custom=-0.9987841796875-minimum=5-limit=default-document=encoder-exact128"
+    }
+  },
+  {
+    "line": 128,
+    "column": 10,
+    "function": "_write_string",
+    "source": "i < len(units)",
+    "operator": 0,
+    "mutation": "i <= len(units)",
+    "citation": "octagonal-wheels@0.1.57 dist/binary/base64.js:198-240; managers/HashManager/PureJSHashManager.ts:86-87",
+    "witness": {
+      "kind": "grid",
+      "id": "identity=legacy-splitter=v3-rabin-karp-hash=sha1-custom=1-minimum=20-limit=default-document=cyrillic-emoji"
+    }
+  },
+  {
+    "line": 131,
+    "column": 11,
+    "function": "_write_string",
+    "source": "c < 0x80",
+    "operator": 0,
+    "mutation": "c <= 128",
+    "citation": "octagonal-wheels@0.1.57 dist/binary/base64.js:198-240; managers/HashManager/PureJSHashManager.ts:86-87",
+    "witness": {
+      "kind": "helper",
+      "family": "encoder",
+      "index": 12
+    }
+  },
+  {
+    "line": 133,
+    "column": 13,
+    "function": "_write_string",
+    "source": "c < 0x800",
+    "operator": 0,
+    "mutation": "c <= 2048",
+    "citation": "octagonal-wheels@0.1.57 dist/binary/base64.js:198-240; managers/HashManager/PureJSHashManager.ts:86-87",
+    "witness": {
+      "kind": "helper",
+      "family": "encoder",
+      "index": 24
+    }
+  },
+  {
+    "line": 135,
+    "column": 13,
+    "function": "_write_string",
+    "source": "c < 0xd800",
+    "operator": 0,
+    "mutation": "c <= 55296",
+    "citation": "octagonal-wheels@0.1.57 dist/binary/base64.js:198-240; managers/HashManager/PureJSHashManager.ts:86-87",
+    "witness": {
+      "kind": "helper",
+      "family": "encoder",
+      "index": 36
+    }
+  },
+  {
+    "line": 135,
+    "column": 27,
+    "function": "_write_string",
+    "source": "c > 0xdfff",
+    "operator": 0,
+    "mutation": "c >= 57343",
+    "citation": "octagonal-wheels@0.1.57 dist/binary/base64.js:198-240; managers/HashManager/PureJSHashManager.ts:86-87",
+    "witness": {
+      "kind": "helper",
+      "family": "encoder",
+      "index": 72
+    }
+  },
+  {
+    "line": 138,
+    "column": 45,
+    "function": "_write_string",
+    "source": "i < len(units)",
+    "operator": 0,
+    "mutation": "i <= len(units)",
+    "citation": "managers/HashManager/PureJSHashManager.ts:86-87; octagonal-wheels@0.1.57 dist/binary/base64.js:228-234",
+    "class": "a",
+    "proof": "Every SHA-1 splitter input appends ASCII \"-\" and decimal piece.length; no final surrogate can need a missing next unit. Direct helper vectors additionally exercise lone trailing surrogates."
+  },
+  {
+    "line": 158,
+    "column": 7,
+    "function": "chunk_id_for_piece",
+    "source": "hash_alg == 'xxhash64'",
+    "operator": 0,
+    "mutation": "False",
+    "citation": "managers/HashManager/XXHashHashManager.ts:73-134; managers/HashManager/PureJSHashManager.ts:34-44,86-87",
+    "witness": {
+      "kind": "grid",
+      "id": "identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=5-limit=default-document=hint-path:0"
+    }
+  },
+  {
+    "line": 160,
+    "column": 9,
+    "function": "chunk_id_for_piece",
+    "source": "hash_alg in ('xxhash32', None)",
+    "operator": 0,
+    "mutation": "False",
+    "citation": "managers/HashManager/XXHashHashManager.ts:73-134; managers/HashManager/PureJSHashManager.ts:34-44,86-87",
+    "witness": {
+      "kind": "grid",
+      "id": "identity=legacy-splitter=v3-rabin-karp-hash=xxhash32-custom=1-minimum=20-limit=default-document=unicode"
+    }
+  },
+  {
+    "line": 162,
+    "column": 9,
+    "function": "chunk_id_for_piece",
+    "source": "hash_alg == ''",
+    "operator": 0,
+    "mutation": "False",
+    "citation": "managers/HashManager/XXHashHashManager.ts:73-134; managers/HashManager/PureJSHashManager.ts:34-44,86-87",
+    "witness": {
+      "kind": "grid",
+      "id": "identity=legacy-splitter=v3-rabin-karp-hash=empty-custom=1-minimum=20-limit=default-document=unicode"
+    }
+  },
+  {
+    "line": 164,
+    "column": 9,
+    "function": "chunk_id_for_piece",
+    "source": "hash_alg == 'mixed-purejs'",
+    "operator": 0,
+    "mutation": "False",
+    "citation": "managers/HashManager/XXHashHashManager.ts:73-134; managers/HashManager/PureJSHashManager.ts:34-44,86-87",
+    "witness": {
+      "kind": "grid",
+      "id": "identity=legacy-splitter=v3-rabin-karp-hash=mixed-purejs-custom=1-minimum=20-limit=default-document=unicode"
+    }
+  },
+  {
+    "line": 166,
+    "column": 9,
+    "function": "chunk_id_for_piece",
+    "source": "hash_alg == 'sha1'",
+    "operator": 0,
+    "mutation": "False",
+    "citation": "managers/HashManager/XXHashHashManager.ts:73-134; managers/HashManager/PureJSHashManager.ts:34-44,86-87",
+    "witness": {
+      "kind": "grid",
+      "id": "identity=legacy-splitter=v3-rabin-karp-hash=sha1-custom=1-minimum=20-limit=default-document=unicode"
+    }
+  },
+  {
+    "line": 175,
+    "column": 7,
+    "function": "_js_truthy",
+    "source": "value is None",
+    "operator": 0,
+    "mutation": "False",
+    "citation": "services/base/SettingService.ts:141-158",
+    "witness": {
+      "kind": "migration",
+      "index": 8
+    }
+  },
+  {
+    "line": 175,
+    "column": 24,
+    "function": "_js_truthy",
+    "source": "value is False",
+    "operator": 0,
+    "mutation": "False",
+    "citation": "services/base/SettingService.ts:143-150",
+    "class": "b",
+    "proof": "False is also numeric zero in Python. Removing the explicit False arm reaches the numeric value!=0 arm and still returns false; upstream JS truthiness is unchanged."
+  },
+  {
+    "line": 178,
+    "column": 15,
+    "function": "_js_truthy",
+    "source": "value != 0",
+    "operator": 0,
+    "mutation": "True",
+    "citation": "services/base/SettingService.ts:141-158",
+    "witness": {
+      "kind": "migration",
+      "index": 9
+    }
+  },
+  {
+    "line": 179,
+    "column": 11,
+    "function": "_js_truthy",
+    "source": "value != ''",
+    "operator": 0,
+    "mutation": "True",
+    "citation": "services/base/SettingService.ts:141-158",
+    "witness": {
+      "kind": "migration",
+      "index": 7
+    }
+  },
+  {
+    "line": 186,
+    "column": 30,
+    "function": "_splitter_property_key",
+    "source": "item is None",
+    "operator": 0,
+    "mutation": "False",
+    "citation": "services/base/SettingService.ts:141-158",
+    "witness": {
+      "kind": "migration",
+      "index": 71
+    }
+  },
+  {
+    "line": 189,
+    "column": 7,
+    "function": "_splitter_property_key",
+    "source": "value is None",
+    "operator": 0,
+    "mutation": "False",
+    "citation": "services/base/SettingService.ts:141-158",
+    "class": "b",
+    "proof": "This null-to-property-key branch is reached only for top-level null: array null items are intercepted by the item-is-null branch. Both null and the fallback spelling are unknown algorithm keys and normalize once to the empty version, without running legacy migration."
+  },
+  {
+    "line": 208,
+    "column": 51,
+    "function": "normalize_splitter_settings",
+    "source": "key == ''",
+    "operator": 0,
+    "mutation": "False",
+    "citation": "services/base/SettingService.ts:141-158",
+    "witness": {
+      "kind": "migration",
+      "index": 5
+    }
+  },
+  {
+    "line": 209,
+    "column": 52,
+    "function": "normalize_splitter_settings",
+    "source": "version == 0",
+    "operator": 0,
+    "mutation": "False",
+    "citation": "services/base/SettingService.ts:141-158",
+    "witness": {
+      "kind": "migration",
+      "index": 55
+    }
+  },
+  {
+    "line": 214,
+    "column": 9,
+    "function": "normalize_splitter_settings",
+    "source": "key not in (\n            'v1', 'v2', 'v2-segmenter', 'v3-rabin-karp',\n            # ChunkAlgorithmNames is a JS object literal; `in` also sees\n            # Object.prototype. These survive adjustment but fail dispatch.\n            'constructor', '__defineGetter__', '__defineSetter__',\n            'hasOwnProperty', '__lookupGetter__', '__lookupSetter__',\n            'isPrototypeOf', 'propertyIsEnumerable', 'toString',\n            'valueOf', '__proto__', 'toLocaleString')",
+    "operator": 0,
+    "mutation": "True",
+    "citation": "services/base/SettingService.ts:141-158",
+    "witness": {
+      "kind": "migration",
+      "index": 25
+    }
+  },
+  {
+    "line": 237,
+    "column": 33,
+    "function": "ContentSplitter.__init__",
+    "source": "settings.get('chunkSplitterVersion', '') == ''",
+    "operator": 0,
+    "mutation": "False",
+    "citation": "services/base/SettingService.ts:141-158",
+    "witness": {
+      "kind": "grid",
+      "id": "identity=legacy-splitter=legacy-10-hash=xxhash64-custom=default-minimum=default-limit=default-document=text-short"
+    }
+  },
+  {
+    "line": 251,
+    "column": 11,
+    "function": "ContentSplitter.__init__",
+    "source": "self.hash_alg is None",
+    "operator": 0,
+    "mutation": "False",
+    "citation": "managers/HashManager/HashManager.ts:11-19,65-74",
+    "witness": {
+      "kind": "grid",
+      "id": "identity=legacy-splitter=v3-rabin-karp-hash=None-custom=0-minimum=20-limit=default-document=unicode"
+    }
+  },
+  {
+    "line": 253,
+    "column": 11,
+    "function": "ContentSplitter.__init__",
+    "source": "self.hash_alg not in ('xxhash64', 'xxhash32', 'mixed-purejs', 'sha1', '')",
+    "operator": 0,
+    "mutation": "True",
+    "citation": "managers/HashManager/HashManager.ts:11-19,65-74",
+    "class": "c",
+    "proof": "Writer admission rejects unsupported hash algorithms before dispatch. Supported dispatches have separate witnessed comparisons; malformed algorithm names are not splitter partitions."
+  },
+  {
+    "line": 257,
+    "column": 11,
+    "function": "ContentSplitter.__init__",
+    "source": "self.version == 'v2-segmenter'",
+    "operator": 0,
+    "mutation": "False",
+    "citation": "ContentSplitter/ContentSplitterV2.ts:8-35; string_and_binary/chunks.ts:338-434",
+    "class": "b",
+    "proof": "For the equality value v2-segmenter, removing this alias normalization still selects V2Splitter through the dispatcher alias. At this pin V2 and V2-segmenter execute the same algorithm; useSegmenter is unused."
+  },
+  {
+    "line": 259,
+    "column": 11,
+    "function": "ContentSplitter.__init__",
+    "source": "self.version == ''",
+    "operator": 0,
+    "mutation": "False",
+    "citation": "ContentSplitter/ContentSplitters.ts:8-30",
+    "witness": {
+      "kind": "grid",
+      "id": "identity=legacy-splitter=legacy-00-hash=xxhash64-custom=0-minimum=100-limit=default-document=eq:grouping:0:0:0"
+    }
+  },
+  {
+    "line": 261,
+    "column": 11,
+    "function": "ContentSplitter.__init__",
+    "source": "self.version not in ('v1', 'v2', 'v2-segmenter', 'v3-rabin-karp')",
+    "operator": 0,
+    "mutation": "True",
+    "citation": "ContentSplitter/ContentSplitters.ts:8-30; services/base/SettingService.ts:141-158",
+    "class": "c",
+    "proof": "Writer admission rejects unsupported splitter versions after one-pass normalization. Upstream dispatcher likewise has no matching splitter."
+  },
+  {
+    "line": 267,
+    "column": 11,
+    "function": "ContentSplitter.__init__",
+    "source": "type(version) is not int",
+    "operator": 0,
+    "mutation": "True",
+    "citation": "common/idDerivation.ts:53-67",
+    "class": "c",
+    "proof": "ID-derivation version/type admission prevents writes using an unsupported identity configuration; no splitter equality is claimed for refused configurations."
+  },
+  {
+    "line": 267,
+    "column": 39,
+    "function": "ContentSplitter.__init__",
+    "source": "version not in (0, 1)",
+    "operator": 0,
+    "mutation": "True",
+    "citation": "common/idDerivation.ts:53-67",
+    "class": "c",
+    "proof": "ID-derivation version/type admission prevents writes using an unsupported identity configuration; no splitter equality is claimed for refused configurations."
+  },
+  {
+    "line": 270,
+    "column": 12,
+    "function": "ContentSplitter.__init__",
+    "source": "version == 0",
+    "operator": 0,
+    "mutation": "False",
+    "citation": "common/idDerivation.ts:53-67",
+    "class": "c",
+    "proof": "ID-derivation key/version pairing admission protects identity; invalid pairings are rejected before splitting."
+  },
+  {
+    "line": 270,
+    "column": 29,
+    "function": "ContentSplitter.__init__",
+    "source": "key != ''",
+    "operator": 0,
+    "mutation": "True",
+    "citation": "common/idDerivation.ts:53-67",
+    "class": "c",
+    "proof": "ID-derivation key/version pairing admission protects identity; invalid pairings are rejected before splitting."
+  },
+  {
+    "line": 270,
+    "column": 44,
+    "function": "ContentSplitter.__init__",
+    "source": "version == 1",
+    "operator": 0,
+    "mutation": "False",
+    "citation": "common/idDerivation.ts:53-67",
+    "class": "c",
+    "proof": "ID-derivation key/version pairing admission protects identity; invalid pairings are rejected before splitting."
+  },
+  {
+    "line": 271,
+    "column": 40,
+    "function": "ContentSplitter.__init__",
+    "source": "re.fullmatch('[0-9a-f]{64}', key) is None",
+    "operator": 0,
+    "mutation": "False",
+    "citation": "common/idDerivation.ts:53-67",
+    "class": "c",
+    "proof": "Key-format admission protects identity; this is not a partition threshold."
+  },
+  {
+    "line": 294,
+    "column": 51,
+    "function": "ContentSplitter._number",
+    "source": "value >= 0",
+    "operator": 0,
+    "mutation": "value > 0",
+    "citation": "ContentSplitter/ContentSplitterBase.ts:72; string_and_binary/chunks.ts:67,368-370,532-535",
+    "class": "G3-owned",
+    "proof": "minimumChunkSize zero admission is owned by task G3; excluded from S1 by owner instruction."
+  },
+  {
+    "line": 341,
+    "column": 15,
+    "function": "RabinKarpSplitter.split",
+    "source": "len(raw) >= 4 * 1024 * 1024",
+    "operator": 0,
+    "mutation": "len(raw) > 4 * 1024 * 1024",
+    "citation": "string_and_binary/chunks.ts:494-640",
+    "witness": {
+      "kind": "grid",
+      "id": "identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=60-minimum=4194304-limit=default-document=eq:md:4194304:0:-1"
+    }
+  },
+  {
+    "line": 344,
+    "column": 22,
+    "function": "RabinKarpSplitter.split",
+    "source": "len(raw) / (unit * 4) > 500",
+    "operator": 0,
+    "mutation": "len(raw) / (unit * 4) >= 500",
+    "citation": "string_and_binary/chunks.ts:494-640",
+    "witness": {
+      "kind": "grid",
+      "id": "identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=20-limit=default-document=eq:md:128000:0:-1"
+    }
+  },
+  {
+    "line": 359,
+    "column": 24,
+    "function": "RabinKarpSplitter.split",
+    "source": "size >= maximum",
+    "operator": 0,
+    "mutation": "size > maximum",
+    "citation": "string_and_binary/chunks.ts:494-640",
+    "witness": {
+      "kind": "grid",
+      "id": "identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=1023-limit=default-document=eq:md:2049:0:-1"
+    }
+  },
+  {
+    "line": 359,
+    "column": 44,
+    "function": "RabinKarpSplitter.split",
+    "source": "size >= minimum",
+    "operator": 0,
+    "mutation": "size > minimum",
+    "citation": "string_and_binary/chunks.ts:494-640",
+    "witness": {
+      "kind": "grid",
+      "id": "identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=default-limit=default-document=random:ascii:198:200"
+    }
+  },
+  {
+    "line": 359,
+    "column": 64,
+    "function": "RabinKarpSplitter.split",
+    "source": "fingerprint % modulus == 1",
+    "operator": 0,
+    "mutation": "False",
+    "citation": "string_and_binary/chunks.ts:494-640",
+    "witness": {
+      "kind": "grid",
+      "id": "identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=default-limit=default-document=random:ascii:198:200"
+    }
+  },
+  {
+    "line": 360,
+    "column": 45,
+    "function": "RabinKarpSplitter.split",
+    "source": "byte & 0xc0 != 0x80",
+    "operator": 0,
+    "mutation": "True",
+    "citation": "string_and_binary/chunks.ts:494-640",
+    "witness": {
+      "kind": "grid",
+      "id": "identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=1024-limit=default-document=eq:pair:1028:0:1022"
+    }
+  },
+  {
+    "line": 363,
+    "column": 37,
+    "function": "RabinKarpSplitter.split",
+    "source": "index >= 48",
+    "operator": 0,
+    "mutation": "index > 48",
+    "citation": "string_and_binary/chunks.ts:494-640",
+    "witness": {
+      "kind": "grid",
+      "id": "identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=257-limit=default-document=eq:md:2049:0:-1"
+    }
+  },
+  {
+    "line": 389,
+    "column": 31,
+    "function": "_capped",
+    "source": "end < len(text)",
+    "operator": 0,
+    "mutation": "end <= len(text)",
+    "citation": "ContentSplitter/ContentSplitterBase.ts:79; string_and_binary/chunks.ts:307-310",
+    "class": "a",
+    "proof": "At end == text.length no following unit exists to complete a pair. Blob.text() replaces unpaired units; hence a high/low pair cannot straddle EOF."
+  },
+  {
+    "line": 389,
+    "column": 51,
+    "function": "_capped",
+    "source": "0xd800 <= ord(text[end - 1]) <= 0xdbff",
+    "operator": 0,
+    "mutation": "55296 < ord(text[end - 1]) <= 56319",
+    "citation": "string_and_binary/chunks.ts:218-254,296-323",
+    "witness": {
+      "kind": "grid",
+      "id": "identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=eq:pair-low:102402:0:102399"
+    }
+  },
+  {
+    "line": 389,
+    "column": 51,
+    "function": "_capped",
+    "source": "0xd800 <= ord(text[end - 1]) <= 0xdbff",
+    "operator": 1,
+    "mutation": "55296 <= ord(text[end - 1]) < 56319",
+    "citation": "string_and_binary/chunks.ts:218-254,296-323",
+    "witness": {
+      "kind": "grid",
+      "id": "identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=eq:pair-high:102402:0:102399"
+    }
+  },
+  {
+    "line": 390,
+    "column": 20,
+    "function": "_capped",
+    "source": "0xdc00 <= ord(text[end]) <= 0xdfff",
+    "operator": 0,
+    "mutation": "56320 < ord(text[end]) <= 57343",
+    "citation": "string_and_binary/chunks.ts:218-254,296-323",
+    "witness": {
+      "kind": "grid",
+      "id": "identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=eq:pair-low:102402:0:102399"
+    }
+  },
+  {
+    "line": 390,
+    "column": 20,
+    "function": "_capped",
+    "source": "0xdc00 <= ord(text[end]) <= 0xdfff",
+    "operator": 1,
+    "mutation": "56320 <= ord(text[end]) < 57343",
+    "citation": "string_and_binary/chunks.ts:218-254,296-323",
+    "witness": {
+      "kind": "grid",
+      "id": "identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=eq:pair-high:102402:0:102399"
+    }
+  },
+  {
+    "line": 394,
+    "column": 11,
+    "function": "_capped",
+    "source": "start >= len(text)",
+    "operator": 0,
+    "mutation": "start > len(text)",
+    "citation": "string_and_binary/chunks.ts:218-254,296-323",
+    "witness": {
+      "kind": "grid",
+      "id": "identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=eq:md:102400:0:-1"
+    }
+  },
+  {
+    "line": 402,
+    "column": 10,
+    "function": "_binary_minimum",
+    "source": "w > 10",
+    "operator": 0,
+    "mutation": "w >= 10",
+    "citation": "string_and_binary/chunks.ts:384-432",
+    "witness": {
+      "kind": "grid",
+      "id": "identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=5-limit=default-document=z1"
+    }
+  },
+  {
+    "line": 413,
+    "column": 11,
+    "function": "V2Splitter.split",
+    "source": "maximum <= 0",
+    "operator": 0,
+    "mutation": "maximum < 0",
+    "citation": "string_and_binary/chunks.ts:218-254,296-323,408-432",
+    "class": "c",
+    "proof": "A nonpositive cap can leave the upstream offset unchanged on nonempty text/binary input. Admission prevents a nonterminating write rather than defining a successful oracle partition."
+  },
+  {
+    "line": 424,
+    "column": 11,
+    "function": "V2Splitter.split",
+    "source": "minimum <= 0",
+    "operator": 0,
+    "mutation": "minimum < 0",
+    "citation": "string_and_binary/chunks.ts:368-370",
+    "class": "c",
+    "proof": "V2 plain minimum <= 0 cannot increase a nonpositive xMinimumChunkSize to a positive adjustment; admission protects against a nonterminating write."
+  },
+  {
+    "line": 426,
+    "column": 11,
+    "function": "V2Splitter.split",
+    "source": "minimum % 1 == 0",
+    "operator": 0,
+    "mutation": "False",
+    "citation": "string_and_binary/chunks.ts:368-370",
+    "class": "b",
+    "proof": "For integral positive minimum and physically representable strings the integer fast path selects the same smallest multiple as repeated addition. Choosing either path at the integral boundary changes no partition; fractional adjustment is witnessed separately."
+  },
+  {
+    "line": 433,
+    "column": 18,
+    "function": "V2Splitter.split",
+    "source": "len(text) / adjusted > 100",
+    "operator": 0,
+    "mutation": "len(text) / adjusted >= 100",
+    "citation": "string_and_binary/chunks.ts:338-377",
+    "witness": {
+      "kind": "grid",
+      "id": "identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=0.5-limit=default-document=fractional:50:1"
+    }
+  },
+  {
+    "line": 439,
+    "column": 15,
+    "function": "V2Splitter.split",
+    "source": "end - start > adjusted",
+    "operator": 0,
+    "mutation": "end - start >= adjusted",
+    "citation": "string_and_binary/chunks.ts:338-377",
+    "witness": {
+      "kind": "grid",
+      "id": "identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=5-limit=default-document=eq:line:40:0:5"
+    }
+  },
+  {
+    "line": 458,
+    "column": 14,
+    "function": "V2Splitter._binary",
+    "source": "offset < len(data)",
+    "operator": 0,
+    "mutation": "offset <= len(data)",
+    "citation": "string_and_binary/chunks.ts:408-432",
+    "witness": {
+      "kind": "grid",
+      "id": "identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=5-limit=default-document=eq:png:102400:0:-1"
+    }
+  },
+  {
+    "line": 460,
+    "column": 15,
+    "function": "V2Splitter._binary",
+    "source": "preferred != -1",
+    "operator": 0,
+    "mutation": "True",
+    "citation": "string_and_binary/chunks.ts:418-428",
+    "class": "b",
+    "proof": "At preferred == search, inclusive indexOf from that matching index returns the same offset. At sentinel -1, repeating the failed suffix search cannot find a match in a suffix of a suffix with no delimiter."
+  },
+  {
+    "line": 460,
+    "column": 35,
+    "function": "V2Splitter._binary",
+    "source": "preferred < search",
+    "operator": 0,
+    "mutation": "preferred <= search",
+    "citation": "string_and_binary/chunks.ts:418-428",
+    "class": "b",
+    "proof": "At preferred == search, inclusive indexOf from that matching index returns the same offset. At sentinel -1, repeating the failed suffix search cannot find a match in a suffix of a suffix with no delimiter."
+  },
+  {
+    "line": 463,
+    "column": 15,
+    "function": "V2Splitter._binary",
+    "source": "found == -1",
+    "operator": 0,
+    "mutation": "False",
+    "citation": "string_and_binary/chunks.ts:408-432",
+    "witness": {
+      "kind": "grid",
+      "id": "identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=5-limit=default-document=eq:lf-json:125:0:10"
+    }
+  },
+  {
+    "line": 464,
+    "column": 19,
+    "function": "V2Splitter._binary",
+    "source": "newline != -1",
+    "operator": 0,
+    "mutation": "True",
+    "citation": "string_and_binary/chunks.ts:422-423",
+    "class": "b",
+    "proof": "At newline == search inclusive indexOf returns the same LF offset. At sentinel -1 a suffix of a suffix without LF still has no LF, so repeating the search is indistinguishable."
+  },
+  {
+    "line": 464,
+    "column": 37,
+    "function": "V2Splitter._binary",
+    "source": "newline < search",
+    "operator": 0,
+    "mutation": "newline <= search",
+    "citation": "string_and_binary/chunks.ts:422-423",
+    "class": "b",
+    "proof": "At newline == search inclusive indexOf returns the same LF offset. At sentinel -1 a suffix of a suffix without LF still has no LF, so repeating the search is indistinguishable."
+  },
+  {
+    "line": 467,
+    "column": 50,
+    "function": "V2Splitter._binary",
+    "source": "found != -1",
+    "operator": 0,
+    "mutation": "True",
+    "citation": "string_and_binary/chunks.ts:408-432",
+    "witness": {
+      "kind": "grid",
+      "id": "identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=5-limit=default-document=z1"
+    }
+  },
+  {
+    "line": 478,
+    "column": 11,
+    "function": "LegacySplitter.split",
+    "source": "maximum <= 0",
+    "operator": 0,
+    "mutation": "maximum < 0",
+    "citation": "string_and_binary/chunks.ts:218-254,472-492",
+    "class": "c",
+    "proof": "Nonpositive cap can leave the upstream offset unchanged on nonempty input; guard prevents nontermination."
+  },
+  {
+    "line": 488,
+    "column": 19,
+    "function": "LegacySplitter.split",
+    "source": "found != -1",
+    "operator": 0,
+    "mutation": "True",
+    "citation": "string_and_binary/chunks.ts:436-493",
+    "witness": {
+      "kind": "grid",
+      "id": "identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=eq:json:99:0:50"
+    }
+  },
+  {
+    "line": 493,
+    "column": 19,
+    "function": "LegacySplitter.split",
+    "source": "offset >= len(data)",
+    "operator": 0,
+    "mutation": "offset > len(data)",
+    "citation": "string_and_binary/chunks.ts:436-493",
+    "witness": {
+      "kind": "grid",
+      "id": "identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=eq:json:99:0:50"
+    }
+  },
+  {
+    "line": 515,
+    "column": 35,
+    "function": "LegacySplitter._groups.take",
+    "source": "index < count",
+    "operator": 0,
+    "mutation": "index <= count",
+    "citation": "string_and_binary/chunks.ts:13-72",
+    "witness": {
+      "kind": "grid",
+      "id": "identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=100-limit=default-document=eq:grouping:0:0:0"
+    }
+  },
+  {
+    "line": 517,
+    "column": 14,
+    "function": "LegacySplitter._groups",
+    "source": "index < count",
+    "operator": 0,
+    "mutation": "index <= count",
+    "citation": "string_and_binary/chunks.ts:13-72",
+    "witness": {
+      "kind": "grid",
+      "id": "identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=100-limit=default-document=eq:grouping:0:0:0"
+    }
+  },
+  {
+    "line": 522,
+    "column": 22,
+    "function": "LegacySplitter._groups",
+    "source": "index < count",
+    "operator": 0,
+    "mutation": "index <= count",
+    "citation": "string_and_binary/chunks.ts:13-72",
+    "witness": {
+      "kind": "grid",
+      "id": "identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=fence-only"
+    }
+  },
+  {
+    "line": 524,
+    "column": 23,
+    "function": "LegacySplitter._groups",
+    "source": "index == count",
+    "operator": 0,
+    "mutation": "False",
+    "citation": "string_and_binary/chunks.ts:13-72",
+    "witness": {
+      "kind": "grid",
+      "id": "identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=100-limit=default-document=eq:grouping:0:0:21"
+    }
+  },
+  {
+    "line": 527,
+    "column": 47,
+    "function": "LegacySplitter._groups",
+    "source": "len(pre) > 2048",
+    "operator": 0,
+    "mutation": "len(pre) >= 2048",
+    "citation": "string_and_binary/chunks.ts:13-72",
+    "witness": {
+      "kind": "grid",
+      "id": "identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=eq:fence:2047:0:-1"
+    }
+  },
+  {
+    "line": 528,
+    "column": 19,
+    "function": "LegacySplitter._groups",
+    "source": "index < count",
+    "operator": 0,
+    "mutation": "index <= count",
+    "citation": "string_and_binary/chunks.ts:13-72",
+    "witness": {
+      "kind": "grid",
+      "id": "identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=100-limit=default-document=eq:grouping:0:0:21"
+    }
+  },
+  {
+    "line": 542,
+    "column": 20,
+    "function": "LegacySplitter._groups",
+    "source": "length >= self.minimum_chunk_size",
+    "operator": 0,
+    "mutation": "length > self.minimum_chunk_size",
+    "citation": "string_and_binary/chunks.ts:13-72",
+    "witness": {
+      "kind": "grid",
+      "id": "identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=eq:line:40:0:5"
+    }
+  },
+  {
+    "line": 542,
+    "column": 57,
+    "function": "LegacySplitter._groups",
+    "source": "index == count",
+    "operator": 0,
+    "mutation": "False",
+    "citation": "string_and_binary/chunks.ts:13-72",
+    "witness": {
+      "kind": "grid",
+      "id": "identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=100-limit=default-document=eq:grouping:0:0:0"
+    }
+  },
+  {
+    "line": 543,
+    "column": 27,
+    "function": "LegacySplitter._groups",
+    "source": "lines[index] == '#'",
+    "operator": 0,
+    "mutation": "False",
+    "citation": "string_and_binary/chunks.ts:13-72",
+    "witness": {
+      "kind": "grid",
+      "id": "identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=100-limit=default-document=eq:grouping:0:0:1"
+    }
+  }
+]

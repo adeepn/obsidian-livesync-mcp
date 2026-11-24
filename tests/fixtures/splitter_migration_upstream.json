@@ -29,6 +29,42 @@
     {
       "input": {
         "chunkSplitterVersion": "",
+        "enableChunkSplitterV2": false,
+        "useSegmenter": ""
+      },
+      "expected": {
+        "chunkSplitterVersion": "",
+        "enableChunkSplitterV2": false,
+        "useSegmenter": ""
+      }
+    },
+    {
+      "input": {
+        "chunkSplitterVersion": "",
+        "enableChunkSplitterV2": false,
+        "useSegmenter": null
+      },
+      "expected": {
+        "chunkSplitterVersion": "",
+        "enableChunkSplitterV2": false,
+        "useSegmenter": null
+      }
+    },
+    {
+      "input": {
+        "chunkSplitterVersion": "",
+        "enableChunkSplitterV2": false,
+        "useSegmenter": 0
+      },
+      "expected": {
+        "chunkSplitterVersion": "",
+        "enableChunkSplitterV2": false,
+        "useSegmenter": 0
+      }
+    },
+    {
+      "input": {
+        "chunkSplitterVersion": "",
         "enableChunkSplitterV2": true,
         "useSegmenter": false
       },
@@ -48,6 +84,222 @@
         "chunkSplitterVersion": "v2-segmenter",
         "enableChunkSplitterV2": true,
         "useSegmenter": true
+      }
+    },
+    {
+      "input": {
+        "chunkSplitterVersion": "",
+        "enableChunkSplitterV2": true,
+        "useSegmenter": ""
+      },
+      "expected": {
+        "chunkSplitterVersion": "v2",
+        "enableChunkSplitterV2": true,
+        "useSegmenter": ""
+      }
+    },
+    {
+      "input": {
+        "chunkSplitterVersion": "",
+        "enableChunkSplitterV2": true,
+        "useSegmenter": null
+      },
+      "expected": {
+        "chunkSplitterVersion": "v2",
+        "enableChunkSplitterV2": true,
+        "useSegmenter": null
+      }
+    },
+    {
+      "input": {
+        "chunkSplitterVersion": "",
+        "enableChunkSplitterV2": true,
+        "useSegmenter": 0
+      },
+      "expected": {
+        "chunkSplitterVersion": "v2",
+        "enableChunkSplitterV2": true,
+        "useSegmenter": 0
+      }
+    },
+    {
+      "input": {
+        "chunkSplitterVersion": "",
+        "enableChunkSplitterV2": "",
+        "useSegmenter": false
+      },
+      "expected": {
+        "chunkSplitterVersion": "",
+        "enableChunkSplitterV2": "",
+        "useSegmenter": false
+      }
+    },
+    {
+      "input": {
+        "chunkSplitterVersion": "",
+        "enableChunkSplitterV2": "",
+        "useSegmenter": true
+      },
+      "expected": {
+        "chunkSplitterVersion": "",
+        "enableChunkSplitterV2": "",
+        "useSegmenter": true
+      }
+    },
+    {
+      "input": {
+        "chunkSplitterVersion": "",
+        "enableChunkSplitterV2": "",
+        "useSegmenter": ""
+      },
+      "expected": {
+        "chunkSplitterVersion": "",
+        "enableChunkSplitterV2": "",
+        "useSegmenter": ""
+      }
+    },
+    {
+      "input": {
+        "chunkSplitterVersion": "",
+        "enableChunkSplitterV2": "",
+        "useSegmenter": null
+      },
+      "expected": {
+        "chunkSplitterVersion": "",
+        "enableChunkSplitterV2": "",
+        "useSegmenter": null
+      }
+    },
+    {
+      "input": {
+        "chunkSplitterVersion": "",
+        "enableChunkSplitterV2": "",
+        "useSegmenter": 0
+      },
+      "expected": {
+        "chunkSplitterVersion": "",
+        "enableChunkSplitterV2": "",
+        "useSegmenter": 0
+      }
+    },
+    {
+      "input": {
+        "chunkSplitterVersion": "",
+        "enableChunkSplitterV2": null,
+        "useSegmenter": false
+      },
+      "expected": {
+        "chunkSplitterVersion": "",
+        "enableChunkSplitterV2": null,
+        "useSegmenter": false
+      }
+    },
+    {
+      "input": {
+        "chunkSplitterVersion": "",
+        "enableChunkSplitterV2": null,
+        "useSegmenter": true
+      },
+      "expected": {
+        "chunkSplitterVersion": "",
+        "enableChunkSplitterV2": null,
+        "useSegmenter": true
+      }
+    },
+    {
+      "input": {
+        "chunkSplitterVersion": "",
+        "enableChunkSplitterV2": null,
+        "useSegmenter": ""
+      },
+      "expected": {
+        "chunkSplitterVersion": "",
+        "enableChunkSplitterV2": null,
+        "useSegmenter": ""
+      }
+    },
+    {
+      "input": {
+        "chunkSplitterVersion": "",
+        "enableChunkSplitterV2": null,
+        "useSegmenter": null
+      },
+      "expected": {
+        "chunkSplitterVersion": "",
+        "enableChunkSplitterV2": null,
+        "useSegmenter": null
+      }
+    },
+    {
+      "input": {
+        "chunkSplitterVersion": "",
+        "enableChunkSplitterV2": null,
+        "useSegmenter": 0
+      },
+      "expected": {
+        "chunkSplitterVersion": "",
+        "enableChunkSplitterV2": null,
+        "useSegmenter": 0
+      }
+    },
+    {
+      "input": {
+        "chunkSplitterVersion": "",
+        "enableChunkSplitterV2": 0,
+        "useSegmenter": false
+      },
+      "expected": {
+        "chunkSplitterVersion": "",
+        "enableChunkSplitterV2": 0,
+        "useSegmenter": false
+      }
+    },
+    {
+      "input": {
+        "chunkSplitterVersion": "",
+        "enableChunkSplitterV2": 0,
+        "useSegmenter": true
+      },
+      "expected": {
+        "chunkSplitterVersion": "",
+        "enableChunkSplitterV2": 0,
+        "useSegmenter": true
+      }
+    },
+    {
+      "input": {
+        "chunkSplitterVersion": "",
+        "enableChunkSplitterV2": 0,
+        "useSegmenter": ""
+      },
+      "expected": {
+        "chunkSplitterVersion": "",
+        "enableChunkSplitterV2": 0,
+        "useSegmenter": ""
+      }
+    },
+    {
+      "input": {
+        "chunkSplitterVersion": "",
+        "enableChunkSplitterV2": 0,
+        "useSegmenter": null
+      },
+      "expected": {
+        "chunkSplitterVersion": "",
+        "enableChunkSplitterV2": 0,
+        "useSegmenter": null
+      }
+    },
+    {
+      "input": {
+        "chunkSplitterVersion": "",
+        "enableChunkSplitterV2": 0,
+        "useSegmenter": 0
+      },
+      "expected": {
+        "chunkSplitterVersion": "",
+        "enableChunkSplitterV2": 0,
+        "useSegmenter": 0
       }
     },
     {
