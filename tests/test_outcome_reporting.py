@@ -133,7 +133,7 @@ async def test_journal_published_uncertainty_replays_to_convergence(tmp_path, mo
     'overwrite', 'append', 'prepend', 'after-heading', 'search-replace',
     'properties_set', 'properties_delete', 'tags_add', 'tags_remove',
     'node_add', 'node_remove', 'edge_add', 'edge_remove', 'template'])
-async def test_every_mutating_tool_preserves_unknown_outcome_verbatim(backend, monkeypatch, operation):
+async def test_every_mutating_tool_reports_exact_retry_class(backend, monkeypatch, operation):
     import json
     import server
     import storage_base
@@ -170,10 +170,29 @@ async def test_every_mutating_tool_preserves_unknown_outcome_verbatim(backend, m
                {'search':'old','replace':'larger'} if operation == 'search-replace' else {}))
     else:
         result = await calls[operation]()
-    assert result == str(unknown)
     assert result.startswith('outcome unknown')
     assert 'MAY have been applied' in result and 're-read' in result
-    assert 'blind retry can duplicate' in result
+    labels = {
+        'create': 'note create', 'upload': 'attachment upload',
+        'copy': 'copy', 'move': 'move', 'delete': 'delete',
+        'overwrite': 'overwrite', 'append': 'append', 'prepend': 'prepend',
+        'after-heading': 'after-heading insertion', 'search-replace': 'search-replace',
+        'properties_set': 'properties set', 'properties_delete': 'properties delete',
+        'tags_add': 'tags add', 'tags_remove': 'tags remove',
+        'node_add': 'canvas node add', 'node_remove': 'canvas node remove',
+        'edge_add': 'canvas edge add', 'edge_remove': 'canvas edge remove',
+        'template': 'template create',
+    }
+    assert labels[operation] in result
+    if operation in ('append', 'prepend', 'search-replace', 'after-heading', 'node_add', 'edge_add'):
+        assert 'NON-IDEMPOTENT' in result
+        assert 'blind retry can duplicate the change' in result
+        assert 're-read the note and apply the remaining change manually rather than retrying blindly' in result
+        assert 'retrying the same request is safe' not in result
+    else:
+        assert 'IDEMPOTENT FOR THE SAME INPUT' in result
+        assert 're-read to see whether it applied; retrying the same request is safe' in result
+        assert 'blind retry can duplicate' not in result
 
 
 @pytest.mark.parametrize('method', ['put', 'put_if_absent'])
@@ -347,3 +366,26 @@ async def test_metadata_publication_uncertainty_boundary(monkeypatch, operation,
             else:
                 note = await peer.read_note(path)
                 assert (note['data'] if operation == 'attachment' else note['text']) == (b'replacement' if operation == 'attachment' else 'replacement')
+
+
+async def test_canvas_add_lost_response_warns_before_blind_retry_duplicates(backend, monkeypatch):
+    import json
+    import server
+    from storage_base import OutcomeUnknown
+    monkeypatch.setattr(server, 'backend', backend)
+    await backend.write_note('retry.canvas', '{"nodes": [], "edges": []}', create=True)
+    write = backend.write_note
+    async def accepted(*args, **kwargs):
+        await write(*args, **kwargs)
+        raise OutcomeUnknown()
+    with monkeypatch.context() as patch:
+        patch.setattr(backend, 'write_note', accepted)
+        result = await server.obsidian_canvas_node('retry.canvas', text='once')
+    assert 'canvas node add: NON-IDEMPOTENT' in result
+    assert 're-read the note and apply the remaining change manually rather than retrying blindly' in result
+    first = json.loads((await backend.read_note('retry.canvas'))['text'])
+    assert len(first['nodes']) == 1
+    await server.obsidian_canvas_node('retry.canvas', text='once')
+    second = json.loads((await backend.read_note('retry.canvas'))['text'])
+    assert len(second['nodes']) == 2
+    assert second['nodes'][0]['id'] != second['nodes'][1]['id']

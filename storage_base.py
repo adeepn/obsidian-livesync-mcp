@@ -110,17 +110,46 @@ class MutationNotApplied(StorageUnavailable):
     """The adapter can prove the mutation was refused or never sent."""
 
 
+# Operation names are shared by runtime messages and MCP tool descriptions.
+RETRY_IDEMPOTENT = {
+    "note create": True, "attachment upload": True,
+    "overwrite": True, "delete": True, "move": True, "copy": True,
+    "template create": True, "properties set": True, "properties delete": True,
+    "tags add": True, "tags remove": True,
+    "canvas node remove": True, "canvas edge remove": True,
+    "append": False, "prepend": False, "search-replace": False,
+    "after-heading insertion": False, "canvas node add": False, "canvas edge add": False,
+}
+
+
+def retry_guidance(operation: str) -> str:
+    """Describe a retry of the same tool input, after inspecting remote truth."""
+    if RETRY_IDEMPOTENT[operation]:
+        return (
+            f"{operation}: IDEMPOTENT FOR THE SAME INPUT; "
+            "re-read to see whether it applied; retrying the same request is safe."
+        )
+    return (
+        f"{operation}: NON-IDEMPOTENT; a blind retry can duplicate the change; "
+        "re-read the note and apply the remaining change manually rather than retrying blindly."
+    )
+
+
 class OutcomeUnknown(StorageUnavailable):
-    """Publication may have happened; never invite an unexamined retry."""
+    """Metadata publication may have happened; retain the uncertain step."""
 
     def __init__(self, detail: str = ""):
-        super().__init__(
-            (f"outcome unknown: {detail}. " if detail else "outcome unknown: ") +
-            "the change MAY have been applied. "
-            "Inspect and re-read the affected paths before retrying. "
-            "For append, prepend, search-replace, properties set and tags add, "
-            "a blind retry can duplicate the change."
-        )
+        self.detail = detail
+        super().__init__(self.message())
+
+    def message(self, operation: str | None = None) -> str:
+        prefix = "outcome unknown: "
+        if self.detail:
+            prefix += self.detail + ". "
+        prefix += "the change MAY have been applied. "
+        if operation is not None:
+            return prefix + retry_guidance(operation)
+        return prefix + "Inspect and re-read the affected paths before deciding how to retry."
 
 
 class NoteMeta(TypedDict):

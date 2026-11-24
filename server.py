@@ -37,7 +37,8 @@ from storage_base import (
     WriteSkipped,
     RenameRefused,
     RenamePartialError, UnresolvedConflicts,
-    OutcomeUnknown, WriterUnsupported, StorageBackend, StorageError, NoteNotFound, NoteExists,
+    OutcomeUnknown, RETRY_IDEMPOTENT, retry_guidance, WriterUnsupported,
+    StorageBackend, StorageError, NoteNotFound, NoteExists,
     ConcurrentModification, UnsupportedVault, StorageUnavailable, NoteContent,
 )
 from storage_couchdb import CouchDBBackend
@@ -250,13 +251,15 @@ def _storage_message(error: StorageError) -> str:
 def _tool_errors(
     handler=None, *, force_refresh: bool = False, writer: bool = False,
     read_action: str | None = None,
+    operation: str | None = None, operation_arg: str | None = None,
 ):
     if handler is None:
         return lambda fn: _tool_errors(
             fn, force_refresh=force_refresh, writer=writer, read_action=read_action,
+            operation=operation, operation_arg=operation_arg,
         )
 
-    signature = inspect.signature(handler) if read_action is not None else None
+    signature = inspect.signature(handler)
 
     @wraps(handler)
     async def guarded(*args, **kwargs):
@@ -264,7 +267,7 @@ def _tool_errors(
             return "Error: server not started; storage backend is unavailable."
         try:
             is_write = writer
-            if is_write and signature is not None:
+            if is_write and read_action is not None:
                 arguments = signature.bind(*args, **kwargs)
                 arguments.apply_defaults()
                 is_write = arguments.arguments['action'] != read_action
@@ -278,17 +281,33 @@ def _tool_errors(
         except regex_runner.RegexTimeoutError:
             return "Error: regex pattern too complex or input too large."
         except StorageError as error:
+            if isinstance(error, OutcomeUnknown) and operation is not None:
+                name = operation
+                if operation_arg is not None:
+                    arguments = signature.bind(*args, **kwargs)
+                    arguments.apply_defaults()
+                    value = arguments.arguments[operation_arg]
+                    name = f"{name} {value}" if name else value
+                    if name == "after-heading":
+                        name = "after-heading insertion"
+                if name in RETRY_IDEMPOTENT:
+                    return error.message(name)
             return _storage_message(error)
         except ForbiddenPathError:
             return "Error: forbidden vault path."
         except FrontmatterError:
             return "Error: invalid YAML frontmatter."
     if writer:
+        if operation_arg is None:
+            operations = [operation] if operation is not None else []
+        elif operation == "":
+            operations = ["overwrite", "append", "prepend", "search-replace", "after-heading insertion"]
+        else:
+            operations = [name for name in RETRY_IDEMPOTENT if name.startswith(operation + " ")]
         guarded.__doc__ = (handler.__doc__ or "") + (
             "\n\nMutation outcomes: success confirms application; refusal means no change. "
             "An 'outcome unknown' result means the change MAY have been applied. "
-            "Re-read before retrying; a blind retry can duplicate append, prepend, "
-            "search-replace, properties set or tags add changes."
+            + " ".join(retry_guidance(name) for name in operations)
         )
     return guarded
 
@@ -542,7 +561,7 @@ async def obsidian_search(query: str, regex: bool = False) -> str:
 
 
 @_tool
-@_tool_errors(writer=True)
+@_tool_errors(writer=True, operation='attachment upload')
 async def obsidian_upload_attachment(
     path: str, content_b64: str, *, overwrite: bool = False, lossy_text: bool = False,
 ) -> str:
@@ -659,7 +678,7 @@ async def obsidian_fetch(path: str, include_properties: bool = True, include_sta
 
 # 3. obsidian-create-note
 @_tool
-@_tool_errors(writer=True)
+@_tool_errors(writer=True, operation='note create')
 async def obsidian_create_note(
     path: str,
     content: str = "",
@@ -689,7 +708,7 @@ async def obsidian_create_note(
 
 # 4. obsidian-update-note
 @_tool
-@_tool_errors(writer=True)
+@_tool_errors(writer=True, operation='', operation_arg='mode')
 async def obsidian_update_note(
     path: str,
     mode: str,
@@ -794,7 +813,7 @@ async def obsidian_update_note(
 
 # 5. obsidian-delete-note
 @_tool
-@_tool_errors(writer=True)
+@_tool_errors(writer=True, operation='delete')
 async def obsidian_delete_note(path: str) -> str:
     """Delete a note from the vault.
 
@@ -810,7 +829,7 @@ async def obsidian_delete_note(path: str) -> str:
 
 # 6. obsidian-move-note
 @_tool
-@_tool_errors(writer=True)
+@_tool_errors(writer=True, operation='move')
 async def obsidian_move_note(path: str, new_path: str) -> str:
     """Move or rename a note.
 
@@ -827,7 +846,7 @@ async def obsidian_move_note(path: str, new_path: str) -> str:
 
 # 7. obsidian-duplicate-note
 @_tool
-@_tool_errors(writer=True)
+@_tool_errors(writer=True, operation='copy')
 async def obsidian_duplicate_note(path: str, new_path: str = "") -> str:
     """Duplicate a note.
 
@@ -873,7 +892,7 @@ async def obsidian_list_notes(
 
 # 9. obsidian-manage-properties
 @_tool
-@_tool_errors(writer=True, read_action="get")
+@_tool_errors(writer=True, read_action="get", operation='properties', operation_arg='action')
 async def obsidian_manage_properties(
     path: str,
     action: str = "get",
@@ -920,7 +939,7 @@ async def obsidian_manage_properties(
 
 # 10. obsidian-manage-tags
 @_tool
-@_tool_errors(writer=True, read_action="list")
+@_tool_errors(writer=True, read_action="list", operation='tags', operation_arg='action')
 async def obsidian_manage_tags(
     path: str,
     action: str = "list",
@@ -1096,7 +1115,7 @@ async def obsidian_find_hub_notes(min_links: int = 3) -> str:
 
 # 16. obsidian-canvas-node
 @_tool
-@_tool_errors(writer=True)
+@_tool_errors(writer=True, operation='canvas node', operation_arg='action')
 async def obsidian_canvas_node(
     path: str,
     action: str = "add",
@@ -1185,7 +1204,7 @@ async def obsidian_canvas_node(
 
 # 17. obsidian-canvas-edge
 @_tool
-@_tool_errors(writer=True)
+@_tool_errors(writer=True, operation='canvas edge', operation_arg='action')
 async def obsidian_canvas_edge(
     path: str,
     action: str = "add",
@@ -1298,7 +1317,7 @@ async def obsidian_vault_stats() -> str:
 
 # 19. obsidian-create-from-template
 @_tool
-@_tool_errors(writer=True)
+@_tool_errors(writer=True, operation='template create')
 async def obsidian_create_from_template(
     template_path: str,
     new_path: str,
