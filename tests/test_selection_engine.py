@@ -19,8 +19,11 @@ from storage_base import StorageError
 async def test_allowed_string_false_denies_write(backend, monkeypatch, payload):
     b, mutations = backend
     b.selection_only = 'md'
-    monkeypatch.setattr(subprocess, 'run', lambda *a, **k: SimpleNamespace(
-        stdout=json.dumps(payload), returncode=0))
+    from selection_engine import SelectionWorker
+    original = SelectionWorker._exchange
+    def response(self, op, data=None):
+        return payload if op == 'evaluate' else original(self, op, data)
+    monkeypatch.setattr(SelectionWorker, '_exchange', response)
     before = mutations()
     with pytest.raises(StorageError, match='malformed-output'):
         await b.write_note('safe.md', 'denied', create=True)

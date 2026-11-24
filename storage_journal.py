@@ -410,10 +410,7 @@ class JournalBackend(DeviceSelection):
     async def backend_info(self) -> dict:
         """Diagnostics for ``vault_stats`` and startup logs."""
         store = self._store
-        selection = await asyncio.to_thread(self.selection_info)
-        if getattr(self, '_selection_engine_reason', None):
-            selection['selection_writer_supported'] = False
-            selection['selection_unsupported_reason'] = self._selection_engine_reason
+        selection = await self.selection_diagnostics()
         return {
             **selection,
             "writer_supported": self._writer_unsupported_reason is None and selection["selection_writer_supported"],
@@ -439,6 +436,7 @@ class JournalBackend(DeviceSelection):
 
     async def close(self) -> None:
         """Close the local store (idempotent)."""
+        await self.selection_close()
         if self._store is not None:
             self._store.close()
             self._store = None
@@ -1082,7 +1080,6 @@ class JournalBackend(DeviceSelection):
         """Capped byte-input alias for write_note; type still follows path."""
         self.check_writer_support()
         validate_vault_path(path)
-        await self.check_selection(path)
         if len(data) > MAX_ATTACHMENT_BYTES:
             raise ValueError(
                 f"attachment exceeds 32 MiB cap ({MAX_ATTACHMENT_BYTES} bytes); "

@@ -1,7 +1,11 @@
 """Local device selection shared by both storage writers."""
 import asyncio
+import hashlib
+import json
+from collections import OrderedDict
 
-from livesync_format import canonical_path, is_target_file
+from livesync_format import canonical_path, TargetVerdict
+from selection_engine import SelectionWorker, EngineFailure
 from storage_base import StorageError, WriterUnsupported
 
 
@@ -10,48 +14,107 @@ class DeviceSelection:
     selection_ignore = ''
     selection_use_ignore_files = False
     selection_ignore_files = ()
+    selection_cache_entries = 4096
 
-    async def selection_startup(self):
-        from selection_engine import capability_check, EngineFailure
-        self._selection_engine_state = 'off'
-        self._selection_engine_reason = None
-        if not (self.selection_only or self.selection_ignore or self.selection_use_ignore_files):
-            return
-        try:
-            await asyncio.to_thread(capability_check)
-            verdict = await asyncio.to_thread(self.selection_verdict)
-            if not verdict.writer_supported:
-                raise WriterUnsupported(verdict.reason)
-        except (EngineFailure, WriterUnsupported) as exc:
-            self._selection_engine_state = 'unsupported'
-            self._selection_engine_reason = str(exc)
-            raise WriterUnsupported(str(exc)) from None
-        self._selection_engine_state = 'ready'
+    def _selection_active(self):
+        return bool(self.selection_only or self.selection_ignore or self.selection_use_ignore_files)
 
-    def selection_verdict(self, path='', **kwargs):
+    def _selection_init(self):
+        if not hasattr(self, '_selection_worker'):
+            self._selection_worker = SelectionWorker()
+            # Admit before to_thread: parallel tools cannot grow a pool of
+            # blocked threads or Node processes. One in-flight request per backend.
+            self._selection_limit = asyncio.Semaphore(1)
+            self._selection_cache = OrderedDict()
+            self._selection_engine_state = 'off'
+            self._selection_engine_reason = None
+            self._selection_rules = None
+
+    def _selection_payload(self, path='', files=None):
         identity = getattr(self, '_path_identity', None)
         if identity is None:
             identity = getattr(getattr(self, '_store', None), 'path_identity', 'legacy')
-        return is_target_file(
-            path, only_patterns=self.selection_only, ignore_patterns=self.selection_ignore,
-            case_sensitive=identity in ('case-sensitive', 'nfc-case-sensitive'),
-            **kwargs,
-        )
+        return dict(path=path, only_patterns=self.selection_only,
+                    ignore_patterns=self.selection_ignore,
+                    case_sensitive=identity in ('case-sensitive', 'nfc-case-sensitive'),
+                    ignore_files=files, ignore_names=self.selection_ignore_files)
+
+    def _selection_configuration(self):
+        return (self.selection_only, self.selection_ignore,
+                self.selection_use_ignore_files, tuple(self.selection_ignore_files))
+
+    async def selection_diagnostics(self):
+        if (self._selection_active() and getattr(self, '_selection_checked_configuration', None)
+                != self._selection_configuration()):
+            try:
+                await self.selection_startup()
+            except WriterUnsupported:
+                pass
+        return self.selection_info()
+
+    async def selection_startup(self):
+        self._selection_checked_configuration = self._selection_configuration()
+        if not self._selection_active():
+            return
+        verdict = await self._selection_evaluate(self._selection_payload())
+        if not verdict.writer_supported:
+            await self.selection_close()
+            raise WriterUnsupported(verdict.reason)
+        # Check ignore compilation too, even if the only list short circuits.
+        if self.selection_ignore:
+            payload = self._selection_payload()
+            payload['only_patterns'] = ''
+            verdict = await self._selection_evaluate(payload)
+            if not verdict.writer_supported:
+                await self.selection_close()
+                raise WriterUnsupported(verdict.reason)
+
+    async def _selection_evaluate(self, payload):
+        self._selection_init()
+        async with self._selection_limit:
+            # Shield a running thread from cancellation: retain the admission
+            # permit until it stops, so cancelled calls cannot multiply workers.
+            task = asyncio.create_task(asyncio.to_thread(self._selection_worker.evaluate, payload))
+            cancelled = False
+            while not task.done():
+                try:
+                    await asyncio.shield(task)
+                except asyncio.CancelledError:
+                    cancelled = True
+                except EngineFailure:
+                    break
+            try:
+                verdict = task.result()
+            except EngineFailure as exc:
+                self._selection_engine_state = 'unsupported'
+                self._selection_engine_reason = str(exc)
+                if cancelled:
+                    raise asyncio.CancelledError
+                return TargetVerdict(False, writer_supported=False, reason=str(exc))
+            if cancelled:
+                raise asyncio.CancelledError
+            self._selection_engine_state = 'ready' if verdict.writer_supported else 'unsupported'
+            self._selection_engine_reason = verdict.reason
+            return verdict
 
     def selection_info(self):
-        verdict = self.selection_verdict(
-            ignore_files={} if self.selection_use_ignore_files else None,
-            ignore_names=self.selection_ignore_files,
-        )
-        if verdict.writer_supported and self.selection_ignore:
-            verdict = is_target_file('', ignore_patterns=self.selection_ignore)
+        self._selection_init()
+        active = self._selection_active()
+        # Read the last observed capability without launching a process.
+        reason = self._selection_engine_reason if active else None
         return {
-            'selection_engine_state': getattr(self, '_selection_engine_state', 'off'),
-            'selection_engine_reason': getattr(self, '_selection_engine_reason', None),
-            'filters_active': bool(self.selection_only or self.selection_ignore or self.selection_use_ignore_files),
-            'selection_writer_supported': verdict.writer_supported,
-            'selection_unsupported_reason': verdict.reason,
+            'selection_engine_state': self._selection_engine_state if active else 'off',
+            'selection_engine_reason': reason,
+            'filters_active': active,
+            'selection_writer_supported': reason is None,
+            'selection_unsupported_reason': reason,
         }
+
+    async def selection_close(self):
+        if hasattr(self, '_selection_worker'):
+            async with self._selection_limit:
+                await asyncio.to_thread(self._selection_worker.close)
+            self._selection_cache.clear()
 
     async def _selection_lines(self, path):
         # targetFilter.ts getIgnoreFile treats missing/unreadable files as absent.
@@ -68,22 +131,57 @@ class DeviceSelection:
             path: await self._selection_lines(path) for path in self.selection_ignore_files
         }
 
+    def selection_cache_size(self):
+        store = getattr(self, '_store', None)
+        if store is not None:
+            return store.selection_cache_size()
+        return len(getattr(self, '_selection_cache', {}))
+
     async def selection_for(self, path):
+        if not self._selection_active():
+            return TargetVerdict(True)
+        self._selection_init()
         path = canonical_path(path)
         files = None
         if self.selection_use_ignore_files:
             files = {}
-            # Same candidates as isAcceptedAll. Read through on every write:
-            # changed ignore files cannot remain stale between refresh calls.
+            # Read through before lookup: a changed ignore file changes the key.
             parts = path.split('/')[:-1]
             for n in range(len(parts), -1, -1):
                 for name in self.selection_ignore_files:
                     candidate = '/'.join(parts[:n] + [name])
                     files[candidate] = await self._selection_lines(candidate)
-        return await asyncio.to_thread(
-            self.selection_verdict, path, ignore_files=files,
-            ignore_names=self.selection_ignore_files,
-        )
+        payload = self._selection_payload(path, files)
+        def fingerprint(value):
+            return hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=True).encode()).hexdigest()
+        rules = fingerprint([payload['only_patterns'], payload['ignore_patterns'],
+                             self.selection_use_ignore_files, self.selection_ignore_files,
+                             payload['case_sensitive'], 'selection-worker-v1'])
+        key = fingerprint([path, rules, payload['case_sensitive'], fingerprint(files)])
+        store = getattr(self, '_store', None)
+        if self._selection_rules != rules:
+            self._selection_cache.clear()
+            self._selection_rules = rules
+        if store is not None:
+            cached = store.selection_cache_get(key, rules, self.selection_cache_entries)
+        else:
+            cached = self._selection_cache.get(key)
+            if cached is not None:
+                self._selection_cache.move_to_end(key)
+        if cached is not None and self._selection_engine_state == 'ready':
+            return TargetVerdict(**cached)
+        verdict = await self._selection_evaluate(payload)
+        # Failures are never cached: repairing the runtime permits recovery.
+        if verdict.writer_supported:
+            value = dict(allowed=verdict.allowed, rule=verdict.rule,
+                         writer_supported=verdict.writer_supported, reason=verdict.reason)
+            if store is not None:
+                store.selection_cache_put(key, rules, value, self.selection_cache_entries)
+            else:
+                self._selection_cache[key] = value
+                while len(self._selection_cache) > self.selection_cache_entries:
+                    self._selection_cache.popitem(last=False)
+        return verdict
 
     async def check_selection(self, path):
         verdict = await self.selection_for(path)

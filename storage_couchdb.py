@@ -432,10 +432,7 @@ class CouchDBBackend(DeviceSelection):
 
     async def backend_info(self) -> dict:
         info = await self._db_info()
-        selection = await asyncio.to_thread(self.selection_info)
-        if getattr(self, '_selection_engine_reason', None):
-            selection['selection_writer_supported'] = False
-            selection['selection_unsupported_reason'] = self._selection_engine_reason
+        selection = await self.selection_diagnostics()
         return {
             **selection,
             "writer_supported": self._writer_unsupported_reason is None and selection["selection_writer_supported"],
@@ -448,6 +445,7 @@ class CouchDBBackend(DeviceSelection):
         }
 
     async def close(self) -> None:
+        await self.selection_close()
         self._text_verdicts.clear()
         await self._client.aclose()
 
@@ -978,7 +976,6 @@ class CouchDBBackend(DeviceSelection):
         """Capped byte-input alias for write_note; type still follows path."""
         self.check_writer_support()
         validate_vault_path(path)
-        await self.check_selection(path)
         if len(data) > MAX_ATTACHMENT_BYTES:
             raise ValueError(
                 f"attachment exceeds 32 MiB cap ({MAX_ATTACHMENT_BYTES} bytes); "

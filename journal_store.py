@@ -242,6 +242,10 @@ class JournalStore:
                                'text_verdict_document ON text_verdicts(doc_id)')
             self._trim_text_verdicts()
 
+        self._conn.execute("""CREATE TABLE IF NOT EXISTS selection_verdicts (
+            cache_key TEXT PRIMARY KEY, rules TEXT, verdict TEXT, used INTEGER)""")
+        self._conn.commit()
+
         stored_identity = self._meta_get(_META_PATH_IDENTITY)
         if stored_identity is None:
             self._meta_set(_META_PATH_IDENTITY, path_identity)
@@ -395,6 +399,31 @@ class JournalStore:
             self.reset()
         self._meta_set(_META_EPOCH, value)
 
+    def selection_cache_size(self):
+        return self._conn.execute('SELECT COUNT(*) FROM selection_verdicts').fetchone()[0]
+
+    def _selection_cache_trim(self, limit):
+        self._conn.execute('DELETE FROM selection_verdicts WHERE cache_key NOT IN '
+                           '(SELECT cache_key FROM selection_verdicts ORDER BY used DESC LIMIT ?)', (limit,))
+
+    def selection_cache_get(self, key, rules, limit):
+        with self._conn:
+            self._conn.execute('DELETE FROM selection_verdicts WHERE rules != ?', (rules,))
+            self._selection_cache_trim(limit)
+            row = self._conn.execute('SELECT verdict FROM selection_verdicts WHERE cache_key = ?', (key,)).fetchone()
+            if row is not None:
+                self._conn.execute('UPDATE selection_verdicts SET used = '
+                                   '(SELECT COALESCE(MAX(used), 0) + 1 FROM selection_verdicts) '
+                                   'WHERE cache_key = ?', (key,))
+        return json.loads(row[0]) if row else None
+
+    def selection_cache_put(self, key, rules, value, limit):
+        with self._conn:
+            self._conn.execute('INSERT OR REPLACE INTO selection_verdicts VALUES (?, ?, ?, '
+                               '(SELECT COALESCE(MAX(used), 0) + 1 FROM selection_verdicts))',
+                               (key, rules, json.dumps(value)))
+            self._selection_cache_trim(limit)
+
     def reset(self) -> None:
         """Wipe replicated state: docs/processed/meta rows and chunk files.
 
@@ -402,6 +431,7 @@ class JournalStore:
         state directory, not the remote history). The reset is logged.
         """
         with self._conn:
+            self._conn.execute("DELETE FROM selection_verdicts")
             self._conn.execute("DELETE FROM text_verdicts")
             self._conn.execute("DELETE FROM docs")
             self._conn.execute("DELETE FROM processed")
