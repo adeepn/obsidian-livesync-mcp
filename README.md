@@ -302,13 +302,52 @@ uses case-sensitive filenames. `/foo/g` is literal regex source, not JS literal
 syntax; `g`, `y`, `u`, and `v` flags cannot be configured by these settings.
 For example, `\.md$|[]|\.canvas$` allows either suffix.
 
-Active filters require **Node.js 22+** in the service PATH. The peer runs pinned
-upstream functions and vendored minimatch, rather than translating to Python
-regex/glob. Invalid expressions, a missing engine, or an evaluation exceeding
-five seconds refuse writes; `backend_info` reports `filters_active`,
-`writer_supported`, and a reason. Empty settings require no Node runtime.
-The regex engine runs in an isolated subprocess; configured expressions cannot
-execute JS code. This adds one engine invocation per filtered write/check.
+Selection filters are **off by default**. Without Node.js the server is fully
+functional with filters off; it never launches Node in that mode. With any
+selection filter configured, both backends require **Node.js 22+** in the service
+PATH and refuse to start if the executable, version check, or runner self-test
+is unusable. The startup error names the cause and how to resolve it.
+
+The peer runs pinned upstream functions and vendored minimatch, rather than
+translating to Python regex/glob. One persistent Node worker per backend uses
+id-correlated JSON lines over stdio, with one concurrent evaluation admitted
+before dispatch to a thread. Active-filter startup is its first use; otherwise
+it starts lazily. Each new process checks the Node version and runs a health
+self-test. It restarts on the next request after a crash; a failed request is
+never silently retried. Backend close terminates and reaps the process and
+joins its pipe threads. Five-second evaluation deadlines include blocked stdin;
+timeout, nonzero exit, malformed responses and invalid field types deny writes.
+Errors expose sanitized causes; diagnostic details remain in server logs.
+`backend_info` exposes `selection_engine_state` (`off`, `ready`, `unsupported`),
+`selection_engine_reason`, `filters_active`, and writer support.
+
+A 4096-entry LRU caches supported allow/deny verdicts by canonical path, rules
+fingerprint, case sensitivity, and ignore-content fingerprint. CouchDB keeps it
+in process memory; the journal backend persists it in its local SQLite store
+and clears it on reset. Rules changes invalidate old entries. Ignore files are
+read before lookup, so content changes cannot reuse a stale verdict. Cache hits
+avoid engine calls; misses reuse the worker instead of spawning Node per write.
+The standalone synchronous `livesync_format.is_target_file` convenience API
+retains one-shot execution for isolated callers/tests with no backend lifecycle;
+backend writes and diagnostics never fall back to it.
+
+Local macOS / Node 26.13.1 measurements (100 warm regex-only checks; no vault
+network I/O) give the following median / maximum latency in milliseconds:
+
+| Path | Median / max (ms) |
+|---|---|
+| Previous one-shot runner | 129.980 / 193.564 |
+| Persistent worker, uncached | 0.211 / 0.454 |
+| Process-memory cache hit | 0.0069 / 0.0615 |
+| Journal worker + SQLite, uncached | 0.325 / 2.205 |
+| Journal SQLite cache hit | 0.0369 / 0.1515 |
+
+Worker cold startup including version check/self-test took 238.5 ms (paid at
+active-filter startup). Peak child RSS was 45.9 MiB versus 45.8 MiB for one-shot;
+the worker retains its memory between calls. Storage and ignore-file reads add
+their own latency. Reproduce with `PYTHONPATH=. ./venv/bin/python
+scripts/benchmark_selection.py MODE`, where MODE is `one-shot`, `worker`,
+`cache`, `journal-worker`, or `journal-cache`.
 
 Ignore files are ordinary vault metadata, including hidden `.gitignore` files stored under the `i:` prefix;
 the peer reads their content through the backend, without exposing hidden files
