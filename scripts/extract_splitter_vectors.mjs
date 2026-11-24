@@ -1,6 +1,6 @@
 // Extract executable recipes and EXPECTED arrays from pinned upstream specs.
-// Usage: node (22.13+) scripts/extract_splitter_vectors.mjs UPSTREAM_CHECKOUT OUTPUT_JSON [XXHASH_WASM_ESM]
-// No npm dependencies. The algorithm is loaded verbatim; assertions supply the oracle.
+// Usage: node (22.13+) scripts/extract_splitter_vectors.mjs UPSTREAM_CHECKOUT OUTPUT_JSON XXHASH_WASM_ESM WHEELS_DIR WHEELS_TARBALL
+// Dependencies are supplied as verified published artifacts. The algorithm is loaded verbatim; assertions supply the oracle.
 import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
@@ -9,7 +9,9 @@ import vm from 'node:vm';
 import { stripTypeScriptTypes } from 'node:module';
 import { deflateSync, inflateSync } from 'node:zlib';
 import { execFileSync } from 'node:child_process';
+import {splitterDependencies} from './splitter_oracle_dependencies.mjs';
 const root = process.argv[2];
+const {dependency, ...primitives} = await splitterDependencies(root, process.argv[5], process.argv[6]);
 const pin = '484c164450d61deb2e301582b60cb9b5f9fa977f';
 if (execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], {encoding:'utf8'}).trim() !== pin) throw Error('Wrong upstream revision');
 const sourcePath = 'string_and_binary/chunks.ts';
@@ -24,13 +26,8 @@ const tasks = [], vectors = [];
 let pending, title;
 const ctx = {
     Blob, Uint8Array, Buffer, AbortController,
-    isTextBlob: b => b.type === 'text/plain',
-    readString: b => new TextDecoder().decode(b),
+    ...primitives,
     arrayBufferToBase64Single: async b => Buffer.from(b).toString('base64'),
-    concatUInt8Array: parts => new Uint8Array(Buffer.concat(parts)),
-    async *iterateBlobBlocks(blob, size) {
-        for (let i=0; i<blob.size; i+=size) yield new Uint8Array(await blob.slice(i,i+size).arrayBuffer());
-    },
     describe: (_name, fn) => fn(),
     expect: actual => ({
         toBe(expected) { if (actual !== expected) throw Error(`Assertion failed: ${title}`); },
@@ -50,6 +47,7 @@ function it(name, fn) {
 it.each = values => (name, fn) => values.forEach(v => it(name, () => fn(v)));
 ctx.it = it;
 vm.createContext(ctx);
+vm.runInContext(stripTypeScriptTypes(read(sourcePath).slice(0,read(sourcePath).indexOf('import '))),ctx);
 const algorithm = read(sourcePath).slice(read(sourcePath).indexOf('export async function splitPiecesRabinKarp('));
 vm.runInContext(stripTypeScriptTypes(algorithm.split('export async function splitPiecesRabinKarpOld(')[0].replace('export ','')), ctx);
 const original = ctx.splitPiecesRabinKarp;
@@ -97,11 +95,13 @@ const encryptedHashes = [...encryptedCompatibility.matchAll(/\[HashAlgorithms\.(
 const hashLiteralsOutsideScope = [...new Set([...hashSpec.matchAll(/(?:\[HashAlgorithms\.\w+\]:|toBe\()\s*"([+a-zA-Z0-9=/-]{20,})"/g)].map(m=>m[1]))]
     .filter(value=>!hashes.some(h=>h.expected===value));
 const sourceHashes = Object.fromEntries([sourcePath,specPath,hashPath,directPath].map(p=>[p,createHash('sha256').update(read(p)).digest('hex')]));
-const result = {source_sha256:sourceHashes, out_of_scope_encrypted_hashes:encryptedHashes, out_of_scope_hash_literals:hashLiteralsOutsideScope, upstream_commit:pin,source:sourcePath, vectors, differential, hashes, hash_source:hashPath, repeat_inputs:repeatInputs,
+const result = {decoder_dependency:dependency, source_sha256:sourceHashes, out_of_scope_encrypted_hashes:encryptedHashes, out_of_scope_hash_literals:hashLiteralsOutsideScope, upstream_commit:pin,source:sourcePath, vectors, differential, hashes, hash_source:hashPath, repeat_inputs:repeatInputs,
     direct_worker:{source:directPath,input:directPiece,contains:[...read(directPath).matchAll(/toContain\("([^"]+)"\)/g)].map(m=>m[1])}};
 if (process.argv[4]) {
     // Optional independent hash oracle: xxhash-wasm 1.1.0 from upstream lock.
     const hashModule = process.argv[4];
+    if (createHash('sha256').update(fs.readFileSync(hashModule)).digest('hex') !==
+        'e3be9143c10d60a015448de1ceef383b8f2ea1fd2773a5a5c69973ed52d8325a') throw Error('Wrong hash oracle');
     const wasm = await (await import(pathToFileURL(path.resolve(hashModule)).href)).default();
     const hash = piece => 'h:' + wasm.h64(`${piece}-${piece.length}`).toString(36);
     if (hash('helloWorld') !== 'h:' + hashes.find(h=>h.algorithm==='XXHASH64').expected) throw Error('Hash oracle mismatch');
@@ -110,7 +110,7 @@ if (process.argv[4]) {
         let offset=0;
         vector.expected_ids = vector.expected_lengths.map(size=>{
             const piece = raw.subarray(offset,offset+size); offset+=size;
-            return hash(vector.text ? new TextDecoder().decode(piece) : piece.toString('base64'));
+            return hash(vector.text ? primitives.readString(piece) : piece.toString('base64'));
         });
     }
     result.hash_oracle = {package:'xxhash-wasm',version:'1.1.0',

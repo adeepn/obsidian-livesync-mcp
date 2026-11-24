@@ -28,6 +28,48 @@ def _js_utf8(text: str) -> bytes:
         'utf-16-le', errors='replace').encode('utf-8')
 
 
+class _TextBlob(bytes):
+    """Raw text/plain Blob bytes, including malformed UTF-8 (oracle input)."""
+
+
+def _read_string(raw: bytes) -> str:
+    """octagonal-wheels@0.1.57 readString, including its <=128-byte path.
+
+    Long buffers use nonfatal TextDecoder(ignoreBOM=true). Short buffers
+    manually consume unchecked continuation bytes; absent bytes coerce to 0,
+    unrecognised lead bytes disappear, and fromCharCode truncates to uint16.
+    """
+    if len(raw) > 128:
+        return raw.decode('utf-8', errors='replace')
+    units = []
+    index = 0
+
+    def continuation():
+        nonlocal index
+        value = raw[index] if index < len(raw) else 0
+        index += 1
+        return value & 63
+
+    while index < len(raw):
+        c = raw[index]
+        index += 1
+        if c < 128:
+            units.append(c)
+        elif c & 0xe0 == 0xc0:
+            units.append(((c & 31) << 6) | continuation())
+        elif c & 0xf0 == 0xe0:
+            units.append(((c & 15) << 12) | (continuation() << 6) | continuation())
+        elif c & 0xf8 == 0xf0:
+            code = ((c & 7) << 18) | (continuation() << 12) | (continuation() << 6) | continuation()
+            if code < 0x10000:
+                units.append(code)
+            else:
+                code -= 0x10000
+                units.extend(((code >> 10) + 0xd800, (code & 1023) + 0xdc00))
+    return b''.join((unit & 0xffff).to_bytes(2, 'little') for unit in units).decode(
+        'utf-16-le', errors='surrogatepass')
+
+
 def _utf16_units(text: str) -> list[int]:
     raw = text.encode('utf-16-le', errors='surrogatepass')
     return [raw[i] | raw[i + 1] << 8 for i in range(0, len(raw), 2)]
@@ -188,7 +230,12 @@ class ContentSplitter:
     def chunk_id_for_piece(self, piece: bytes | str) -> str:
         return chunk_id_for_piece(piece, hash_alg=self.hash_alg)
 
-    def split(self, data: str | bytes, *, path: str = '', plain_split: bool = False) -> list[str]:
+    def split(self, data: str | bytes, *, path: str = '', plain_split: bool = False,
+              text_blob: bool = False) -> list[str]:
+        # Raw bytes normally denote binary; text_blob exposes a text/plain Blob
+        # without first decoding malformed input through a Python string.
+        if text_blob and isinstance(data, bytes):
+            data = _TextBlob(data)
         # ContentSplitterBase.ts:65-94; ContentSplitters.ts:8-30.
         algorithm = {'v1': LegacySplitter, 'v2': V2Splitter,
                      'v2-segmenter': V2Splitter, 'v3-rabin-karp': RabinKarpSplitter}[self.version]
@@ -209,8 +256,8 @@ class RabinKarpSplitter(_Splitter):
         A binary .md/.txt/.canvas path uses text thresholds but still emits
         base64. A text Blob always uses text thresholds below 4 MiB.
         """
-        is_text = isinstance(data, str)
-        raw = _js_utf8(data) if is_text else data
+        is_text = isinstance(data, (str, _TextBlob))
+        raw = _js_utf8(data) if isinstance(data, str) else data
         if not raw:
             return []
         plain = is_text or plain_split
@@ -242,8 +289,8 @@ class RabinKarpSplitter(_Splitter):
             fingerprint = ((fingerprint - old * weight) * 31 + byte) & 0xffffffff
         pieces.append(raw[start:])
         if is_text:
-            # TextDecoder removes a leading BOM on each separately read piece.
-            return [piece.decode('utf-8-sig', errors='replace') for piece in pieces]
+            # V3 uses readString, unlike the legacy Blob.text() path.
+            return [_read_string(piece) for piece in pieces]
         return [base64.b64encode(piece).decode('ascii') for piece in pieces]
 
 
@@ -290,9 +337,9 @@ class V2Splitter(_Splitter):
         maximum = self.absolute_max_piece_size
         if maximum <= 0:
             raise ValueError('customChunkSize must produce a positive piece size')
-        if isinstance(data, bytes):
+        if isinstance(data, bytes) and not isinstance(data, _TextBlob):
             return self._binary(data, path)
-        raw = _js_utf8(data)
+        raw = _js_utf8(data) if isinstance(data, str) else data
         if not raw:
             return []
         text = _unit_string(raw.decode('utf-8-sig', errors='replace'))
@@ -355,7 +402,7 @@ class LegacySplitter(_Splitter):
         maximum = self.absolute_max_piece_size
         if maximum <= 0:
             raise ValueError('customChunkSize must produce a positive piece size')
-        if isinstance(data, bytes):
+        if isinstance(data, bytes) and not isinstance(data, _TextBlob):
             delimiter = b'/' if path.endswith('.pdf') else b',' if path.endswith('.json') else b'\0'
             minimum = _binary_minimum(len(data), path)
             pieces = []
@@ -370,7 +417,8 @@ class LegacySplitter(_Splitter):
                 offset = end
                 if offset >= len(data):
                     return pieces
-        text = _unit_string(_js_utf8(data).decode('utf-8-sig', errors='replace'))
+        raw = _js_utf8(data) if isinstance(data, str) else data
+        text = _unit_string(raw.decode('utf-8-sig', errors='replace'))
         if not plain_split:
             return list(_capped(text, maximum, False))
         return [piece for group in self._groups(text) for piece in _capped(group, maximum)]

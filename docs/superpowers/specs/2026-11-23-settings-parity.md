@@ -27,6 +27,19 @@ Definitions used below: `N` = Blob byte size; `m` = minimumChunkSize; `A = floor
 | minimumChunkSize / longLineThreshold | m changes L and (text only) Q by formulas above; never raises M. `longLineThreshold` is present in tweak template but is **not passed** to the selected splitter and has no v3 effect. `U:common/models/tweak.definition.ts:25-26`; `U:ContentSplitter/ContentSplitterBase.ts:65-94`; `U:ContentSplitter/ContentSplitterRabinKarp.ts:17-20`. | Neither setting consumed by writers: `storage_journal.py:979-1053`. | Task 3 consume m; do not invent a long-line boundary rule from the setting name. |
 | Piece → local chunk → journal record | EntryManager skips empty pieces, computes id, adds `{_id:id,data:piece,type:"leaf"}`, and keeps ordered child IDs including repeats; size is Blob.size. Metadata has children/_id/path/ctime/mtime/size/type/eden:{}; flush threshold ~2 MB only batches writes. Journal serializes chunk as UTF-8 `~h:ID␟escaped(data)\n`, metadata as JSON+newline. `U:managers/EntryManager/EntryManagerImpls.ts:83-149,252-282,371-388`; `U:replication/journal/journalRecords.ts:70-76`. | Matching compact serializer and metadata shape: `journal_codec.py:122-159`; `livesync_format.py:374-399`; only one child. | Task 3 replace piece preparation, preserve journal protocol. Task 5 distinguish piece limit, journal batch size and whole-file policy. |
 
+[GOTCHA] Decoder parity (Task 3c fix round 1): V3 calls the published
+`octagonal-wheels@0.1.57` `dist/binary/base64.js:249-298` `readString` through
+`U:string_and_binary/convert.ts:2-17`. It preserves every BOM. Above 128 bytes
+it uses nonfatal UTF-8 `TextDecoder(ignoreBOM=true)`; at <=128 bytes it manually
+consumes unchecked continuation bytes (missing bytes coerce to zero, unknown
+lead bytes disappear, `String.fromCharCode` truncates to 16 bits). It can emit
+lone surrogates from malformed bytes. V1/V2 instead call `Blob.text()`
+(`U:string_and_binary/chunks.ts:357,445`): remove the initial BOM once, replace
+malformed UTF-8, preserve NUL. Blob construction from JS strings first replaces
+lone surrogates; non-plain V1 may subsequently split a valid surrogate pair.
+Oracles must execute the published decoder, verified against the pinned
+lockfile SHA512 and tar members, rather than substitute TextDecoder.
+
 ## б. Chunk identifiers
 
 | Question | Exact upstream behavior + citation | Our current implementation + citation | Delta / Task 2–5 action |

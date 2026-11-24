@@ -1,4 +1,15 @@
 {
+  "decoder_dependency": {
+    "package": "octagonal-wheels",
+    "version": "0.1.57",
+    "integrity": "sha512-CijSXOtflv60HaqrsyHxJ7jBwE/8v+RX5JjIDnJaibXM8qgG5IV1RJAHFEKDyqA/nhJb46TZf+eVa+2LBRf2vQ==",
+    "source_sha256": {
+      "package/dist/binary/base64.js": "0675e7a75edeb8eabc7f867ac18a44bd50bf4f493a5356d3760fb2b167fa82bc",
+      "package/dist/common/logger.js": "cc929b9b9a685fb060c6c382f53a3e61e67b05a4ae299fe846966a6d7332f58f",
+      "package/dist/binary/blob.js": "21ef13f0c43ecaf20fa4875395d849dab74f1046a676b769586feeef91e9270d",
+      "package/dist/binary/typedArray.js": "a6af3f42ca6d4b8cdd79947dca8719d220d97595cdf0be7a948a8404ad5e0f58"
+    }
+  },
   "source_sha256": {
     "string_and_binary/chunks.ts": "8cccf58cd8306d8504bcc41d5e2c303361936f8691abebf40764856805cf54aa",
     "string_and_binary/chunks.rabin-karp.unit.spec.ts": "5c4ad1cd197d13d5276c9512ef7b51b46d133c2e8cb1a65062220ac28bd026ae",
