@@ -187,20 +187,20 @@ async def test_wipe_epoch(minio):
     await reader.refresh(force=True)
     assert await reader.read_note("old.md") is not None
     old_epoch = (await reader.backend_info())["epoch"]
+    processed = (await reader.backend_info())["files_processed"]
     wipe()
     seed(protocol=3)
     await reader.startup_check()
     info = await reader.backend_info()
     assert info["epoch"] != old_epoch
     assert info["epoch"] == "3:salt-a"
-    assert info["files_processed"] == 0
-    assert await reader.list_notes() == []
-    assert await reader.read_note("old.md") is None
+    assert info["files_processed"] == processed  # no send history: upstream keeps caches
+    assert (await reader.read_note("old.md"))["text"] == "Old epoch"
     fresh, _ = await peer("fresh-writer")
     await fresh.write_note("new.md", "New epoch", create=True)
     await reader.refresh(force=True)
     assert (await reader.read_note("new.md"))["text"] == "New epoch"
-    assert await reader.read_note("old.md") is None
+    assert (await reader.read_note("old.md"))["text"] == "Old epoch"
 
 
 @requires_minio

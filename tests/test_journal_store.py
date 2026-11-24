@@ -369,7 +369,7 @@ class TestApplyJournal:
 
 class TestProcessedAndMeta:
     @pytest.mark.parametrize("symlink_root", [False, True], ids=["shard", "root"])
-    def test_reset_unlinks_directory_symlinks_without_touching_targets(
+    def test_cache_reset_never_traverses_or_removes_chunk_symlinks(
         self, store, tmp_path, symlink_root
     ):
         outside = tmp_path / "outside"
@@ -390,8 +390,8 @@ class TestProcessedAndMeta:
 
         assert (outside / "payload").read_bytes() == b"private"
         assert (outside_shard / "nested").read_bytes() == b"also private"
-        assert not link.is_symlink()
-        assert not link.exists()
+        assert link.is_symlink()
+        assert link.exists()
         assert store.files_processed_count() == 0
 
     def test_defaults_on_fresh_store(self, store):
@@ -430,7 +430,7 @@ class TestProcessedAndMeta:
         assert second.epoch == "1:salt"
         second.close()
 
-    def test_epoch_change_wipes_tables_and_chunk_files(self, tmp_path):
+    def test_epoch_records_value_without_destroying_state(self, tmp_path):
         state = tmp_path / "state"
         store = JournalStore(state, PATH_IDENTITY_LEGACY)
         store.epoch = "1:salt"
@@ -447,10 +447,16 @@ class TestProcessedAndMeta:
         store.epoch = "2:othersalt"
 
         assert store.epoch == "2:othersalt"
-        assert store.note_ids() == []
+        assert store.note_ids() == ["note.md"]
+        assert store.files_processed_count() == 1
+        assert store.last_sent_key == JOURNAL_1
+        assert store.read_note("note.md")[1] == "body"
+        store.reset()
+        assert store.note_ids() == ["note.md"]
         assert store.files_processed_count() == 0
         assert store.last_sent_key == ""
-        assert [p for p in chunks_root.rglob("*") if p.is_file()] == []
+        assert store.epoch == "2:othersalt"
+        assert store.read_note("note.md")[1] == "body"
         store.close()
 
     def test_setting_same_epoch_does_not_reset(self, store):

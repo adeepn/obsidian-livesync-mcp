@@ -224,7 +224,7 @@ class TestStartup:
 
 
 class TestEpochAndWipe:
-    async def test_epoch_change_resets_state_and_replays_everything(self, tmp_path):
+    async def test_epoch_change_without_send_history_preserves_caches(self, tmp_path):
         backend, storage = make_backend(tmp_path, healthy_bucket())
         await backend.startup_check()
         await backend.refresh()
@@ -235,17 +235,16 @@ class TestEpochAndWipe:
         storage._objects[SYNC_PARAMETERS_KEY] = params_blob(salt="salt-b")
         await backend.startup_check()
         info = await backend.backend_info()
-        assert info["files_processed"] == 0
+        assert info["files_processed"] == 3
         assert info["epoch"] == "2:salt-b"
 
         storage.get_calls.clear()
         storage.list_calls.clear()
         await backend.refresh(force=True)
         assert await files_processed(backend) == 3
-        # The reset cleared the processed ledger: the replay lists from the
-        # beginning again and re-reads every journal.
+        # Epoch alone cannot confirm a wipe: keep the processed ledger.
         assert storage.list_calls == [""]
-        assert sorted(storage.get_calls) == sorted([SYNC_PARAMETERS_KEY, JOURNAL_1, JOURNAL_2, JOURNAL_3])
+        assert storage.get_calls == [SYNC_PARAMETERS_KEY]
         await backend.close()
 
     async def test_same_epoch_keeps_state(self, tmp_path):
@@ -1102,7 +1101,7 @@ class TestJournalWrites:
         assert first['size'] == 13
         doc = backend._store.winner('a.md')
         assert doc['_revisions'] == {'start': 1, 'ids': [first['rev'].split('-', 1)[1]]}
-        assert storage.get_calls == [storage.put_calls[0][0]]
+        assert storage.get_calls == [SYNC_PARAMETERS_KEY, storage.put_calls[0][0]]
         second = await backend.write_note('A.md', 'new', expected_rev=first['rev'])
         doc = backend._store.winner('a.md')
         assert doc['_revisions']['start'] == 2
@@ -1555,14 +1554,14 @@ class TestRuntimeHistoryGuards:
         storage.get_calls.clear()
         await backend.refresh(force=True)
         paths = {meta['path'] for meta in await backend.list_notes()}
-        assert 'replacement.md' in paths
-        assert 'a.md' not in paths
-        assert (sent['path'] in paths) == changed_epoch
+        assert ('replacement.md' in paths) == (not changed_epoch)
+        assert 'a.md' in paths
+        assert sent['path'] in paths
         assert storage.get_calls.count(SYNC_PARAMETERS_KEY) == 1
         assert backend._store.epoch == ('2:salt-b' if changed_epoch else '2:salt-a')
         await backend.close()
 
-    async def test_write_after_wipe_resets_and_refuses_publication(self, tmp_path):
+    async def test_write_after_wipe_refuses_without_changing_local_state(self, tmp_path):
         backend, storage = make_backend(tmp_path, healthy_bucket())
         await backend.startup_check()
         await backend.refresh()
@@ -1570,12 +1569,12 @@ class TestRuntimeHistoryGuards:
         del storage._objects[backend._store.last_sent_key]
         before = dict(storage._objects)
         puts = len(storage.put_calls)
-        with pytest.raises(ConcurrentModification, match='remote was rebuilt; retry the operation after refresh'):
+        with pytest.raises(ConcurrentModification, match='remote was rebuilt or journals are missing; refresh and retry'):
             await backend.write_note('sent.md', 'stale', expected_rev=original['rev'])
         assert storage._objects == before
         assert len(storage.put_calls) == puts
-        assert await backend.list_notes() == []
-        await backend.refresh()  # reset also clears the throttle
+        assert (await backend.read_note('sent.md'))['text'] == 'old'
+        await backend.refresh(force=True)  # explicit reconciliation after refusal
         assert await files_processed(backend) == 3
         await backend.close()
 

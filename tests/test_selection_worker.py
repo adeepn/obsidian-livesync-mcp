@@ -43,7 +43,7 @@ async def test_cache_hit_rules_invalidate_and_attachment_once(backend, monkeypat
     assert calls == ['a.txt']
 
 
-async def test_cache_bounded_and_journal_reset(backend):
+async def test_cache_bounded_and_retained_by_journal_dedupe_reset(backend):
     b, _ = backend
     b.selection_only = 'md$'
     assert hasattr(b, 'selection_cache_size')
@@ -53,7 +53,7 @@ async def test_cache_bounded_and_journal_reset(backend):
     assert b.selection_cache_size() == 16
     if getattr(b, '_store', None):
         b._store.reset()
-        assert b.selection_cache_size() == 0
+        assert b.selection_cache_size() == 16
 
 
 async def test_rename_checks_each_path_once(backend, monkeypatch):

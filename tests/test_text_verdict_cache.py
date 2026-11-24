@@ -107,15 +107,17 @@ async def test_rewrite_copy_rename_invalidate_before_next_scan(backend):
     assert cached_ids(backend) == []
 
 
-async def test_reset_clears_verdicts(backend):
+async def test_dedupe_reset_retains_journal_verdicts(backend):
     await backend.write_note('file.base', b'\x00', create=True)
     assert (await backend.read_text_note('file.base'))['text'] is None
     assert cached_ids(backend)
     if hasattr(backend, '_store'):
+        before = cached_ids(backend)
         backend._store.reset()
+        assert cached_ids(backend) == before  # revision content is retained
     else:
         await backend.startup_check()
-    assert cached_ids(backend) == []
+        assert cached_ids(backend) == []
 
 
 async def test_remote_revision_invalidates_verdict(backend):

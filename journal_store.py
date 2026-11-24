@@ -23,10 +23,9 @@ Design notes:
   concurrent devices coexist and the loser stays queryable via
   :meth:`JournalStore.leaves`.
 - *Epoch resets*: the epoch is ``protocolVersion:pbkdf2salt`` from the
-  journal sync parameters. When it changes, the remote history is no longer
-  compatible with local state, so setting a different epoch wipes every
-  table (except the path-identity configuration) and every chunk file, and
-  the reset is logged.
+  journal sync parameters. The backend confirms wipes against send history;
+  resets clear only processed-journal and last-sent tracking. Local revision
+  trees and chunks survive, including notes absent from rebuilt remote history.
 - *Path identity*: the mode resolved at startup
   (:func:`livesync_format.resolve_path_identity`) is stored on first open;
   reopening the same state directory with a different mode is a state-dir
@@ -388,14 +387,8 @@ class JournalStore:
 
     @epoch.setter
     def epoch(self, value: str) -> None:
-        current = self.epoch
-        if value != current:
-            logger.info(
-                "journal store: epoch changed %r -> %r; resetting local state",
-                current,
-                value,
-            )
-            self.reset()
+        # Epoch alone does not prove a wipe (upstream JournalSyncCore:354-388).
+        # The backend reconciles send history before clearing dedupe caches.
         self._meta_set(_META_EPOCH, value)
 
     def selection_cache_size(self):
@@ -424,45 +417,17 @@ class JournalStore:
             self._selection_cache_trim(limit)
 
     def reset(self) -> None:
-        """Wipe replicated state: docs/processed/meta rows and chunk files.
+        """Clear replication deduplication caches, retaining every local copy.
 
-        The path-identity configuration row is preserved (it describes the
-        state directory, not the remote history). The reset is logged.
+        Like device checkpoint resets (JournalSyncCore.ts:332-341,392-400),
+        this never removes revision trees or content-addressed chunk files.
+        Identity, epoch, and read/selection verdicts remain valid locally.
         """
         with self._conn:
-            self._conn.execute("DELETE FROM selection_verdicts")
-            self._conn.execute("DELETE FROM text_verdicts")
-            self._conn.execute("DELETE FROM docs")
             self._conn.execute("DELETE FROM processed")
-            self._conn.execute("DELETE FROM meta")
-            self._conn.execute(
-                "INSERT OR REPLACE INTO meta(key, value) VALUES (?, ?)",
-                (_META_PATH_IDENTITY, self.path_identity),
-            )
-        removed = 0
-        if self._chunks_dir.is_symlink():
-            self._chunks_dir.unlink()
-        elif self._chunks_dir.is_dir():
-            for shard in self._chunks_dir.iterdir():
-                if shard.is_symlink():
-                    shard.unlink()
-                    removed += 1
-                elif shard.is_dir():
-                    for chunk_file in shard.iterdir():
-                        if chunk_file.is_file():
-                            chunk_file.unlink()
-                            removed += 1
-                    try:
-                        shard.rmdir()
-                    except OSError:
-                        pass
-                elif shard.is_file():
-                    shard.unlink()
-                    removed += 1
+            self._conn.execute("DELETE FROM meta WHERE key = ?", (_META_LAST_SENT_KEY,))
         logger.warning(
-            "journal store state reset: cleared docs/processed/meta tables "
-            "and removed %d chunk file(s)",
-            removed,
+            "journal store dedupe caches reset; local documents and chunks retained"
         )
 
     def _meta_get(self, key: str) -> str | None:

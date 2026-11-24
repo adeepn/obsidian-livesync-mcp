@@ -311,17 +311,9 @@ class JournalBackend(DeviceSelection):
             await self.refresh_selection_files()
             return
         if self._store.epoch != epoch:
-            # The setter wipes docs/processed/meta and chunk files, so the
-            # next refresh replays the whole history.
-            logger.info(
-                "journal epoch changed %r -> %r; local state was reset",
-                self._store.epoch,
-                epoch,
-            )
             self._store.epoch = epoch
             self._clear_refresh_clock()
-        else:
-            self._probe_remote_wipe(epoch)
+        self._probe_remote_wipe(epoch)
 
         await self.refresh_selection_files()
 
@@ -521,15 +513,10 @@ class JournalBackend(DeviceSelection):
         )
 
     def _probe_remote_wipe(self, epoch: str | None) -> bool:
-        """Reset local state when the last-sent journal has vanished.
+        """Confirm a missing last-sent journal and clear only dedupe caches.
 
-        Returns whether a reset occurred. A missing object for the last
-        file this peer sent
-        means the bucket was wiped or rebuilt (objects are never deleted
-        individually, spec section 7), like upstream's
-        ``ensureCheckpointCachesAreFresh`` wipe probe. ``epoch``, when
-        known, is re-recorded after the reset so the next startup
-        compares against the correct value.
+        Refresh/startup use this mutating reconciliation; publication uses a
+        separate read-only precondition so a refused write changes nothing.
         """
         store = self._store
         if store is None:
@@ -539,7 +526,7 @@ class JournalBackend(DeviceSelection):
             return False
         logger.warning(
             "journal object %r vanished; assuming a remote wipe and "
-            "resetting local state",
+            "clearing dedupe caches while retaining local notes",
             key,
         )
         store.reset()
@@ -1013,9 +1000,12 @@ class JournalBackend(DeviceSelection):
             )
             if len(blob) + control_reserve > self.max_refresh_bytes:
                 raise ReplayBudgetExceeded("max_refresh_bytes", len(blob) + control_reserve, self.max_refresh_bytes)
-            if self._probe_remote_wipe(store.epoch or None):
+            remote_epoch = self._load_sync_parameters_epoch()
+            last_sent = store.last_sent_key
+            if (store.epoch != (remote_epoch or "") or
+                    (last_sent and not self._object_storage.exists(last_sent))):
                 raise ConcurrentModification(
-                    "remote was rebuilt; retry the operation after refresh"
+                    "remote was rebuilt or journals are missing; refresh and retry"
                 )
             ms = max(int(time.time() * 1000), self._max_seen_ms + 1)
             # Reserve even failed attempts so a retry cannot reuse their key.
