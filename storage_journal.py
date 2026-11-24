@@ -66,6 +66,7 @@ from livesync_format import (
     assemble_binary,
     canonical_path,
     resolve_content_splitter,
+    resolve_sync_max_size,
     clone_metadata,
     prepare_file_content,
     is_note_document,
@@ -76,9 +77,12 @@ from livesync_format import (
     soft_delete_revision,
     validate_vault_path,
 )
+from replay_limits import ReplayLimits, ReplayBudgetExceeded
 from object_storage import JournalObjectStorage, ObjectSizeLimit, MAX_OBJECT_BYTES
 from storage_base import (
-    MAX_ATTACHMENT_BYTES,
+    check_file_size,
+    WriteSkipped,
+    RenameOutOfSync,
     ConcurrentModification,
     NoteContent,
     NoteExists,
@@ -140,15 +144,16 @@ KNOWN_METADATA_KEYS = frozenset({
     "children", "eden", "deleted", "_deleted",
 })
 
-# Aggregate refresh limits, independent of the per-file codec/download caps.
-MAX_REFRESH_KEYS = 1_000_000
-MAX_REFRESH_BYTES = 4 * 1024**3
-MAX_REFRESH_SECONDS = 300.0
+# Operational refresh budgets; derivation and deliberate parity difference
+# are documented in replay_limits.py. No dependence on local file selection.
+MAX_REFRESH_KEYS = ReplayLimits.max_refresh_keys
+MAX_REFRESH_BYTES = ReplayLimits.max_refresh_bytes
+MAX_REFRESH_SECONDS = ReplayLimits.max_refresh_seconds
 _LIST_PAGE_SIZE = 1000
 
 
-class _RefreshBudgetStop(Exception):
-    """Internal clean partial-stop signal; never marks a file processed."""
+class _RefreshBudgetStop(ReplayBudgetExceeded):
+    """Public budget failure after preserving completed replay progress."""
 
 
 
@@ -201,10 +206,11 @@ class JournalBackend(DeviceSelection):
         max_inflated_bytes: int = MAX_INFLATED_BYTES,
         max_records: int = MAX_RECORDS,
         max_line_bytes: int = MAX_LINE_BYTES,
+        max_json_depth: int = ReplayLimits.max_json_depth,
     ):
         for value in (max_refresh_keys, max_refresh_bytes, max_refresh_seconds,
-                      max_inflated_bytes, max_records, max_line_bytes):
-            if value <= 0 or not math.isfinite(value):
+                      max_inflated_bytes, max_records, max_line_bytes, max_json_depth):
+            if value <= 0 or (isinstance(value, float) and not math.isfinite(value)):
                 raise ValueError("journal limits must be positive and finite")
         if text_verdict_cache_entries <= 0:
             raise ValueError("text verdict cache entries must be positive")
@@ -215,6 +221,7 @@ class JournalBackend(DeviceSelection):
         self.max_inflated_bytes = max_inflated_bytes
         self.max_records = max_records
         self.max_line_bytes = max_line_bytes
+        self.max_json_depth = max_json_depth
         self._listing_cursor = ""
         self._refresh_deadline: float | None = None
         self._refresh_downloaded = 0
@@ -226,6 +233,8 @@ class JournalBackend(DeviceSelection):
         self._store: JournalStore | None = None
         self._writer_unsupported_reason = None
         self._splitter = ContentSplitter()
+        self.sync_max_size_mb = 50
+        self.sync_max_size_mb_override = None
         # Throttle clock (monotonic) and the wall-clock stamp for diagnostics.
         self._last_refresh_failure: Exception | None = None
         self._last_refresh: float | None = None
@@ -260,6 +269,8 @@ class JournalBackend(DeviceSelection):
             )
             identity = PATH_IDENTITY_LEGACY
             self._splitter = ContentSplitter()
+            self.sync_max_size_mb = (50 if self.sync_max_size_mb_override is None
+                                     else self.sync_max_size_mb_override)
         else:
             if milestone.get("locked") is True:
                 logger.warning(
@@ -268,6 +279,8 @@ class JournalBackend(DeviceSelection):
                 )
             try:
                 identity = resolve_path_identity(milestone)
+                self.sync_max_size_mb = (resolve_sync_max_size(milestone)
+                    if self.sync_max_size_mb_override is None else self.sync_max_size_mb_override)
                 self._splitter = resolve_content_splitter(milestone)
             except UnsupportedWriterSettings as exc:
                 self._splitter = None
@@ -335,6 +348,8 @@ class JournalBackend(DeviceSelection):
             and now - self._last_refresh < self.refresh_min_interval
         ):
             if self._last_refresh_failure is not None:
+                if isinstance(self._last_refresh_failure, ReplayBudgetExceeded):
+                    raise self._last_refresh_failure
                 raise StorageError(
                     "refresh failed previously; retry after interval or force"
                 ) from self._last_refresh_failure
@@ -357,8 +372,9 @@ class JournalBackend(DeviceSelection):
             # Advance only after this entire window was replayed. A byte/time
             # stop or failure retries the same window, skipping its ledger.
             self._listing_cursor = next_cursor
-        except _RefreshBudgetStop as exc:
-            logger.warning("journal refresh budget stop: %s", exc)
+            if next_cursor:
+                raise _RefreshBudgetStop('max_refresh_keys', self.max_refresh_keys,
+                                         self.max_refresh_keys)
         except Exception as exc:
             self._last_refresh_failure = exc
             raise
@@ -388,7 +404,9 @@ class JournalBackend(DeviceSelection):
 
     def _check_refresh_time(self, point: str) -> None:
         if self._refresh_deadline is not None and time.monotonic() >= self._refresh_deadline:
-            raise _RefreshBudgetStop(f"wall-clock at {point!r}")
+            raise _RefreshBudgetStop('max_refresh_seconds',
+                self.max_refresh_seconds + time.monotonic() - self._refresh_deadline,
+                self.max_refresh_seconds)
 
     def _get_object(self, key: str) -> bytes | None:
         if self._refresh_deadline is None:
@@ -396,12 +414,14 @@ class JournalBackend(DeviceSelection):
         self._check_refresh_time(key)
         remaining = self.max_refresh_bytes - self._refresh_downloaded
         if remaining <= 0:
-            raise _RefreshBudgetStop(f"download bytes at {key!r}")
+            raise _RefreshBudgetStop('max_refresh_bytes',
+                self._refresh_downloaded + 1, self.max_refresh_bytes)
         try:
             blob = self._object_storage.get(key, max_bytes=remaining)
-        except ObjectSizeLimit:
+        except ObjectSizeLimit as exc:
             if remaining < getattr(self._object_storage, "max_object_bytes", MAX_OBJECT_BYTES):
-                raise _RefreshBudgetStop(f"download bytes at {key!r}") from None
+                raise _RefreshBudgetStop('max_refresh_bytes',
+                    self._refresh_downloaded + exc.observed, self.max_refresh_bytes) from None
             raise
         self._refresh_downloaded += len(blob) if blob is not None else 0
         self._check_refresh_time(key)
@@ -583,13 +603,13 @@ class JournalBackend(DeviceSelection):
                 )
             journal = parse_journal(
                 inflate_journal(blob, max_output_bytes=self.max_inflated_bytes),
-                name=name, max_records=self.max_records, max_line_bytes=self.max_line_bytes,
+                name=name, max_records=self.max_records, max_line_bytes=self.max_line_bytes, max_json_depth=self.max_json_depth,
             )
             for doc in journal.docs:
                 validate_document_identity(doc, store.path_identity)
             store.apply_journal(name, journal.chunks, journal.docs)
             return journal.docs[-100:]
-        except StorageUnavailable:
+        except (StorageUnavailable, ReplayBudgetExceeded):
             raise
         except (StorageError, ValueError, OSError, sqlite3.Error) as exc:
             # The public message carries the file name and the error class
@@ -784,7 +804,7 @@ class JournalBackend(DeviceSelection):
             content = store.read_note(meta["doc_id"])
             if content is not None:
                 return self._meta_from_doc(content[0]), content[1]
-        except StorageUnavailable:
+        except (StorageUnavailable, ReplayBudgetExceeded):
             raise  # backend-wide condition, not a per-note failure
         except Exception:
             logger.exception(
@@ -969,12 +989,14 @@ class JournalBackend(DeviceSelection):
         try:
             payload = serialize_journal(chunks, docs)
             if len(payload) > self.max_inflated_bytes:
-                raise StorageError("journal inflated output exceeds limit")
+                raise ReplayBudgetExceeded("max_inflated_bytes", len(payload), self.max_inflated_bytes)
             try:
                 journal = parse_journal(
                     payload, max_records=self.max_records,
-                    max_line_bytes=self.max_line_bytes,
+                    max_line_bytes=self.max_line_bytes, max_json_depth=self.max_json_depth,
                 )
+            except ReplayBudgetExceeded:
+                raise
             except ValueError as exc:
                 raise StorageError(f"journal publication preflight failed: {exc}") from exc
             for doc in journal.docs:
@@ -982,7 +1004,7 @@ class JournalBackend(DeviceSelection):
             store.validate_journal(journal.chunks, journal.docs)
             blob = deflate_journal(payload)
             if len(blob) > getattr(self._object_storage, "max_object_bytes", MAX_OBJECT_BYTES):
-                raise StorageError("journal compressed object size exceeds limit")
+                raise ReplayBudgetExceeded("max_object_bytes", len(blob), self._object_storage.max_object_bytes)
             # A fresh replay reads sync parameters before downloading journals.
             # Leave room for that control read and modest object growth.
             control_reserve = (
@@ -990,7 +1012,7 @@ class JournalBackend(DeviceSelection):
                 else self._sync_parameters_bytes + 1024
             )
             if len(blob) + control_reserve > self.max_refresh_bytes:
-                raise StorageError("journal download bytes exceeds refresh limit")
+                raise ReplayBudgetExceeded("max_refresh_bytes", len(blob) + control_reserve, self.max_refresh_bytes)
             if self._probe_remote_wipe(store.epoch or None):
                 raise ConcurrentModification(
                     "remote was rebuilt; retry the operation after refresh"
@@ -1021,7 +1043,7 @@ class JournalBackend(DeviceSelection):
             )
             journal = parse_journal(
                 decoded, name=name, max_records=self.max_records,
-                max_line_bytes=self.max_line_bytes,
+                max_line_bytes=self.max_line_bytes, max_json_depth=self.max_json_depth,
             )
             if (
                 decoded != payload
@@ -1056,6 +1078,7 @@ class JournalBackend(DeviceSelection):
         overwrite: bool = False,
         mtime: int | None = None,
         expected_rev: str | None = None,
+        lossy_text: bool = False,
     ) -> NoteMeta:
         """Ingest file content using device path-based disk-reading rules.
 
@@ -1065,7 +1088,13 @@ class JournalBackend(DeviceSelection):
         self.check_writer_support()
         validate_vault_path(path)
         await self.check_selection(path)
-        body, doc_type, size = prepare_file_content(path, content)
+        # Ordinary CREATE/CHANGED skips before content acquisition/publication.
+        # C:serviceModules/ServiceFileHandlerBase/events.ts:63-69.
+        if isinstance(content, bytes):
+            check_file_size(path, len(content), self.sync_max_size_mb)
+        body, doc_type, size = prepare_file_content(path, content, lossy_text=lossy_text)
+        if isinstance(content, str):
+            check_file_size(path, size, self.sync_max_size_mb)
         return await self._write_content(
             path, body, size, doc_type,
             attachment_data=body if isinstance(body, bytes) else None,
@@ -1076,18 +1105,14 @@ class JournalBackend(DeviceSelection):
     async def write_attachment(
         self, path: str, data: bytes, *, create: bool = False,
         overwrite: bool = False, expected_rev: str | None = None,
+        lossy_text: bool = False,
     ) -> NoteMeta:
-        """Capped byte-input alias for write_note; type still follows path."""
+        """Byte-input alias for write_note; type still follows path."""
         self.check_writer_support()
         validate_vault_path(path)
-        if len(data) > MAX_ATTACHMENT_BYTES:
-            raise ValueError(
-                f"attachment exceeds 32 MiB cap ({MAX_ATTACHMENT_BYTES} bytes); "
-                f"actual size {len(data)} bytes"
-            )
         return await self.write_note(
             path, data, create=create, overwrite=overwrite,
-            expected_rev=expected_rev,
+            expected_rev=expected_rev, lossy_text=lossy_text,
         )
 
     async def _write_content(
@@ -1177,6 +1202,10 @@ class JournalBackend(DeviceSelection):
     ) -> NoteMeta:
         """Publish destination and source soft deletion in ONE journal.
 
+        Exception: outer device size admission maps an oversized destination
+        to source-only retirement, reported as RenameOutOfSync. MCP has no
+        moved host file to retain, so no destination is claimed saved.
+
         Same-path is a no-op; identity-preserving renames update only the
         display path and mtime. Single-file publication has no partial phases,
         so RenamePartialError (mapped by the tool layer for contract parity)
@@ -1195,6 +1224,20 @@ class JournalBackend(DeviceSelection):
         if path == new_path:
             return await self.get_meta(path)
         source = self._source_doc(path)
+        # Full event admission matters: oversized RENAME becomes source DELETE.
+        # C:managers/StorageEventManager/admission.ts:78-108,124-130;
+        # C:serviceModules/ServiceFileHandlerBase/selection.ts:18-60.
+        try:
+            check_file_size(new_path, source.get('size', 0), self.sync_max_size_mb)
+        except WriteSkipped:
+            if not preserve_source:
+                retired = self._next_revision(
+                    soft_delete_revision(source, int(time.time() * 1000)), source)
+                self._publish([], [retired])
+            raise RenameOutOfSync(path, new_path, source.get('size', 0),
+                                  self.sync_max_size_mb,
+                                  source_retired=not preserve_source) from None
+
         if self._doc_id(path) == self._doc_id(new_path):
             body = self._next_revision(
                 clone_metadata(
@@ -1220,6 +1263,10 @@ class JournalBackend(DeviceSelection):
         validate_vault_path(new_path)
         await self.check_selection(new_path)
         source = self._source_doc(path)
+        # Copy creates a new storage file -> CREATE size gate (C:events.ts:63-69).
+        # C:serviceModules/ServiceFileHandlerBase/events.ts:63-77.
+        # Rename has a separate admission rule; deletes have no size gate.
+        check_file_size(new_path, source.get('size', 0), self.sync_max_size_mb)
         body = self._copy_revision(source, new_path, overwrite)
         self._publish([], [body])
         return self._meta_from_doc(body)

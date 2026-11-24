@@ -35,18 +35,20 @@ from botocore.exceptions import BotoCoreError, ClientError
 
 from config import S3Config
 from storage_base import StorageError, StorageUnavailable
+from replay_limits import ReplayLimits, ReplayBudgetExceeded
 
 logger = logging.getLogger(__name__)
 
 # S3 ListObjectsV2 never returns more than 1000 keys per page.
 _MAX_PAGE_KEYS = 1000
 
-# Maximum compressed object size, including control objects (512 MiB).
-MAX_OBJECT_BYTES = 512 * 1024**2
+# Operational compressed-object budget including control objects.
+# See replay_limits.py for derivation; this is not a device file-size cap.
+MAX_OBJECT_BYTES = ReplayLimits.max_object_bytes
 _READ_BLOCK_BYTES = 1024**2
 
 
-class ObjectSizeLimit(StorageError):
+class ObjectSizeLimit(ReplayBudgetExceeded):
     """An object exceeded the bounded download size."""
 
 
@@ -162,7 +164,7 @@ class Boto3ObjectStorage:
                 if max_bytes is not None:
                     limit = min(limit, max_bytes)
                 if response.get("ContentLength", 0) > limit:
-                    raise ObjectSizeLimit(f"object {key!r} exceeds download limit")
+                    raise ObjectSizeLimit("max_object_bytes", response["ContentLength"], limit)
                 chunks = bytearray()
                 while True:
                     block = body.read(min(_READ_BLOCK_BYTES, limit + 1 - len(chunks)))
@@ -170,7 +172,7 @@ class Boto3ObjectStorage:
                         return bytes(chunks)
                     chunks.extend(block)
                     if len(chunks) > limit:
-                        raise ObjectSizeLimit(f"object {key!r} exceeds download limit")
+                        raise ObjectSizeLimit("max_object_bytes", len(chunks), limit)
         except ClientError as exc:
             if _is_missing(exc):
                 return None

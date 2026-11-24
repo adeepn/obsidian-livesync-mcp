@@ -10,9 +10,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Add local device allow/ignore regex and vault ignore-file selection to both writers, with pinned ECMAScript/minimatch matching and filter diagnostics. Active filters require Node.js 22+.
 
-- Added `obsidian_download_attachment` for complete binary downloads over base64 with raw size/SHA-256, an optional caller size limit, and a symmetric 32 MiB hard cap for CouchDB and S3 journals
+- Added `obsidian_download_attachment` for complete binary downloads over base64 with raw size/SHA-256, an optional caller size limit, and no fixed peer size cap for CouchDB and S3 journals
 
-- Added `obsidian_upload_attachment` for binary PDF/scan uploads up to 32 MiB decoded through CouchDB or S3 journals, using LiveSync `newnote` base64 storage and returning size/SHA-256 metadata
+- Added `obsidian_upload_attachment` for binary PDF/scan uploads under the vault device size policy through CouchDB or S3 journals, using LiveSync `newnote` base64 storage and returning size/SHA-256 metadata
 
 - Added S3 local peer state size/path diagnostics and `vault_stats.local_state` warnings controlled by `S3_STATE_SIZE_WARN_MB` (disabled by default)
 - Added shared bearer API key authentication via `MCP_API_KEY` for MCP clients that use `Authorization: Bearer <token>`
@@ -22,6 +22,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Added a `backend` field to `vault_stats` output identifying the active storage backend
 
 ### Changed
+
+- Replace fixed 32 MiB upload/write caps with the resolved device `syncMaxSizeInMB` rule on both backends; oversized ordinary writes and copies return a structured skipped outcome without publishing or changing the previous revision. Keep delete and received revision persistence independent of this gate; mirror oversized rename admission by retiring a selected source without saving the destination and report `moved_out_of_sync`.
+- Remove the fixed download cap; retain the optional caller `max_bytes` limit.
+- Expose all operational journal/replay budgets through environment overrides without upper ceilings, enlarge defaults with piece-derived headroom, and return actionable budget errors while preserving completed replay progress.
 
 - Resolve plain/newnote storage from the exact case-sensitive LiveSync device disk-reading suffixes in both backends; accept strings and bytes through one writer and retain attachment aliases and existing size caps
 - Expose strictly valid UTF-8 newnotes as editable text in MCP tools while retaining path-derived storage types; keep metadata/download behavior for non-UTF-8 attachments

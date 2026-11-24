@@ -556,7 +556,7 @@ def test_write_signatures_are_pinned():
     write = inspect.signature(CouchDBBackend.write_note)
     assert list(write.parameters) == [
         "self", "path", "content", "create", "overwrite", "mtime",
-        "expected_rev",
+        "expected_rev", "lossy_text",
     ]
     assert write.parameters["create"].default is False
     assert write.parameters["overwrite"].default is False

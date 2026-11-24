@@ -12,11 +12,63 @@ from __future__ import annotations
 from typing import AsyncIterator, Protocol, TypedDict, runtime_checkable
 
 
-MAX_ATTACHMENT_BYTES = 32 * 1024 * 1024
-
-
 class StorageError(Exception):
     """Base class for every storage-level failure."""
+
+
+class WriteSkipped(StorageError):
+    """Device policy outcome, not a failed/unsupported write. No revision exists.
+
+    Backends signal this before publication; tools return status=skipped.
+    C:services/base/VaultService.ts:73-81; C:serviceModules/
+    ServiceFileHandlerBase/events.ts:58-69 (pins in docs/upstream-pin.md).
+    """
+
+    def __init__(self, path: str, size: int, maximum: float):
+        self.path, self.size, self.maximum = path, size, maximum
+        super().__init__(
+            f"skipped: {size / 1024**2:.3g} MiB ({size} bytes) exceeds the vault's "
+            f"syncMaxSizeInMB ({maximum:g}); the plugin would not synchronize "
+            "this file either — raise syncMaxSizeInMB in the plugin settings "
+            "or pass a smaller file"
+        )
+
+    def as_dict(self) -> dict:
+        return dict(status="skipped", path=self.path, size=self.size,
+                    syncMaxSizeInMB=self.maximum, message=str(self))
+
+
+class RenameOutOfSync(StorageError):
+    """Rename admission excluded the destination; a distinct device outcome.
+
+    C:managers/StorageEventManager/admission.ts:78-108,124-130 turns this
+    into DELETE(source), not RENAME. Source retirement must finish before
+    signaling source_retired=True. No destination DB revision is published.
+    """
+
+    def __init__(self, source: str, destination: str, size: int, maximum: float,
+                 *, source_retired: bool):
+        self.source, self.destination = source, destination
+        self.size, self.maximum = size, maximum
+        self.source_retired = source_retired
+        super().__init__(
+            f"rename destination exceeds syncMaxSizeInMB ({maximum:g}); "
+            + ("source DB entry retired; " if source_retired else "source DB entry preserved; ")
+            + "no destination saved. The plugin retains the moved file in its "
+            "local vault; this MCP peer has no local vault file."
+        )
+
+    def as_dict(self) -> dict:
+        return dict(status='moved_out_of_sync' if self.source_retired else 'skipped',
+                    source=self.source, path=self.destination, size=self.size,
+                    syncMaxSizeInMB=self.maximum, source_retired=self.source_retired,
+                    destination_published=False, message=str(self))
+
+
+def check_file_size(path: str, size: int, maximum: float) -> None:
+    # C:services/base/VaultService.ts:73-81: strict >, <=0 disables.
+    if maximum > 0 and size > 0 and size > maximum * 1024 * 1024:
+        raise WriteSkipped(path, size, maximum)
 
 
 class NoteNotFound(StorageError):
@@ -169,8 +221,13 @@ class StorageBackend(Protocol):
         overwrite: bool = False,
         mtime: int | None = None,
         expected_rev: str | None = None,
+        lossy_text: bool = False,
     ) -> NoteMeta:
         """Ingest file content using the device disk-reading path rule.
+
+        Oversized ordinary input signals WriteSkipped without publication.
+        Byte input is selected by its original size, before opt-in lossy_text
+        conversion for plain paths; strings use Blob UTF-8 byte length.
 
         ``expected_rev`` is the read-through lost-update precondition:
         when it is not ``None`` and the refreshed local winning token differs
@@ -190,14 +247,13 @@ class StorageBackend(Protocol):
         create: bool = False,
         overwrite: bool = False,
         expected_rev: str | None = None,
+        lossy_text: bool = False,
     ) -> NoteMeta:
         """Write binary data with write_note create/overwrite/resurrection rules.
 
         Thin byte-input alias: path selects plain/newnote as in write_note.
         Validate ForbiddenPath first. Stale expected_rev refuses all writes.
-        MAX_ATTACHMENT_BYTES caps decoded data at 32 MiB; larger bodies raise
-        ValueError naming the cap and actual size. Journal preflight caps make
-        bodies above roughly 40 MiB undeployable anyway; 32 MiB leaves headroom.
+        Oversized input signals WriteSkipped before mutation, as write_note does.
         """
         ...
 
@@ -215,7 +271,12 @@ class StorageBackend(Protocol):
     async def rename_note(
         self, path: str, new_path: str, *, overwrite: bool = False
     ) -> NoteMeta:
-        """Move a note by copying ``children`` (no content re-encoding)."""
+        """Move existing references; oversized destination signals RenameOutOfSync.
+
+        Device rename admission retires a selected source without saving an
+        oversized destination. MCP has no disk copy to retain; report this
+        outcome explicitly instead of claiming a durable destination.
+        """
         ...
 
     async def copy_note(

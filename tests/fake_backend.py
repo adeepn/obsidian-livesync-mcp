@@ -105,7 +105,7 @@ class FakeBackend:
             yield deepcopy(note["meta"]), text
 
     async def write_note(self, path, content, *, create=False,
-                         overwrite=False, mtime=None, expected_rev=None):
+                         overwrite=False, mtime=None, expected_rev=None, lossy_text=False):
         self._call("write_note", path, content, create, overwrite, mtime,
                    expected_rev)
         if expected_rev is not None and self._current_rev(path) != expected_rev:
@@ -116,14 +116,14 @@ class FakeBackend:
             raise NoteExists(path)
         if path not in self.notes and not create:
             raise NoteNotFound(path)
-        body, doc_type, _ = prepare_file_content(path, content)
+        body, doc_type, _ = prepare_file_content(path, content, lossy_text=lossy_text)
         self.add(path, text=body if doc_type == "plain" else None,
                  data=body if doc_type == "newnote" else None,
                  mtime=mtime if mtime is not None else 2)
         return deepcopy(self.notes[path]["meta"])
 
     async def write_attachment(self, path, data, *, create=False,
-                               overwrite=False, expected_rev=None):
+                               overwrite=False, expected_rev=None, lossy_text=False):
         self._call("write_attachment", path, data, create, overwrite, expected_rev)
         if expected_rev is not None and self._current_rev(path) != expected_rev:
             raise ConcurrentModification("note changed concurrently; re-read and retry")
@@ -131,7 +131,7 @@ class FakeBackend:
             raise NoteExists(path)
         if path not in self.notes and not create:
             raise NoteNotFound(path)
-        body, doc_type, _ = prepare_file_content(path, data)
+        body, doc_type, _ = prepare_file_content(path, data, lossy_text=lossy_text)
         self.add(path, text=body if doc_type == "plain" else None,
                  data=body if doc_type == "newnote" else None)
         return deepcopy(self.notes[path]["meta"])

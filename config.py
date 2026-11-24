@@ -14,6 +14,8 @@ from dataclasses import dataclass, replace
 from typing import Literal, Mapping
 from urllib.parse import parse_qs
 
+from replay_limits import ReplayLimits
+
 S3_URI_SCHEME = "sls://"
 
 BACKENDS = ("couchdb", "s3")
@@ -93,6 +95,8 @@ class Config:
     oauth_password: str
     oauth_client_id: str
     oauth_client_secret: str
+    replay_limits: ReplayLimits = ReplayLimits()
+    sync_max_size_mb: float | None = None
     selection_only: str = ''
     selection_ignore: str = ''
     selection_use_ignore_files: bool = False
@@ -303,6 +307,17 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
     """
     if env is None:
         env = os.environ
+    try:
+        replay_limits = ReplayLimits.from_env(env)
+    except ValueError as exc:
+        raise ConfigError(str(exc)) from None
+    size_override = env.get('LIVESYNC_SYNC_MAX_SIZE_MB', '').strip()
+    try:
+        sync_max_size_mb = float(size_override) if size_override else None
+        if sync_max_size_mb is not None and not math.isfinite(sync_max_size_mb):
+            raise ValueError
+    except ValueError:
+        raise ConfigError('LIVESYNC_SYNC_MAX_SIZE_MB must be a finite number or empty') from None
     scan_limits = []
     for key, default in (("LIVESYNC_SCAN_MAX_NOTES", 10000),
                          ("LIVESYNC_SCAN_MAX_BYTES", 64 * 1024 * 1024),
@@ -352,6 +367,8 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
         )
 
     return Config(
+        replay_limits=replay_limits,
+        sync_max_size_mb=sync_max_size_mb,
         selection_only=env.get('LIVESYNC_SYNC_ONLY_REGEX', ''),
         selection_ignore=env.get('LIVESYNC_SYNC_IGNORE_REGEX', ''),
         selection_use_ignore_files=use_ignore == 'true',

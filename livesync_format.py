@@ -179,6 +179,7 @@ _RECOGNIZED_TWEAK_KEYS = frozenset(
         "hashAlg",
         "minimumChunkSize",
         "customChunkSize",
+        "syncMaxSizeInMB",
         "idDerivationVersion",
         "idDerivationKey",
     }
@@ -380,7 +381,7 @@ def plain_ingress_utf8(raw: bytes, *, lossy_text: bool = False) -> tuple[str, in
 
 
 def prepare_file_content(
-    path: str, content: str | bytes,
+    path: str, content: str | bytes, *, lossy_text: bool = False,
 ) -> tuple[str | bytes, str, int]:
     """Model host reading followed by Blob creation; return body, type, size.
 
@@ -401,7 +402,7 @@ def prepare_file_content(
             raw = content.encode("utf-8")
         return (content if doc_type == "plain" else raw), doc_type, len(raw)
     if doc_type == "plain":
-        text, _ = plain_ingress_utf8(content)
+        text, _ = plain_ingress_utf8(content, lossy_text=lossy_text)
         return text, doc_type, len(text.encode("utf-8"))
     return content, doc_type, len(content)
 
@@ -444,6 +445,23 @@ def chunk_id_for(data: str) -> str:
 
 class UnsupportedWriterSettings(UnsupportedVaultSettings):
     """Writer-only incompatibility; existing content remains readable."""
+
+
+def resolve_sync_max_size(milestone_settings: dict) -> float:
+    """Use the identity settings resolution; ambiguous device values fail closed.
+
+    C:common/models/setting.const.defaults.ts:147 supplies missing value 50.
+    C:services/base/VaultService.ts:73-81 defines the predicate, not a cap.
+    """
+    import math
+    values = [settings.get('syncMaxSizeInMB', 50)
+              for settings in _milestone_setting_maps(milestone_settings)]
+    if any(isinstance(v, bool) or not isinstance(v, (int, float))
+           or not math.isfinite(v) for v in values):
+        raise UnsupportedVaultSettings('syncMaxSizeInMB must be a finite number')
+    if any(v != values[0] for v in values[1:]):
+        raise UnsupportedVaultSettings('conflicting syncMaxSizeInMB settings')
+    return values[0]
 
 
 def resolve_content_splitter(milestone_settings: dict) -> ContentSplitter:

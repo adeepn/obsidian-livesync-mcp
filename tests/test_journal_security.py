@@ -13,6 +13,7 @@ import journal_codec as codec
 from journal_store import JournalStore, parse_rev
 from livesync_format import PATH_IDENTITY_LEGACY
 from object_storage import Boto3ObjectStorage
+from replay_limits import ReplayBudgetExceeded
 from storage_base import StorageError
 from storage_journal import JournalBackend, MILESTONE_KEY, SYNC_PARAMETERS_KEY
 from tests.fake_object_storage import FakeObjectStorage
@@ -29,21 +30,21 @@ async def backend(tmp_path, objects=None, **kwargs):
 
 def test_inflate_bomb():
     blob = codec.deflate_journal(b'x' * (1024 * 1024))
-    with pytest.raises(ValueError, match='journal inflated output exceeds limit'):
+    with pytest.raises(ValueError, match='max_inflated_bytes.*4097.*4096.*LIVESYNC_JOURNAL_MAX_INFLATED_BYTES'):
         codec.inflate_journal(blob, max_output_bytes=4096)
     assert codec.inflate_journal(codec.deflate_journal(b'x' * 4096), max_output_bytes=4096) == b'x' * 4096
 
 
 def test_parse_limits():
-    with pytest.raises(ValueError, match='hostile: line 1:.*line.*limit'):
+    with pytest.raises(ValueError, match='max_line_bytes.*limit'):
         codec.parse_journal(b'~h:a\x1f' + b'x' * 100 + b'\n', name='hostile', max_line_bytes=16)
-    with pytest.raises(ValueError, match='hostile: line 2:.*record.*limit'):
+    with pytest.raises(ValueError, match='max_records.*limit'):
         codec.parse_journal(b'~h:a\x1fx\n' * 2, name='hostile', max_records=1)
 
 
 def test_deep_json():
     data = b'{"_id":"a","_rev":"1-a","nested":' + b'[' * (sys.getrecursionlimit() + 100) + b'0' + b']' * (sys.getrecursionlimit() + 100) + b'}\n'
-    with pytest.raises(ValueError, match='deep: line 1:'):
+    with pytest.raises(ValueError, match='max_json_depth.*LIVESYNC_JOURNAL_MAX_JSON_DEPTH'):
         codec.parse_journal(data, name='deep')
 
 
@@ -102,9 +103,12 @@ async def test_key_budget_continues(tmp_path, caplog):
     peer, _ = await backend(tmp_path, objects, max_refresh_keys=2)
     try:
         for _ in range(5):
-            await peer.refresh(force=True)
+            try:
+                await peer.refresh(force=True)
+            except ReplayBudgetExceeded as exc:
+                assert exc.variable == 'LIVESYNC_JOURNAL_MAX_REFRESH_KEYS'
         assert peer._store.files_processed_count() == 5
-        assert 'budget' in caplog.text
+        assert peer._listing_cursor is not None
     finally:
         await peer.close()
 
@@ -121,16 +125,14 @@ async def test_nonprogress_listing(tmp_path):
 
 async def test_byte_budget_continues(tmp_path, caplog):
     objects = {f'{i}-docs.jsonl.gz': journal_blob([meta_doc(f'{i}.md', '1-a')]) for i in range(3)}
-    # Includes the sync-parameters control read on each refresh.
     budget = len(params_blob()) + len(next(iter(objects.values())))
     peer, _ = await backend(tmp_path, objects, max_refresh_bytes=budget)
     try:
-        await peer.refresh(force=True)
-        assert peer._store.files_processed_count() == 1
         for _ in range(2):
-            await peer.refresh(force=True)
+            with pytest.raises(ReplayBudgetExceeded, match='LIVESYNC_JOURNAL_MAX_REFRESH_BYTES'):
+                await peer.refresh(force=True)
+        await peer.refresh(force=True)
         assert peer._store.files_processed_count() == 3
-        assert 'budget' in caplog.text
     finally:
         await peer.close()
 
@@ -215,7 +217,8 @@ async def test_hostile_file_has_clean_error(tmp_path, kind):
     try:
         with pytest.raises(StorageError) as caught:
             await peer.refresh(force=True)
-        assert str(caught.value) == f"journal file {name!r} could not be replayed: " + ('ObjectSizeLimit' if kind == 'download' else 'ValueError')
+        assert 'LIVESYNC_JOURNAL_MAX_' in str(caught.value)
+        assert 'observed' in str(caught.value) and 'configured' in str(caught.value)
         assert not peer._store.processed(name)
     finally:
         await peer.close()
@@ -232,12 +235,14 @@ async def test_time_budget_preserves_progress(tmp_path, monkeypatch, caplog):
         clock[0] += 2
     peer._store.apply_journal = slow_apply
     try:
-        await peer.refresh(force=True)
-        assert peer._store.files_processed_count() == 1
-        for _ in range(2):
+        with pytest.raises(ReplayBudgetExceeded, match='LIVESYNC_JOURNAL_MAX_REFRESH_SECONDS'):
             await peer.refresh(force=True)
+        assert peer._store.files_processed_count() == 1
+        with pytest.raises(ReplayBudgetExceeded, match='LIVESYNC_JOURNAL_MAX_REFRESH_SECONDS'):
+            await peer.refresh(force=True)
+        await peer.refresh(force=True)
         assert peer._store.files_processed_count() == 3
-        assert 'wall-clock' in caplog.text
+        assert peer._last_refresh_failure is None
     finally:
         await peer.close()
 

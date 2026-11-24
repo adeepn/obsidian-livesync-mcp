@@ -181,7 +181,7 @@ async def test_journal_factory_propagates_cache_limit(tmp_path, monkeypatch):
     import server
     from tests.test_storage_journal import healthy_bucket
     storage = healthy_bucket()
-    monkeypatch.setattr(server, 'Boto3ObjectStorage', lambda cfg: storage)
+    monkeypatch.setattr(server, 'Boto3ObjectStorage', lambda cfg, **kwargs: storage)
     cfg = load_config({
         'LIVESYNC_BACKEND': 's3',
         'LIVESYNC_S3_URI': 'sls://AK:SK@https://minio.local?bucket=vault&region=auto',

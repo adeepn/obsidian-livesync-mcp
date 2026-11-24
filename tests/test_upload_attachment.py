@@ -61,8 +61,10 @@ async def test_attachment_forbidden_before_text_or_size(backend):
         await backend.write_attachment(".hidden.md", b"x" * (CAP + 1), create=True)
 
 
-async def test_attachment_cap(backend):
-    with pytest.raises(ValueError, match=r"32 MiB.*33554433"):
+async def test_attachment_obeys_device_limit(backend):
+    from storage_base import WriteSkipped
+    backend.sync_max_size_mb = 32
+    with pytest.raises(WriteSkipped, match=r"syncMaxSizeInMB.*32"):
         await backend.write_attachment("scan.pdf", b"x" * (CAP + 1), create=True)
     assert await backend.read_note("scan.pdf") is None
 
@@ -87,7 +89,7 @@ async def test_journal_attachment_two_peer_replay(tmp_path):
 def test_max_attachment_fits_journal_line():
     encoded = base64.b64encode(b"x" * CAP).decode("ascii")
     payload = serialize_journal([("h:0123456789abcdef", encoded)], [])
-    assert max(map(len, payload.splitlines())) < MAX_LINE_BYTES == 64 * 1024 * 1024
+    assert max(map(len, payload.splitlines())) < MAX_LINE_BYTES
     assert parse_journal(payload).chunks["h:0123456789abcdef"] == encoded
 
 
@@ -125,12 +127,13 @@ async def test_journal_verifies_original_bytes_before_local_apply(tmp_path, monk
         await backend.close()
 
 
-async def test_tool_size_guard(monkeypatch):
+async def test_tool_has_no_fixed_size_guard(monkeypatch):
     fake = FakeBackend()
     monkeypatch.setattr(server, "backend", fake)
-    result = await server.obsidian_upload_attachment("scan.pdf", base64.b64encode(b"x" * (CAP + 1)).decode())
-    assert "32 MiB" in result and "33554433" in result
-    assert not fake.notes
+    result = json.loads(await server.obsidian_upload_attachment(
+        "scan.pdf", base64.b64encode(b"x" * (CAP + 1)).decode()))
+    assert result['size'] == CAP + 1
+    assert len(fake.notes['scan.pdf']['data']) == CAP + 1
 
 
 async def test_tool_overwrite(monkeypatch):

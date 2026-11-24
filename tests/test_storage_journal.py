@@ -1604,10 +1604,10 @@ async def test_invalid_timestamps_are_isolated(tmp_path, field, value):
     await backend.close()
 
 @pytest.mark.parametrize("limit,value,match", [
-    ("max_line_bytes", 30, "line length"),
+    ("max_line_bytes", 30, "max_line_bytes"),
     ("max_inflated_bytes", 30, "inflated"),
-    ("max_records", 1, "record count"),
-    ("max_refresh_bytes", 1, "download"),
+    ("max_records", 1, "max_records"),
+    ("max_refresh_bytes", 1, "max_refresh_bytes"),
     ("max_object_bytes", 1, "object"),
 ])
 async def test_publication_preflight_limits(tmp_path, limit, value, match):
@@ -1624,7 +1624,8 @@ async def test_publication_preflight_limits(tmp_path, limit, value, match):
 async def test_publication_rejects_oversized_chunk_before_put(tmp_path):
     backend, storage = make_backend(tmp_path, healthy_bucket())
     await backend.startup_check()
-    with pytest.raises(StorageError, match="line length"):
+    backend.max_line_bytes = 64 * 1024**2
+    with pytest.raises(StorageError, match="max_line_bytes"):
         backend._publish([("h:oversized", "x" * (64 * 1024**2 + 1))], [])
     assert storage.put_calls == []
     assert backend._store.winner("big.md") is None
@@ -1656,13 +1657,13 @@ async def test_publication_reserves_control_read_bytes(tmp_path, observation):
     backend.max_refresh_bytes = len(blob) + reserve - 1
     before = dict(storage._objects)
     try:
-        with pytest.raises(StorageError, match="download"):
+        with pytest.raises(StorageError, match="max_refresh_bytes"):
             backend._publish([], docs)
         assert storage.put_calls == []
         assert storage._objects == before
         # Original reviewer case: payload alone fits the entire budget.
         backend.max_refresh_bytes = len(blob)
-        with pytest.raises(StorageError, match="download"):
+        with pytest.raises(StorageError, match="max_refresh_bytes"):
             backend._publish([], docs)
         assert storage.put_calls == []
     finally:

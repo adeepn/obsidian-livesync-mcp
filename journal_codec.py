@@ -36,6 +36,7 @@ from __future__ import annotations
 import json
 import zlib
 from dataclasses import dataclass, field
+from replay_limits import ReplayLimits, ReplayBudgetExceeded
 
 # journalRecords.ts: RECORD_SPLIT and UNIT_SPLIT.
 _RECORD_SPLIT = "\n"
@@ -51,10 +52,10 @@ _DEFLATE_LEVEL = 8
 
 # Per-file replay limits; callers may override keyword arguments. Byte limits
 # apply before decoding UTF-8 or constructing JSON objects.
-MAX_INFLATED_BYTES = 1024**3
-MAX_RECORDS = 100_000
-MAX_JSON_DEPTH = 512
-MAX_LINE_BYTES = 64 * 1024**2
+MAX_INFLATED_BYTES = ReplayLimits.max_inflated_bytes
+MAX_RECORDS = ReplayLimits.max_records
+MAX_JSON_DEPTH = ReplayLimits.max_json_depth
+MAX_LINE_BYTES = ReplayLimits.max_line_bytes
 
 _CORRUPT_BLOB_MESSAGE = "incompatible or corrupt journal blob"
 
@@ -176,7 +177,7 @@ def inflate_journal(blob: bytes, *, max_output_bytes: int = MAX_INFLATED_BYTES) 
     try:
         out = decompressor.decompress(blob, max_output_bytes + 1)
         if len(out) > max_output_bytes or decompressor.unconsumed_tail:
-            raise ValueError("journal inflated output exceeds limit")
+            raise ReplayBudgetExceeded("max_inflated_bytes", len(out), max_output_bytes)
     except zlib.error as exc:
         raise ValueError(_CORRUPT_BLOB_MESSAGE) from exc
     if not decompressor.eof or decompressor.unused_data:
@@ -188,7 +189,7 @@ def inflate_journal(blob: bytes, *, max_output_bytes: int = MAX_INFLATED_BYTES) 
 
 def parse_journal(
     data: bytes, *, name: str = "", max_records: int = MAX_RECORDS,
-    max_line_bytes: int = MAX_LINE_BYTES,
+    max_line_bytes: int = MAX_LINE_BYTES, max_json_depth: int = MAX_JSON_DEPTH,
 ) -> JournalFile:
     """Parse inflated journal bytes into a :class:`JournalFile`.
 
@@ -212,10 +213,11 @@ def parse_journal(
     while start < len(data):
         lineno += 1
         if lineno > max_records:
-            raise ValueError(f"{name}: line {lineno}: journal record count exceeds limit")
+            raise ReplayBudgetExceeded("max_records", lineno, max_records)
         end = data.find(b"\n", start, start + max_line_bytes + 1)
         if end == -1:
-            raise ValueError(f"{name}: line {lineno}: journal line length exceeds limit")
+            raise ReplayBudgetExceeded("max_line_bytes",
+                                       data.find(b"\n", start) - start, max_line_bytes)
         raw_line = data[start:end]
         start = end + 1
         if not raw_line:
@@ -227,7 +229,7 @@ def parse_journal(
         if line.startswith(_COMPACT_PREFIX):
             _parse_compact_line(result, name, lineno, line)
         else:
-            _parse_metadata_line(result, name, lineno, line)
+            _parse_metadata_line(result, name, lineno, line, max_json_depth)
     return result
 
 
@@ -247,11 +249,11 @@ def _reject_json_constant(name: str, lineno: int, token: str) -> None:
 
 
 def _parse_metadata_line(
-    target: JournalFile, name: str, lineno: int, line: str
+    target: JournalFile, name: str, lineno: int, line: str, max_json_depth: int
 ) -> None:
     # Python versions differ in where the C decoder raises RecursionError.
     # Bound nesting before parsing, while ignoring brackets inside strings.
-    if line.count("[") + line.count("{") > MAX_JSON_DEPTH:
+    if line.count("[") + line.count("{") > max_json_depth:
         depth = 0
         quoted = escaped = False
         for char in line:
@@ -266,8 +268,8 @@ def _parse_metadata_line(
                 quoted = True
             elif char in "[{":
                 depth += 1
-                if depth > MAX_JSON_DEPTH:
-                    raise ValueError(f"{name}: line {lineno}: JSON nesting exceeds limit")
+                if depth > max_json_depth:
+                    raise ReplayBudgetExceeded("max_json_depth", depth, max_json_depth)
             elif char in "]}":
                 depth -= 1
     try:

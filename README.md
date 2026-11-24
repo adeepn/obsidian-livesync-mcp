@@ -70,11 +70,87 @@ verify-visible); follow the [live acceptance checklist](docs/live-check-s3-check
 - **canvas_edge** — Add/remove canvas edges
 
 ### Other
-- **obsidian_upload_attachment** — Upload PDFs, scans, and other binary attachments from base64 (32 MiB decoded maximum)
-- **obsidian_download_attachment** — Download complete binary attachments as base64 with size/SHA-256 (32 MiB raw maximum; optional `max_bytes` limit, no truncation)
+- **obsidian_upload_attachment** — Upload PDFs, scans, and other binary attachments from base64 (vault device size policy)
+- **obsidian_download_attachment** — Download complete binary attachments as base64 with size/SHA-256 (optional caller `max_bytes` limit, no truncation)
 - **vault_stats** — Vault statistics
 - **create_from_template** — Create from template with variable substitution
 - **list_templates** — List available templates
+
+## Size behavior
+
+Ordinary writes in **both backends**, including text edits and attachment uploads,
+follow the device's `syncMaxSizeInMB`: skip only when `max > 0`, `size > 0`, and
+`size > max * 1024 * 1024`. Equality is admitted; fractions work; zero/negative
+disables the check. Raising 50 to 100 admits files through 100 MiB. Settings
+resolve from milestone `tweak_values.PREFERRED`, otherwise the device maps
+(conflicting limits refuse startup), with device default 50 when absent.
+A blank/unset `LIVESYNC_SYNC_MAX_SIZE_MB` uses this vault value; an explicit
+finite number overrides it. Settings are resolved at startup: restart this
+peer after changing the vault setting. Other selection policies still apply.
+
+Oversized ordinary input is **skipped**, before chunks or metadata are published;
+any previous revision stays intact. Byte input is measured before optional
+lossy text conversion; strings use Blob UTF-8 size. Python backends signal `WriteSkipped` as a
+control-flow outcome. Every MCP mutation tool handles it as JSON, for example:
+
+```json
+{"status":"skipped","path":"scan.pdf","size":43201331,"syncMaxSizeInMB":40,"message":"skipped: 41.2 MiB (43201331 bytes) exceeds the vault's syncMaxSizeInMB (40); the plugin would not synchronize this file either — raise syncMaxSizeInMB in the plugin settings or pass a smaller file"}
+```
+
+This response does not claim success or persistence. MCP has no host vault file
+to retain. Copy creates a new file and uses the size gate; delete remains allowed.
+Rename has a distinct admission rule: an oversized destination is outside sync,
+so a selected source DB entry is retired and **no destination is saved**. The
+move tool returns JSON `status: "moved_out_of_sync"`, `source_retired: true`,
+`destination_published: false`, plus source/path/size/limit/message. If the source
+path is also outside selection, it stays unchanged (`status: "skipped"`,
+`source_retired: false`). A literal same-path rename remains a no-op. This mirrors
+the plugin's DB effect after its disk move: the plugin retains the moved file
+locally, whereas MCP has no local vault copy. Source revision history/chunks are
+not purged. The source admission rule is
+`C:managers/StorageEventManager/admission.ts:78-108,124-130`, with guarded deletion
+in `C:serviceModules/ServiceFileHandlerBase/selection.ts:18-60`.
+Received oversized revisions remain stored and readable, and existing DB
+revisions are not excluded from journal packing. The plugin can skip reflecting
+such revisions into its host vault until its settings allow them; this peer
+reads the DB directly. Downloads have no device-size gate; `max_bytes` remains
+an optional caller choice. Sources: [parity specification §д](docs/superpowers/specs/2026-11-23-settings-parity.md#д-syncmaxsizeinmb--file-selection-not-journal-admission).
+
+The deliberate size/replay parity difference is **operational protection against
+corrupt or hostile journals**. Devices have no corresponding replay budgets.
+These budgets are independent of file size and `syncMaxSizeInMB`, including 0:
+
+| Budget | Default | Environment override |
+|---|---:|---|
+| UTF-8 record line bytes | 256 MiB | `LIVESYNC_JOURNAL_MAX_LINE_BYTES` |
+| Inflated journal bytes | 8 GiB | `LIVESYNC_JOURNAL_MAX_INFLATED_BYTES` |
+| Records per journal | 1,000,000 | `LIVESYNC_JOURNAL_MAX_RECORDS` |
+| JSON nesting levels | 512 | `LIVESYNC_JOURNAL_MAX_JSON_DEPTH` |
+| Compressed object bytes (also control objects) | 8 GiB | `LIVESYNC_JOURNAL_MAX_OBJECT_BYTES` |
+| Listed keys per refresh | 1,000,000 | `LIVESYNC_JOURNAL_MAX_REFRESH_KEYS` |
+| Download bytes per refresh (also controls) | 64 GiB | `LIVESYNC_JOURNAL_MAX_REFRESH_BYTES` |
+| Refresh elapsed seconds | 3600 | `LIVESYNC_JOURNAL_MAX_REFRESH_SECONDS` |
+
+All accept positive values without an imposed upper ceiling (integers except
+seconds, which accepts fractions). A trip names the budget, observed amount,
+configured limit, and exact variable to raise. Streaming inflate/download can
+report a lower bound rather than consume an entire hostile body. Restart after
+changing env values. Key/byte/time failures preserve completed replay progress;
+subsequent throttled calls repeat the actionable diagnostic until a successful
+refresh. Increasing budgets permits larger inputs but consumes more resources.
+
+Default derivation: V3 binary pieces are at most 4 MiB; valid text may exceed its
+boundary by 3 UTF-8 bytes. Base64 costs 4/3, JSON escaping at worst 6 per raw
+byte (compact escaping at most 2). A conservative encoded-piece allowance is
+32 MiB: `max(ceil(4 MiB/3)*4, (4 MiB+3)*6) < 32 MiB`. A line gets 8 allowances,
+an inflated/compressed journal 256, and a refresh 2048. Metadata lines get the
+same large allowance for child references; record/key defaults accommodate many
+tiny pieces/objects. One hour permits 64 GiB at about 19 MiB/s; 512 nesting
+levels far exceeds ordinary metadata (<10). These are headroom choices, not
+protocol bounds. Legacy splitters, foreign peers and journals/history have no
+universal maximum: unusually large inputs may require tuning even with these
+defaults. No finite budget can promise admission of all unbounded histories.
+See [replay_limits.py](replay_limits.py) for pinned source references.
 
 ## Prerequisites
 
@@ -110,14 +186,13 @@ Ineligible newnotes return metadata (`size`, `sha256`) from `obsidian_fetch`;
 use `obsidian_download_attachment` for their bytes. Newnote files that decode
 as UTF-8 can also be downloaded without conversion.
 
-Attachment uploads and downloads remain capped at **32 MiB raw (decoded)
-bytes**. Upload uses the same path-based writer; its response size/SHA-256
-refer to the supplied bytes. For plain paths, host decoding and the vault's
-text splitter can change the stored bytes. `obsidian_download_attachment(path,
-max_bytes=0)` returns JSON `{path, size, sha256, content_b64}` with base64
-transport and SHA-256 over the stored raw bytes. A positive `max_bytes` sets
-an additional caller limit; exceeding either download limit returns an error
-without content or truncation. Plain documents use `obsidian_fetch`.
+Uploads use the vault's device size policy (see [Size behavior](#size-behavior)).
+Their response size/SHA-256 describe the stored bytes; plain-path decoding and
+splitting can change the input bytes. `obsidian_download_attachment(path,
+max_bytes=0)` returns complete JSON `{path, size, sha256, content_b64}` over the
+stored raw bytes. There is no peer file-size cap on downloads. A positive
+`max_bytes` is an explicit caller limit: exceeding it returns an error without
+content or truncation. Plain documents use `obsidian_fetch`.
 
 The server derives document ids from vault paths the same way LiveSync does.
 Both backends support these vault settings:
@@ -399,14 +474,13 @@ Ineligible newnotes return metadata (`size`, `sha256`) from `obsidian_fetch`;
 use `obsidian_download_attachment` for their bytes. Newnote files that decode
 as UTF-8 can also be downloaded without conversion.
 
-Attachment uploads and downloads remain capped at **32 MiB raw (decoded)
-bytes**. Upload uses the same path-based writer; its response size/SHA-256
-refer to the supplied bytes. For plain paths, host decoding and the vault's
-text splitter can change the stored bytes. `obsidian_download_attachment(path,
-max_bytes=0)` returns JSON `{path, size, sha256, content_b64}` with base64
-transport and SHA-256 over the stored raw bytes. A positive `max_bytes` sets
-an additional caller limit; exceeding either download limit returns an error
-without content or truncation. Plain documents use `obsidian_fetch`.
+Uploads use the vault's device size policy (see [Size behavior](#size-behavior)).
+Their response size/SHA-256 describe the stored bytes; plain-path decoding and
+splitting can change the input bytes. `obsidian_download_attachment(path,
+max_bytes=0)` returns complete JSON `{path, size, sha256, content_b64}` over the
+stored raw bytes. There is no peer file-size cap on downloads. A positive
+`max_bytes` is an explicit caller limit: exceeding it returns an error without
+content or truncation. Plain documents use `obsidian_fetch`.
 
 Set `LIVESYNC_BACKEND=s3` and choose exactly one connection form.
 Use the URI or individual-variable block in the quick start matrix.
@@ -432,26 +506,16 @@ interval to elapse to receive subsequent device changes. Internal callers can us
 return a tool error instead of serving stale data. Calls throttled after an
 unresolved failure also return an error; a successful refresh clears that failure.
 
-Replay uses bounded downloads (512 MiB compressed per object), inflation (1 GiB),
-records (100,000 per file), lines (64 MiB in UTF-8 bytes), and JSON nesting
-(512 levels). Limits are module constants in `object_storage.py` and
-`journal_codec.py`; `Boto3ObjectStorage(max_object_bytes=...)` and the codec
-keyword arguments allow overrides. `JournalBackend` also accepts
-`max_inflated_bytes`, `max_records`, and `max_line_bytes`.
-
-Each refresh examines at most 1,000,000 keys, downloads at most 4 GiB
-(including sync parameters), and has a 300-second wall-clock budget.
-Override these through `JournalBackend(max_refresh_keys=...,
-max_refresh_bytes=..., max_refresh_seconds=...)`. These are Python constructor
-options, not environment variables. Stops are logged; processed files stay
-processed. Key-limited sweeps continue from their last listed key, then restart
-from the beginning so late objects below the cursor are eventually discovered.
-Files are numerically ordered within each bounded window. Byte/time stops retry
-the unfinished window and skip its processed files. The time budget is checked
-between synchronous operations; an in-flight request, parse or SQLite transaction
-can finish after the deadline. Configure budgets large enough for a single
-allowed journal plus control reads. Restarting the server restarts the listing
-sweep; the durable processed ledger preserves replay progress.
+Replay protection budgets are an explicit difference from the device, documented
+under [Size behavior](#size-behavior). A trip returns an actionable error;
+completed files stay processed. Key-limited sweeps continue from their last
+listed key, then restart from the beginning so late objects below the cursor
+are eventually discovered. Files are numerically ordered within each window.
+Byte/time stops retry the unfinished window and skip its processed files.
+The time budget is checked between synchronous operations; an in-flight request,
+parse or SQLite transaction can finish after the deadline. Configure budgets
+large enough for one journal plus control reads. Restarting the server restarts
+the listing sweep; the durable ledger preserves progress.
 
 Local state directories and chunk shards are private (`0700`); SQLite and newly
 written chunk files use `0600`. Opening an existing cache tightens permissive

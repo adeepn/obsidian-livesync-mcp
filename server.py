@@ -17,6 +17,7 @@ import hashlib
 from contextlib import aclosing, asynccontextmanager
 from contextvars import ContextVar
 from scan_budget import ScanBudget
+from replay_limits import ReplayBudgetExceeded
 from text_eligibility import is_text_characters, DEFAULT_TEXT_SCAN_MAX_BYTES
 from functools import wraps
 from pathlib import Path
@@ -33,7 +34,8 @@ from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
 from mcp.server.transport_security import TransportSecuritySettings
 from config import Config, ConfigError, load_config
 from storage_base import (
-    MAX_ATTACHMENT_BYTES,
+    WriteSkipped,
+    RenameOutOfSync,
     RenamePartialError, UnresolvedConflicts,
     WriterUnsupported, StorageBackend, StorageError, NoteNotFound, NoteExists,
     ConcurrentModification, UnsupportedVault, StorageUnavailable, NoteContent,
@@ -65,12 +67,17 @@ def get_backend(cfg: Config) -> StorageBackend:
         if cfg.s3 is None:
             raise ConfigError("S3 configuration is required.")
         result = JournalBackend(
-            Boto3ObjectStorage(cfg.s3),
+            Boto3ObjectStorage(cfg.s3, max_object_bytes=cfg.replay_limits.max_object_bytes),
             Path(cfg.s3.state_dir),
             cfg.s3.refresh_min_interval_sec,
             state_size_warn_mb=cfg.s3.state_size_warn_mb,
+            **{key: value for key, value in vars(cfg.replay_limits).items()
+               if key != 'max_object_bytes'},
             text_verdict_cache_entries=cfg.text_verdict_cache_entries,
         )
+        result.sync_max_size_mb_override = cfg.sync_max_size_mb
+        if cfg.sync_max_size_mb is not None:
+            result.sync_max_size_mb = cfg.sync_max_size_mb
         result.text_scan_max_bytes = cfg.text_scan_max_bytes
         _configure_selection(result, cfg)
         return result
@@ -85,6 +92,9 @@ def get_backend(cfg: Config) -> StorageBackend:
         scan_max_notes=cfg.scan_max_notes,
         scan_max_bytes=cfg.scan_max_bytes,
     )
+    result.sync_max_size_mb_override = cfg.sync_max_size_mb
+    if cfg.sync_max_size_mb is not None:
+        result.sync_max_size_mb = cfg.sync_max_size_mb
     result.text_scan_max_bytes = cfg.text_scan_max_bytes
     _configure_selection(result, cfg)
     return result
@@ -194,7 +204,11 @@ def create_app(cfg: Config) -> FastMCP:
 # --- Helper functions ---
 
 def _storage_message(error: StorageError) -> str:
-    """Map storage errors; only writer compatibility diagnostics are public."""
+    """Map device outcomes/errors; expose only explicitly safe diagnostics."""
+    if isinstance(error, ReplayBudgetExceeded):
+        return f"Error: {error}"
+    if isinstance(error, (WriteSkipped, RenameOutOfSync)):
+        return json.dumps(error.as_dict(), ensure_ascii=False)
     if isinstance(error, WriterUnsupported):
         return f"Error: {error}"
     if isinstance(error, RenamePartialError):
@@ -525,8 +539,8 @@ async def obsidian_upload_attachment(
 ) -> str:
     """Upload a binary attachment (PDF, scan, image) from strict base64.
 
-    Decoded data is capped at 32 MiB. Device path rules select plain or
-    newnote storage. Existing files require overwrite=True. Malformed UTF-8
+    Oversized input returns status=skipped under syncMaxSizeInMB. Device path
+    rules select plain or newnote storage. Existing files require overwrite=True. Malformed UTF-8
     on plain paths is refused unless lossy_text=True explicitly converts it.
     Returns stored size and SHA-256, and replaced_bytes for lossy conversion.
     """
@@ -534,21 +548,17 @@ async def obsidian_upload_attachment(
         data = base64.b64decode(content_b64, validate=True)
     except (binascii.Error, ValueError):
         return "Error: invalid base64 content (characters or padding)."
-    if len(data) > MAX_ATTACHMENT_BYTES:
-        return (
-            f"Error: attachment exceeds 32 MiB cap ({MAX_ATTACHMENT_BYTES} bytes); "
-            f"actual size {len(data)} bytes."
+    # The backend gates original disk bytes before host-style decoding.
+    # C:serviceModules/ServiceFileHandlerBase/events.ts:63-69.
+    try:
+        meta = await _backend().write_attachment(
+            path, data, create=True, overwrite=overwrite, lossy_text=lossy_text,
         )
+    except InvalidPlainTextBytes as error:
+        return f'Error: {error}'
     replaced_bytes = 0
-    if resolve_doc_type(path, data) == 'plain':
-        try:
-            text, replaced_bytes = plain_ingress_utf8(data, lossy_text=lossy_text)
-        except InvalidPlainTextBytes as error:
-            return f'Error: {error}'
-        data = text.encode('utf-8')
-    meta = await _backend().write_attachment(
-        path, data, create=True, overwrite=overwrite,
-    )
+    if lossy_text and resolve_doc_type(path, data) == 'plain':
+        _, replaced_bytes = plain_ingress_utf8(data, lossy_text=True)
     # Legacy Blob.text() can strip BOM. Report the saved revision's bytes,
     # rather than the caller's original input or the pre-split Blob size.
     stored = await _backend().read_note(meta['path'])
@@ -562,18 +572,13 @@ async def obsidian_upload_attachment(
     }, ensure_ascii=False)
 
 
-MAX_DOWNLOAD_BYTES = 32 * 1024 * 1024
-
-
 @_tool
 @_tool_errors
 async def obsidian_download_attachment(path: str, max_bytes: int = 0) -> str:
     """Download a complete binary attachment as base64 with size and SHA-256.
 
-    The hard cap is 32 MiB of raw bytes for JSON-RPC payload sanity,
-    matching upload. A positive max_bytes imposes a smaller caller limit;
-    zero or negative values leave only the hard cap. Oversized files are
-    refused, never truncated, because partial binary files are corrupt.
+    A positive max_bytes imposes an explicit caller limit; zero/negative
+    disables it. Files are complete or refused, never truncated.
     Plain documents use obsidian_fetch. UTF-8 newnotes also remain downloadable.
     """
     note = await _backend().read_note(path)
@@ -585,11 +590,6 @@ async def obsidian_download_attachment(path: str, max_bytes: int = 0) -> str:
     if data is None:
         raise StorageError()
     size = len(data)
-    if size > MAX_DOWNLOAD_BYTES:
-        return (
-            f"Error: attachment exceeds 32 MiB cap ({MAX_DOWNLOAD_BYTES} bytes); "
-            f"actual size {size} bytes."
-        )
     if max_bytes > 0 and size > max_bytes:
         return (
             f"Error: attachment size {size} bytes exceeds "
@@ -804,6 +804,10 @@ async def obsidian_delete_note(path: str) -> str:
 @_tool_errors(writer=True)
 async def obsidian_move_note(path: str, new_path: str) -> str:
     """Move or rename a note.
+
+    Oversized destination follows device rename admission: source DB entry
+    is retired without saving the destination. Returns moved_out_of_sync JSON;
+    this peer has no local disk copy, unlike the plugin's moved vault file.
 
     Args:
         path: Current path of the note

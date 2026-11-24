@@ -63,12 +63,12 @@ async def test_download_caller_limit_rejects_whole_file(fake):
 
 
 @pytest.mark.parametrize("limit", [0, CAP * 2])
-async def test_download_hard_cap_cannot_be_disabled(fake, limit):
+async def test_download_has_no_fixed_cap(fake, limit):
     fake.add("scan.pdf", data=b"x" * (CAP + 1))
     result = await server.obsidian_download_attachment("scan.pdf", limit)
-    assert "error" in result.lower() and "32 MiB" in result
-    assert str(CAP) in result and str(CAP + 1) in result
-    assert "content_b64" not in result
+    result = json.loads(result)
+    assert result["size"] == CAP + 1
+    assert base64.b64decode(result["content_b64"]) == b"x" * (CAP + 1)
 
 
 async def test_download_exact_hard_cap(fake):

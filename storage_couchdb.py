@@ -60,6 +60,7 @@ from livesync_format import (
     assemble_text,
     canonical_path,
     resolve_content_splitter,
+    resolve_sync_max_size,
     prepare_file_content,
     new_metadata_doc,
     identity_path2id,
@@ -72,7 +73,9 @@ from livesync_format import (
     validate_vault_path,
 )
 from storage_base import (
-    MAX_ATTACHMENT_BYTES,
+    check_file_size,
+    WriteSkipped,
+    RenameOutOfSync,
     ConcurrentModification,
     RenamePartialError,
     UnresolvedConflicts,
@@ -160,6 +163,8 @@ class CouchDBBackend(DeviceSelection):
         self._path_identity = PATH_IDENTITY_LEGACY
         self._writer_unsupported_reason = None
         self._splitter = ContentSplitter()
+        self.sync_max_size_mb = 50
+        self.sync_max_size_mb_override = None
         self._client = httpx.AsyncClient(
             base_url=url if url.endswith("/") else url + "/",
             auth=(username, password),
@@ -378,6 +383,8 @@ class CouchDBBackend(DeviceSelection):
         self._text_verdicts.clear()
         self._writer_unsupported_reason = None
         self._splitter = ContentSplitter()
+        self.sync_max_size_mb = (50 if self.sync_max_size_mb_override is None
+                                 else self.sync_max_size_mb_override)
         await self._db_info()
         version_doc = await self._get_doc(_VERSION_DOC_ID)
         if version_doc is not None:
@@ -406,6 +413,8 @@ class CouchDBBackend(DeviceSelection):
         body = body if isinstance(body, dict) else {}
         try:
             self._path_identity = resolve_path_identity(body)
+            self.sync_max_size_mb = (resolve_sync_max_size(body)
+                if self.sync_max_size_mb_override is None else self.sync_max_size_mb_override)
             self._splitter = resolve_content_splitter(body)
         except UnsupportedWriterSettings as exc:
             self._splitter = None
@@ -953,6 +962,7 @@ class CouchDBBackend(DeviceSelection):
         overwrite: bool = False,
         mtime: int | None = None,
         expected_rev: str | None = None,
+        lossy_text: bool = False,
     ) -> NoteMeta:
         """Ingest file content using device path-based disk-reading rules.
 
@@ -962,7 +972,13 @@ class CouchDBBackend(DeviceSelection):
         self.check_writer_support()
         validate_vault_path(path)
         await self.check_selection(path)
-        body, doc_type, size = prepare_file_content(path, content)
+        # Ordinary CREATE/CHANGED skips before content acquisition/publication.
+        # C:serviceModules/ServiceFileHandlerBase/events.ts:63-69.
+        if isinstance(content, bytes):
+            check_file_size(path, len(content), self.sync_max_size_mb)
+        body, doc_type, size = prepare_file_content(path, content, lossy_text=lossy_text)
+        if isinstance(content, str):
+            check_file_size(path, size, self.sync_max_size_mb)
         return await self._write_content(
             path, body, size, doc_type,
             create=create, overwrite=overwrite, mtime=mtime,
@@ -972,18 +988,14 @@ class CouchDBBackend(DeviceSelection):
     async def write_attachment(
         self, path: str, data: bytes, *, create: bool = False,
         overwrite: bool = False, expected_rev: str | None = None,
+        lossy_text: bool = False,
     ) -> NoteMeta:
-        """Capped byte-input alias for write_note; type still follows path."""
+        """Byte-input alias for write_note; type still follows path."""
         self.check_writer_support()
         validate_vault_path(path)
-        if len(data) > MAX_ATTACHMENT_BYTES:
-            raise ValueError(
-                f"attachment exceeds 32 MiB cap ({MAX_ATTACHMENT_BYTES} bytes); "
-                f"actual size {len(data)} bytes"
-            )
         return await self.write_note(
             path, data, create=create, overwrite=overwrite,
-            expected_rev=expected_rev,
+            expected_rev=expected_rev, lossy_text=lossy_text,
         )
 
     async def _write_content(
@@ -1061,7 +1073,9 @@ class CouchDBBackend(DeviceSelection):
         ``path`` field in a single revision (D1 — no delete); otherwise
         a new metadata document with the *same* ``children`` ids is PUT
         first, and only then is the source soft-deleted, so a failed
-        copy can duplicate a note but never lose one.
+        copy can duplicate a note but never lose one. Exception: outer device
+        size admission maps an oversized destination to source-only retirement,
+        reported as RenameOutOfSync (MCP has no moved host file to retain).
         """
         self.check_writer_support()
         validate_vault_path(path)
@@ -1076,6 +1090,18 @@ class CouchDBBackend(DeviceSelection):
             return await self.get_meta(path)
 
         doc = await self._get_note_doc(path)
+        # Full event admission matters: oversized RENAME becomes source DELETE.
+        # C:managers/StorageEventManager/admission.ts:78-108,124-130;
+        # C:serviceModules/ServiceFileHandlerBase/selection.ts:18-60.
+        try:
+            check_file_size(new_path, doc.get('size', 0), self.sync_max_size_mb)
+        except WriteSkipped:
+            if not preserve_source:
+                await self._soft_delete(doc, path, _now_ms())
+            raise RenameOutOfSync(path, new_path, doc.get('size', 0),
+                                  self.sync_max_size_mb,
+                                  source_retired=not preserve_source) from None
+
         if self._path2id(new_path) == self._path2id(path):
             # One document, two spellings: one revision, path updated.
             body = clone_metadata(doc)
@@ -1115,6 +1141,10 @@ class CouchDBBackend(DeviceSelection):
         validate_vault_path(new_path)
         await self.check_selection(new_path)
         doc = await self._get_note_doc(path)
+        # Copy creates a new storage file -> CREATE size gate (C:events.ts:63-69).
+        # C:serviceModules/ServiceFileHandlerBase/events.ts:63-77.
+        # Rename has a separate admission rule; deletes have no size gate.
+        check_file_size(new_path, doc.get('size', 0), self.sync_max_size_mb)
         target = await self._target_doc_for_write(new_path, overwrite=overwrite)
         body = self._moved_body(doc, new_path, _now_ms())
         if target is not None:
