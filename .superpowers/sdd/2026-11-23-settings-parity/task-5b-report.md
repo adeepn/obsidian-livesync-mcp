@@ -436,3 +436,15 @@ Authorization/encoded-userinfo full suite: **7125 passed, 7 skipped,
 3 subtests passed**, 90.79 s. Durable artifact: `task-5b-fix1-auth-suite.log`.
 Diff reviewed; diff check clean. This follow-up is kept separate from the
 vault_stats/documentation correction as a distinct security change.
+
+### Prefixed credential labels follow-up
+
+The adversarial corpus also covers aws_secret_access_key, aws_session_token,
+db_password and camel-case dbPassword in plain, mixed-case JSON, dict-repr and
+percent-encoded forms. `/tmp/parity-prefix-red.log` records 24 leaking cases.
+The shared label recognizer now accepts a field-name prefix before a known
+credential label; no second sanitizer or backend-specific rule was added.
+Focused hygiene + specific-message regressions: **2966 passed**.
+
+Prefixed-label full suite: **7581 passed, 7 skipped, 3 subtests passed**, 95.46 s.
+Durable artifact: `task-5b-fix1-prefix-suite.log`. Diff and diff check clean.

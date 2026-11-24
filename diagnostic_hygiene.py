@@ -11,7 +11,7 @@ _NAMES = ('aws_access_key_id', 'access_key', 'secret_key', 'secret', 'password',
 _LABEL = '(?:' + '|'.join(_SEPARATOR.join(re.escape(part) for part in
     re.findall(r'[A-Z]?[a-z]+|[A-Z]+(?![a-z])', name.replace('_', ' ')))
     for name in _NAMES) + ')'
-_CREDENTIAL = re.compile(r"(?i)(?<![\w])_?" + _LABEL + r"[\"']?\s*[:=]\s*")
+_CREDENTIAL = re.compile(r"(?i)(?<![\w])[\w.-]*" + _LABEL + r"[\"']?\s*[:=]\s*")
 
 
 def _credential_end(text: str, start: int) -> int:

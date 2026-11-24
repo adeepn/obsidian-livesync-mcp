@@ -9,7 +9,8 @@ import storage_base as errors
 from tests.fake_backend import FakeBackend
 from tests.test_storage_messages import descendants
 
-LABELS = ['aws_access_key_id', 'access_key', 'secret', 'secret_key', 'password',
+LABELS = ['aws_access_key_id', 'aws_secret_access_key', 'aws_session_token',
+          'db_password', 'dbPassword', 'access_key', 'secret', 'secret_key', 'password',
           'passwd', 'passphrase', 'token', 'api_key', 'apikey', 'client_secret',
           'private_key', 'idDerivationKey', 'id_derivation_key']
 PAIRS = [(f'{label}=Credential-Marker', 'Credential-Marker') for label in LABELS]
