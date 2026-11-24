@@ -92,7 +92,7 @@ class FakeBackend:
             note["is_text"] = is_text_doc(note["meta"]["type"], path)
         return note
 
-    async def iterate_texts(self, extension=".md"):
+    async def iterate_texts(self, extension=""):
         self._call("iterate_texts", extension)
         for path, note in self.notes.items():
             if not path.endswith(extension):

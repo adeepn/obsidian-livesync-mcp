@@ -55,7 +55,7 @@ async def test_search_isolated(tools):
     result = json.loads(await server.obsidian_search("needle"))
     assert result["skipped"] == ["bad.md"]
     assert [n["path"] for n in result["results"]] == ["good.md"]
-    assert ("iterate_texts", (".md",)) in fake.calls
+    assert ("iterate_texts", ("",)) in fake.calls
 
 
 async def test_list_notes_recursive_default(tools):
@@ -201,7 +201,7 @@ async def test_get_backend_couchdb():
     from config import CouchDBConfig
     from storage_couchdb import CouchDBBackend
     cfg = SimpleNamespace(backend="couchdb", couchdb=CouchDBConfig(
-        url="http://localhost:5984", user="test", password="test", database="vault"), scan_max_notes=10000, scan_max_bytes=67108864)
+        url="http://localhost:5984", user="test", password="test", database="vault"), scan_max_notes=10000, scan_max_bytes=67108864, text_scan_max_bytes=8388608)
     backend = server.get_backend(cfg)
     assert isinstance(backend, CouchDBBackend)
     await backend.close()

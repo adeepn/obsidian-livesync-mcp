@@ -31,6 +31,8 @@ before applying it locally; rename publishes both revisions in one file.
 
 from __future__ import annotations
 
+from text_eligibility import DEFAULT_TEXT_SCAN_MAX_BYTES
+
 import json
 import logging
 import math
@@ -152,6 +154,8 @@ def _has_hidden_segment(path: str) -> bool:
 
 
 def _matches_extension(path: str, extension: str) -> bool:
+    if not extension:
+        return True
     suffix = extension if extension.startswith(".") else "." + extension
     return path.lower().endswith(suffix.lower())
 
@@ -690,8 +694,22 @@ class JournalBackend:
             meta=meta, text=text, data=data, is_text=is_text, rev=meta["rev"]
         )
 
+    async def read_text_note(self, path: str) -> NoteContent | None:
+        self._validate_read_path(path)
+        store = self._require_store('read_text_note')
+        doc = store.winner(self._path2id(store, path))
+        if doc is None or not is_note_document(doc):
+            return None
+        if doc.get('type') != 'newnote':
+            return await self.read_note(path)
+        text = store.scan_newnote(
+            doc, getattr(self, 'text_scan_max_bytes', DEFAULT_TEXT_SCAN_MAX_BYTES))
+        meta = self._meta_from_doc(doc)
+        return NoteContent(meta=meta, text=text, data=None,
+                           is_text=text is not None, rev=meta['rev'])
+
     async def iterate_texts(
-        self, extension: str = ".md"
+        self, extension: str = ""
     ) -> AsyncIterator[tuple[NoteMeta, str | None]]:
         """Stream ``(meta, text)`` for every note matching ``extension``.
 
@@ -740,6 +758,10 @@ class JournalBackend:
         vault-wide scan. Only backend-wide storage unavailability aborts.
         """
         try:
+            doc = store.winner(meta["doc_id"])
+            if doc is not None and doc.get('type') == 'newnote':
+                return self._meta_from_doc(doc), store.scan_newnote(
+                    doc, getattr(self, 'text_scan_max_bytes', DEFAULT_TEXT_SCAN_MAX_BYTES))
             content = store.read_note(meta["doc_id"])
             if content is not None:
                 return self._meta_from_doc(content[0]), content[1]

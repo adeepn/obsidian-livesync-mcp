@@ -513,7 +513,7 @@ async def test_listing_and_iteration_exclude_hidden_segments():
 def test_iterate_texts_signature_is_pinned():
     parameters = inspect.signature(CouchDBBackend.iterate_texts).parameters
     assert list(parameters) == ["self", "extension"]
-    assert parameters["extension"].default == ".md"
+    assert parameters["extension"].default == ""
 
 
 async def test_iterate_texts_skips_corrupt_notes(caplog):
@@ -528,8 +528,8 @@ async def test_iterate_texts_skips_corrupt_notes(caplog):
             results = {}
             async for meta, text in backend.iterate_texts():
                 results[meta["path"]] = text
-    # extension filter: data.txt is excluded from the ".md" iteration
-    assert sorted(results) == ["bad.md", "good.md"]
+    # Default scans include every extension.
+    assert sorted(results) == ["bad.md", "data.txt", "good.md"]
     assert results["good.md"] == "hello"
     assert results["bad.md"] is None
     assert any("bad.md" in record.message for record in caplog.records)
@@ -1270,7 +1270,7 @@ async def test_empty_newnote_classification(extension, is_text):
         assert content['is_text'] is is_text
         assert content['text'] == ('' if is_text else None)
         if extension == '.md':
-            assert [text async for _, text in backend.iterate_texts()] == [None]
+            assert [text async for _, text in backend.iterate_texts()] == ['']
             await backend.write_note(path, 'edited')
             assert (await backend.read_note(path))['text'] == 'edited'
 

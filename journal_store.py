@@ -62,6 +62,7 @@ from livesync_format import (
 )
 
 from storage_base import StorageError
+from text_eligibility import TextProjection
 
 logger = logging.getLogger(__name__)
 
@@ -223,6 +224,9 @@ class JournalStore:
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA synchronous=NORMAL")
         self._conn.executescript(_SCHEMA_V1)
+        self._conn.execute("""CREATE TABLE IF NOT EXISTS text_verdicts (
+            doc_id TEXT, rev TEXT, budget INTEGER, eligible INTEGER,
+            PRIMARY KEY(doc_id, rev, budget))""")
 
         stored_identity = self._meta_get(_META_PATH_IDENTITY)
         if stored_identity is None:
@@ -383,6 +387,7 @@ class JournalStore:
         state directory, not the remote history). The reset is logged.
         """
         with self._conn:
+            self._conn.execute("DELETE FROM text_verdicts")
             self._conn.execute("DELETE FROM docs")
             self._conn.execute("DELETE FROM processed")
             self._conn.execute("DELETE FROM meta")
@@ -533,6 +538,31 @@ class JournalStore:
                 f"note {path!r} is corrupt: invalid chunk encoding"
             ) from None
         return winner, None, body, False
+
+    def scan_newnote(self, doc: dict, max_bytes: int) -> str | None:
+        key = (doc['_id'], doc['_rev'], max_bytes)
+        verdict = self._conn.execute(
+            'SELECT eligible FROM text_verdicts WHERE doc_id=? AND rev=? AND budget=?',
+            key).fetchone()
+        if verdict is not None and not verdict[0]:
+            return None
+        if doc.get('e_'):
+            raise EncryptedNoteError(_ENCRYPTED_MESSAGE.format(path=doc['path']))
+        children = doc.get('children') or []
+        if not isinstance(children, list) or not all(isinstance(c, str) for c in children):
+            raise ValueError('invalid children field')
+        inline = extract_inline_chunks(doc)
+        projection = TextProjection(max_bytes)
+        eligible = True
+        for index, child in enumerate(children):
+            piece = self._chunk_datas([child], inline, doc['path'])[0]
+            if not projection.feed(piece, final=index == len(children) - 1):
+                eligible = False
+                break
+        self._conn.execute('INSERT OR REPLACE INTO text_verdicts VALUES (?, ?, ?, ?)',
+                           (*key, int(eligible)))
+        self._conn.commit()
+        return projection.text() if eligible else None
 
     def _chunk_datas(
         self, children: list[str], inline: dict[str, str], path: str

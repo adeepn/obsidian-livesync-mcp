@@ -225,7 +225,7 @@ class StorageBackend(Protocol):
         ...
 
     def iterate_texts(
-        self, extension: str = ".md"
+        self, extension: str = ""
     ) -> AsyncIterator[tuple[NoteMeta, str | None]]:
         """Stream ``(meta, text)`` for every note with the extension.
 

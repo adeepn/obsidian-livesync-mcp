@@ -42,6 +42,7 @@ import urllib.parse
 from typing import AsyncIterator
 
 from scan_budget import ScanBudget
+from text_eligibility import TextProjection, DEFAULT_TEXT_SCAN_MAX_BYTES
 
 import httpx
 
@@ -113,6 +114,8 @@ def _has_hidden_segment(path: str) -> bool:
 
 
 def _matches_extension(path: str, extension: str) -> bool:
+    if not extension:
+        return True
     suffix = extension if extension.startswith(".") else "." + extension
     return path.lower().endswith(suffix.lower())
 
@@ -142,6 +145,8 @@ class CouchDBBackend:
         scan_max_bytes: int = 64 * 1024 * 1024,
     ) -> None:
         self._scan_limits = (scan_max_notes, scan_max_bytes)
+        self.text_scan_max_bytes = DEFAULT_TEXT_SCAN_MAX_BYTES
+        self._text_verdicts = {}
         self._database = database
         self._path_identity = PATH_IDENTITY_LEGACY
         self._writer_unsupported_reason = None
@@ -486,8 +491,20 @@ class CouchDBBackend:
             return None
         return await self._content_from_doc(doc)
 
+    async def read_text_note(self, path: str) -> NoteContent | None:
+        self._validate_read_path(path)
+        doc = await self._get_doc(self._path2id(path))
+        if doc is None or not is_note_document(doc):
+            return None
+        if doc.get('type') != 'newnote':
+            return await self._content_from_doc(doc)
+        text = await self._scan_newnote(doc)
+        meta = self._meta_from_doc(doc)
+        return NoteContent(meta=meta, text=text, data=None,
+                           is_text=text is not None, rev=meta['rev'])
+
     async def iterate_texts(
-        self, extension: str = ".md"
+        self, extension: str = ""
     ) -> AsyncIterator[tuple[NoteMeta, str | None]]:
         index = await self._current_index()
         ordered = sorted(
@@ -513,6 +530,8 @@ class CouchDBBackend:
                     and is_note_document(row["doc"])}
             missing = set()
             for doc in docs.values():
+                if doc.get("type") == "newnote":
+                    continue  # Classify lazily; never prefetch a whole binary.
                 children = doc.get("children")
                 if not isinstance(children, list) or not all(isinstance(c, str) for c in children):
                     continue
@@ -544,6 +563,9 @@ class CouchDBBackend:
                     doc = docs.get(indexed["_id"])
                     if doc is not None:
                         self._validate_read_path(self._meta_from_doc(doc)["path"])
+                    if doc is not None and doc.get("type") == "newnote":
+                        yield self._meta_from_doc(doc), await self._scan_newnote(doc)
+                        continue
                     content = (await self._content_from_doc(doc, chunks)
                                if doc is not None else None)
                     yield (content["meta"], content["text"]) if content else (meta, None)
@@ -553,6 +575,24 @@ class CouchDBBackend:
             # No body-bearing window survives into the next HTTP fetch.
             del docs, rows, chunks, chunk_rows, doc, content
             inline = row = chunk = None
+
+    async def _scan_newnote(self, doc: dict) -> str | None:
+        key = (doc['_id'], doc['_rev'], self.text_scan_max_bytes)
+        if self._text_verdicts.get(key) is False:
+            return None
+        if doc.get('e_'):
+            raise UnsupportedVault('encrypted note')
+        children = doc.get('children') or []
+        if not isinstance(children, list) or not all(isinstance(c, str) for c in children):
+            raise StorageError('invalid children field')
+        projection = TextProjection(self.text_scan_max_bytes)
+        for index, child in enumerate(children):
+            piece = (await self._fetch_chunk_datas([child], doc['path'], doc.get('eden')))[0]
+            if not projection.feed(piece, final=index == len(children) - 1):
+                self._text_verdicts[key] = False
+                return None
+        self._text_verdicts[key] = True
+        return projection.text()
 
     # -- note decoding -------------------------------------------------------
 

@@ -17,6 +17,7 @@ import hashlib
 from contextlib import aclosing, asynccontextmanager
 from contextvars import ContextVar
 from scan_budget import ScanBudget
+from text_eligibility import is_text_characters
 from functools import wraps
 from pathlib import Path
 from typing import Any
@@ -54,15 +55,17 @@ def get_backend(cfg: Config) -> StorageBackend:
     if cfg.backend == "s3":
         if cfg.s3 is None:
             raise ConfigError("S3 configuration is required.")
-        return JournalBackend(
+        result = JournalBackend(
             Boto3ObjectStorage(cfg.s3),
             Path(cfg.s3.state_dir),
             cfg.s3.refresh_min_interval_sec,
             state_size_warn_mb=cfg.s3.state_size_warn_mb,
         )
+        result.text_scan_max_bytes = cfg.text_scan_max_bytes
+        return result
     if cfg.couchdb is None:
         raise ConfigError("CouchDB configuration is required.")
-    return CouchDBBackend(
+    result = CouchDBBackend(
         url=cfg.couchdb.url,
         username=cfg.couchdb.user,
         password=cfg.couchdb.password,
@@ -70,6 +73,8 @@ def get_backend(cfg: Config) -> StorageBackend:
         scan_max_notes=cfg.scan_max_notes,
         scan_max_bytes=cfg.scan_max_bytes,
     )
+    result.text_scan_max_bytes = cfg.text_scan_max_bytes
+    return result
 
 
 # Direct Python callers use the module backend; registered tools bind their
@@ -271,6 +276,8 @@ def _text_representation(note: NoteContent) -> NoteContent:
         raise StorageError()
     try:
         text = data.decode("utf-8")
+        if not is_text_characters(text):
+            return note
     except UnicodeDecodeError:
         return note
     return {**note, "text": text, "is_text": True}
@@ -283,10 +290,12 @@ async def _read_text_note(path: str) -> NoteContent | None:
     device edit landing between the tool's read and write surfaces as a
     ConcurrentModification error instead of being silently overwritten.
     """
-    note = await _backend().read_note(path)
+    reader = getattr(_backend(), 'read_text_note', _backend().read_note)
+    note = await reader(path)
     if note is None:
         return None
-    note = _text_representation(note)
+    if note["data"] is not None or note["is_text"]:
+        note = _text_representation(note)
     if not note["is_text"]:
         raise _TextRequiredError()
     return note
@@ -387,23 +396,6 @@ async def _scan_texts():
     budget = _scan_budget.get()
     async with aclosing(_backend().iterate_texts()) as texts:
         async for meta, text in texts:
-            if text is None and meta.get("type") == "newnote":
-                # Storage keeps newnotes as bytes; scans use the same strict
-                # UTF-8 presentation as fetch and read-modify-write tools.
-                try:
-                    note = await _read_text_note(meta["path"])
-                    if note is not None:
-                        meta, text = note["meta"], note["text"]
-                except StorageUnavailable:
-                    raise  # Backend-wide failure, like iterate_texts.
-                except _TextRequiredError:
-                    pass
-                except Exception:
-                    # Match backend per-note scan isolation (including I/O
-                    # and SQLite failures); never retry failed plain reads.
-                    logging.getLogger(__name__).exception(
-                        "skipping note %s: UTF-8 scan read failed", meta["path"]
-                    )
             size = len(meta["path"].encode()) + (len(text.encode()) if text else 0)
             if budget and not budget.admit(meta["path"], size):
                 break

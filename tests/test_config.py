@@ -124,7 +124,7 @@ def test_port_accepts_boundaries(port):
     assert load_config({**COUCHDB_ENV, 'MCP_PORT': str(port)}).port == port
 
 
-@pytest.mark.parametrize('key', ['LIVESYNC_SCAN_MAX_NOTES', 'LIVESYNC_SCAN_MAX_BYTES'])
+@pytest.mark.parametrize('key', ['LIVESYNC_SCAN_MAX_NOTES', 'LIVESYNC_SCAN_MAX_BYTES', 'LIVESYNC_TEXT_SCAN_MAX_BYTES'])
 @pytest.mark.parametrize('value', ['invalid', '0', '-1'])
 def test_invalid_scan_limits_fail_config_validation(key, value):
     with pytest.raises(ConfigError, match=key):

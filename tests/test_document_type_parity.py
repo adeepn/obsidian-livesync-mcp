@@ -191,12 +191,12 @@ async def test_scan_utf8_projection_isolates_unexpected_store_failure(tmp_path, 
         await store.startup_check()
         await store.write_note('bad.MD', 'needle', create=True)
         await store.write_note('good.md', 'needle', create=True)
-        original = store._store.read_note
-        def read(path):
+        original = store._store._chunk_datas
+        def read(children, inline, path):
             if path.lower() == 'bad.md':
                 raise OSError('unreadable chunk')
-            return original(path)
-        monkeypatch.setattr(store._store, 'read_note', read)
+            return original(children, inline, path)
+        monkeypatch.setattr(store._store, '_chunk_datas', read)
         monkeypatch.setattr(server, 'backend', store)
         result = json.loads(await server.obsidian_search('needle'))
         assert [item['path'] for item in result['results']] == ['good.md']

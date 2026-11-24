@@ -534,3 +534,21 @@ means durable publication, not a promise that it remains the eventual winner.
 The S3 journal backend also uses best-effort scans of its local state.
 Refresh or state resets can interleave with a scan; chunks are retained until
 an epoch or remote-wipe reset. An unreadable note can be returned without text.
+
+### Text scan eligibility
+
+Vault text scans visit every visible note, independent of extension. Plain
+documents retain their text semantics. Newnotes are read one independently
+base64-encoded piece at a time with strict incremental UTF-8 validation; NUL
+and non-text controls (except tab, CR and LF) reject the file immediately.
+`LIVESYNC_TEXT_SCAN_MAX_BYTES` (default 8388608, positive integer) bounds
+newnote bytes decoded per file. Rejected and oversized files appear in
+`skipped`, and still count against the overall scan note budget. No extension
+allowlist is used. Fetch and byte downloads retain the stored document type.
+
+A normal PNG needs one piece read; a PDF with an ASCII prefix needs pieces
+until the first binary/control byte or the byte budget; a textual `.base`
+needs all its pieces, bounded by that budget. Negative verdicts avoid body
+reads on later scans of the same revision; positive verdicts still require
+streaming the text to run each query. Journal verdicts live in SQLite and
+CouchDB verdicts in process memory, keyed by document/revision and budget.
