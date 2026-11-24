@@ -30,3 +30,15 @@ export async function splitterDependencies(root, wheels, archive) {
     return {readString:binary.readString, iterateBlobBlocks:blob.iterateBlobBlocks,
         concatUInt8Array:typed.concatUInt8Array, dependency:{package:'octagonal-wheels',version:'0.1.57',integrity,source_sha256:hashes}};
 }
+
+export function verifyWasmDependency(root, moduleFile, archive) {
+    const pin = '484c164450d61deb2e301582b60cb9b5f9fa977f';
+    const lock = JSON.parse(execFileSync('git', ['-C',root,'show',`${pin}:package-lock.json`], {encoding:'utf8'}));
+    const entry = lock.packages['node_modules/xxhash-wasm-102'];
+    const integrity = 'sha512-' + createHash('sha512').update(fs.readFileSync(archive)).digest('base64');
+    if (integrity !== entry.integrity) throw Error('xxhash-wasm integrity');
+    const original = execFileSync('tar', ['-xOf',archive,'package/esm/xxhash-wasm.js']);
+    if (!original.equals(fs.readFileSync(moduleFile))) throw Error('Modified xxhash-wasm ESM');
+    return {package:entry.name,version:entry.version,source:entry.resolved,integrity,
+        module_sha256:createHash('sha256').update(original).digest('hex')};
+}

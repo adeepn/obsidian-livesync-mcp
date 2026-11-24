@@ -237,8 +237,9 @@ class ContentSplitter:
         if normalize_settings or settings.get('chunkSplitterVersion', '') == '':
             settings = normalize_splitter_settings(settings)
         self.normalized_settings = dict(settings)
-        self.minimum_chunk_size = self._number(settings, 'minimumChunkSize', 20)
-        custom = self._number(settings, 'customChunkSize', 0, allow_negative=True)
+        # ContentSplitterBase.ts:71 passes minimumChunkSize without validation.
+        self.minimum_chunk_size = settings.get('minimumChunkSize', 20)
+        custom = self._number(settings, 'customChunkSize', 0)
         try:
             self.absolute_max_piece_size = math.floor(102400 * (custom + 1))
         except (OverflowError, ValueError) as exc:
@@ -287,11 +288,11 @@ class ContentSplitter:
             raise error
 
     @staticmethod
-    def _number(settings: dict, key: str, default: int, *, allow_negative=False) -> float:
+    def _number(settings: dict, key: str, default: int) -> float:
         value = settings.get(key, default)
         try:
             valid = (not isinstance(value, bool) and isinstance(value, (int, float))
-                     and math.isfinite(value) and (value >= 0 or allow_negative))
+                     and math.isfinite(value))
         except (OverflowError, ValueError) as exc:
             error = ValueError(f'invalid {key}')
             error.setting_keys = (key,)
@@ -316,6 +317,40 @@ class ContentSplitter:
                      'v2-segmenter': V2Splitter, 'v3-rabin-karp': RabinKarpSplitter}[self.version]
         plain = plain_split or path.endswith(('.md', '.txt', '.canvas'))
         return algorithm(self).split(data, path=path, plain_split=plain)
+
+
+def _minimum_number(value):
+    """JS numeric coercion in chunks.ts:66,279,369,537 (not validation)."""
+    if value is None:
+        return 0.0
+    if isinstance(value, (list, dict)):
+        value = _splitter_property_key(value)
+    try:
+        if isinstance(value, str):
+            # ECMAScript StringNumericLiteral, used by the comparisons and
+            # Math.max in chunks.ts:66,279,369,537; float() alone accepts
+            # Python's "inf" and rejects JavaScript's radix-prefixed forms.
+            value = value.strip('\t\n\v\f\r \u00a0\u1680\u2000\u2001\u2002\u2003'
+                                '\u2004\u2005\u2006\u2007\u2008\u2009\u200a'
+                                '\u2028\u2029\u202f\u205f\u3000\ufeff')
+            if not value:
+                return 0.0
+            if re.fullmatch(r'0(?:[xX][0-9a-fA-F]+|[bB][01]+|[oO][0-7]+)', value):
+                return float(int(value, 0))
+            if not re.fullmatch(r'[+-]?(?:(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?|Infinity)', value):
+                return math.nan
+        return float(value)
+    except OverflowError:
+        return -math.inf if str(value).startswith('-') else math.inf
+    except (ValueError, TypeError):
+        return math.nan
+
+
+def _loop_refusal(setting, remedy):
+    error = ValueError(
+        f'{setting}: the plugin itself does not terminate for this input; use {remedy}')
+    error.setting_keys = (setting,)
+    return error
 
 
 class _Splitter:
@@ -346,8 +381,10 @@ class RabinKarpSplitter(_Splitter):
         maximum = min(unit * 16 if plain else 4 * 1024 * 1024,
                       max(self.absolute_max_piece_size, 30 * 1024))
         gap = max(1, maximum // 4)
-        minimum = min(max(unit * 2 if plain else gap, self.minimum_chunk_size), maximum)
-        modulus = min(max(unit * 4, minimum), maximum) if plain else gap
+        # chunks.ts:535-545: Math.min/max propagate NaN; place the setting
+        # first so Python min/max preserve it rather than discarding it.
+        minimum = min(max(_minimum_number(self.minimum_chunk_size), unit * 2 if plain else gap), maximum)
+        modulus = min(max(minimum, unit * 4), maximum) if plain else gap
         weight = pow(31, 47, 2**32)
         fingerprint = 0
         start = 0
@@ -381,12 +418,17 @@ def _from_units(text: str) -> str:
     return text.encode('utf-16-le', errors='surrogatepass').decode('utf-16-le', errors='surrogatepass')
 
 
-def _capped(text: str, maximum: int, preserve_pairs: bool = True):
+def _capped(text: str, maximum: int, preserve_pairs: bool = True, *, v1_plain=False):
     # chunks.ts:218-254,296-323. V1 non-plain intentionally splits pairs.
     start = 0
     while True:
-        end = start + maximum
-        if (preserve_pairs and end < len(text) and 0xd800 <= ord(text[end - 1]) <= 0xdbff
+        # chunks.ts:234-240: charCodeAt(-1)=NaN != undefined, so V1
+        # increments a zero cap to one, intentionally cutting surrogate pairs.
+        if v1_plain and maximum == 0:
+            end = start + 1
+        else:
+            end = start + maximum
+        if (preserve_pairs and maximum > 0 and end < len(text) and 0xd800 <= ord(text[end - 1]) <= 0xdbff
                 and 0xdc00 <= ord(text[end]) <= 0xdfff):
             end += 1
         yield _from_units(text[start:end])
@@ -410,8 +452,6 @@ class V2Splitter(_Splitter):
 
     def split(self, data, *, path='', plain_split=False):
         maximum = self.absolute_max_piece_size
-        if maximum <= 0:
-            raise ValueError('customChunkSize must produce a positive piece size')
         if isinstance(data, bytes) and not isinstance(data, _TextBlob):
             return self._binary(data, path)
         raw = _js_utf8(data) if isinstance(data, str) else data
@@ -419,33 +459,54 @@ class V2Splitter(_Splitter):
             return []
         text = _unit_string(raw.decode('utf-8-sig', errors='replace'))
         if not plain_split:
-            return list(_capped(text, maximum))
-        minimum = self.minimum_chunk_size
-        if minimum <= 0:
-            raise ValueError('minimumChunkSize must be positive for plain V2 text')
-        if minimum % 1 == 0:
+            return self._cap(text)
+        minimum = _minimum_number(self.minimum_chunk_size)
+        # chunks.ts:367-371: only numeric zero (including null/empty string)
+        # cannot advance xMinimumChunkSize. Negative zero divides to -Infinity;
+        # negative/NaN minima also skip this loop.
+        if text and minimum == 0 and math.copysign(1, minimum) > 0:
+            raise _loop_refusal('minimumChunkSize', 'minimumChunkSize=20 (or another positive minimumChunkSize)')
+        if minimum > 0 and not isinstance(self.minimum_chunk_size, str) and minimum % 1 == 0:
             # Exact fast path for the integer UI setting; O(1).
             adjusted = max(1, math.ceil(len(text) / (100 * minimum))) * minimum
         else:
             # Preserve JS binary64 repeated-addition rounding for fractional
             # tweaks too; multiplication can change strict newline boundaries.
             adjusted = minimum
-            while len(text) / adjusted > 100:
-                adjusted += minimum
+            source = self.minimum_chunk_size
+            while adjusted > 0 and len(text) / adjusted > 100:
+                # JS += concatenates when the setting is a string.
+                source = source + self.minimum_chunk_size if isinstance(source, str) else source + minimum
+                adjusted = _minimum_number(source)
         pieces = []
         start = 0
         for match in re.finditer('\n', text):
             end = match.end()
             if end - start > adjusted:
-                pieces.extend(_capped(text[start:end], maximum))
+                pieces.extend(self._cap(text[start:end]))
                 start = end
         # splitByDelimiterWithMinLength yields even an empty final tail.
-        pieces.extend(_capped(text[start:], maximum))
+        pieces.extend(self._cap(text[start:]))
         return pieces
+
+    def _cap(self, text):
+        # chunks.ts:297-313: nonpositive maxLength grows end to 1 once,
+        # then stalls at the first code point boundary. A single code point
+        # (including a surrogate pair) still terminates.
+        if self.absolute_max_piece_size <= 0:
+            if len(_from_units(text)) > 1 or (not text and self.absolute_max_piece_size < 0):
+                # chunks.ts:299-309: a negative cap on an empty source (BOM
+                # or flushed newline tail) grows end forever, not just once.
+                raise _loop_refusal('customChunkSize', 'customChunkSize=0 (positive pieceSize)')
+            return [_from_units(text)]
+        return list(_capped(text, self.absolute_max_piece_size))
 
     def _binary(self, data: bytes, path: str):
         if not data:
             return []
+        if self.absolute_max_piece_size <= 0:
+            # chunks.ts:418-432: i = splitEnd <= i.
+            raise _loop_refusal('customChunkSize', 'customChunkSize=0 (positive pieceSize)')
         delimiter = b'/' if path.endswith('.pdf') else b',' if path.endswith('.json') else b'\0'
         minimum = _binary_minimum(len(data), path)
         maximum = self.absolute_max_piece_size
@@ -475,9 +536,12 @@ class LegacySplitter(_Splitter):
 
     def split(self, data, *, path='', plain_split=False):
         maximum = self.absolute_max_piece_size
-        if maximum <= 0:
-            raise ValueError('customChunkSize must produce a positive piece size')
         if isinstance(data, bytes) and not isinstance(data, _TextBlob):
+            if data and maximum <= 0:
+                # chunks.ts:473-491: i += piece.length stays zero.
+                raise _loop_refusal('customChunkSize', 'customChunkSize=0 (positive pieceSize)')
+            if not data:
+                return ['']
             delimiter = b'/' if path.endswith('.pdf') else b',' if path.endswith('.json') else b'\0'
             minimum = _binary_minimum(len(data), path)
             pieces = []
@@ -494,9 +558,15 @@ class LegacySplitter(_Splitter):
                     return pieces
         raw = _js_utf8(data) if isinstance(data, str) else data
         text = _unit_string(raw.decode('utf-8-sig', errors='replace'))
+        # chunks.ts:234-250: substring clamps negative offsets to zero.
+        if text and (maximum < 0 or (not plain_split and maximum == 0)):
+            raise _loop_refusal('customChunkSize',
+                                'customChunkSize=0 (zero pieceSize also works for V1 plain text)')
+        if not text:
+            return ['']
         if not plain_split:
             return list(_capped(text, maximum, False))
-        return [piece for group in self._groups(text) for piece in _capped(group, maximum)]
+        return [piece for group in self._groups(text) for piece in _capped(group, maximum, v1_plain=True)]
 
     def _groups(self, text):
         lines = text.split('\n')
@@ -539,7 +609,7 @@ class LegacySplitter(_Splitter):
                 part = take()
                 buffer.append(part)
                 length += len(part)
-                if (length >= self.minimum_chunk_size or index == count
+                if (length >= _minimum_number(self.minimum_chunk_size) or index == count
                         or lines[index] == '#' or buffer[0].startswith('#')):
                     yield ''.join(buffer)
                     buffer = []

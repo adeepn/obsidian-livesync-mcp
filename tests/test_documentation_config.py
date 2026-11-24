@@ -197,3 +197,15 @@ def test_couchdb_compression_documentation_contract():
     tweaks = (ROOT / 'docs/tweak-compatibility.md').read_text()
     assert 'no CouchDB compression adapter' not in tweaks
     assert 'typed boolean `enableCompression`' in tweaks
+
+
+def test_legacy_parameter_recovery_documented():
+    readme = (ROOT / 'README.md').read_text()
+    focused = (ROOT / 'docs/vault-format.md').read_text()
+    assert 'Nonpositive legacy piece caps and V2 plain-text minimums are unsupported' not in readme
+    assert 'plugin itself does not terminate' in readme
+    for name in ('customChunkSize', 'minimumChunkSize'):
+        assert f'| `{name}` |' in readme
+        assert name in focused and name in (ROOT / '.env.example').read_text()
+    for term in ('864', 'UTF-16', 'single code point', 'null', 'NaN', 'Recovery'):
+        assert term in focused

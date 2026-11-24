@@ -140,8 +140,8 @@ combination. [Source inventory and caveats](docs/superpowers/specs/2026-11-23-se
 | `chunkSplitterVersion` | v1, v2, v2-segmenter, v3-rabin-karp, legacy empty | Identical | All writers; legacy split-surrogate pieces retain device IDs and transport encoding; v2-segmenter equals v2 at this pin |
 | `enableChunkSplitterV2`, `useSegmenter` | false / true (legacy migration) | Identical | One-pass migration of empty version; unknown version normalization follows upstream |
 | `hashAlg` | xxhash64, xxhash32, mixed-purejs, sha1, empty | Identical | Upstream UTF-16 length and hash semantics |
-| `customChunkSize` | Number >=0 in UI (default 0) | Identical | Absolute cap derived from setting; V3 floor/ceiling retained |
-| `minimumChunkSize` | Numeric (default 20) | Identical for valid values; V2 plain 0 not supported | Algorithm-specific minimum; V2 plain requires >0; negative/nonnumeric values refuse |
+| `customChunkSize` | Number >=0 in UI (default 0) | Identical wherever the plugin terminates | V1 plain cap zero advances one UTF-16 unit; V3 clamps; see [loop refusals](docs/vault-format.md#invalid-writer-parameters) |
+| `minimumChunkSize` | Numeric (default 20) | Identical wherever the plugin terminates | Negative, empty, null and NaN follow upstream coercion; only V2 nonempty plain minima coercing to positive zero loop |
 | `syncMaxSizeInMB` | UI number >=0, default 50; 0 disables | Deliberate difference | Device ordinary-write predicate; oversized rename refuses to protect source |
 | `syncOnlyRegEx`, `syncIgnoreRegEx` | ECMAScript pattern lists | Identical when configured | Set local env explicitly; never inferred from milestone |
 | `useIgnoreFiles` | Boolean | Identical | Derived from vault settings unless overridden; active policy requires Node.js 22+ |
@@ -196,9 +196,16 @@ combination. [Source inventory and caveats](docs/superpowers/specs/2026-11-23-se
   connection fields and use CouchDB username/password instead.
   Ordinary tools reserve service prefixes/names and dot-prefixed paths;
   [path admission](docs/vault-format.md#path-admission) lists the exact exclusions.
-- Nonpositive legacy piece caps and V2 plain-text minimums are unsupported;
-  invalid numeric writer parameters refuse instead of risking a nonterminating
-  upstream loop. Keep legacy caps and V2 plain minimum positive.
+- Refuse only inputs on which the plugin itself does not terminate: V1
+  nonempty binary/non-plain text with nonpositive caps, V1 nonempty plain text
+  with negative caps, V2 nonempty binary with nonpositive caps, V2 text groups
+  containing more than one Unicode code point with nonpositive caps (or empty
+  groups with negative caps), and V2 nonempty decoded plain text with
+  `minimumChunkSize` coercing to positive zero (ordinary 0, empty string or null);
+  negative zero terminates.
+  Use `customChunkSize` producing a positive pieceSize and a positive V2 plain
+  `minimumChunkSize`. Empty inputs and V3 retain upstream semantics.
+  [Exact cell evidence and recovery](docs/vault-format.md#invalid-writer-parameters).
 - The peer is an invisible writer: it does not register a device or modify
   milestone/PREFERRED settings. Align device settings separately; review
   [tweak compatibility](docs/tweak-compatibility.md) after upgrades.

@@ -147,8 +147,8 @@
     "id": "N4",
     "owner": "module",
     "function": "_capped",
-    "source": "if (preserve_pairs and end < len(text)",
-    "mutation": "if (False and end < len(text)",
+    "source": "if (preserve_pairs and maximum > 0 and end < len(text)",
+    "mutation": "if (False and maximum > 0 and end < len(text)",
     "nodes": [
       "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=surrogate:102399]",
       "tests/test_settings_matrix.py::test_settings_text_partition[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=surrogate:102399-couchdb]",
@@ -375,8 +375,8 @@
     "id": "Y4",
     "owner": "LegacySplitter",
     "function": "_groups",
-    "source": "length >= self.minimum_chunk_size",
-    "mutation": "length > self.minimum_chunk_size",
+    "source": "length >= _minimum_number(self.minimum_chunk_size)",
+    "mutation": "length > _minimum_number(self.minimum_chunk_size)",
     "nodes": [
       "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=random:newline:17:200]",
       "tests/test_settings_matrix.py::test_settings_full_cycle[identity=legacy-splitter=v1-hash=xxhash32-custom=0-minimum=default-limit=1-document=bom-couchdb]",
@@ -531,8 +531,8 @@
     "id": "13",
     "owner": "RabinKarpSplitter",
     "function": "split",
-    "source": "self.minimum_chunk_size), maximum)",
-    "mutation": "0), maximum)",
+    "source": "_minimum_number(self.minimum_chunk_size)",
+    "mutation": "0",
     "nodes": [
       "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=102400-limit=default-document=override]",
       "tests/test_settings_matrix.py::test_settings_full_cycle[identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=102400-limit=default-document=override-couchdb]",
@@ -567,8 +567,8 @@
     "id": "X1",
     "owner": "LegacySplitter",
     "function": "split",
-    "source": "pieces = []\n        offset = 0",
-    "mutation": "pieces = []\n        if not data: return []\n        offset = 0",
+    "source": "if not data:\n            return ['']",
+    "mutation": "if not data:\n            return []",
     "nodes": [
       "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=binary-empty]",
       "tests/test_settings_matrix.py::test_settings_text_partition[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=binary-empty-couchdb]",
@@ -728,11 +728,95 @@
     "function": "_groups",
     "source": "index < count",
     "mutation": "index <= count",
-    "line": 522,
+    "line": 587,
     "nodes": [
       "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=fence-only]",
       "tests/test_settings_matrix.py::test_settings_persisted_equality_witness[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=fence-only-couchdb]",
       "tests/test_settings_matrix.py::test_settings_persisted_equality_witness[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=fence-only-journal]"
+    ]
+  },
+  {
+    "id": "G3-zero-whole",
+    "owner": "LegacySplitter",
+    "function": "split",
+    "source": "maximum = self.absolute_max_piece_size",
+    "mutation": "maximum = self.absolute_max_piece_size\n    if maximum == 0:\n        return [data]",
+    "nodes": [
+      "tests/test_legacy_cells.py::test_terminating_legacy_cell[identity=legacy-splitter=v1-hash=xxhash64-custom=-1-minimum=20-limit=default-document=g3-plain]",
+      "tests/test_legacy_cells.py::test_cell_backend_lifecycle[identity=legacy-splitter=v1-hash=xxhash64-custom=-1-minimum=20-limit=default-document=g3-plain-couchdb]",
+      "tests/test_legacy_cells.py::test_cell_backend_lifecycle[identity=legacy-splitter=v1-hash=xxhash64-custom=-1-minimum=20-limit=default-document=g3-plain-journal]"
+    ]
+  },
+  {
+    "id": "G3-negative-group",
+    "owner": "LegacySplitter",
+    "function": "_groups",
+    "source": "length >= _minimum_number(self.minimum_chunk_size)",
+    "mutation": "length >= max(20, _minimum_number(self.minimum_chunk_size))",
+    "nodes": [
+      "tests/test_legacy_cells.py::test_terminating_legacy_cell[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=-1-limit=default-document=g3-plain]",
+      "tests/test_legacy_cells.py::test_cell_backend_lifecycle[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=-1-limit=default-document=g3-plain-couchdb]",
+      "tests/test_legacy_cells.py::test_cell_backend_lifecycle[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=-1-limit=default-document=g3-plain-journal]"
+    ]
+  },
+  {
+    "id": "G3-accept-loop",
+    "owner": "V2Splitter",
+    "function": "split",
+    "source": "if text and minimum == 0 and math.copysign(1, minimum) > 0:",
+    "mutation": "if False:",
+    "nodes": [
+      "tests/test_legacy_cells.py::test_every_upstream_cell[g3:v2:plain:0:0:nonempty]",
+      "tests/test_legacy_cells.py::test_loop_cell_preserves_backend[g3:v2:plain:0:0:nonempty-couchdb]",
+      "tests/test_legacy_cells.py::test_loop_cell_preserves_backend[g3:v2:plain:0:0:nonempty-journal]"
+    ]
+  },
+  {
+    "id": "G3-bom-loop",
+    "owner": "V2Splitter",
+    "function": "_cap",
+    "source": "len(_from_units(text)) > 1 or (not text and self.absolute_max_piece_size < 0)",
+    "mutation": "len(_from_units(text)) > 1",
+    "nodes": [
+      "tests/test_legacy_cells.py::test_every_upstream_cell[g3-bom:v2:-2:20]",
+      "tests/test_legacy_cells.py::test_loop_cell_preserves_backend[g3-bom:v2:-2:20-couchdb]",
+      "tests/test_legacy_cells.py::test_loop_cell_preserves_backend[g3-bom:v2:-2:20-journal]"
+    ]
+  },
+  {
+    "id": "G3-radix-minimum",
+    "owner": "module",
+    "function": "_minimum_number",
+    "source": "return float(int(value, 0))",
+    "mutation": "return math.nan",
+    "nodes": [
+      "tests/test_legacy_cells.py::test_terminating_legacy_cell[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=0x10-limit=default-document=g3-numeric]",
+      "tests/test_legacy_cells.py::test_cell_backend_lifecycle[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=0x10-limit=default-document=g3-numeric-couchdb]",
+      "tests/test_legacy_cells.py::test_cell_backend_lifecycle[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=0x10-limit=default-document=g3-numeric-journal]"
+    ]
+  },
+  {
+    "id": "G3-reject-pair",
+    "owner": "V2Splitter",
+    "function": "_cap",
+    "source": "len(_from_units(text)) > 1",
+    "mutation": "len(text) > 1",
+    "nodes": [
+      "tests/test_legacy_cells.py::test_terminating_legacy_cell[identity=legacy-splitter=v2-hash=xxhash64-custom=-1-minimum=20-limit=default-document=g3-one-pair]",
+      "tests/test_legacy_cells.py::test_cell_backend_lifecycle[identity=legacy-splitter=v2-hash=xxhash64-custom=-1-minimum=20-limit=default-document=g3-one-pair-couchdb]",
+      "tests/test_legacy_cells.py::test_cell_backend_lifecycle[identity=legacy-splitter=v2-hash=xxhash64-custom=-1-minimum=20-limit=default-document=g3-one-pair-journal]"
+    ]
+  },
+  {
+    "id": "G3-reject-signed-zero",
+    "owner": "V2Splitter",
+    "function": "split",
+    "source": "math.copysign(1, minimum) > 0",
+    "mutation": "True",
+    "nodes": [
+      "tests/test_legacy_cells.py::test_terminating_legacy_cell[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=-0.0-limit=default-document=g3-plain]",
+      "tests/test_legacy_cells.py::test_cell_backend_lifecycle[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=-0.0-limit=default-document=g3-plain-couchdb]",
+      "tests/test_legacy_cells.py::test_cell_backend_lifecycle[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=-0.0-limit=default-document=g3-plain-journal]"
     ]
   }
 ]

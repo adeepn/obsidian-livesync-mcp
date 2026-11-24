@@ -51,7 +51,6 @@ def test_direct_worker_spec_text_survives():
 
 @pytest.mark.parametrize('settings', [
     {'chunkSplitterVersion': 'unknown'}, {'hashAlg': 'unknown'},
-    {'minimumChunkSize': -1}, {'minimumChunkSize': float('nan')},
     {'customChunkSize': float('inf')}, {'customChunkSize': True},
     {'idDerivationVersion': 1}, {'idDerivationVersion': 2},
     {'idDerivationKey': 'bad'}, {'encrypt': True},

@@ -38,6 +38,16 @@ def test_comparison_equality_is_observable(entry):
         vector = GRID[witness['id']]
         expected = expected_pieces({'pieces': vector['split_pieces']}), vector['split_children']
         run = lambda module: grid_result(module, vector)
+    elif witness['kind'] == 'cell':
+        from tests.test_legacy_cells import ALL_CELL_ROWS, cell_run
+        row = next(r for r in ALL_CELL_ROWS if r['id'] == witness['id'])
+        assert row['status'] in ('time_limit', 'step_limit')
+        expected = ('refused',)
+        def run(module):
+            try:
+                return cell_run(module, row)
+            except ValueError:
+                return ('refused',)
     elif witness['kind'] == 'helper':
         vector = ORACLE['helper_probes'][witness['family']][witness['index']]
         expected = (vector['base36'], vector['raw_hash']) if 'value' in vector else vector['base64']
@@ -50,7 +60,7 @@ def test_comparison_equality_is_observable(entry):
     assert run(content_splitter) == expected, entry
     try:
         result = run(mutant)
-    except (IndexError, ValueError, RecursionError, MutationFuelExhausted):
-        # The unmutated path has a successful upstream oracle result.
+    except (IndexError, ValueError, ZeroDivisionError, RecursionError, MutationFuelExhausted):
+        # The mutant differs from the upstream result or the bounded refusal.
         return
     assert result != expected, entry

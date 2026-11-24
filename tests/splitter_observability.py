@@ -52,12 +52,11 @@ def isolated_mutant(entry):
     tree = ast.parse(source)
     # A sentinel flip can prevent progress. Inject deterministic fuel into
     # isolated loops only; baseline production and files remain untouched.
-    if entry['line'] in (467, 488, 493):
-        for node in ast.walk(tree):
-            if isinstance(node, ast.While):
-                node.body.insert(0, ast.Expr(ast.Call(
-                    ast.Name('_mutation_tick', ast.Load()), [], [])))
-        ast.fix_missing_locations(tree)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.While):
+            node.body.insert(0, ast.Expr(ast.Call(
+                ast.Name('_mutation_tick', ast.Load()), [], [])))
+    ast.fix_missing_locations(tree)
     module = types.ModuleType('isolated_splitter')
     fuel = [1000]
 
@@ -65,6 +64,7 @@ def isolated_mutant(entry):
         fuel[0] -= 1
         if fuel[0] <= 0:
             raise MutationFuelExhausted('isolated mutation exhausted loop fuel')
+    module._mutation_fuel = fuel
     module._mutation_tick = tick
     module.__file__ = str(SOURCE_PATH)
     exec(compile(tree, str(SOURCE_PATH), 'exec'), module.__dict__)

@@ -546,3 +546,72 @@ logical value, not their original encoded representation; an identity assertion
 on the encoded input would contradict that explicit skip/decode contract.
 Malformed marked inputs deliberately refuse rather than mirror the published
 base64 decoder's swallowed-error empty-string result.
+
+
+### 2026-11-25 — G3 legacy parameter correction
+
+[DECISION] Replace blanket nonpositive/negative-minimum guards with
+input-dependent progress guards derived from pinned chunks.ts:234-250,
+297-313,350-371,418-432,473-491. V1 plain cap zero advances one UTF-16 unit;
+negative minima terminate; V3 keeps upstream clamps (527-545). Empty/null/NaN
+minimum coercion follows upstream. The former `_number` minimum sign check
+(`value >= 0`, S1 G3-owned) is removed from minimum admission, rather than
+claiming an unreachable positive-minimum invariant. Complete empirical cell
+results live in tests/fixtures/legacy_cells_upstream.json; generated grid
+expectations remain in settings_oracle_upstream.json.gz. Existing surrogate
+hash-collision refusals protect data; SHA1 supplies the collision-free zero-cap
+surrogate lifecycle witness. Historical status above remains unchanged.
+
+Review correction: V2 negative caps also loop on empty grouped sources from
+BOM-only Blobs and flushed delimiter tails (chunks.ts:288-309). The supplemental
+96-cell upstream fixture and preservation tests cover this guard. Numeric
+minimum coercion follows JavaScript StringNumericLiteral, including radix
+prefixes and exact Infinity spelling, rather than Python float syntax. NaN
+backend witnesses exercise the existing ordinary-tweak mismatch bypass,
+matching upstream NaN inequality; no compatibility policy was changed.
+
+A further V2 progress witness covers a complete surrogate pair under a
+nonpositive cap: chunks.ts:307-309 grows the initial end through both units.
+Exactly one Unicode code point terminates; a subsequent code point stalls.
+Plain and non-plain pair inputs have executed upstream oracle vectors and
+backend write/read/rename/delete coverage.
+
+Signed-zero correction: V2 plain minimum `-0` divides text length to negative
+infinity and therefore terminates (chunks.ts:369). Both numeric -0 and the
+string "-0" have pinned upstream grid and full backend lifecycle vectors.
+Only positive-zero-coercing minima use the loop refusal.
+
+Oracle provenance: commonlib 484c164450d61deb2e301582b60cb9b5f9fa977f,
+Node 26.13.1, octagonal-wheels 0.1.57 and xxhash-wasm 1.1.0. Both published
+tarballs were verified against lockfile SHA512 integrity; the WASM ESM was
+compared byte-for-byte with its tar member. Journal projection expectations
+execute pinned journalRecords.ts:69-108, rather than a Python approximation.
+
+Fixture SHA256:
+
+- `settings_oracle_upstream.json.gz`: `8567dc71e08b61ee7b9143ff3fae4efa45f3eb9ef1854cdb1d310a5ab3156a85`
+- `legacy_cells_upstream.json`: `ade7b98c1b6ec764baa5333b4d66d15b5eb2662084b7ff09b1f4c1c6e6224ba3`
+- `legacy_bom_cells_upstream.json`: `bb0ac5358eab9f9be95fb7f7fdf331deb6cf4186f3728a89c2da16f66030c7a9`
+- `legacy_wire_cells_upstream.json`: `5339fb37457691a88e58fe3c7600759a4e0aa24b4d3d413ea7f02218798da50a`
+
+Mutation acceptance: all 68 in-memory mutations are caught by each selected
+unit/grid, CouchDB and journal witness (204 failing mutant tests). No production
+module is rewritten for these checks.
+
+Overflowing minimum correction: JSON.parse converts an overflowing numeric
+literal to Infinity. The peer accepts it and follows the V1/V2 grouping and
+V3 maximum clamp, rather than retaining the former minimum admission error.
+Three executed upstream vectors and both backend lifecycles replace the old
+minimum-overflow rejection assertions. All previous 5,815 grid vectors and
+69 matrix vectors retain identical decoded pieces and IDs.
+
+Validation before commit: full `./venv/bin/python -m pytest tests/ -q` reports
+20,029 passed, 7 skipped and 3 subtests passed (229.93 s), compared with the
+owner-provided baseline of 15,413 passed, 7 skipped and 3 subtests. The focused
+G3/writer/observability/documentation checks report 4,015 passed. All 68 mutation
+campaigns pass their three selected witnesses; the additive overflow oracle
+check confirms all previous vectors and mutation witnesses remain unchanged.
+Worktree-scoped compileall and diff/ignored-file checks pass. Bare compileall
+exits zero but reports the environment's absent system python313.zip; no
+interpreter installation changes are part of this task. Post-commit full-suite
+evidence is kept in the ignored G3 task directory.

@@ -69,11 +69,51 @@ writes; internal metadata is not a public note interface.
 
 ## Invalid writer parameters
 
-V1/V2 require a positive derived piece cap; V2 plain text requires a positive
-minimum. Zero can leave the upstream legacy loops nonterminating, so these
-configurations are refused. Negative/nonnumeric minimums and other invalid
-writer parameters are unsupported. These guard refusals are outside the
-“identical for valid settings” claim; V3 retains its own floor/clamp semantics.
+The derived pieceSize is `floor(102400 * ((customChunkSize || 0) * 1 + 1))`;
+`customChunkSize = -1` gives zero. Negative minima are supported. Empty string,
+null and NaN minima follow JavaScript coercion, not peer numeric validation.
+Overflowing numeric minimum literals become Infinity and follow the same
+upstream grouping and clamp rules.
+V3 retains its 30 KiB cap floor and minimum/maximum clamps, including NaN's
+suppression of content-defined candidates (maximum cuts still apply).
+
+The peer refuses only these upstream nontermination cases:
+
+| Algorithm and input | Loop condition | Recovery |
+| --- | --- | --- |
+| V1 nonempty plain text | Negative pieceSize; substring cannot consume the buffer | Use customChunkSize producing a positive pieceSize; zero also terminates |
+| V1 nonempty non-plain text or binary | Nonpositive pieceSize; remaining text or byte offset does not advance | Use customChunkSize producing a positive pieceSize |
+| V2/V2-segmenter nonempty binary | Nonpositive pieceSize; splitEnd never advances | Use customChunkSize producing a positive pieceSize |
+| V2/V2-segmenter text | Nonpositive pieceSize with a group containing more than one Unicode code point (from stalls at the first code point boundary), or negative pieceSize with an empty group (surrogate-growth loop never ends) | Use customChunkSize producing a positive pieceSize |
+| V2/V2-segmenter nonempty decoded plain text | Positive-zero-coercing minimumChunkSize (ordinary 0, empty string, null) leaves minimum adjustment unchanged; negative zero terminates | Use a positive minimumChunkSize |
+
+Empty Blobs terminate at every tested cap/minimum. V2 text groups containing
+a single code point (including a surrogate pair) terminate even with a
+nonpositive cap. V1 plain zero-cap splitting emits
+one UTF-16 unit per piece, intentionally splitting surrogate pairs. Different
+lone surrogates can share an xxhash ID after TextEncoder replacement; the
+existing collision guard protects shared data. Use a collision-free hash mode
+(such as SHA1 for the committed surrogate witness) or a positive pieceSize.
+
+These rules follow commonlib@484c164 `chunks.ts:234-250,297-313,350-371,
+418-432,473-491,527-545`. `scripts/extract_legacy_cells.mjs` commits all 864
+cells in `tests/fixtures/legacy_cells_upstream.json`: eight dispatch/migration
+choices × three input classes × three cap signs × six minima × empty/nonempty.
+Each looping cell has a source progress proof and an isolated upstream child
+with a 128-yield limit and a 2-second wall deadline. Defined pieces and IDs
+come from pinned upstream execution with integrity-verified published wheels.
+The supplemental `scripts/extract_legacy_bom_cells.mjs` and
+`tests/fixtures/legacy_bom_cells_upstream.json` record 96 BOM-only and newline
+probes, including empty decoded sources and final delimiter tails. JavaScript
+radix-prefixed numeric strings, signed zero and single-surrogate-pair groups
+are also covered by the main oracle. `scripts/extract_legacy_wire_cells.mjs`
+executes the pinned journal encoder/decoder for zero-cap surrogate pieces in
+`tests/fixtures/legacy_wire_cells_upstream.json`. NaN is
+encoded as a tagged input recipe in JSON and materialized as a real NaN in
+upstream execution and backend tests; ordinary tweak equality treats NaN as
+unequal to itself, so those backend tests use the existing explicit
+`LIVESYNC_DISABLE_CHECKING_CONFIG_MISMATCH` bypass. No defined upstream
+validation errors occur in these tables.
 
 ## CouchDB JSON string encoding
 

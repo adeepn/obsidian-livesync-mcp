@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Settings parity
 
+- Match terminating legacy splitter edge parameters: zero-cap V1 plain text,
+  negative and JavaScript-coerced minima, empty inputs and V3 clamps. Refuse
+  only proven plugin loops with setting names and recovery guidance; retain
+  collision protection for surrogate pieces sharing a chunk ID.
+
 - Read compressed CouchDB documents regardless of the vault setting and compress
   writes when `enableCompression` is true. Accept mixed device settings; report
   the effective boolean in `vault_stats`. Preserve CR/LF base64-looking text,

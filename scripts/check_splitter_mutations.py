@@ -1,4 +1,4 @@
-"""Replay 53 known, G1..G4 and four new equality flips, entirely in memory.
+"""Replay known splitter mutations and G3 edge-parameter flips in memory.
 
 Run with ./venv/bin/python scripts/check_splitter_mutations.py OUTPUT_DIR.
 Each isolated process runs the committed exact grid/CouchDB/journal witness

@@ -197,6 +197,16 @@ def _candidate_patch(seed):
 
 @lru_cache(maxsize=8)
 def grid_payload(kind):
+    if kind.startswith('g3-'):
+        if kind in ('g3-one-pair', 'g3-one-plain-pair'):
+            return ('.svg' if kind == 'g3-one-pair' else '.md'), '🙂'
+        if kind == 'g3-numeric':
+            return '.md', 'a' * 16 + '\nb\n'
+        if kind == 'g3-bom':
+            return '.md', '\ufeff'
+        suffix = '.md' if kind.startswith('g3-plain') or kind in ('g3-surrogate', 'g3-large') else '.svg'
+        text = '' if kind.endswith('-empty') else 'a' if kind == 'g3-one' else 'a🙂b' if kind == 'g3-surrogate' else ('abc\ndef\n' * 300 if kind == 'g3-large' else 'abc\ndef')
+        return ('.png', text.encode()) if kind.startswith('g3-binary') else (suffix, text)
     if kind.startswith('decoder:'):
         _, size, byte, position = kind.split(':')
         size, position = int(size), int(position)
@@ -571,6 +581,51 @@ OBSERVABLE_CASES = [
 ]
 EQUALITY_CASES += OBSERVABLE_CASES
 PERSISTED_EQUALITY_CASES += OBSERVABLE_CASES
+
+
+# G3 category-(a) input cells. Safety selection follows chunks.ts:234-250,
+# 297-313,350-370,418-432,473-491; expected pieces/ids come only from Node.
+G3_CASES = []
+for _version, _custom, _minimum, _kind in product(
+        FACTORS[1][1], (0, -1, -2), (20, 0, -1, '', None, '__G3_NaN__'),
+        ('g3-plain', 'g3-text', 'g3-binary', 'g3-plain-empty',
+         'g3-text-empty', 'g3-binary-empty')):
+    _v1 = _version == 'v1' or _version.startswith('legacy-0')
+    _empty = _kind.endswith('-empty')
+    _plain = _kind.startswith('g3-plain')
+    _binary = _kind.startswith('g3-binary')
+    _safe = (_empty or _version == 'v3-rabin-karp' or
+             ((_custom == 0 or (_v1 and _plain and _custom == -1)) and
+              (_v1 or not _plain or _minimum not in (0, '', None))))
+    if _safe:
+        G3_CASES.append(('legacy', _version, 'xxhash64', _custom, _minimum, 'default', _kind))
+# Boundaries that distinguish V2's first-step growth from its stationary next
+# step, plus V1's intentional zero-cap surrogate cuts (chunks.ts:235-240).
+G3_CASES += [('legacy', v, 'xxhash64', c, 20, 'default', 'g3-one')
+             for v in ('v2', 'v2-segmenter', 'legacy-10', 'legacy-11') for c in (-1, -2)]
+G3_CASES += [('legacy', 'v1', 'sha1', -1, m, 'default', 'g3-surrogate')
+             for m in (20, -1, 0)]
+# V3 probes exceed the text cap so clamps and NaN candidate suppression are
+# actually observed, rather than inferred from a single tiny chunk.
+G3_CASES += [('legacy', 'v3-rabin-karp', 'xxhash64', c, m, 'default', 'g3-large')
+             for c in (-2, -1, 0) for m in (-1, 0, '', None, '__G3_NaN__')]
+G3_CASES += [('legacy', v, 'xxhash64', c, m, 'default', 'g3-bom')
+             for v in ('v2', 'v2-segmenter', 'legacy-10', 'legacy-11')
+             for c in (0, -1) for m in (0, -1, None)]
+G3_CASES += [('legacy', v, 'xxhash64', 0, m, 'default', k)
+             for v in ('v1', 'v2', 'v3-rabin-karp')
+             for m in ('0x10', '0b10', '0o10', 'inf', 'Infinity', '-Infinity')
+             for k in ('g3-numeric', 'g3-large')]
+G3_CASES += [('legacy', v, 'xxhash64', c, 20, 'default', k)
+             for v in ('v2', 'v2-segmenter', 'legacy-10', 'legacy-11')
+             for c in (-1, -2) for k in ('g3-one-pair', 'g3-one-plain-pair')]
+# chunks.ts:369: textLen / -0 is -Infinity, so signed zero terminates.
+G3_CASES += [('legacy', v, 'xxhash64', 0, m, 'default', 'g3-plain')
+             for v in FACTORS[1][1] for m in (-0.0, '-0')]
+# JSON.parse converts an overflowing numeric literal to +Infinity.
+G3_CASES += [('legacy', v, 'xxhash64', 0, '__G3_INFINITY__', 'default', 'g3-large')
+             for v in ('v1', 'v2', 'v3-rabin-karp')]
+EQUALITY_CASES += G3_CASES
 
 
 def is_text_blob(kind):

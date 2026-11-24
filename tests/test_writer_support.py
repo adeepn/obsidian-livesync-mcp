@@ -96,15 +96,14 @@ async def test_supported_writer_info_and_write(tmp_path, kind):
 
 
 @pytest.mark.parametrize('key,value', [('customChunkSize', 1e308),
-    ('customChunkSize', 10**400), ('minimumChunkSize', 10**400)])
+    ('customChunkSize', 10**400)])
 def test_overflow_is_keyed_value_error(key, value):
     with pytest.raises(ValueError, match=key):
         ContentSplitter({key: value})
 
 
 @pytest.mark.parametrize('kind', ['couchdb', 'journal'])
-@pytest.mark.parametrize('key,value', [('customChunkSize', 1e308),
-                                     ('minimumChunkSize', 10**400)])
+@pytest.mark.parametrize('key,value', [('customChunkSize', 1e308)])
 async def test_backend_overflow_is_clean_storage_error(tmp_path, kind, key, value):
     async with vault(tmp_path, kind, {key: value}) as (backend, _, writes):
         with pytest.raises(UnsupportedVault, match=key):

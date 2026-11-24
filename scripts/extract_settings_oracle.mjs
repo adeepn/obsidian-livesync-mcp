@@ -1,5 +1,5 @@
 // Offline regeneration only. Node >=26.13.1.
-// Usage: node scripts/extract_settings_oracle.mjs COMMONLIB WASM_ESM WHEELS_DIR WHEELS_TARBALL OUTPUT.json.gz
+// Usage: node scripts/extract_settings_oracle.mjs COMMONLIB WASM_ESM WHEELS_DIR WHEELS_TARBALL OUTPUT.json.gz WASM_TARBALL
 // Inputs come from tests/settings_oracle_inputs.py, with no production imports.
 // Executes pinned migration, dispatcher, parameter calculation, splitters and hash
 // managers verbatim. Real octagonal-wheels decoder and IO, verified by archive.
@@ -11,8 +11,8 @@ import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {pathToFileURL} from 'node:url';
 import {gzipSync} from 'node:zlib';
-import {splitterDependencies} from './splitter_oracle_dependencies.mjs';
-const [root, wasmFile, wheels, archive, out] = process.argv.slice(2);
+import {splitterDependencies, verifyWasmDependency} from './splitter_oracle_dependencies.mjs';
+const [root, wasmFile, wheels, archive, out, wasmArchive] = process.argv.slice(2);
 const pin = '484c164450d61deb2e301582b60cb9b5f9fa977f';
 const sha = x => createHash('sha256').update(x).digest('hex');
 const sources = {};
@@ -41,6 +41,7 @@ verify('package/dist/hash/purejs.js');
 const binary = await import(pathToFileURL(path.resolve(wheels, 'package/dist/binary/base64.js')));
 const hashes = await import(pathToFileURL(path.resolve(wheels, 'package/dist/hash/purejs.js')));
 if (sha(fs.readFileSync(wasmFile)) !== 'e3be9143c10d60a015448de1ceef383b8f2ea1fd2773a5a5c69973ed52d8325a') throw Error('Wrong WASM');
+const wasmDependency = verifyWasmDependency(root, wasmFile, wasmArchive);
 const wasm = await (await import(pathToFileURL(path.resolve(wasmFile)))).default();
 const ctx = vm.createContext({Blob, Uint8Array, Buffer, AbortController, TextDecoder, TextEncoder,
     ...primitives, ...hashes, HashManagerCore: class {},
@@ -78,7 +79,7 @@ for (const [alg, name] of Object.entries({'':'XXHash32RawHashManager', xxhash32:
 managers.null = managers.xxhash32;
 const migration = read('services/base/SettingService.ts');
 const migrateCode = migration.slice(migration.indexOf('if (settings.chunkSplitterVersion == "")'), migration.indexOf('return Promise.resolve(settings);', migration.indexOf('if (settings.chunkSplitterVersion == "")')));
-const input = JSON.parse(execFileSync(process.env.PYTHON || './venv/bin/python', ['-m', 'tests.settings_oracle_inputs'], {maxBuffer:96*1024*1024}));
+const input = process.env.G3_CELL ? {} : JSON.parse(execFileSync(process.env.PYTHON || './venv/bin/python', ['-m', 'tests.settings_oracle_inputs'], {maxBuffer:96*1024*1024}));
 // Intern entire pieces, preserving their exact strings (including surrogate cuts),
 // ordered references and repeated children. No payload bytes are stored separately.
 const pieces = [], pieceIndex = new Map(), vectors = [];
@@ -114,6 +115,8 @@ async function vector(settings, payload) {
     if (cache.has(cacheKey)) return cache.get(cacheKey);
     ctx.settings = {customChunkSize:defaultCustom, minimumChunkSize:defaultMinimum, ...settings, disableWorkerForGeneratingChunks:true};
     run(migrateCode);
+    if (ctx.settings.minimumChunkSize === '__G3_NaN__') ctx.settings.minimumChunkSize = NaN;
+    if (ctx.settings.minimumChunkSize === '__G3_INFINITY__') ctx.settings.minimumChunkSize = Infinity;
     const effective = ctx.settings;
     ctx.options = {settingService:{currentSettings: () => effective}};
     const splitter = vm.runInContext('new ContentSplitter(options)', ctx);
@@ -152,7 +155,9 @@ async function vector(settings, payload) {
     } else raw = Buffer.from(payload.base64, 'base64');
     const blob = new Blob([raw], {type:payload.text?'text/plain':'application/octet-stream'});
     const result = [], children = [], splitPieces = [], splitChildren = [];
+    let steps = 0;
     for await (const p of await splitter.splitContent({path:payload.path, data:blob})) {
+        if (process.env.G3_CELL && ++steps > 128) throw new RangeError('G3_STEP_LIMIT');
         // Empty worker sentinel is not a persisted leaf (EntryManager contract).
         if (!pieceIndex.has(p)) {pieceIndex.set(p, pieces.length); pieces.push(p);}
         const hashKey = JSON.stringify([settings.hashAlg, pieceIndex.get(p)]);
@@ -165,6 +170,21 @@ async function vector(settings, payload) {
     const v = {pieces:result, children, split_pieces:splitPieces, split_children:splitChildren};
     cache.set(cacheKey, v);
     return v;
+}
+// G3 isolated child: the parent enforces a wall deadline even when upstream
+// loops before its first yield (chunks.ts:369-370,307-309).
+if (process.env.G3_CELL) {
+    const cell = JSON.parse(process.env.G3_CELL);
+    try {
+        const result = await vector(cell.settings, cell.payload);
+        console.log(JSON.stringify({status:'defined', ...result, strings:pieces,
+            source_sha256:sources, decoder_dependency:dependency, wasm_dependency:wasmDependency, upstream_commit:pin,
+            wasm_sha256:sha(fs.readFileSync(wasmFile)), node:process.version}));
+    } catch (error) {
+        console.log(JSON.stringify({status:error.message === 'G3_STEP_LIMIT'?'step_limit':'throws',
+            error_class:error.constructor.name}));
+    }
+    process.exit(0);
 }
 for (const row of input.matrix) {
     const payloads = {};
@@ -238,8 +258,11 @@ for (const value of [0,-1,2**31-1,2**31,-(2**31)]) {
     helperProbes.hash_conversion.push({value, base36:value.toString(36),
         raw_hash:await conversion.computeHashWithoutEncryption('')});
 }
-const fixture = {helper_probes:helperProbes, candidate_measurements:candidateMeasurements, scalar_probes:scalarProbes, upstream_commit:pin, node:process.version, decoder_dependency:dependency, source_sha256:sources,
+const fixture = {helper_probes:helperProbes, candidate_measurements:candidateMeasurements, scalar_probes:scalarProbes, upstream_commit:pin, node:process.version, wasm_dependency:wasmDependency, decoder_dependency:dependency, source_sha256:sources,
     wasm_sha256:sha(fs.readFileSync(wasmFile)), inputs_sha256:sha(fs.readFileSync('tests/settings_oracle_inputs.py')),
     boundary_measurements:boundaryMeasurements, pieces, matrix:vectors, grid};
-fs.writeFileSync(out, gzipSync(JSON.stringify(fixture)+'\n', {level:9}));
+// JSON.stringify normally loses the sign of -0. Keep the input literal so
+// offline comparison witnesses replay the same signed-zero setting.
+const encoded = JSON.stringify(fixture, (_key, value) => Object.is(value, -0) ? JSON.rawJSON('-0.0') : value);
+fs.writeFileSync(out, gzipSync(encoded+'\n', {level:9}));
 console.log(JSON.stringify({matrix:vectors.length, grid:grid.length, pieces:pieces.length, bytes:fs.statSync(out).size}));

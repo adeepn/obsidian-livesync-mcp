@@ -12,7 +12,7 @@ _oracle = json.loads(gzip.decompress(
 if hashlib.sha256(INPUTS.read_bytes()).hexdigest() != _oracle['inputs_sha256']:
     raise AssertionError(
         'Stale settings oracle; regenerate with node scripts/extract_settings_oracle.mjs '
-        'COMMONLIB WASM_ESM WHEELS_DIR WHEELS_TARBALL OUTPUT.json.gz')
+        'COMMONLIB WASM_ESM WHEELS_DIR WHEELS_TARBALL OUTPUT.json.gz WASM_TARBALL')
 ORACLE = _oracle
 del _oracle
 MATRIX = {v['id']: v for v in ORACLE['matrix']}

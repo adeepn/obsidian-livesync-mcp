@@ -55,6 +55,13 @@ production module on disk. Run the fast observability checks with:
 ./venv/bin/python scripts/check_splitter_mutations.py .superpowers/sdd/2026-11-23-settings-parity/s1/campaign
 ```
 
+`scripts/extract_legacy_cells.mjs` runs isolated pinned-upstream parameter cells
+with a hard child deadline and yield limit;
+`scripts/extract_legacy_bom_cells.mjs` adds BOM-only and delimiter-tail probes;
+`scripts/extract_legacy_wire_cells.mjs` executes journal leaf transport for
+zero-cap surrogate pieces; `tests/test_legacy_cells.py` checks
+partitions, IDs, backend lifecycles and pre-mutation loop refusals.
+
 `scripts/extract_compression_vectors.mjs` executes pinned compression functions with integrity-verified published wheels and fflate; `tests/fixtures/compression_upstream.json` records upstream and zlib interoperability vectors.
 
 `scripts/extract_surrogate_vectors.mjs` executes pinned journal records, legacy splitting and verified published dependencies to produce `tests/fixtures/surrogate_wire_upstream.json`.
