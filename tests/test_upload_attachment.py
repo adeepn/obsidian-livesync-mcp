@@ -200,7 +200,7 @@ async def test_couchdb_attachment_requires_201(target):
     from storage_base import StorageUnavailable
     chunk_id = chunk_id_for(base64.b64encode(DATA).decode())
     async with fake_backend(put_202_ids=(chunk_id if target == "chunk" else "scan.pdf",)) as (backend, _):
-        with pytest.raises(StorageUnavailable, match="outcome unknown"):
+        with pytest.raises(StorageUnavailable, match="note is unchanged" if target == "chunk" else "outcome unknown"):
             await backend.write_attachment("scan.pdf", DATA, create=True)
         assert await backend.read_note("scan.pdf") is None
 

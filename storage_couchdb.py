@@ -83,7 +83,7 @@ from storage_base import (
     NoteExists,
     NoteMeta,
     NoteNotFound,
-    StorageError, OutcomeUnknown,
+    StorageError, OutcomeUnknown, MutationNotApplied,
     StorageUnavailable,
     UnsupportedVault,
     WriterUnsupported,
@@ -895,6 +895,11 @@ class CouchDBBackend(DeviceSelection):
             )
         try:
             await self._put_doc(chunk_id, {"data": data, "type": "leaf"})
+        except OutcomeUnknown:
+            raise MutationNotApplied(
+                "note is unchanged: content chunk publication was not confirmed; "
+                "a harmless orphan chunk may exist"
+            ) from None
         except ConcurrentModification:
             # Another writer may have published the same immutable chunk
             # after our absence check. Never overwrite the winning leaf.
@@ -1124,7 +1129,9 @@ class CouchDBBackend(DeviceSelection):
         try:
             await self._soft_delete(doc, path, _now_ms())
         except OutcomeUnknown:
-            raise
+            raise OutcomeUnknown(
+                "destination published; source removal unknown — re-read both paths"
+            ) from None
         except Exception as exc:
             logger.exception("rename source retirement failed for %s", path)
             source_state = "unknown"

@@ -1102,7 +1102,7 @@ async def test_put_202_on_chunk_is_not_durable():
     async with fake_vault({}, put_202_ids=(chunk_id_for("fresh"),)) as (
         backend, raw, _log,
     ):
-        with pytest.raises(StorageUnavailable, match="outcome unknown"):
+        with pytest.raises(StorageUnavailable, match="note is unchanged"):
             await backend.write_note("note.md", "fresh", create=True)
         meta_response = await raw.get(
             f"{DATABASE}/{urllib.parse.quote('note.md', safe='')}"

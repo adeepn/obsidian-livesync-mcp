@@ -287,3 +287,63 @@ async def test_rename_source_retirement_response_lost_stays_unknown(monkeypatch)
             await backend.rename_note('only.md', 'target.md')
         assert await backend.read_note('only.md') is None
         assert (await backend.read_note('target.md'))['text'] == 'old'
+
+
+@pytest.mark.parametrize('operation,phase', [
+    ('write', 'chunk'), ('attachment', 'chunk'),
+    ('write', 'metadata'), ('attachment', 'metadata'),
+    ('copy', 'metadata'), ('rename', 'metadata'), ('delete', 'metadata'),
+    ('rename', 'retirement'),
+])
+async def test_metadata_publication_uncertainty_boundary(monkeypatch, operation, phase):
+    import httpx
+    from storage_base import OutcomeUnknown, MutationNotApplied
+    from tests.test_storage_couchdb import fake_backend
+    async with fake_backend() as (peer, _):
+        path = 'only.pdf' if operation == 'attachment' else 'only.md'
+        await peer.write_note(path, b'old' if operation == 'attachment' else 'old', create=True)
+        before = await peer.read_note(path)
+        original = peer._client.request
+        puts = []
+        async def lost(method, url, **kwargs):
+            response = await original(method, url, **kwargs)
+            if method == 'PUT':
+                body = kwargs['json']
+                puts.append(body)
+                hit = (body.get('type') == 'leaf' if phase == 'chunk' else
+                       bool(body.get('deleted')) if phase == 'retirement' else
+                       body.get('type') != 'leaf')
+                if hit:
+                    raise httpx.ReadError('accepted; response lost')
+            return response
+        monkeypatch.setattr(peer._client, 'request', lost)
+        calls = {
+            'write': lambda: peer.write_note(path, 'replacement'),
+            'attachment': lambda: peer.write_attachment(path, b'replacement'),
+            'copy': lambda: peer.copy_note(path, 'target.md'),
+            'rename': lambda: peer.rename_note(path, 'target.md'),
+            'delete': lambda: peer.delete_note(path),
+        }
+        expected = MutationNotApplied if phase == 'chunk' else OutcomeUnknown
+        with pytest.raises(expected) as caught:
+            await calls[operation]()
+        assert type(caught.value) is expected
+        if phase == 'chunk':
+            assert 'note is unchanged' in str(caught.value)
+            assert await peer.read_note(path) == before
+            assert all(body.get('type') == 'leaf' for body in puts)
+        elif phase == 'retirement':
+            assert 'destination published; source removal unknown — re-read both paths' in str(caught.value)
+            assert await peer.read_note(path) is None
+            assert (await peer.read_note('target.md'))['text'] == 'old'
+        else:
+            if operation in ('copy', 'rename', 'delete'):
+                assert all(body.get('type') != 'leaf' for body in puts)
+            if operation == 'delete':
+                assert await peer.read_note(path) is None
+            elif operation in ('copy', 'rename'):
+                assert (await peer.read_note('target.md'))['text'] == 'old'
+                assert await peer.read_note(path) == before
+            else:
+                note = await peer.read_note(path)
+                assert (note['data'] if operation == 'attachment' else note['text']) == (b'replacement' if operation == 'attachment' else 'replacement')

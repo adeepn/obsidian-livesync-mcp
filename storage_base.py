@@ -113,9 +113,10 @@ class MutationNotApplied(StorageUnavailable):
 class OutcomeUnknown(StorageUnavailable):
     """Publication may have happened; never invite an unexamined retry."""
 
-    def __init__(self):
+    def __init__(self, detail: str = ""):
         super().__init__(
-            "outcome unknown: the change MAY have been applied. "
+            (f"outcome unknown: {detail}. " if detail else "outcome unknown: ") +
+            "the change MAY have been applied. "
             "Inspect and re-read the affected paths before retrying. "
             "For append, prepend, search-replace, properties set and tags add, "
             "a blind retry can duplicate the change."
