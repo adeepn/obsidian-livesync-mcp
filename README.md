@@ -95,13 +95,16 @@ invalid bytes with U+FFFD; the response reports `replaced_bytes`, stored size,
 and stored SHA-256. Newnote bytes remain unchanged. Native-host invalid-byte
 behavior still needs live validation; opt-in replacement is this peer's policy.
 The existing vault splitter determines pieces and their ordered child IDs;
-metadata size is the input Blob byte length after decoding, before splitting.
+metadata size is the actual stored content byte length. For legacy plain
+splitters this accounts for initial BOM removal by Blob.text(); upstream's
+pre-split Blob.size can differ in that case.
 
-Tools expose a separate text representation: a newnote whose bytes strictly
-decode as UTF-8 can be fetched and edited as text, regardless of extension.
+Tools expose a separate text representation: eligible newnotes can be fetched
+and edited as text, regardless of extension. Their bytes must pass strict
+UTF-8, control-character and per-file byte-budget checks.
 Edits go through the same path-based writer, so `.base`/`.json`/`.yaml` stay
 newnote. Frontmatter and canvas tools retain their existing format checks.
-Non-UTF-8 bodies return metadata (`size`, `sha256`) from `obsidian_fetch`;
+Ineligible newnotes return metadata (`size`, `sha256`) from `obsidian_fetch`;
 use `obsidian_download_attachment` for their bytes. Newnote files that decode
 as UTF-8 can also be downloaded without conversion.
 
@@ -290,13 +293,16 @@ invalid bytes with U+FFFD; the response reports `replaced_bytes`, stored size,
 and stored SHA-256. Newnote bytes remain unchanged. Native-host invalid-byte
 behavior still needs live validation; opt-in replacement is this peer's policy.
 The existing vault splitter determines pieces and their ordered child IDs;
-metadata size is the input Blob byte length after decoding, before splitting.
+metadata size is the actual stored content byte length. For legacy plain
+splitters this accounts for initial BOM removal by Blob.text(); upstream's
+pre-split Blob.size can differ in that case.
 
-Tools expose a separate text representation: a newnote whose bytes strictly
-decode as UTF-8 can be fetched and edited as text, regardless of extension.
+Tools expose a separate text representation: eligible newnotes can be fetched
+and edited as text, regardless of extension. Their bytes must pass strict
+UTF-8, control-character and per-file byte-budget checks.
 Edits go through the same path-based writer, so `.base`/`.json`/`.yaml` stay
 newnote. Frontmatter and canvas tools retain their existing format checks.
-Non-UTF-8 bodies return metadata (`size`, `sha256`) from `obsidian_fetch`;
+Ineligible newnotes return metadata (`size`, `sha256`) from `obsidian_fetch`;
 use `obsidian_download_attachment` for their bytes. Newnote files that decode
 as UTF-8 can also be downloaded without conversion.
 
@@ -520,8 +526,9 @@ Previously list-shaped responses become `{ "results": [...], ... }` when
 truncated. Counts and graph conclusions then describe only the scanned subset.
 The CouchDB metadata index uses the same caps, retains no bodies or eden, and
 propagates truncation to these tools. Direct note reads remain available.
-These are aggregate scan limits: an individual HTTP response or note is still
-loaded before its actual size can be checked. Regex replacements have a separate
+These are aggregate scan limits. Plain-note HTTP responses are loaded before
+actual size accounting; newnote text projection additionally has the per-file
+piece budget described below. Regex replacements have a separate
 10 MiB UTF-8 output cap and a two-second disposable-process deadline.
 
 New and replaced metadata persist canonical, case-preserving paths: separators
@@ -554,7 +561,9 @@ allowlist is used. Fetch and byte downloads retain the stored document type.
 
 A normal PNG needs one piece read; a PDF with an ASCII prefix needs pieces
 until the first binary/control byte or the byte budget; a textual `.base`
-needs all its pieces, bounded by that budget. Negative verdicts avoid body
+needs all its pieces, bounded by that budget. With `k` all-text prefix pieces,
+a later binary PDF piece costs `k + 1` reads; a wholly textual PDF under budget
+is eligible by the same rule as any other newnote. Negative verdicts avoid body
 reads on later scans of the same revision; positive verdicts still require
 streaming the text to run each query. Journal verdicts live in SQLite and
 CouchDB verdicts in process memory, keyed by document/revision and budget.

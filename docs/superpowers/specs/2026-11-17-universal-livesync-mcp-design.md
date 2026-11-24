@@ -1,5 +1,16 @@
 # Design: универсальный MCP-сервер для Self-hosted LiveSync (CouchDB + S3)
 
+> **SUPERSEDED — политика записи, Task 4 / fix round 1 (2026-11-24).**
+> Упоминания `BinaryNoteError`, запрета записи по расширению и запрета бинарных
+> upload ниже описывают историческое решение и больше не являются требованиями.
+> `write_note` принимает `str | bytes`; тип выбирается по upstream disk-ingestion
+> правилам. Newnote bytes сохраняются точно; invalid UTF-8 на plain-пути по
+> умолчанию отклоняется, явный `lossy_text=true` доступен в upload-инструменте.
+> Textual newnotes участвуют в text-tools по общей UTF-8/control/budget eligibility.
+> Актуальные контракты: [settings parity, §в](../specs/2026-11-23-settings-parity.md#в-plain--newnote)
+> и [README](../../../README.md#text-scan-eligibility). Исходный текст сохранён
+> для истории; удалённые runtime-символы не восстанавливаются.
+
 Дата: 2026-11-17. Статус: черновик на согласование.
 Опорные материалы: `docs/AUDIT-2026-11-10.md` (аудит текущей CouchDB-заготовки, 69 подтверждённых находок), исходники upstream `vrtmrz/livesync-commonlib` (журнальный S3-режим).
 

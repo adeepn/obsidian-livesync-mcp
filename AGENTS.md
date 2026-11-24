@@ -13,6 +13,7 @@ This repository is a small Python MCP server for accessing an Obsidian LiveSync 
 - `object_storage.py`: S3 object storage adapter using boto3.
 - `storage_journal.py`: append-only LiveSync S3 journal storage backend.
 - `livesync_format.py`: LiveSync document/chunk codecs, device disk-ingestion document typing, path rules, and vault validation.
+- `text_eligibility.py`: bounded incremental UTF-8/control-character projection of newnote pieces, shared by both backends.
 - `frontmatter.py`: round-trip YAML frontmatter editing (ruamel.yaml).
 - `links.py`: Obsidian-compatible link extraction, resolution, and graph building.
 - `auth_config.py`: auth-mode selection and the static bearer token verifier.

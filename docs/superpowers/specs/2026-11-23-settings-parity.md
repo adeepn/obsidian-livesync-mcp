@@ -51,6 +51,10 @@ lockfile SHA512 and tar members, rather than substitute TextDecoder.
 
 ## в. plain / newnote
 
+> **Historical baseline:** the "Our current implementation" column below
+> records the starting revision. Its extension-based write refusals and
+> `str`-only API are superseded by Task 4 and the fix-round-1 contracts below.
+
 | Question | Exact upstream behavior + citation | Our current implementation + citation | Delta / Task 2–5 action |
 |---|---|---|---|
 | Device extension list / sniffing | `isPlainText` uses case-sensitive suffixes **.md .txt .svg .html .csv .css .js .xml .canvas**, no content sniff. FileAccessBase.vaultReadAuto/adapterReadAuto selects host text read for that list, binary read otherwise. readStubContent wraps the resulting string/ArrayBuffer with createBlob. `U:string_and_binary/path.ts:164-174`; `U:serviceModules/FileAccessBase.ts:162-167,201-206`; `U:serviceModules/ServiceFileAccessBase.ts:265-276`; `U:common/utils.ts:100-115`. | Read classification list + type plain override: `livesync_format.py:299-308`; write binary denylist: `livesync_format.py:311-325`. | Task 4 remove denylist as a device-type rule. `.MD`, `.json`, `.base`, `.png` are outside this exact list, even when contents look textual. |
