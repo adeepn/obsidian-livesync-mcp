@@ -166,6 +166,18 @@ HINT_KINDS = tuple('hint-' + ext for ext in ('MD', 'Canvas', 'TXT', 'json', 'bar
 BASE_GRID_KINDS = GRID_KINDS
 GRID_KINDS += FENCE_KINDS + HINT_KINDS + ('cyrillic-emoji', 'binary-empty', 'binary-nul', 'json-clamp', 'pdf-far-lf')
 
+def _grouping_input(seed, variant):
+    char = chr(97 + seed)
+    inputs = [char + '\n\n' + char * 2, char + '\n#\n' + char * 2,
+              char + '\n##\n' + char * 2, char + '\nend',
+              '#' + char + '\nend', char + '#\nend']
+    inputs += [' ' * n + '`' * ticks + '\n' + char + ',;:<' + char + '\n' + ' ' * n + '`' * ticks + '\ntail'
+               for n, ticks in product(range(5), (2, 3, 4))]
+    inputs += ['```\n' + char + ',;:<' + char + suffix for suffix in ('', '=', '=x')]
+    inputs += [char + '\nend' + suffix for suffix in ('', '\n', '\n\n')]
+    return inputs[variant]
+
+
 @lru_cache(maxsize=3)
 def _candidate_patch(seed):
     # Input construction only: choose a 48-byte window whose unsigned base-31
@@ -189,6 +201,8 @@ def grid_payload(kind):
         _, mode, size, seed, position = kind.split(':')
         size, seed, position = int(size), int(seed), int(position)
         char = chr(97 + seed)
+        if mode == 'grouping':
+            return '.md', _grouping_input(seed, position)
         if mode == 'candidate-binary':
             data = bytearray(char.encode() * size)
             data[position - 3:position] = _candidate_patch(seed)
@@ -488,6 +502,13 @@ for version, ext, delta, seed in product(
 for seed, delta in product((0, 1, 2), (-1, 0, 1)):
     _equality('V3 binary candidate minimum equality', 'v3-rabin-karp', 0,
               25600 + delta, 'candidate-binary', 26001, seed, 25600)
+
+# Discrete string decisions also need seeded neighbors: exact '#' vs empty/
+# '##', first-column '#', supported fence indents vs four spaces, terminal '=',
+# and EOF/trailing-line conditions. All versions here actually dispatch V1.
+for version, seed, variant in product(('v1', 'legacy-00', 'legacy-01'), (0, 1, 2), range(27)):
+    _equality('V1 headings/fence/suffix/EOF decisions', version, 0, 100,
+              'grouping', 0, seed, variant)
 
 # The reported Z1 witness is byte-for-byte fixed, independently of seeds.
 Z1_CASE = ('legacy', 'v2', 'xxhash64', 0, 5, 'default', 'z1')

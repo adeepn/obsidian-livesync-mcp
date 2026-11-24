@@ -98,6 +98,16 @@ function candidatePatch(seed) {
     }
     throw Error('Cannot construct binary candidate input');
 }
+function groupingInput(seed, variant) {
+    const char = String.fromCharCode(97 + seed);
+    const inputs = [char + '\n\n' + char.repeat(2), char + '\n#\n' + char.repeat(2),
+        char + '\n##\n' + char.repeat(2), char + '\nend', '#' + char + '\nend', char + '#\nend'];
+    for (let n = 0; n < 5; n++) for (const ticks of [2, 3, 4])
+        inputs.push(' '.repeat(n) + '`'.repeat(ticks) + '\n' + char + ',;:<' + char + '\n' + ' '.repeat(n) + '`'.repeat(ticks) + '\ntail');
+    for (const suffix of ['', '=', '=x']) inputs.push('```\n' + char + ',;:<' + char + suffix);
+    for (const suffix of ['', '\n', '\n\n']) inputs.push(char + '\nend' + suffix);
+    return inputs[variant];
+}
 async function vector(settings, payload) {
     const cacheKey = JSON.stringify([settings, payload]);
     if (cache.has(cacheKey)) return cache.get(cacheKey);
@@ -111,7 +121,9 @@ async function vector(settings, payload) {
         const [, mode, sizeText, seedText, positionText] = payload.recipe.split(':');
         const size = Number(sizeText), position = Number(positionText);
         const char = String.fromCharCode(97 + Number(seedText));
-        if (mode === 'candidate-binary') {
+        if (mode === 'grouping') {
+            raw = Buffer.from(groupingInput(Number(seedText), position));
+        } else if (mode === 'candidate-binary') {
             raw = Buffer.alloc(size, char);
             raw.set(candidatePatch(Number(seedText)), position - 3);
         } else if (mode.startsWith('lf-')) {
