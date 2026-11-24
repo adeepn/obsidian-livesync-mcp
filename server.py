@@ -1,5 +1,7 @@
 """Obsidian MCP Server — remote MCP server for Obsidian via CouchDB/LiveSync."""
 
+from diagnostic_hygiene import sanitize_diagnostic, sanitize_diagnostic_fields
+
 import json
 import inspect
 import asyncio
@@ -207,22 +209,20 @@ def create_app(cfg: Config) -> FastMCP:
 # --- Helper functions ---
 
 def _safe_storage_detail(error: Exception) -> str:
-    """Defense in depth for diagnostics; adapters never forward transport text."""
-    detail = re.sub(r"[a-zA-Z][a-zA-Z0-9+.-]*://[^\s]+", "[redacted URL]", str(error))
-    detail = re.sub(
-        r"(?i)(?<![\w])['\"]?(?:_?rev(?:ision)?|"
-        r"(?:[\w.-]*[_-])?(?:password|passphrase|secret|token|authorization|api[_-]?key|access[_-]?key)|"
-        r"id[_-]?derivation[_-]?key|secret[_-]?key)['\"]?"
-        r"\s*[:=]\s*(?:(?:Bearer|Basic)\s+)?(?:<invalid configuration>|\"[^\"]*\"|'[^']*'|[^\s;,}\]]+)",
-        lambda match: (match.group(0) if match.group(0) ==
-            "idDerivationKey=<invalid configuration>" else "[redacted]"), detail,
-    )
-    detail = re.sub(r"\b[0-9]+-[0-9a-fA-F]{32}\b", "[redacted revision]", detail)
-    return detail or "storage operation failed"
+    return sanitize_diagnostic(str(error)) or "storage operation failed"
+
+
+def _diagnostic_outcome(text: str) -> str:
+    # Structured refusals remain valid JSON even when a path needs redaction.
+    try:
+        value = json.loads(text)
+    except (ValueError, TypeError):
+        return sanitize_diagnostic(text)
+    return json.dumps(sanitize_diagnostic_fields(value), ensure_ascii=False)
 
 
 def _storage_message(error: StorageError) -> str:
-    message = _storage_message_body(error)
+    message = _diagnostic_outcome(_storage_message_body(error))
     detail = _safe_storage_detail(error) if str(error) else ''
     if detail and detail not in message:
         if type(error) is UnsupportedVault:
@@ -326,11 +326,11 @@ def _tool_errors(
                 elif isinstance(error, WriteSkipped):
                     response = error.as_dict()
                     response['message'] = f"{context}: {response['message']}"
-                    return json.dumps(response, ensure_ascii=False)
+                    return json.dumps(sanitize_diagnostic_fields(response), ensure_ascii=False)
                 elif isinstance(error, MutationNotApplied):
-                    return f"Error: {context}: note is unchanged; {_safe_storage_detail(error)}"
+                    return sanitize_diagnostic(f"Error: {context}: note is unchanged; {_safe_storage_detail(error)}")
                 else:
-                    return f"Error: {context}: {_safe_storage_detail(error)}"
+                    return sanitize_diagnostic(f"Error: {context}: {_safe_storage_detail(error)}")
             if isinstance(error, OutcomeUnknown) and operation is not None:
                 name = operation
                 if operation_arg is not None:
@@ -341,7 +341,7 @@ def _tool_errors(
                     if name == "after-heading":
                         name = "after-heading insertion"
                 if name in RETRY_IDEMPOTENT:
-                    return error.message(name)
+                    return sanitize_diagnostic(error.message(name))
             return _storage_message(error)
         except ForbiddenPathError:
             return "Error: forbidden vault path."

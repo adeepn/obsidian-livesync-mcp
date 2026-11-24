@@ -35,6 +35,8 @@ without reassembling content, so binary notes travel chunk-wise
 
 from __future__ import annotations
 
+from diagnostic_hygiene import sanitize_diagnostic
+
 from collections import OrderedDict
 import asyncio
 from device_selection import DeviceSelection
@@ -464,7 +466,7 @@ class CouchDBBackend(DeviceSelection):
             **selection,
             "tweak_assessment": dict(self._tweak_assessment),
             "writer_supported": self._writer_unsupported_reason is None and selection["selection_writer_supported"],
-            "writer_unsupported_reason": self._writer_unsupported_reason or selection["selection_unsupported_reason"],
+            "writer_unsupported_reason": (sanitize_diagnostic(reason) if (reason := self._writer_unsupported_reason or selection["selection_unsupported_reason"]) else None),
             "backend": "couchdb",
             "path_identity": self._path_identity,
             "database": self._database,

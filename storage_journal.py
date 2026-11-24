@@ -31,6 +31,8 @@ before applying it locally; rename publishes both revisions in one file.
 
 from __future__ import annotations
 
+from diagnostic_hygiene import sanitize_diagnostic
+
 from text_eligibility import (DEFAULT_TEXT_SCAN_MAX_BYTES,
                               DEFAULT_TEXT_VERDICT_CACHE_ENTRIES)
 
@@ -440,7 +442,7 @@ class JournalBackend(DeviceSelection):
             **selection,
             "tweak_assessment": dict(self._tweak_assessment),
             "writer_supported": self._writer_unsupported_reason is None and selection["selection_writer_supported"],
-            "writer_unsupported_reason": self._writer_unsupported_reason or selection["selection_unsupported_reason"],
+            "writer_unsupported_reason": (sanitize_diagnostic(reason) if (reason := self._writer_unsupported_reason or selection["selection_unsupported_reason"]) else None),
             "backend": "s3-journal",
             "protocol_notes": list(self._protocol_notes),
             "state_dir_path": str(self._state_dir),

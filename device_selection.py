@@ -1,4 +1,6 @@
 """Local device selection shared by both storage writers."""
+from diagnostic_hygiene import sanitize_diagnostic
+
 import asyncio
 import hashlib
 import json
@@ -101,7 +103,7 @@ class DeviceSelection:
         self._selection_init()
         active = self._selection_active()
         # Read the last observed capability without launching a process.
-        reason = self._selection_engine_reason if active else None
+        reason = sanitize_diagnostic(self._selection_engine_reason) if active and self._selection_engine_reason else None
         return {
             'selection_engine_state': self._selection_engine_state if active else 'off',
             'selection_engine_reason': reason,

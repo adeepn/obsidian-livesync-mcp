@@ -184,3 +184,31 @@ safe diagnostic to survive every StorageError dispatch, including structured out
 RED: `/tmp/parity-fix1-red.log` (8 lost-detail failures). The first full run found
 one older test requiring suppression of any StorageUnavailable detail; its transport
 payload now uses a private URL and verifies URL redaction while retaining the cause.
+
+### Uniform diagnostic redaction
+
+Premises: mutation OutcomeUnknown bypassed `_storage_message`; WriteSkipped returned
+raw JSON fields; writer-support settings could contain arbitrary objects. RED logs:
+`/tmp/parity-hygiene-red.log`, `/tmp/parity-source-red.log`,
+`/tmp/parity-nested-red.log`, `/tmp/parity-observability-red.log`.
+
+Execution trace: exception dispatch sanitizes both contextual paths and causes;
+structured outcomes sanitize string leaves before JSON encoding; backend_info
+sanitizes writer/selection reasons. `sanitize_diagnostic` is the sole redaction
+implementation: URL removal, percent/unicode/escaped-quote decoding, header/auth
+redaction, credential assignments (including nested containers), entropy and AWS
+ID redaction. Vault note contents are outside the diagnostic sanitizer.
+
+The committed corpus covers plain, JSON, dict-repr, encoded and punctuation forms,
+nested objects/arrays, mixed-case labels, long numeric passphrases, and bare auth.
+The invariant injects every corpus payload through every recursively discovered
+StorageError class and every registered reading/mutating tool (including action
+branches). Separate real-backend and mutation uncertainty regressions exercise
+the reviewer's exact reproductions. Focused hygiene: 2243 passed.
+
+Rejected paths: suppressing every specific cause, sanitizing normal note bodies,
+using redaction as permission to stringify arbitrary settings, changing assessment
+normalization/selection semantics, regenerating accepted oracle fixtures.
+
+Hygiene full suite: **6852 passed, 7 skipped, 3 subtests passed**, 96.44 s.
+Durable artifact: `task-5b-fix1-hygiene-suite.log`. Diff check clean.
