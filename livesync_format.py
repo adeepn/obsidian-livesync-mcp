@@ -508,10 +508,10 @@ def new_metadata_doc(
 
     Upstream ``EntryManagerImpls`` writes exactly the fields ``_id, path,
     children, ctime, mtime, size, type, eden``. Times are millisecond
-    ints. ``size`` is the decoded body byte length (spec §7), not the
-    encoded chunk length. ``_id`` comes from path2id; ``eden`` starts
-    empty (it only carries E2EE-related chunks, which this server does
-    not support).
+    ints. ``size`` is the ingested Blob byte length before splitting,
+    including any initial BOM, not the encoded chunk length. ``_id``
+    comes from path2id. Current pinned writers leave ``eden`` empty;
+    historical unencrypted inline chunks are supported on read.
     """
     return {
         "_id": path2id(path),

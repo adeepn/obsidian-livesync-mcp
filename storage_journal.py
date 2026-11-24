@@ -782,9 +782,9 @@ class JournalBackend(DeviceSelection):
         note's body is read from the local snapshot at its turn — a
         concurrent ``refresh``/reset may interleave, so cross-note
         snapshot consistency is not guaranteed (per-note only). Referenced
-        chunks live in the store until an epoch/wipe reset, whose worst
-        case here is a per-note ``(meta, None)`` after logging, never a
-        failed scan (audit C4). Never calls ``refresh``: tools own it.
+        chunks survive epoch/wipe dedupe resets. An unreadable note yields
+        per-note ``(meta, None)`` after logging rather than failing the
+        scan (audit C4). Never calls ``refresh``: tools own it.
         The extension match is case-insensitive, like the CouchDB peer.
         """
         store = self._require_store("iterate_texts")

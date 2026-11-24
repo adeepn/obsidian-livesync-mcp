@@ -1,0 +1,66 @@
+# S3 journal operation
+
+Set `LIVESYNC_BACKEND=s3` and choose exactly one connection form.
+Use the URI or individual-variable block in the quick start matrix.
+Prefix is prepended literally to object keys; include a trailing slash for a
+folder prefix. Shared state settings work with either connection form.
+
+Before each tool operation, the backend refreshes its local state. On first
+use, this replays the full journal history. This one-time replay can take a
+long time for a large vault. Startup validates settings and opens local state; it does not replay
+journals. Subsequent refreshes use the processed-file ledger. A confirmed remote
+wipe clears only deduplication tracking and starts replay from the beginning;
+local notes and chunks stay readable. Use a dedicated writable
+state directory per vault/peer and persist it across restarts. It contains
+`journal.sqlite3` (SQLite revision state and processed journals) and
+`chunks/` (cached chunk files).
+
+`obsidian_refresh` lists remote journals and replays unseen files.
+`S3_REFRESH_MIN_INTERVAL_SEC` is the minimum spacing between refresh attempts, including failures
+and partial budget stops (positive seconds, default 5); calls within that interval are skipped.
+Ordinary tool calls refresh automatically using the same throttle. There is
+no background polling. `obsidian_refresh` also uses this throttle; allow the
+interval to elapse to receive subsequent device changes. Internal callers can use
+`refresh(force=True)` to bypass the throttle. Refresh failures
+return a tool error instead of serving stale data. Calls throttled after an
+unresolved failure also return an error; a successful refresh clears that failure.
+
+Replay protection budgets are an explicit difference from the device, documented
+under [Size behavior](size-policy.md). A trip returns an actionable error;
+completed files stay processed. Key-limited sweeps continue from their last
+listed key, then restart from the beginning so late objects below the cursor
+are eventually discovered. Files are numerically ordered within each window.
+Byte/time stops retry the unfinished window and skip its processed files.
+The time budget is checked between synchronous operations; an in-flight request,
+parse or SQLite transaction can finish after the deadline. Configure budgets
+large enough for one journal plus control reads. Restarting the server restarts
+the listing sweep; the durable ledger preserves progress.
+
+Local state directories and chunk shards are private (`0700`); SQLite and newly
+written chunk files use `0600`. Opening an existing cache tightens permissive
+directory modes and logs each correction once.
+
+Remote storage is append-only: updates publish new journal objects.
+Publication first attempts atomic create-only `PutObject(IfNoneMatch="*")`
+(Ruling B-13). Occupied keys are regenerated, with at most ten attempts;
+read-back verification still precedes local application. Providers reporting
+conditional writes as unsupported use the B-10 exists-precheck + put fallback,
+with a warning logged once per adapter. That compatibility fallback retains
+the race between the precheck and upload.
+The backend never deletes S3 objects, prunes history, or runs remote garbage
+collection. Deleting a note publishes a tombstone; it does not remove journal
+objects. Automatic dedupe resets retain all local documents and chunks.
+
+Concurrent edits can leave sibling revisions. The winner is deterministic:
+highest revision generation, then lexicographically greatest revision hash.
+A successful write confirms publication, not that it will remain the winner.
+Sibling revisions remain available to LiveSync's conflict UI in Obsidian for
+resolution.
+
+Supported S3 vault settings are legacy path identity (normalization version 0)
+and NFC identity (version 1), each with case-insensitive or case-sensitive
+filenames. Both backends follow the vault setting. NFC aliases composed and
+decomposed names even in sensitive mode. Existing local state with another
+identity archives the old store in quarantine and starts fresh; incompatible
+metadata IDs are refused. E2EE
+and path obfuscation remain unsupported.
