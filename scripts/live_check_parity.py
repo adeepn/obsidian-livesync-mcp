@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import base64
+import binascii
 from datetime import date
 import hashlib
 import json
@@ -22,6 +23,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from content_splitter import _wheels_read_string
 from config import S3Config
 from diagnostic_hygiene import escape_path
 from livesync_format import (TWEAK_COMPATIBILITY_RULES, _TWEAK_TEMPLATE_KEYS,
@@ -102,6 +104,15 @@ async def refresh(backend):
     await backend.refresh(force=True)
 
 
+def safe_metadata(doc):
+    """Expose closed type names and bounded integer sizes only."""
+    doc = doc if isinstance(doc, dict) else {}
+    kind, size = doc.get('type'), doc.get('size')
+    kind = kind if type(kind) is str and kind in ('plain', 'newnote') else '<unexpected>'
+    size = size if type(size) is int and 0 <= size < 2**63 else '<invalid>'
+    return kind, size
+
+
 async def verify(backend, vault, paths, *, partitions=True):
     good, records = True, []
     if not paths:
@@ -111,24 +122,47 @@ async def verify(backend, vault, paths, *, partitions=True):
         local = vault / path
         note = await backend.read_note(path)
         raw = local.read_bytes() if local.is_file() else None
-        matches = raw is not None and note is not None and raw == note_bytes(note)
+        byte_match = raw is not None and note is not None and raw == note_bytes(note)
+        body, expected_type, blob_size = (prepare_file_content(path, raw) if raw is not None
+                                         else (None, None, None))
         doc = await raw_doc(backend, path)
+        kind, metadata_size = safe_metadata(doc)
+        metadata_match = type(metadata_size) is int and metadata_size == blob_size
+        type_match = kind == expected_type
         children = doc.get('children', []) if doc else []
         piece_match = None
-        if partitions and matches:
-            body, _, _ = prepare_file_content(path, raw)
+        if partitions and byte_match:
             pieces = backend._splitter.split(body, path=path)
             expected = [backend._splitter.chunk_id_for_piece(piece) for piece in pieces if piece != '']
             piece_match = expected == children
-            matches = matches and piece_match
-        records.append({'path': path, 'byte_exact': bool(matches),
+        matches = byte_match and metadata_match and type_match and (piece_match is not False)
+        records.append({'path': path, 'byte_exact': bool(byte_match),
                         'size': len(raw) if raw is not None else None,
-                        'metadata_size': doc.get('size') if doc else None,
-                        'type': doc.get('type') if doc else None,
+                        'ingested_blob_size': blob_size, 'metadata_size': metadata_size,
+                        'metadata_size_matches': metadata_match, 'type': kind, 'type_matches': type_match,
                         'piece_count': len(children), 'piece_ids_match': piece_match,
                         'sha256': hashlib.sha256(raw).hexdigest() if raw is not None else None})
-        good = check(matches, f'byte comparison + piece IDs {escape_path(path)} pieces={len(children)}') and good
+        good = check(matches, f'bytes + Blob metadata + piece IDs {escape_path(path)} pieces={len(children)}') and good
     return good, records
+
+
+async def verify_size(backend, vault, limit_mib):
+    if backend.sync_max_size_mb != limit_mib:
+        return check(False, 'resolved vault size limit differs from expected owner setting'), {}
+    sizes = {'device-40m.bin': 40 * MIB, 'exact.bin': limit_mib * MIB,
+             'above.bin': limit_mib * MIB + 1}
+    physical, good = {}, True
+    for name, expected in sizes.items():
+        file = vault / PREFIX / name
+        size = file.stat().st_size if file.is_file() else None
+        physical[name] = {'size': size, 'expected_size': expected}
+        good = check(size == expected, f'physical size {PREFIX}/{name}') and good
+    if not good:
+        return False, {'physical_files': physical}
+    good, records = await verify(backend, vault, [f'{PREFIX}/device-40m.bin', f'{PREFIX}/exact.bin'])
+    above = await backend.read_note(f'{PREFIX}/above.bin')
+    good = check(above is None, 'device did not publish above-limit file') and good
+    return good, {'files': records, 'physical_files': physical, 'limit_mib': limit_mib}
 
 
 def local_prepare(vault, payloads):
@@ -179,10 +213,10 @@ async def write_phase(backend):
     return good, {'moved': moved, 'deleted': deleted, 'body': BODY + 'Обновлено.\n'}
 
 
-async def oversize(backend, source):
+async def oversize(backend, source, *, expected_limit=50):
     limit = backend.sync_max_size_mb
-    if not 0 < limit <= 256:
-        return check(False, 'requires finite active limit <=256 MiB'), {}
+    if type(limit) not in (int, float) or not 0 < limit <= 256 or limit != expected_limit:
+        return check(False, 'resolved size limit differs from expected lowered owner setting'), {}
     destination, skipped = f'{PREFIX}/refused-move.bin', f'{PREFIX}/skipped.bin'
     before = await backend.read_note(source)
     if before is None or len(note_bytes(before)) <= limit * MIB:
@@ -207,15 +241,44 @@ async def oversize(backend, source):
     return good, {'limit_mib': limit, 'skipped': skipped_ok, 'rename_refused': refused}
 
 
-async def inspect_decoding(backend):
+MAX_DECODING_BYTES = 4096
+MAX_DECODING_CHILDREN = 256
+LEAF_ID = re.compile(r'h:[A-Za-z0-9+/=_-]{1,128}\Z')
+
+
+def public_decoder_variants(name):
+    """Sharing allowlist, NOT an assertion of native-host decoder semantics.
+
+    Unknown observations stay unknown: share only size/digest and ask for local
+    owner inspection instead of leaking stale content or inventing an answer.
+    """
+    raw = DECODING[name]
+    if name != 'invalid.md':
+        return {raw}
+    return {raw, b'', _wheels_read_string(raw).encode('utf-8', errors='surrogatepass'),
+            *(raw.decode(codec, errors=errors).encode('utf-8') for codec, errors in
+              [('utf-8', 'replace'), ('utf-8', 'ignore'), ('latin-1', 'strict'), ('cp1252', 'replace')])}
+
+
+async def inspect_decoding(backend, vault=None):
+    if vault is None or any(not (vault / PREFIX / name).is_file() or
+                            (vault / PREFIX / name).stat().st_size != len(data) or
+                            (vault / PREFIX / name).read_bytes() != data
+                            for name, data in DECODING.items()):
+        return check(False, 'prepared fixed local decoding inputs are required'), {}
     records, good = {}, True
     for name in DECODING:
         path = f'{PREFIX}/{name}'
         doc = await raw_doc(backend, path)
-        if not doc:
-            good = check(False, f'missing device decoding document {path}') and good
+        kind, size = safe_metadata(doc)
+        children = doc.get('children') if isinstance(doc, dict) else None
+        valid = (kind in ('plain', 'newnote') and type(size) is int and size <= MAX_DECODING_BYTES
+                 and isinstance(children, list) and len(children) <= MAX_DECODING_CHILDREN
+                 and all(type(child) is str and LEAF_ID.fullmatch(child) for child in children))
+        if not valid:
+            records[path] = {'type': kind, 'size': size, 'capture': 'invalid metadata; no chunk data shared'}
+            good = check(False, f'invalid bounded decoding metadata {path}') and good
             continue
-        children = doc.get('children', [])
         if isinstance(backend, JournalBackend):
             data = backend._store._chunk_datas(children, extract_inline_chunks(doc), path)
         else:
@@ -224,13 +287,33 @@ async def inspect_decoding(backend):
             for child in children:
                 leaf = await backend._get_doc(child) if child not in inline else None
                 data.append(inline[child] if child in inline else (leaf or {}).get('data'))
-        if any(not isinstance(value, str) or
-               len(value.encode('utf-8', errors='surrogatepass')) > 4096 for value in data):
-            raise ValueError('unexpected experiment chunk')
-        records[path] = {'type': doc.get('type'), 'size': doc.get('size'),
-                         'children': children, 'chunk_data': data,
-                         'disk_input_b64': base64.b64encode(DECODING[name]).decode()}
-        check(True, f'captured native decoding {path} type={doc.get("type")} pieces={len(children)}')
+        if any(type(value) is not str or len(value) > MAX_DECODING_BYTES for value in data):
+            good = check(False, f'oversized or invalid decoding chunks {path}') and good
+            records[path] = {'type': kind, 'size': size, 'capture': 'invalid chunks; no data shared'}
+            continue
+        encoded = [value.encode('utf-8', errors='surrogatepass') for value in data]
+        if sum(map(len, encoded)) > MAX_DECODING_BYTES:
+            good = check(False, f'aggregate decoding byte bound {path}') and good
+            records[path] = {'type': kind, 'size': size, 'capture': 'aggregate bound; no data shared'}
+            continue
+        try:
+            observed = (b''.join(encoded) if kind == 'plain' else
+                        b''.join(base64.b64decode(value, validate=True) for value in data))
+        except (ValueError, binascii.Error):
+            observed = b''.join(encoded)
+            shared = False
+        else:
+            shared = (observed in public_decoder_variants(name) and
+                      [backend._splitter.chunk_id_for_piece(value) for value in data] == children)
+        row = {'type': kind, 'size': size, 'piece_count': len(children),
+               'observed_size': len(observed), 'observed_sha256': hashlib.sha256(observed).hexdigest(),
+               'disk_input_b64': base64.b64encode(DECODING[name]).decode()}
+        if shared:
+            row.update(children=children, chunk_data=data, capture='recognized public fixture observation')
+        else:
+            row['capture'] = 'unexpected observation; raw data withheld; inspect locally with owner'
+        records[path] = row
+        good = check(shared, f'native decoding {path} type={kind} pieces={len(children)}') and good
     return good, records
 
 
@@ -269,11 +352,7 @@ async def run(args):
             check(True, f'scope: {len(paths)} ordinary files; {hidden} hidden files outside peer scope')
             return good, {'files': records, 'milestone': settings, 'hidden_files_outside_scope': hidden}
         if args.command == 'verify-size':
-            good, records = await verify(backend, args.vault, [f'{PREFIX}/device-40m.bin', f'{PREFIX}/exact.bin'])
-            good = check(backend.sync_max_size_mb == args.limit_mib, 'resolved vault size limit matches owner setting') and good
-            above = await backend.read_note(f'{PREFIX}/above.bin')
-            good = check(above is None, 'device did not publish above-limit file') and good
-            return good, {'files': records, 'limit_mib': backend.sync_max_size_mb}
+            return await verify_size(backend, args.vault, args.limit_mib)
         if args.command == 'write-large':
             path = f'{PREFIX}/peer-40m.bin'
             if await backend.read_note(path) is not None:
@@ -287,11 +366,11 @@ async def run(args):
             return good, {'path': path, 'size': len(raw), 'sha256': hashlib.sha256(raw).hexdigest(),
                           'piece_count': len(doc['children'])}
         if args.command == 'oversize':
-            return await oversize(backend, args.source)
+            return await oversize(backend, args.source, expected_limit=args.limit_mib)
         if args.command == 'write-phase':
             return await write_phase(backend)
         if args.command == 'inspect-decoding':
-            return await inspect_decoding(backend)
+            return await inspect_decoding(backend, args.vault)
         return await verify(backend, args.vault, args.path)
     finally:
         await backend.close()
@@ -321,7 +400,7 @@ def parser():
         child.add_argument('--ignore-regex', default='')
         child.add_argument('--use-ignore-files', action='store_true')
         child.add_argument('--ignore-files', default='')
-        child.add_argument('--limit-mib', type=int, default=100)
+        child.add_argument('--limit-mib', type=int, default=50 if command == 'oversize' else 100)
         if command == 'oversize':
             child.add_argument('--source', default=f'{PREFIX}/exact.bin')
         if command == 'verify-visible':
