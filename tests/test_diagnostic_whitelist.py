@@ -39,7 +39,7 @@ def assert_no_remote_secret(output, case):
 
 def escape(value):
     return ''.join({'\n': r'\n', '\r': r'\r', '\t': r'\t'}.get(c,
-        f'\\u{ord(c):04x}' if ord(c) < 32 or 127 <= ord(c) <= 159 or c in '\u2028\u2029' else c) for c in value)
+        f'\\u{ord(c):04x}' if ord(c) < 32 or 127 <= ord(c) <= 159 or c in '\u2028\u2029\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069' else c) for c in value)
 
 
 @pytest.mark.parametrize('case', CORPUS, ids=lambda c: c['id'])
@@ -74,7 +74,7 @@ async def test_caller_path_identity(monkeypatch, path):
     monkeypatch.setattr(server, 'backend', b)
     b.errors['refresh'] = errors.WriteSkipped('remote-path', 2*1024**2, 1)
     result = json.loads(await server.obsidian_create_note(path, 'body'))
-    assert result['path'] == escape(path)
+    assert result['path'] == path
     assert escape(path) in result['message']
     b.errors['refresh'] = errors.OutcomeUnknown('remote detail')
     result = await server.obsidian_create_note(path, 'body')

@@ -368,7 +368,10 @@ unchanged; only their public field projection is constrained.
 Journal filenames are shown only for `<digits>-docs.jsonl.gz` or
 `<digits>-<32 hex>-docs.jsonl.gz`; other names become
 `<unexpected journal name>` plus length. Default logs omit response fields,
-exception text/tracebacks, setting values and selection patterns. The only
+exception text/tracebacks, setting values and selection patterns in ordinary
+storage/selection logs. Lifespan exceptions propagate to the hosting framework;
+it controls startup traceback logging. Outcome-rendering failures log full
+exception details but return an outcome-unknown message to the tool caller. The only
 free-text sink is explicit `LIVESYNC_UNSAFE_DEBUG=1` at DEBUG, documented as
 unsafe for production; its last-line redactor caps inspection at 2048 characters
 and withholds nonempty inputs wholesale. There is no regex secret detector on the
@@ -382,3 +385,23 @@ so it is protocol metadata rather than a demonstrated authentication secret.
 Nevertheless its public diagnostic representation is a 16-hex SHA-256
 fingerprint of the epoch; internal epoch/replay comparisons retain the original.
 No substitute upstream oracle was introduced (P-7).
+
+
+### P-21: typed diagnostic validation (Task 5b fix round 3)
+
+Transport diagnostics retain HTTP status, operation and sanitized cause class,
+including S3 failures wrapped by journal publication/readback. Operations are
+closed to GET/PUT/POST/DELETE/HEAD/LIST. Causes match the ASCII identifier charset
+`[A-Za-z_][A-Za-z0-9_]{0,63}` or become `<unexpected cause>`. Other identifier-like
+fields retain their closed reason/key/budget/algorithm inventories. Diagnostic
+numbers are strictly `int` (bool excluded), `0 <= x < 2**63`, validated at
+construction and again at rendering; malformed numbers become `<invalid>`.
+Environment replay limits are positive integers below `2**63`, including seconds.
+
+Free-text paths escape C0/C1, CR/LF/tab, U+2028/U+2029, bidi embeddings/overrides
+U+202A–U+202E and isolates U+2066–U+2069. Zero-width U+200B/U+200C/U+200D and BOM
+U+FEFF pass unchanged because they can belong to note identities and do not
+reorder text. Structured JSON paths remain exact and addressable. Renderer
+exceptions cannot escape the tool wrapper: the operation's result is unknown,
+and callers must re-read before retrying. The last-line redactor also accepts
+non-string inputs defensively, withholding them without invoking object coercion.

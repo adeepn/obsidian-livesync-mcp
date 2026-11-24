@@ -36,7 +36,8 @@ without reassembling content, so binary notes travel chunk-wise
 from __future__ import annotations
 
 from diagnostic_hygiene import (writer_diagnostic, diagnostic, settings_exception_diagnostic, PublicDiagnostic, DiagnosticPath, setting_key,
-    DiagnosticCode, assessment_fields, setting_value, fingerprint, unsafe_debug)
+    DiagnosticCode, assessment_fields, setting_value, fingerprint, unsafe_debug,
+    cause_name, operation_field, numeric_field)
 
 from collections import OrderedDict
 import asyncio
@@ -208,38 +209,35 @@ class CouchDBBackend(DeviceSelection):
                 method, path, params=params, json=json_body
             )
         except httpx.HTTPError as exc:
-            logger.warning('CouchDB <omitted> <omitted> failed: <omitted>; cause: %s', type(exc).__name__)
+            logger.warning('CouchDB <omitted> <omitted> failed: <omitted>; cause: %s', cause_name(type(exc)))
             if method in {"PUT", "DELETE"} and not isinstance(
                 exc, (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout)
             ):
-                raise OutcomeUnknown(cause=exc) from None
-            raise StorageUnavailable(DiagnosticCode.COUCHDB_UNAVAILABLE, cause=exc) from None
+                raise OutcomeUnknown(PublicDiagnostic(operation=method, transport='CouchDB', cause=type(exc))) from None
+            raise StorageUnavailable(PublicDiagnostic(operation=method, transport='CouchDB', cause=type(exc))) from None
 
         code = response.status_code
-        if code == 404:
-            return response  # callers decide: missing doc vs missing db
+        if code == 404 and method in {'GET', 'HEAD'}:
+            return response  # missing notes are an ordinary absence
         if code >= 400:
-            # Payloads are excluded by default, including exception tracebacks.
             unsafe_debug(logger, response.text)
-            logger.warning("CouchDB %s status: %s",
-                method if method in {"GET", "PUT", "DELETE", "POST", "HEAD"} else "<value hidden>", code)
-            if code in (401, 403):
-                raise StorageUnavailable("CouchDB authorization error")
+            logger.warning('CouchDB %s status: %s', operation_field(method), numeric_field(code))
+            reason = (DiagnosticCode.COUCHDB_DATABASE_NOT_FOUND if code == 404 else
+                      DiagnosticCode.COUCHDB_AUTHORIZATION_ERROR if code in {401, 403} else
+                      DiagnosticCode.THE_NOTE_WAS_CHANGED_CONCURRENTLY_RE_READ_IT_AND_RETRY if code == 409 else
+                      DiagnosticCode.COUCHDB_UNAVAILABLE if code >= 500 else DiagnosticCode.FAILED)
+            public = PublicDiagnostic(reason, status=code, operation=method, transport='CouchDB', cause=httpx.HTTPStatusError)
             if code == 409:
-                raise ConcurrentModification(
-                    "the note was changed concurrently; re-read it and retry"
-                )
-            if code >= 500:
-                if method in {"PUT", "DELETE"}:
-                    raise OutcomeUnknown()
-                raise StorageUnavailable("CouchDB unavailable")
-            raise StorageUnavailable(f"CouchDB request failed (HTTP {code})")
+                raise ConcurrentModification(public) from None
+            if code >= 500 and method in {'PUT', 'DELETE'}:
+                raise OutcomeUnknown(public) from None
+            raise StorageUnavailable(public) from None
         return response
 
     async def _db_info(self) -> dict:
         response = await self._request("GET", self._db_path)
         if response.status_code == 404:
-            raise StorageUnavailable("CouchDB database not found")
+            raise StorageUnavailable(PublicDiagnostic(DiagnosticCode.COUCHDB_DATABASE_NOT_FOUND, status=404, operation=response.request.method, transport='CouchDB', cause=httpx.HTTPStatusError))
         body = response.json()
         return body if isinstance(body, dict) else {}
 
@@ -252,7 +250,7 @@ class CouchDBBackend(DeviceSelection):
         )
         if response.status_code == 404:
             if _is_db_missing(response):
-                raise StorageUnavailable("CouchDB database not found")
+                raise StorageUnavailable(PublicDiagnostic(DiagnosticCode.COUCHDB_DATABASE_NOT_FOUND, status=404, operation=response.request.method, transport='CouchDB', cause=httpx.HTTPStatusError))
             self._text_verdicts.pop(doc_id, None)
             return None
         body = response.json()
@@ -281,7 +279,7 @@ class CouchDBBackend(DeviceSelection):
         if response.status_code == 404:
             # A present database never 404s on _all_docs, regardless of
             # the keys; only the database path can be missing.
-            raise StorageUnavailable("CouchDB database not found")
+            raise StorageUnavailable(PublicDiagnostic(DiagnosticCode.COUCHDB_DATABASE_NOT_FOUND, status=404, operation=response.request.method, transport='CouchDB', cause=httpx.HTTPStatusError))
         rows = response.json().get("rows", [])
         return rows if isinstance(rows, list) else []
 
@@ -311,7 +309,7 @@ class CouchDBBackend(DeviceSelection):
                 )
                 if response.status_code == 404:
                     # A present database never 404s on _all_docs.
-                    raise StorageUnavailable("CouchDB database not found")
+                    raise StorageUnavailable(PublicDiagnostic(DiagnosticCode.COUCHDB_DATABASE_NOT_FOUND, status=404, operation=response.request.method, transport='CouchDB', cause=httpx.HTTPStatusError))
                 rows = response.json().get("rows", [])
                 for row in rows:
                     if not isinstance(row, dict):
@@ -399,7 +397,7 @@ class CouchDBBackend(DeviceSelection):
         )
         if milestone.status_code != 200:
             if _is_db_missing(milestone):
-                raise StorageUnavailable("CouchDB database not found")
+                raise StorageUnavailable(PublicDiagnostic(DiagnosticCode.COUCHDB_DATABASE_NOT_FOUND, status=404, operation=milestone.request.method, transport='CouchDB', cause=httpx.HTTPStatusError))
             await self.refresh_selection_files()
             return  # no milestone document: pre-E2EE or fresh vault
         try:
@@ -512,7 +510,7 @@ class CouchDBBackend(DeviceSelection):
         try:
             validate_vault_path(path)
         except ForbiddenPathError as exc:
-            logger.info('read refused for vault path <omitted>: <omitted>; cause: %s', type(exc).__name__)
+            logger.info('read refused for vault path <omitted>: <omitted>; cause: %s', cause_name(type(exc)))
             raise NoteNotFound(PublicDiagnostic(DiagnosticCode.NOT_FOUND, paths=(DiagnosticPath(path, remote=False),))) from None
 
     async def get_meta(self, path: str) -> NoteMeta:
@@ -526,7 +524,7 @@ class CouchDBBackend(DeviceSelection):
         try:
             validate_vault_path(path)
         except ForbiddenPathError as exc:
-            logger.info('read refused for vault path <omitted>: <omitted>; cause: %s', type(exc).__name__)
+            logger.info('read refused for vault path <omitted>: <omitted>; cause: %s', cause_name(type(exc)))
             return None
         doc = await self._get_doc(self._path2id(path))
         if doc is None or not is_note_document(doc):
@@ -717,7 +715,7 @@ class CouchDBBackend(DeviceSelection):
         try:
             body = assemble_binary(datas)
         except ValueError as exc:
-            logger.warning('note <omitted>: <omitted>; cause: %s', type(exc).__name__)
+            logger.warning('note <omitted>: <omitted>; cause: %s', cause_name(type(exc)))
             raise StorageError(PublicDiagnostic(DiagnosticCode.IS_CORRUPT_INVALID_CHUNK_ENCODING, paths=(DiagnosticPath(path, remote=True),))) from None
         return NoteContent(
             meta=meta, text=None, data=body, is_text=False,
@@ -811,7 +809,7 @@ class CouchDBBackend(DeviceSelection):
         if response.status_code == 404:
             # A present database never 404s a document PUT.
             logger.warning('CouchDB PUT <omitted> -> 404 (database gone)')
-            raise StorageUnavailable("CouchDB database not found")
+            raise StorageUnavailable(PublicDiagnostic(DiagnosticCode.COUCHDB_DATABASE_NOT_FOUND, status=404, operation=response.request.method, transport='CouchDB', cause=httpx.HTTPStatusError))
         if response.status_code != 201:
             logger.warning('CouchDB PUT <omitted> -> <omitted> (not 201: not confirmed durable)')
             raise OutcomeUnknown()
@@ -1089,17 +1087,17 @@ class CouchDBBackend(DeviceSelection):
             return self._meta_from_doc(body)
         try:
             await self._soft_delete(doc, path, _now_ms())
-        except OutcomeUnknown:
-            raise OutcomeUnknown(source_removal=True, paths=(path, new_path)) from None
+        except OutcomeUnknown as exc:
+            raise OutcomeUnknown(exc.diagnostic, source_removal=True, paths=(path, new_path)) from None
         except Exception as exc:
-            logger.warning('rename source retirement failed for <omitted>; cause: %s', type(exc).__name__)
+            logger.warning('rename source retirement failed for <omitted>; cause: %s', cause_name(type(exc)))
             source_state = "unknown"
             try:
                 source = await self._get_doc(self._path2id(path))
                 if source is not None and is_note_document(source):
                     source_state = "live"
             except Exception:
-                logger.warning('unable to confirm rename source state for <omitted>; cause: %s', type(exc).__name__)
+                logger.warning('unable to confirm rename source state for <omitted>; cause: %s', cause_name(type(exc)))
             raise RenamePartialError(path, new_path, source_state=source_state) from exc
         return self._meta_from_doc(body)
 

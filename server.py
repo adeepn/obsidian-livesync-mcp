@@ -1,6 +1,6 @@
 """Obsidian MCP Server — remote MCP server for Obsidian via CouchDB/LiveSync."""
 
-from diagnostic_hygiene import (escape_path, DiagnosticPath, path_field, assessment_fields, PublicDiagnostic, DiagnosticCode)
+from diagnostic_hygiene import (escape_path, DiagnosticPath, path_field, assessment_fields, PublicDiagnostic, DiagnosticCode, cause_name)
 
 import json
 import inspect
@@ -211,7 +211,7 @@ def create_app(cfg: Config) -> FastMCP:
 def _safe_storage_detail(error: Exception) -> str:
     if isinstance(error, StorageError):
         return error.format()
-    return 'cause: ' + type(error).__name__
+    return 'cause: ' + cause_name(type(error))
 
 
 def _storage_message(error: StorageError, *, caller_paths=()) -> str:
@@ -263,10 +263,17 @@ def _storage_message_body(error: StorageError, *, caller_paths=()) -> str:
     if type(error) in messages:
         message = messages[type(error)]
         public = getattr(error, 'diagnostic', None)
-        if isinstance(public, PublicDiagnostic) and (public.code is not DiagnosticCode.FAILED or public.cause):
+        if isinstance(public, PublicDiagnostic) and (public.code is not DiagnosticCode.FAILED or public.cause or public.operation is not None):
             return message.rstrip('.') + ': ' + public.format()
         return message
     return f"Error: {_safe_storage_detail(error)}"
+
+
+def _reporting_failure(error):
+    # Reporting follows a possibly completed mutation; never claim non-application.
+    logging.getLogger(__name__).exception('internal error while reporting a storage outcome')
+    return (f"Error: internal error while reporting a storage outcome ({cause_name(type(error))}); "
+            "the operation's result is unknown — re-read before retrying")
 
 
 def _tool_errors(
@@ -284,6 +291,7 @@ def _tool_errors(
 
     @wraps(handler)
     async def guarded(*args, **kwargs):
+        signature.bind(*args, **kwargs)  # Preserve Python argument validation before execution.
         if _backend() is None:
             return "Error: server not started; storage backend is unavailable."
         try:
@@ -302,50 +310,58 @@ def _tool_errors(
         except regex_runner.RegexTimeoutError:
             return "Error: regex pattern too complex or input too large."
         except StorageError as error:
-            if isinstance(error, (OutcomeUnknown, WriteSkipped, RenameRefused, WriterUnsupported, MutationNotApplied)):
-                arguments = signature.bind(*args, **kwargs)
-                arguments.apply_defaults()
-                paths = [arguments.arguments[key] for key in
-                         ('path', 'template_path', 'new_path')
-                         if arguments.arguments.get(key)]
-                if handler.__name__ == 'obsidian_duplicate_note' and len(paths) == 1:
-                    base, ext = os.path.splitext(paths[0])
-                    paths.append(f"{base} copy{ext}")
-                context = ' -> '.join(escape_path(p) for p in paths)
-                if isinstance(error, OutcomeUnknown):
-                    outcome_context = context
-                elif isinstance(error, WriteSkipped):
-                    response = error.as_dict(caller_path=DiagnosticPath(paths[0], remote=False) if paths else None)
-                    response['message'] = f"{context}: {response['message']}"
-                    return json.dumps(response, ensure_ascii=False)
-                elif isinstance(error, MutationNotApplied):
-                    return f"Error: {context}: note is unchanged; {_safe_storage_detail(error)}"
-                else:
-                    return f"Error: {context}: {_safe_storage_detail(error)}"
-            if isinstance(error, OutcomeUnknown) and operation is not None:
-                name = operation
-                if operation_arg is not None:
+            try:
+                if isinstance(error, (OutcomeUnknown, WriteSkipped, RenameRefused, WriterUnsupported, MutationNotApplied)):
                     arguments = signature.bind(*args, **kwargs)
                     arguments.apply_defaults()
-                    value = arguments.arguments[operation_arg]
-                    name = f"{name} {value}" if name else value
-                    if name == "after-heading":
-                        name = "after-heading insertion"
-                if name in RETRY_IDEMPOTENT:
-                    return error.message(name, context=outcome_context)
-            arguments = signature.bind(*args, **kwargs)
-            caller_paths = [arguments.arguments[k] for k in ('path', 'template_path', 'new_path')
-                            if arguments.arguments.get(k)]
-            return _storage_message(error, caller_paths=caller_paths)
+                    paths = [arguments.arguments[key] for key in
+                             ('path', 'template_path', 'new_path')
+                             if arguments.arguments.get(key)]
+                    if handler.__name__ == 'obsidian_duplicate_note' and len(paths) == 1:
+                        base, ext = os.path.splitext(paths[0])
+                        paths.append(f"{base} copy{ext}")
+                    context = ' -> '.join(escape_path(p) for p in paths)
+                    if isinstance(error, OutcomeUnknown):
+                        outcome_context = context
+                    elif isinstance(error, WriteSkipped):
+                        response = error.as_dict(caller_path=DiagnosticPath(paths[0], remote=False) if paths else None)
+                        response['message'] = f"{context}: {response['message']}"
+                        return json.dumps(response, ensure_ascii=False)
+                    elif isinstance(error, MutationNotApplied):
+                        return f"Error: {context}: note is unchanged; {_safe_storage_detail(error)}"
+                    else:
+                        return f"Error: {context}: {_safe_storage_detail(error)}"
+                if isinstance(error, OutcomeUnknown) and operation is not None:
+                    name = operation
+                    if operation_arg is not None:
+                        arguments = signature.bind(*args, **kwargs)
+                        arguments.apply_defaults()
+                        value = arguments.arguments[operation_arg]
+                        name = f"{name} {value}" if name else value
+                        if name == "after-heading":
+                            name = "after-heading insertion"
+                    if name in RETRY_IDEMPOTENT:
+                        return error.message(name, context=outcome_context)
+                arguments = signature.bind(*args, **kwargs)
+                caller_paths = [arguments.arguments[k] for k in ('path', 'template_path', 'new_path')
+                                if arguments.arguments.get(k)]
+                return _storage_message(error, caller_paths=caller_paths)
+            except Exception as reporting_error:
+                return _reporting_failure(reporting_error)
+
         except ForbiddenPathError:
             return "Error: forbidden vault path."
         except FrontmatterError:
             return "Error: invalid YAML frontmatter."
         except Exception as error:
-            arguments = signature.bind(*args, **kwargs)
-            context = ' -> '.join(escape_path(arguments.arguments[k]) for k in
-                ('path', 'template_path', 'new_path') if arguments.arguments.get(k))
-            return f"Error: {context + ': ' if context else ''}storage operation failed; cause: {type(error).__name__}"
+            try:
+                arguments = signature.bind(*args, **kwargs)
+                context = ' -> '.join(escape_path(arguments.arguments[k]) for k in
+                    ('path', 'template_path', 'new_path') if arguments.arguments.get(k))
+                return f"Error: {context + ': ' if context else ''}storage operation failed; cause: {cause_name(type(error))}"
+            except Exception as reporting_error:
+                return _reporting_failure(reporting_error)
+
     if writer:
         if operation_arg is None:
             operations = [operation] if operation is not None else []

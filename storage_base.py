@@ -9,7 +9,7 @@ payloads and tracebacks (audit C7, P-19).
 
 from __future__ import annotations
 
-from diagnostic_hygiene import (PublicDiagnostic, DiagnosticPath, diagnostic, path_field, setting_key)
+from diagnostic_hygiene import (PublicDiagnostic, DiagnosticPath, diagnostic, path_field, setting_key, numeric_field, cause_name)
 
 from typing import AsyncIterator, Protocol, TypedDict, runtime_checkable
 
@@ -21,9 +21,24 @@ class StorageError(Exception):
         self.diagnostic = public if isinstance(public, PublicDiagnostic) else diagnostic(reason, cause=cause)
         super().__init__(reason if type(reason) is str else self.format())
 
+    @property
+    def status(self):
+        return self.diagnostic.status
+
+    @property
+    def operation(self):
+        return self.diagnostic.operation
+
+    @property
+    def cause_class(self):
+        public = self.diagnostic
+        from diagnostic_hygiene import identifier
+        return (identifier(public.cause_class, '<unexpected cause>') if public.cause_class is not None
+                else cause_name(public.cause) if public.cause is not None else None)
+
     def format(self):
         value = getattr(self, 'diagnostic', None)
-        return value.format() if isinstance(value, PublicDiagnostic) else type(self).__name__
+        return value.format() if isinstance(value, PublicDiagnostic) else cause_name(type(self))
 
 
 class SelectionRefused(StorageError):
@@ -48,21 +63,23 @@ class WriteSkipped(StorageError):
     """
 
     def __init__(self, path: str, size: int, maximum: float):
-        self.path, self.size, self.maximum = DiagnosticPath(path, remote=False), size, maximum
+        self.path, self.size, self.maximum = DiagnosticPath(path, remote=False), numeric_field(size), numeric_field(maximum)
         super().__init__()
 
     def format(self):
-        size, maximum = self.size, self.maximum
+        size, maximum = numeric_field(self.size), numeric_field(self.maximum)
+        mib = f"{size / 1024**2:.3g}" if type(size) is int else size
         return (
-            f"skipped: {size / 1024**2:.3g} MiB ({size} bytes) exceeds the vault's "
-            f"syncMaxSizeInMB ({maximum:g}); new content was NOT saved; "
+            f"skipped: {mib} MiB ({size} bytes) exceeds the vault's "
+            f"syncMaxSizeInMB ({maximum}); new content was NOT saved; "
             "raise syncMaxSizeInMB in the plugin settings "
             "or pass a smaller file"
         )
 
     def as_dict(self, *, caller_path=None):
-        return dict(status="skipped", path=path_field(caller_path or self.path), size=self.size,
-                    syncMaxSizeInMB=self.maximum, message=self.format())
+        path = caller_path or self.path
+        return dict(status="skipped", path=path.value if isinstance(path, DiagnosticPath) else '<path unavailable>', size=numeric_field(self.size),
+                    syncMaxSizeInMB=numeric_field(self.maximum), message=self.format())
 
 
 class RenameRefused(StorageError):
@@ -70,14 +87,14 @@ class RenameRefused(StorageError):
 
     def __init__(self, source: str, destination: str, size: int, maximum: float):
         self.source, self.destination = DiagnosticPath(source, remote=False), DiagnosticPath(destination, remote=False)
-        self.size, self.maximum = size, maximum
+        self.size, self.maximum = numeric_field(size), numeric_field(maximum)
         super().__init__()
 
     def format(self):
-        size, maximum = self.size, self.maximum
+        size, maximum = numeric_field(self.size), numeric_field(self.maximum)
         return (
             f"move was not performed: {size} bytes exceeds the vault's "
-            f"syncMaxSizeInMB ({maximum:g}). A device would drop the source "
+            f"syncMaxSizeInMB ({maximum}). A device would drop the source "
             "from sync because it still has the file on disk; this peer "
             "would lose the only copy."
         )
@@ -186,8 +203,10 @@ class OutcomeUnknown(StorageUnavailable):
         if getattr(self, 'source_removal', False):
             prefix += "destination published; source removal unknown — re-read both paths. "
         public = getattr(self, 'diagnostic', None)
-        if isinstance(public, PublicDiagnostic) and public.cause is not None:
-            prefix += 'cause: ' + public.cause.__name__ + '. '
+        if isinstance(public, PublicDiagnostic) and public.operation is not None:
+            prefix += public.format() + '. '
+        elif isinstance(public, PublicDiagnostic) and public.cause is not None:
+            prefix += 'cause: ' + cause_name(public.cause) + '. '
         prefix += "the change MAY have been applied. "
         if operation is not None:
             return prefix + retry_guidance(operation)

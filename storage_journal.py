@@ -32,7 +32,7 @@ before applying it locally; rename publishes both revisions in one file.
 from __future__ import annotations
 
 from diagnostic_hygiene import (writer_diagnostic, diagnostic, settings_exception_diagnostic, PublicDiagnostic, setting_key,
-    DiagnosticCode, assessment_fields, setting_value, fingerprint)
+    DiagnosticCode, assessment_fields, setting_value, fingerprint, cause_name)
 
 from text_eligibility import (DEFAULT_TEXT_SCAN_MAX_BYTES,
                               DEFAULT_TEXT_VERDICT_CACHE_ENTRIES)
@@ -369,6 +369,11 @@ class JournalBackend(DeviceSelection):
             candidates, next_cursor = self._list_journals()
             for name in candidates:
                 self._check_refresh_time(name)
+                try:
+                    name.encode('utf-8')  # S3 names must be Unicode scalar values.
+                except UnicodeError as exc:
+                    raise StorageError(PublicDiagnostic(DiagnosticCode.REPLAY_FAILED,
+                        journal=name, cause=type(exc))) from None
                 if not store.processed(name):
                     recent_docs = self._replay_one(store, name)
             # Advance only after this entire window was replayed. A byte/time
@@ -645,7 +650,7 @@ class JournalBackend(DeviceSelection):
         except (StorageError, ValueError, OSError, sqlite3.Error) as exc:
             # Public diagnostics admit only a validated journal name and cause
             # class. Default logs omit remote names, payloads and tracebacks.
-            logger.warning('journal file <omitted> could not be replayed: <omitted>: <omitted>; cause: %s', type(exc).__name__)
+            logger.warning('journal file <omitted> could not be replayed: <omitted>: <omitted>; cause: %s', cause_name(type(exc)))
             raise StorageError(PublicDiagnostic(DiagnosticCode.REPLAY_FAILED, journal=name, cause=type(exc))) from exc
 
     def _require_store(self, operation: str) -> JournalStore:
@@ -737,7 +742,7 @@ class JournalBackend(DeviceSelection):
         try:
             validate_vault_path(path)
         except ForbiddenPathError as exc:
-            logger.info('read refused for vault path <omitted>: <omitted>; cause: %s', type(exc).__name__)
+            logger.info('read refused for vault path <omitted>: <omitted>; cause: %s', cause_name(type(exc)))
             return None
         store = self._require_store("read_note")
         doc_id = self._path2id(store, path)
@@ -844,7 +849,7 @@ class JournalBackend(DeviceSelection):
         try:
             validate_vault_path(path)
         except ForbiddenPathError as exc:
-            logger.info('read refused for vault path <omitted>: <omitted>; cause: %s', type(exc).__name__)
+            logger.info('read refused for vault path <omitted>: <omitted>; cause: %s', cause_name(type(exc)))
             raise NoteNotFound(f"note not found: {path}") from None
 
     @staticmethod
@@ -1050,7 +1055,7 @@ class JournalBackend(DeviceSelection):
                     store.discard_outbound(name)
                     raise
                 except (StorageError, OSError) as exc:
-                    raise OutcomeUnknown() from exc
+                    raise OutcomeUnknown(getattr(exc, "diagnostic", None)) from exc
                 if outcome == "created":
                     published = True
                     break
@@ -1067,7 +1072,7 @@ class JournalBackend(DeviceSelection):
                         store.discard_outbound(name)
                         raise
                     except (StorageError, OSError) as exc:
-                        raise OutcomeUnknown() from exc
+                        raise OutcomeUnknown(getattr(exc, "diagnostic", None)) from exc
                     published = True
                     break
                 store.discard_outbound(name)
@@ -1104,7 +1109,7 @@ class JournalBackend(DeviceSelection):
             store.finish_bookkeeping(finish_send_tracking)
         except (StorageError, ValueError, OSError, sqlite3.Error) as exc:
             if published:
-                raise OutcomeUnknown() from exc
+                raise OutcomeUnknown(getattr(exc, "diagnostic", None)) from exc
             if isinstance(exc, StorageError):
                 raise
             raise StorageError("journal publication or verification failed") from exc

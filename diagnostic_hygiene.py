@@ -9,17 +9,41 @@ import unicodedata
 from diagnostic_codes import DiagnosticCode
 
 
-_CONTROLS = re.compile(r'[\x00-\x1f\x7f-\x9f\u2028\u2029]')
+_CONTROLS = re.compile(r'[\x00-\x1f\x7f-\x9f\u2028\u2029\u202a-\u202e\u2066-\u2069]')
 
 
 def escape_path(value: str, *, remote: bool = False) -> str:
-    """Preserve identity; remote metadata has the protocol's NFC normalization."""
+    """Escape C0/C1, line separators and bidi embeddings/overrides/isolates.
+
+    Zero-width U+200B/C/D and BOM U+FEFF pass through: they can belong to
+    a note identity and do not reorder the displayed outcome. Structured
+    path fields retain exact identity; only free-text lines use escaping.
+    Remote diagnostic metadata uses the protocol's NFC normalization.
+    """
     if remote:
         value = unicodedata.normalize('NFC', value)
     def visible(match):
         c = match[0]
         return {'\n': r'\n', '\r': r'\r', '\t': r'\t'}.get(c, f'\\u{ord(c):04x}')
     return _CONTROLS.sub(visible, value)
+
+
+def numeric_field(value):
+    """Fail closed without coercion, including bool and oversized integers."""
+    return value if type(value) is int and 0 <= value < 2**63 else '<invalid>'
+
+
+def identifier(value, fallback='<unexpected identifier>'):
+    return value if type(value) is str and re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]{0,63}', value) else fallback
+
+
+def cause_name(value):
+    name = value.__name__ if isinstance(value, type) else None
+    return identifier(name, '<unexpected cause>')
+
+
+def operation_field(value):
+    return value if type(value) is str and value in {'GET','PUT','POST','DELETE','HEAD','LIST'} else '<unexpected operation>'
 
 
 @dataclass(frozen=True)
@@ -92,14 +116,35 @@ class PublicDiagnostic:
     selection_cause: str | None = None
     status: int | None = None
 
+    operation: str | None = None
+    transport: str | None = None
+    cause_class: str | None = None
+
+    def __post_init__(self):
+        if self.status is not None:
+            object.__setattr__(self, 'status', numeric_field(self.status))
+        if self.operation is not None:
+            object.__setattr__(self, 'operation', operation_field(self.operation))
+        if self.cause_class is not None:
+            object.__setattr__(self, 'cause_class', identifier(self.cause_class, '<unexpected cause>'))
+
     def format(self):
+        if self.operation is not None:
+            transport = self.transport if type(self.transport) is str and self.transport in {'CouchDB', 'S3'} else 'storage'
+            operation = operation_field(self.operation)
+            text = (f'{transport} returned HTTP {numeric_field(self.status)} for {operation}'
+                    if self.status is not None else f'{transport} {operation} failed')
+            cause = identifier(self.cause_class, '<unexpected cause>') if self.cause_class is not None else cause_name(self.cause) if self.cause is not None else None
+            if isinstance(self.code, DiagnosticCode) and self.code is not DiagnosticCode.FAILED:
+                text = self.code.value + ': ' + text
+            return text + ('; cause: ' + cause if cause is not None else '')
         if self.code is DiagnosticCode.WRITER:
             return ('vault uses ' + ', '.join(issue.format() for issue in self.issues) +
                     '; peer writes are not implemented for this mode yet — reads, search and replay work')
         if self.code is DiagnosticCode.TWEAK_ALIGNMENT:
             return ('vault tweak settings differ: ' + ', '.join(setting_key(k) for k in self.keys) +
                 '; devices require alignment with PREFERRED before synchronizing' +
-                ('; cause: ' + self.cause.__name__ if self.cause else ''))
+                ('; cause: ' + cause_name(self.cause) if self.cause else ''))
         result = self.code.value
         if self.code is DiagnosticCode.SELECTION_ENGINE:
             cause = self.selection_cause if self.selection_cause in {
@@ -107,8 +152,8 @@ class PublicDiagnostic:
                 'malformed-output', 'runner-selftest-failed', 'worker-unavailable',
             } else '<value hidden>'
             result += ': ' + cause
-            if type(self.status) is int:
-                result += f' (status {self.status})'
+            if self.status is not None:
+                result += f' (status {numeric_field(self.status)})'
             result += '; install Node.js 22+ in the service PATH or disable selection filters'
         if self.paths:
             result += "; note: " + " -> ".join(path_field(p) for p in self.paths)
@@ -117,7 +162,7 @@ class PublicDiagnostic:
         if self.journal is not None:
             result += '; journal: ' + journal_name(self.journal)
         if self.cause is not None:
-            result += '; cause: ' + self.cause.__name__
+            result += '; cause: ' + cause_name(self.cause)
         return result
 
 
@@ -168,7 +213,9 @@ def sanitize_diagnostic(text: str) -> str:
     original input: O(min(n, 2048)) time and space, independent of secret syntax.
     Free text has no tool-visible use. Even short encodings are withheld.
     """
-    sample = text[:2048]
+    if not isinstance(text, str):
+        return '[redacted]'
+    sample = str.__getitem__(text, slice(0, 2048))
     return '[redacted]' if sample else ''
 
 

@@ -43,4 +43,5 @@ def test_transport_failure_does_not_reflect_bucket_configuration(caplog):
     error = adapter._unavailable('GET', 'journal-key', OSError('remote body'))
     assert 'PASS-MARKER' not in str(error)
     assert 'PASS-MARKER' not in caplog.text
-    assert 'journal-key' in str(error)
+    assert 'GET' in str(error) and 'OSError' in str(error)
+    assert 'journal-key' not in str(error)

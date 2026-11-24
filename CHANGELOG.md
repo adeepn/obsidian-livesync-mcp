@@ -60,6 +60,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Retain typed transport status, operation and cause through storage outcomes;
+  validate diagnostic integers and identifiers, escape bidi controls in free
+  text, preserve exact structured paths, and contain outcome renderer failures.
+
 - Build tool diagnostics from typed fields and closed reason/key inventories;
   preserve caller note identities with control escaping, normalize remote note
   paths to NFC, and omit remote exception/setting text. Retain mutation outcome
@@ -67,7 +71,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   journal epochs instead of exposing salts.
 - Remove unbounded blacklist sanitization. Cap the opt-in last-line DEBUG sink
   at 2048 characters and withhold free text; omit raw response fields, setting
-  values, regex patterns and tracebacks from default logs.
+  values, regex patterns and tracebacks from ordinary storage/selection logs.
+  Lifespan exceptions propagate to the hosting framework; outcome reporting
+  failures retain exception details in logs.
 
 - Write tools enforce data-safety semantics: no-op writes are skipped, create/overwrite contracts are explicit, and failed writes can no longer point a note at missing chunks
 - Canvas tools refuse empty or malformed structures without mutating the file, and preserve unknown keys of spec-valid documents

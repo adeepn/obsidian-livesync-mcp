@@ -111,7 +111,8 @@ async def test_startup_check_db_missing():
     message = str(excinfo.value)
     assert "couchdb.test" not in message
     assert "5984" not in message
-    assert "http" not in message.lower()
+    assert "http://" not in message.lower()
+    assert "HTTP 404" in message
     assert DATABASE not in message
 
 
@@ -622,7 +623,8 @@ async def test_write_409_concurrent():
     assert orphan["data"] == "loser body"  # orphaned chunk tolerated
     assert not any(r.method == "DELETE" for r in log[:ops_end])
     message = str(excinfo.value)
-    assert "http" not in message.lower()  # C7: no URL leak
+    assert "http://" not in message.lower()
+    assert "HTTP 409" in message  # C7: status is safe; URLs are not
     assert "fake1" not in message  # C7: no revision leak
 
 

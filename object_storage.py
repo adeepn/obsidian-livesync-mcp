@@ -25,6 +25,7 @@ Key semantics (both implementations):
 
 from __future__ import annotations
 
+from diagnostic_hygiene import PublicDiagnostic, cause_name
 import logging
 from contextlib import closing
 from typing import Protocol, runtime_checkable
@@ -184,16 +185,16 @@ class Boto3ObjectStorage:
             raise self._unavailable("GET", key, exc) from None
 
     def _put_failure(self, key: str, exc: Exception) -> StorageError:
-        self._unavailable("PUT", key, exc)
+        public = self._unavailable("PUT", key, exc).diagnostic
         if isinstance(exc, (EndpointConnectionError, ConnectTimeoutError,
                             NoCredentialsError, PartialCredentialsError,
                             ParamValidationError)):
-            return MutationNotApplied("object publication was not sent")
+            return MutationNotApplied(public)
         if isinstance(exc, ClientError):
             status = exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
             if isinstance(status, int) and 400 <= status < 500:
-                return MutationNotApplied("object publication was refused")
-        return OutcomeUnknown()
+                return MutationNotApplied(public)
+        return OutcomeUnknown(public)
 
     def put(self, key: str, data: bytes) -> None:
         try:
@@ -220,7 +221,7 @@ class Boto3ObjectStorage:
                         "UnsupportedHeader", "NotImplementedException",
                         "XNotImplemented", "501"} or status == 501:
                 if not self._conditional_warning_logged:
-                    logger.warning('conditional journal publication unsupported; using B-10 fallback; cause: %s', type(exc).__name__)
+                    logger.warning('conditional journal publication unsupported; using B-10 fallback; cause: %s', cause_name(type(exc)))
                     self._conditional_warning_logged = True
                 return "unsupported"
             raise self._put_failure(key, exc) from None
@@ -284,7 +285,7 @@ class Boto3ObjectStorage:
         """Report safe context without exception text or traceback details."""
         logger.warning('object storage %s failed; cause: %s',
             operation if operation in {'GET', 'PUT', 'HEAD', 'LIST'} else '<value hidden>',
-            type(exc).__name__)
-        return StorageUnavailable(
-            f"object storage {operation} failed for key {key!r}"
-        )
+            cause_name(type(exc)))
+        status = exc.response.get('ResponseMetadata', {}).get('HTTPStatusCode') if isinstance(exc, ClientError) else None
+        return StorageUnavailable(PublicDiagnostic(operation=operation, transport='S3',
+            status=status, cause=type(exc)))

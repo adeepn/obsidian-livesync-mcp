@@ -1,5 +1,5 @@
 """Fail-closed boundary around the pinned ECMAScript selection engine."""
-from diagnostic_hygiene import unsafe_debug, PublicDiagnostic, DiagnosticCode
+from diagnostic_hygiene import unsafe_debug, PublicDiagnostic, DiagnosticCode, cause_name
 import json
 import logging
 import queue
@@ -47,10 +47,10 @@ def run(args, **kwargs):
     except FileNotFoundError as exc:
         raise EngineFailure('node-missing') from exc
     except subprocess.TimeoutExpired as exc:
-        logger.warning('Selection engine timeout; cause: %s', type(exc).__name__)
+        logger.warning('Selection engine timeout; cause: %s', cause_name(type(exc)))
         raise EngineFailure('timeout') from exc
     except OSError as exc:
-        logger.warning('Selection engine launch failed; cause: %s', type(exc).__name__)
+        logger.warning('Selection engine launch failed; cause: %s', cause_name(type(exc)))
         raise EngineFailure('node-missing') from exc
     if result.returncode:
         logger.warning('Selection engine exit <omitted>')

@@ -87,7 +87,7 @@ async def test_factory_wires_all_replay_overrides(tmp_path, monkeypatch):
     monkeypatch.setattr(server, 'Boto3ObjectStorage', adapter)
     overrides = dict(max_line_bytes=1024, max_inflated_bytes=2048, max_records=100,
                      max_json_depth=20, max_object_bytes=4096, max_refresh_keys=50,
-                     max_refresh_bytes=8192, max_refresh_seconds=2.5)
+                     max_refresh_bytes=8192, max_refresh_seconds=3)
     cfg = load_config({'LIVESYNC_BACKEND': 's3',
         'LIVESYNC_S3_URI': 'sls://AK:SK@https://minio.local?bucket=vault&region=auto',
         'MCP_API_KEY': 'test-token', 'S3_STATE_DIR': str(tmp_path),

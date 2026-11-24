@@ -8,9 +8,22 @@ No Obsidian desktop app required on the server — connects to CouchDB or S3-com
 
 Tool diagnostics contain note paths as you supplied them, known setting key
 names, sizes/counts, outcome/retry guidance and cause **class names**. Path
-controls (C0/C1, CR/LF/tab, U+2028/U+2029) become visible escapes; paths are
+controls (C0/C1, CR/LF/tab, U+2028/U+2029, bidi U+202A–U+202E and U+2066–U+2069) become visible escapes; paths are
 never credential-redacted or shortened. Paths read from remote metadata also
-use NFC normalization. Note contents remain note contents.
+use NFC normalization. Zero-width U+200B/U+200C/U+200D and BOM U+FEFF pass
+through unchanged: they can belong to a note identity and do not reorder text.
+Structured JSON path fields keep the exact path; free-text lines are escaped.
+Note contents remain note contents.
+
+Transport failures retain the HTTP status and operation (`GET`, `PUT`, `POST`,
+`DELETE`, `HEAD`, `LIST`) without response bodies or headers. Numeric diagnostic
+fields must be integers (excluding bool), in `0 <= x < 2**63`; invalid values
+become `<invalid>` at construction and are revalidated at rendering. Cause
+classes use `[A-Za-z_][A-Za-z0-9_]{0,63}`; other names become
+`<unexpected cause>`. Setting keys, budget names, reasons and algorithms use
+closed inventories; operation names use the closed inventory above. If outcome
+reporting itself fails, the tool reports that the operation's result is unknown
+and asks the caller to re-read before retrying. Exception details stay in logs.
 
 Diagnostics never include remote exception text, response bodies/headers,
 configured URLs, buckets/regions, passwords, passphrases/salts, setting values,
@@ -21,7 +34,9 @@ SHA-256 fingerprint, never the journal salt. Local cache paths/database names
 are hidden, remote update sequences are fingerprinted, and unfamiliar metadata
 fields are counted rather than printed.
 
-Server logs omit payloads and tracebacks by default. `LIVESYNC_UNSAFE_DEBUG=1`,
+Storage and selection logs omit payloads and tracebacks by default. Reporting
+failures log full exception details. Lifespan exceptions propagate to the hosting
+framework, which controls startup traceback logging. `LIVESYNC_UNSAFE_DEBUG=1`,
 combined with a DEBUG log level, explicitly enables the bounded last-line debug
 sink. **Unsafe for production:** it admits unstructured diagnostic inputs to a
 debug path; never enable it to collect credentials. The current last-line
@@ -212,8 +227,7 @@ These budgets are independent of file size and `syncMaxSizeInMB`, including 0:
 | Download bytes per refresh (also controls) | 64 GiB | `LIVESYNC_JOURNAL_MAX_REFRESH_BYTES` |
 | Refresh elapsed seconds | 3600 | `LIVESYNC_JOURNAL_MAX_REFRESH_SECONDS` |
 
-All accept positive values without an imposed upper ceiling (integers except
-seconds, which accepts fractions). A trip names the budget, observed amount,
+All accept positive integers below `2**63`, including elapsed seconds. A trip names the budget, observed amount,
 configured limit, and exact variable to raise. Streaming inflate/download can
 report a lower bound rather than consume an entire hostile body. Restart after
 changing env values. Key/byte/time failures preserve completed replay progress;

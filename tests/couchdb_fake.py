@@ -224,7 +224,8 @@ def make_fake_couchdb(
                 state["update_seq"] += 1
             if request.url.params.get("conflicts") != "true":
                 body.pop("_conflicts", None)  # served only on request
-            return httpx.Response(200, json=body)
+            return httpx.Response(200, content=json.dumps(body, ensure_ascii=True).encode("utf-8"),
+                                  headers={"content-type": "application/json"})
 
         if request.method == "PUT":
             if doc_id in put_conflict_ids:

@@ -616,3 +616,82 @@ and this report document the final interface and its deliberate limitations.
 Documentation pre-commit full suite: **8532 passed, 7 skipped, 3 subtests passed**
 in 96.55 s (`docs-suite.log`). Final diff check passed. No unresolved blocker;
 free-text DEBUG output is deliberately withheld wholesale.
+
+
+## Fix round 3 — P-21 typed specifics and total outcome reporting
+
+[DECISION] Retain typed HTTP status, operation and sanitized cause class through
+CouchDB, S3 adapter and journal publication/readback uncertainty. Preserve safe
+authorization/database/concurrency reasons and existing retry classifications.
+Operations are GET/PUT/POST/DELETE/HEAD/LIST; no bodies, headers or object keys
+are diagnostic inputs. Missing-object GET/HEAD remains ordinary absence.
+
+Validate numeric diagnostic fields at construction and render: exact int,
+bool excluded, 0 <= x < 2**63; malformed values become <invalid> without
+coercion. An omitted optional HTTP status means no response. An explicitly
+supplied malformed decoder capacity, including None, is <invalid>.
+Environment replay limits, including seconds, are positive bounded integers.
+Reasons/keys/budgets/algorithms retain closed inventories; cause names use
+[A-Za-z_][A-Za-z0-9_]{0,63}; invalid names become <unexpected cause>.
+
+[DECISION] Escape C0/C1, separators and bidi embeddings/overrides/isolates in
+free-text paths. Pass zero-width U+200B/C/D and BOM U+FEFF unchanged because
+they can belong to a note identity and do not reorder text. Structured JSON
+paths preserve exact identity. Contain renderer failures with explicit
+outcome-unknown/re-read guidance; full exception detail stays in logs.
+Restore ordinary Python argument validation before starting execution.
+The bounded debug redactor handles non-string inputs without coercion.
+
+The committed attack corpus now contains all 121 reviewer payloads. Added
+real CouchDB fake-transport status/operation coverage (11 statuses x four
+operations), S3 connection/timeout/throttle/404 coverage, journal uncertainty
+propagation, malformed numeric construction/mutation, identifier validation,
+all requested bidi and zero-width characters through caller/stored paths,
+renderer failures and non-string redactor inputs. The fake CouchDB GET JSON
+encoder uses escaped Unicode so lone-surrogate setting data reaches the real
+backend instead of crashing HTTPX's test response builder. Unencodable journal
+keys now produce a typed storage diagnostic before reaching SQLite.
+
+Evidence (all in this directory):
+
+- task-5b-fix3-red.log: initial RED, 151 failed / 6 passed.
+- task-5b-fix3-journal-red.log: publication/readback detail loss, 2 failed.
+- task-5b-fix3-suite.log: first full run, 13 failed / 8932 passed; failures
+  resolved as described below.
+- task-5b-fix3-suite-final.log: 8967 passed, 7 skipped, 3 subtests passed,
+  95.90 seconds. This includes the previous corpus, expanded corpus, existing
+  differential, outcome/loss and revision-contract suites.
+- task-5b-fix3-build.log and task-5b-fix3-diff-check.log: clean exit 0.
+- task-5b-fix3-verification.json: machine-readable result and evidence hashes.
+
+First full-run failures, all resolved in the final full run:
+
+- tests/test_diagnostic_sources.py::test_transport_failure_does_not_reflect_bucket_configuration
+- tests/test_diagnostic_whitelist.py::test_real_replay_hostile_name[fresh-17]
+- tests/test_diagnostic_whitelist.py::test_real_setting_values_hidden[couchdb-fresh-17]
+- tests/test_storage_couchdb.py::test_startup_check_db_missing
+- tests/test_storage_couchdb.py::test_auth_error_maps_to_storage_unavailable
+- tests/test_storage_couchdb.py::test_server_error_maps_to_storage_unavailable
+- tests/test_storage_couchdb.py::test_read_note_on_missing_db_raises
+- tests/test_storage_couchdb.py::test_all_docs_on_missing_db_raises
+- tests/test_storage_couchdb.py::test_startup_check_db_gone_before_milestone_raises
+- tests/test_storage_couchdb.py::test_write_409_concurrent
+- tests/test_storage_couchdb.py::test_delete_note_stale_rev_raises
+- tests/test_storage_couchdb.py::test_rename_target_race_keeps_source_live
+- tests/test_tools_write.py::test_update_requires_mode
+
+Old assertions were updated only where P-21 changes the public contract
+(HTTP versus URL, typed operation/cause versus hidden object key, exact JSON
+path and integer replay seconds). Safe existing reason wording was retained.
+The argument-validation regression was fixed in the wrapper. The two new
+lone-surrogate routes required the fixture/backend boundary fixes above.
+
+[DEFER] Brief inconsistency: SECRET matches the prescribed identifier regex;
+it is retained, as are other valid identifiers. Rejecting that particular name
+would require a separately specified cause-class inventory. This follows the
+explicit regex rather than the contradictory parenthetical test example.
+Fractional syncMaxSizeInMB diagnostic values are <invalid> under P-21's strict
+integer contract; the admission policy itself still supports fractional sizes.
+No live storage was contacted. Seven existing optional skips remain. No new
+upstream oracle was introduced (P-7); tweak assessment and its fixtures were
+not changed. No docs/test-artifacts path was changed or added (P-20).
