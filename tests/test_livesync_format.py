@@ -452,7 +452,7 @@ def test_resolve_identity_refuses_unknown_version():
         ):
             resolve_path_identity(milestone)
     # The refusal names the offending value (not a secret: a version).
-    with pytest.raises(UnsupportedVaultSettings, match="pathNormalizationVersion 2"):
+    with pytest.raises(UnsupportedVaultSettings, match="pathNormalizationVersion"):
         resolve_path_identity(
             {"tweak_values": {"PREFERRED": {"pathNormalizationVersion": 2}}}
         )

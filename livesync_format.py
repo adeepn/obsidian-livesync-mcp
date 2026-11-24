@@ -17,6 +17,8 @@ typed, v1 compares Unicode NFC forms — see ``path2id`` and
 
 from __future__ import annotations
 
+from diagnostic_hygiene import invalid_setting
+
 from dataclasses import dataclass, field
 from collections.abc import Mapping
 from types import MappingProxyType
@@ -284,7 +286,7 @@ def resolve_path_identity(milestone_settings: dict) -> str:
             or version not in (0, 1)
         ):
             raise UnsupportedVaultSettings(
-                f"unsupported pathNormalizationVersion {version!r}; "
+                "unsupported " + invalid_setting("pathNormalizationVersion", version) + "; "
                 "this server supports 0 (legacy) and 1 (NFC)"
             )
         if version == 1:

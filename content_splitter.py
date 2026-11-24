@@ -9,6 +9,8 @@ See docs/superpowers/specs/2026-11-23-settings-parity.md sections а/б.
 """
 from __future__ import annotations
 
+from diagnostic_hygiene import invalid_setting
+
 import base64
 import hashlib
 import math
@@ -248,24 +250,24 @@ class ContentSplitter:
         if self.hash_alg is None:
             self.hash_alg = 'xxhash32'
         if self.hash_alg not in ('xxhash64', 'xxhash32', 'mixed-purejs', 'sha1', ''):
-            unsupported.append(f'hashAlg={self.hash_alg}')
+            unsupported.append(invalid_setting('hashAlg', self.hash_alg))
         self.version = settings.get('chunkSplitterVersion', '')
         if self.version == 'v2-segmenter':
             self.version = 'v2'
         if self.version == '':
             self.version = 'v1'
         if self.version not in ('v1', 'v2', 'v2-segmenter', 'v3-rabin-karp'):
-            unsupported.append(f'chunkSplitterVersion={self.version}')
+            unsupported.append(invalid_setting('chunkSplitterVersion', self.version))
         # configuredIdKey runs even without encryption (idDerivation.ts:53-67).
         version = settings.get('idDerivationVersion', 0)
         key = settings.get('idDerivationKey', '')
         if type(version) is not int or version not in (0, 1):
-            unsupported.append(f'idDerivationVersion={version}')
+            unsupported.append(invalid_setting('idDerivationVersion', version))
         if (version == 0 and key != '') or (version == 1 and (
             not isinstance(key, str) or re.fullmatch('[0-9a-f]{64}', key) is None
         )):
             # Never expose the configured key in diagnostics or tool errors.
-            unsupported.append(f'idDerivationVersion={version}')
+            unsupported.append(invalid_setting('idDerivationVersion', version))
             unsupported.append('idDerivationKey=<invalid configuration>')
         if unsupported:
             raise UnsupportedWriterMode(

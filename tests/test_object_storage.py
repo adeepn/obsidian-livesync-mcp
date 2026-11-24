@@ -362,7 +362,7 @@ class TestBoto3WireOperations:
         # logs its class name, never the service message or exception text.
         adapter_logs = [r for r in caplog.records if r.name == "object_storage"]
         assert [r.getMessage() for r in adapter_logs] == [
-            f"object storage {operation} failed for bucket 'test-bucket' key 'k': AccessDenied"
+            f"object storage {operation} failed for key 'k': AccessDenied"
         ]
         assert adapter_logs[0].exc_info is None
         assert "ak:sk" not in caplog.text

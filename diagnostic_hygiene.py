@@ -62,7 +62,7 @@ def sanitize_diagnostic(text: str) -> str:
     redaction; it is not a licence to reflect remote bodies or setting values.
     """
     # Decode before matching, including repeatedly percent-encoded userinfo.
-    for _ in range(8):
+    while True:
         decoded = unquote(text)
         decoded = decoded.replace('\\\"', '\"').replace("\\'", "'")
         decoded = re.sub(r'\\u([0-9a-fA-F]{4})',
@@ -83,8 +83,8 @@ def sanitize_diagnostic(text: str) -> str:
     text = re.sub(r'(?<![0-9a-fA-F])[0-9a-fA-F]{32,}(?![0-9a-fA-F])', '[redacted]', text)
     def entropy(match):
         value = match[0]
-        if (any(c.islower() for c in value) and any(c.isupper() for c in value)
-                and (any(c.isdigit() for c in value) or '+' in value or '/' in value)):
+        if ('+' in value or '/' in value or (any(c.islower() for c in value)
+                and any(c.isupper() for c in value) and any(c.isdigit() for c in value))):
             return '[redacted]'
         return value
     return re.sub(r'[A-Za-z0-9+/=_-]{40,}', entropy, text)
@@ -99,3 +99,10 @@ def sanitize_diagnostic_fields(value):
     if isinstance(value, list):
         return [sanitize_diagnostic_fields(item) for item in value]
     return value
+
+
+def invalid_setting(key: str, value: object) -> str:
+    """Describe a known setting key and shape without inspecting its value."""
+    shape = {str: 'string', int: 'number', float: 'number', bool: 'boolean',
+             type(None): 'null', list: 'array', tuple: 'array'}.get(type(value), 'object')
+    return f'{key}=<invalid: {shape}>'

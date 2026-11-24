@@ -283,13 +283,11 @@ class Boto3ObjectStorage:
     def _unavailable(self, operation: str, key: str, exc: Exception) -> StorageUnavailable:
         """Report safe context without exception text or traceback details."""
         logger.warning(
-            "object storage %s failed for bucket %r key %r: %s",
+            "object storage %s failed for key %r: %s",
             operation,
-            self._bucket,
             key,
             type(exc).__name__,
         )
         return StorageUnavailable(
-            f"object storage {operation} failed for bucket "
-            f"{self._bucket!r} key {key!r}"
+            f"object storage {operation} failed for key {key!r}"
         )

@@ -212,3 +212,206 @@ normalization/selection semantics, regenerating accepted oracle fixtures.
 
 Hygiene full suite: **6852 passed, 7 skipped, 3 subtests passed**, 96.44 s.
 Durable artifact: `task-5b-fix1-hygiene-suite.log`. Diff check clean.
+
+### Raise-site audit (P-18)
+
+Audited every direct raise and exception factory in root storage modules, plus
+indirect settings/selection/decode producers. The table uses post-fix source lines.
+The reviewer's audit list was cross-checked against AST enumeration (146 sites).
+"Safe" means the producer uses only approved structured data; paths still pass
+through the sanitizer before tool exposure. It does not mean arbitrary paths
+are trusted to be free of secret-shaped text.
+
+Provenance of forwarding sites:
+- CouchDB/journal `_validate_identity`: `validate_document_identity` raises a
+  constant mismatch/collision reason, never document IDs, values or revisions.
+- Startup settings wrappers: only fixed refusals, fixed schema key names,
+  type/shape explanations and the splitter diagnostic described below.
+- `resolve_content_splitter`: ContentSplitter `_number` reports fixed key names;
+  UnsupportedWriterMode now reports hashAlg/chunkSplitterVersion/ID-version shapes;
+  ID-key values are never stringified. No assessment comparison semantics changed.
+- Journal `_translate_decode_error`: JournalStore note decoding emits paths and
+  fixed corruption/encryption reasons; base64/eden errors are replaced by those
+  fixed reasons. Replay failures instead use journal path + exception class.
+- Journal publication parser: constant preflight failure; raw parser/revision text
+  cannot reach StorageError. Revision-related store ValueErrors are contained by
+  this preflight or the replay class-only wrapper.
+- Selection: worker rule is an enum; arbitrary worker reasons are replaced by
+  `Invalid device selection pattern`. EngineFailure uses literal markers and
+  numeric exit status. No regex/settings values are interpolated.
+- Budget constructors: literal budget name and numeric counts/limits only.
+- WriteSkipped/RenameRefused: measured byte length or remote size after numeric
+  comparison in check_file_size; validated numeric maximum. No arbitrary size
+  object is formatted by a backend outcome.
+- S3 failure factory no longer interpolates configured bucket values (including
+  in its log). Object paths and literal operation names supply context.
+
+Additional constructor/producer sites:
+
+| Site | Interpolated data | Safe? | Change |
+|---|---|---|---|
+| storage_base.py:SelectionRefused | path, validated rule enum | yes; path redacted at boundary | retained |
+| storage_base.py:WriteSkipped / RenameRefused | numeric sizes and maximum; path in JSON | yes; all JSON leaves redacted | uniform structured sanitation |
+| storage_base.py:RenamePartialError | constant reason; paths held as fields | yes; contextual paths redacted | uniform outcome sanitation |
+| storage_base.py:OutcomeUnknown | adapter detail built from paths/constants | yes in adapters; injected details also redacted | mutation retry path now sanitized |
+| replay_limits.py:ReplayBudgetExceeded | literal budget name, numeric counts/limits | yes | retained |
+| livesync_format.py:resolve_content_splitter | known splitter error | previously unsafe via splitter | fixed producers |
+| content_splitter.py:unsupported list | setting values | previously unsafe | key + invalid type/shape, no str/repr |
+| livesync_format.py:resolve_path_identity | pathNormalizationVersion value | previously unsafe | key + invalid type/shape, no repr |
+| selection_engine.py:validate_response / EngineFailure | fixed marker / numeric status | yes; remote reason replaced | retained |
+| Site | Interpolated data | Safe? | Change |
+|---|---|---|---|
+| `content_splitter.py:169` | fixed reason or invalid_setting key/shape list | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `content_splitter.py:273` | fixed reason or invalid_setting key/shape list | yes, structured; boundary redacted | replace raw hashAlg/splitter/ID version with key + shape |
+| `device_selection.py:64` | safe writer/validated selection reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `device_selection.py:72` | safe writer/validated selection reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `device_selection.py:191` | safe writer/validated selection reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `device_selection.py:193` | paths; validated rule/source-state marker | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `journal_codec.py:180` | literal budget name; numeric sizes/counts/limits | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `journal_codec.py:216` | literal budget name; numeric sizes/counts/limits | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `journal_codec.py:219` | literal budget name; numeric sizes/counts/limits | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `journal_codec.py:269` | literal budget name; numeric sizes/counts/limits | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `journal_codec.py:292` | literal budget name; numeric sizes/counts/limits | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `journal_store.py:216` | label | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `journal_store.py:241` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `livesync_format.py:224` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `livesync_format.py:230` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `livesync_format.py:234` | type(preferred).__name__ | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `livesync_format.py:249` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `livesync_format.py:278` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `livesync_format.py:288` | pathNormalizationVersion key and type/shape | yes, structured; boundary redacted | replace raw version repr with key + shape |
+| `livesync_format.py:466` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `livesync_format.py:468` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `livesync_format.py:478` | known splitter diagnostic; key and shape only | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `livesync_format.py:480` | known splitter diagnostic; key and shape only | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `livesync_format.py:485` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `livesync_format.py:891` | fixed mismatch classification and compared key names | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `livesync_format.py:897` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `livesync_format.py:929` | fixed mismatch classification and compared key names | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `object_storage.py:170` | literal budget name; numeric sizes/counts/limits | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `object_storage.py:178` | literal budget name; numeric sizes/counts/limits | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `object_storage.py:182` | literal operation; object path; transport class, never transport text | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `object_storage.py:184` | literal operation; object path; transport class, never transport text | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `object_storage.py:191` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `object_storage.py:195` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `object_storage.py:196` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `object_storage.py:204` | literal operation; object path; transport class, never transport text | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `object_storage.py:226` | literal operation; object path; transport class, never transport text | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `object_storage.py:228` | literal operation; object path; transport class, never transport text | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `object_storage.py:244` | literal operation; object path; transport class, never transport text | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `object_storage.py:256` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `object_storage.py:277` | literal operation; object path; transport class, never transport text | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `object_storage.py:279` | literal operation; object path; transport class, never transport text | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `object_storage.py:291` | operation, key | yes, structured; boundary redacted | remove configured bucket value; retain object path |
+| `server.py:381` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `server.py:407` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `server.py:644` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `server.py:669` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `server.py:706` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `server.py:711` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_base.py:67` | path; measured/compared numeric size and validated maximum | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_couchdb.py:214` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_couchdb.py:215` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_couchdb.py:234` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_couchdb.py:236` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_couchdb.py:241` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_couchdb.py:242` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_couchdb.py:243` | code | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_couchdb.py:249` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_couchdb.py:262` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_couchdb.py:278` | known identity/settings/decode diagnostic (see provenance below) | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_couchdb.py:291` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_couchdb.py:321` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_couchdb.py:416` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_couchdb.py:443` | known identity/settings/decode diagnostic (see provenance below) | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_couchdb.py:530` | path | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_couchdb.py:536` | path | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_couchdb.py:643` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_couchdb.py:646` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_couchdb.py:676` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_couchdb.py:695` | path | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_couchdb.py:711` | path | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_couchdb.py:737` | path | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_couchdb.py:757` | path | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_couchdb.py:759` | path | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_couchdb.py:782` | path | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_couchdb.py:789` | path | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_couchdb.py:808` | path | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_couchdb.py:832` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_couchdb.py:852` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_couchdb.py:859` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_couchdb.py:873` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_couchdb.py:907` | path | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_couchdb.py:914` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_couchdb.py:929` | path | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_couchdb.py:938` | path | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_couchdb.py:954` | new_path | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_couchdb.py:980` | safe writer/validated selection reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_couchdb.py:1042` | path | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_couchdb.py:1044` | path | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_couchdb.py:1113` | safe writer/validated selection reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_couchdb.py:1125` | path; measured/compared numeric size and validated maximum | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_couchdb.py:1147` | path, new_path, path, new_path | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_couchdb.py:1160` | paths; validated rule/source-state marker | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:179` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:181` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:183` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:267` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:304` | known identity/settings/decode diagnostic (see provenance below) | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:320` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:359` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:383` | literal budget name; numeric sizes/counts/limits | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:414` | literal budget name; numeric sizes/counts/limits | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:424` | literal budget name; numeric sizes/counts/limits | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:430` | literal budget name; numeric sizes/counts/limits | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:482` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:486` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:502` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:506` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:514` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:615` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:641` | name | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:664` | name, type(exc).__name__ | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:671` | operation | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:747` | path | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:870` | path | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:894` | known identity/settings/decode diagnostic (see provenance below) | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:895` | known identity/settings/decode diagnostic (see provenance below) | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:916` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:939` | known identity/settings/decode diagnostic (see provenance below) | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:946` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:962` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:976` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:1000` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:1008` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:1012` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:1033` | literal budget name; numeric sizes/counts/limits | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:1042` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:1048` | literal budget name; numeric sizes/counts/limits | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:1056` | literal budget name; numeric sizes/counts/limits | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:1061` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:1076` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:1084` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:1093` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:1098` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:1101` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:1114` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:1119` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:1130` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:1133` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:1137` | safe writer/validated selection reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:1200` | path | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:1202` | path | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:1210` | constant diagnostic / empty outcome / fixed setting-key reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:1254` | path | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:1262` | new_path | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:1288` | safe writer/validated selection reason | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+| `storage_journal.py:1299` | path; measured/compared numeric size and validated maximum | yes, structured; boundary redacted | retain; sanitize at diagnostic boundary |
+
+Source fixes full suite: **6934 passed, 7 skipped, 3 subtests passed**, 95.72 s.
+Durable artifact: `task-5b-fix1-sources-suite.log`. Focused producer + hygiene +
+writer/identity tests: **2393 passed**. Additional RED proofs:
+`/tmp/parity-bucket-red.log` and `/tmp/parity-base64-red.log`.
+The S3 bucket configuration is no longer reflected; token redaction also covers
+single-case runs containing '+' or '/', and decoding continues to a fixed point.
+Both review reproductions pass. Diff and diff-check reviewed clean.

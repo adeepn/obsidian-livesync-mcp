@@ -30,6 +30,8 @@ PAIRS += [
     ('secret.key = Credential-Marker', 'Credential-Marker'),
     ('0123456789abcdef' * 2, '0123456789abcdef' * 2),
     ('aB9+' * 12, 'aB9+' * 12),
+    ('AB9/' * 12, 'AB9/' * 12),
+    ('ab9+' * 12, 'ab9+' * 12),
     ('AKIA0123456789ABCDEF', 'AKIA0123456789ABCDEF'),
     ('ASIA0123456789ABCDEF', 'ASIA0123456789ABCDEF'),
 ]

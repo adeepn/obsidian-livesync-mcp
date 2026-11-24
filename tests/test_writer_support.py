@@ -61,7 +61,7 @@ async def test_unsupported_writer_keeps_reads_and_blocks_all_mutations(tmp_path,
         assert info['writer_supported'] is False
         reason = info['writer_unsupported_reason']
         for key, value in settings.items():
-            assert f'{key}={value}' in reason
+            assert f'{key}=<invalid:' in reason
         assert 'reads, search and replay work' in reason
         before = await snapshot()
         calls = [
@@ -129,7 +129,7 @@ async def test_mcp_lifespan_serves_read_and_clean_writer_error(tmp_path, kind, s
             message = blocks[0].text
             assert message.startswith('Error: new.md: vault uses ')
             for key, value in settings.items():
-                assert f'{key}={value}' in message
+                assert f'{key}=<invalid:' in message
             result = await app.call_tool('obsidian_fetch', {'path': 'old.md'})
             blocks = result[0] if isinstance(result, tuple) else result
             assert json.loads(blocks[0].text)['content'] == 'readable'
@@ -159,7 +159,7 @@ async def test_rejected_write_tool_does_not_replay_pending_journal(tmp_path, mon
         before = await snapshot()
         result = await getattr(server, tool)(*args)
         assert result.startswith('Error: ')
-        assert 'vault uses idDerivationVersion=3; peer writes' in result
+        assert 'vault uses idDerivationVersion=<invalid: number>; peer writes' in result
         for path in (args[0], args[1] if tool in ('obsidian_move_note', 'obsidian_create_from_template') else None):
             if path:
                 assert path in result
