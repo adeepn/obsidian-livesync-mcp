@@ -231,18 +231,19 @@ Run `node scripts/probe_journal_checkpoints.mjs /path/to/pinned/commonlib`;
 it verifies the source against the pin and emits JSON with all six scenarios.
 
 The peer retains every document revision and chunk on recovery; it clears only
-processed journals and last-sent tracking and replays from the beginning after
-a confirmed wipe. Insert-if-missing revision keys and content-addressed chunks
+replication tracking (processed journals, outbound records and last-sent) and
+replays from the beginning after a confirmed wipe. Insert-if-missing revision keys and content-addressed chunks
 make this idempotent. Notes absent from the new world intentionally survive
 locally and are not automatically republished; a fresh peer cannot see them.
-The peer additionally checks last-sent existence even at the same epoch, and
+The peer additionally checks its newest confirmed outbound journal (legacy
+state falls back to last-sent) even at the same epoch, and
 propagates probe IO failures rather than interpreting them as a confirmed wipe.
 This is a conservative extension of upstream, preserving prior peer wipe
 protection and the P-13 refusal invariant.
 
-The pre-append probe is read-only: changed epoch or missing last-sent journal
-raises `ConcurrentModification` (“remote was rebuilt or journals are missing;
-refresh and retry”), without changing store state or publishing anything.
+The pre-append probe is read-only: changed epoch or a missing newest confirmed
+outbound journal raises `ConcurrentModification` (“remote was rebuilt or journals
+are missing; refresh and retry”), without changing store state or publishing anything.
 Startup and refresh reconcile caches without deleting local content, including
 when the first replay download fails. Install staged chunks before committing
 metadata; an install failure leaves previous revisions readable. A failed apply
@@ -258,7 +259,7 @@ stopping all users, moving the new state aside, restoring the archive to the old
 path, and configuring the original identity. No automatic deletion or eviction.
 
 
-## P-15 outcome contract (Task 5 fix round 3)
+## P-15/P-16 outcome contract (Task 5 fix round 4)
 
 Preservation concerns peer-initiated mutations, not incoming replay. Replay
 applies remote truth incrementally; a later download failure does not roll back
@@ -266,17 +267,46 @@ journals already applied. The three closed round-2 loss paths remain unchanged.
 
 A mutation reports applied only after confirmed durable publication (and local
 metadata commit for journal). Explicit pre-application refusals remain ordinary
-errors/skips with no requested mutation. A lost response after send/acceptance,
-unconfirmed acknowledgement, or failure after remote journal publication but
-before local commit raises distinct `OutcomeUnknown`. Every mutating tool
-returns its text verbatim, beginning `outcome unknown`, stating the change MAY
-have been applied and requiring a re-read before retry. Append, prepend,
-search-replace, properties set and tags add explicitly warn that blind retry
-can duplicate changes. Proven pre-send failures and explicit 4xx refusals
-remain ordinary errors.
+errors/skips with no requested mutation. Proven pre-send failures and explicit
+4xx refusals remain ordinary errors. A lost metadata response after send,
+unconfirmed metadata acknowledgement, or failure after remote journal
+publication but before local commit raises distinct `OutcomeUnknown`.
+Every mutating tool returns operation-specific text beginning `outcome unknown`
+and stating that the change MAY have been applied.
+
+Uncertainty starts only when a request publishing the note's **metadata**
+has been sent and its outcome is unknown (P-16). Losing a chunk PUT response
+before metadata publication is an ordinary error: the note is unchanged; a
+harmless orphan chunk may exist. Copy and move reuse chunks. If move publishes
+the destination but loses the source-retirement metadata response, it reports
+`destination published; source removal unknown — re-read both paths`.
+An S3 journal publishes metadata and chunks together in one request. Force a
+journal refresh before re-reading paths after an unknown outcome.
+
+Every mutating tool names its operation and retry class:
+
+- **NON-IDEMPOTENT:** append, prepend, search-replace, after-heading insertion,
+  canvas node add and canvas edge add. A blind retry can duplicate the change:
+  **re-read the note and apply the remaining change manually rather than
+  retrying blindly**.
+- **IDEMPOTENT FOR THE SAME INPUT:** overwrite, delete, move, copy, template
+  create, note create, attachment upload, properties set/delete, tags add/remove
+  and canvas node/edge remove. **Re-read to see whether it applied; retrying the
+  same request is safe**. Create repeats may report “already exists”; tags add
+  deduplicates. This describes the same request, including paths, values and IDs.
+
+The journal peer commits a pending outbound key and payload digest locally
+before sending, then confirms it after exact remote read-back. Replay/refresh
+recognizes its own matching publications independently of `last_sent_key`,
+applies and marks them processed, and repairs last-sent to the newest confirmed
+outbound journal. Reconciliation is idempotent. An unpublished pending intent
+is removed when its key is absent; a colliding key with different bytes is not
+claimed. Removing an obsolete old key after reconciliation causes no refusal;
+a missing newest confirmed journal still triggers wipe detection. Resets retain
+local note revisions and chunks.
 
 After remote read-back and local metadata commit, processed/last-sent tracking
 failure retries at most three times, then logs WARNING and returns success.
-Replaying an unmarked journal is idempotent: no duplicate leaves, unchanged
-winner, and eventual processed-ledger convergence. A later publish advances
-last-sent tracking. This reporting contract does not alter pinned upstream replay behavior or introduce an emulated parity oracle.
+The next replay repairs deferred tracking without requiring another mutation.
+This reporting contract does not introduce an emulated upstream parity oracle;
+checkpoint compatibility checks execute the real pinned commonlib methods.

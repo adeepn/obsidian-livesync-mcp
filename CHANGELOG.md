@@ -8,9 +8,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- Add explicit `outcome unknown` results for mutations whose remote application
-  cannot be confirmed; require re-reading before retry and warn against
-  duplicating non-idempotent edits.
+- Restrict `outcome unknown` to uncertain metadata publication (P-16): a lost
+  chunk PUT response leaves the note unchanged; an uncertain move source
+  retirement says “destination published; source removal unknown — re-read both
+  paths”. S3 journals publish metadata and chunks together.
+- Classify append, prepend, search-replace, after-heading insertion and canvas
+  node/edge add as non-idempotent: re-read the note and apply the remaining
+  change manually rather than retrying blindly. Classify overwrite, delete,
+  move, copy, template/note create, attachment upload, properties set/delete,
+  tags add/remove and canvas node/edge remove as idempotent for the same input:
+  re-read to see whether it applied; retrying the same request is safe.
+- Persist outbound journal intent before publication and confirm exact read-back;
+  replay repairs stale last-sent tracking, applies/processes our journals and
+  cleans unpublished intents idempotently. Missing obsolete keys no longer
+  cause spurious refusal; missing newest confirmed journals still detect wipes.
 
 - Add local device allow/ignore regex and vault ignore-file selection to both writers, with pinned ECMAScript/minimatch matching and filter diagnostics. Active filters require Node.js 22+.
 
