@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Preserve fractional `LIVESYNC_JOURNAL_MAX_REFRESH_SECONDS` settings, including
+  `0.25`, for backward compatibility. Durations accept positive finite numbers
+  below `2**63`; byte/count/depth settings require positive integers below that
+  bound. The S3 refresh interval uses the same duration bounds.
+- Retain fractional size limits and measured durations in diagnostics, using
+  canonical decimal text, and preserve negative subprocess signal statuses.
+  Validate each numeric field at construction and rendering.
+- Supply status-specific HTTP 400/405/408/413/429 guidance. Treat mutating
+  HTTP 408 responses as outcome unknown on CouchDB and S3; re-read before retrying.
+
 ### Added
 
 - Restrict `outcome unknown` to uncertain metadata publication (P-16): a lost

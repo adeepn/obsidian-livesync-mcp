@@ -186,8 +186,7 @@ def _load_s3_state(env: Mapping[str, str]) -> tuple[str, float]:
 
     Blank values fall back to the defaults (same convention as
     ``COUCHDB_URL``). The refresh interval must be a positive, finite
-    number; the error names the variable and echoes only the offending
-    non-secret value.
+    number below 2**63; the error names the variable without echoing input.
     """
     state_dir = env.get("S3_STATE_DIR", "").strip() or S3_STATE_DIR_DEFAULT
 

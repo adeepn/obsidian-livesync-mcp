@@ -15,10 +15,23 @@ through unchanged: they can belong to a note identity and do not reorder text.
 Structured JSON path fields keep the exact path; free-text lines are escaped.
 Note contents remain note contents.
 
+HTTP 400 and 413 advise against retrying unchanged requests; 413 suggests
+splitting content or raising the server limit. HTTP 405 reports a method/configuration
+mismatch, and 429 advises waiting before retrying. HTTP 408 reports a timeout:
+for mutating PUT/POST/DELETE requests the write outcome is unknown, so re-read
+before retrying. Reads can be retried later. HTTP 500/503 retain the existing
+unknown-write-outcome or unavailable-read guidance; unfamiliar statuses retain
+generic guidance.
+
 Transport failures retain the HTTP status and operation (`GET`, `PUT`, `POST`,
 `DELETE`, `HEAD`, `LIST`) without response bodies or headers. Numeric diagnostic
-fields must be integers (excluding bool), in `0 <= x < 2**63`; invalid values
-become `<invalid>` at construction and are revalidated at rendering. Cause
+fields declare their type and range: counts, byte sizes/limits, depths and HTTP
+statuses are integers in `0 <= x < 2**63`; measured limits
+(`syncMaxSizeInMB`) and elapsed seconds accept integers or finite floats in the
+same range. Process exit statuses are integers in `[-256, 256]`, including
+negative signal statuses. Booleans are excluded everywhere. Invalid values
+become `<invalid>` at construction and are revalidated at rendering. Measured
+values render as decimal numbers without exponent notation or trailing `.0`. Cause
 classes use `[A-Za-z_][A-Za-z0-9_]{0,63}`; other names become
 `<unexpected cause>`. Setting keys, budget names, reasons and algorithms use
 closed inventories; operation names use the closed inventory above. If outcome
@@ -227,7 +240,10 @@ These budgets are independent of file size and `syncMaxSizeInMB`, including 0:
 | Download bytes per refresh (also controls) | 64 GiB | `LIVESYNC_JOURNAL_MAX_REFRESH_BYTES` |
 | Refresh elapsed seconds | 3600 | `LIVESYNC_JOURNAL_MAX_REFRESH_SECONDS` |
 
-All accept positive integers below `2**63`, including elapsed seconds. A trip names the budget, observed amount,
+Byte, count and depth settings accept positive integers below `2**63`.
+`LIVESYNC_JOURNAL_MAX_REFRESH_SECONDS` accepts positive finite numbers below
+`2**63`, including fractional seconds such as `0.25`; this preserves the earlier
+duration configuration contract. A trip names the budget, observed amount,
 configured limit, and exact variable to raise. Streaming inflate/download can
 report a lower bound rather than consume an entire hostile body. Restart after
 changing env values. Key/byte/time failures preserve completed replay progress;
@@ -449,7 +465,7 @@ are read only for the selected backend. Empty defaults below mean an empty strin
 | `S3_REGION` | `auto` (fields); empty if omitted in URI | Optional | Object-storage region |
 | `S3_PREFIX` | empty | Optional | Literal key prefix, including trailing slash if needed |
 | `S3_STATE_DIR` | `./data` | Optional | Dedicated persistent local replica directory |
-| `S3_REFRESH_MIN_INTERVAL_SEC` | `5` | Optional | Positive finite seconds between refresh attempts |
+| `S3_REFRESH_MIN_INTERVAL_SEC` | `5` | Optional | Positive finite seconds below `2**63` between refresh attempts |
 | `S3_STATE_SIZE_WARN_MB` | `0` | Optional | Non-negative integer warning threshold in MiB; 0 disables |
 | `MCP_API_KEY` | empty | Required unless full OAuth group set | Shared bearer token; takes precedence over OAuth |
 | `OAUTH_PASSWORD` | empty | Required for OAuth | Password on the authorization form |
