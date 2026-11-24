@@ -42,15 +42,10 @@ async def test_disk_type_and_roundtrip(backend, suffix, doc_type, as_bytes):
         assert note['data'] == TEXT.encode()
 
 
-async def test_plain_host_decode_replaces_invalid_utf8(backend):
-    from content_splitter import ContentSplitter
-    backend._splitter = ContentSplitter({'chunkSplitterVersion': 'v3-rabin-karp'})
-    meta = await backend.write_note('broken.md', b'\xef\xbb\xbfA\xffB', create=True)
-    note = await backend.read_note('broken.md')
-    assert meta['type'] == 'plain'
-    assert note['text'] == '\ufeffA\ufffdB'
-    # EntryManager stores the text Blob's byte length, after host decoding.
-    assert meta['size'] == len('\ufeffA\ufffdB'.encode())
+async def test_plain_ingress_refuses_invalid_utf8(backend):
+    with pytest.raises(ValueError, match='invalid UTF-8'):
+        await backend.write_note('broken.md', b'\xef\xbb\xbfA\xffB', create=True)
+    assert await backend.read_note('broken.md') is None
 
 
 @pytest.mark.parametrize('method', ['write_note', 'write_attachment'])

@@ -966,8 +966,11 @@ class CouchDBBackend:
         if not live and not create:
             raise NoteNotFound(f"note not found: {path}")
 
-        children = [await self._write_chunk(path, piece)
-                    for piece in self._splitter.split(content, path=canonical_path(path)) if piece]
+        pieces = [piece for piece in self._splitter.split(content, path=canonical_path(path)) if piece]
+        # Blob.text() in legacy splitters strips BOM; metadata counts saved bytes.
+        if doc_type == 'plain':
+            size = sum(len(piece.encode('utf-8')) for piece in pieces)
+        children = [await self._write_chunk(path, piece) for piece in pieces]
         new_mtime = _now_ms() if mtime is None else mtime
         if doc is None:
             body = new_metadata_doc(

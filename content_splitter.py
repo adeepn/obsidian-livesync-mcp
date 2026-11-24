@@ -32,7 +32,7 @@ class _TextBlob(bytes):
     """Raw text/plain Blob bytes, including malformed UTF-8 (oracle input)."""
 
 
-def _read_string(raw: bytes) -> str:
+def _wheels_read_string(raw: bytes) -> str:
     """octagonal-wheels@0.1.57 readString, including its <=128-byte path.
 
     Long buffers use nonfatal TextDecoder(ignoreBOM=true). Short buffers
@@ -349,7 +349,7 @@ class RabinKarpSplitter(_Splitter):
         pieces.append(raw[start:])
         if is_text:
             # V3 uses readString, unlike the legacy Blob.text() path.
-            return [_read_string(piece) for piece in pieces]
+            return [_wheels_read_string(piece) for piece in pieces]
         return [base64.b64encode(piece).decode('ascii') for piece in pieces]
 
 

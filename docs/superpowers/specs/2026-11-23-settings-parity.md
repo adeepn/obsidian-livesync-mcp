@@ -58,6 +58,32 @@ lockfile SHA512 and tar members, rather than substitute TextDecoder.
 | .md containing binary bytes | Ordinary device disk path selects **host text decoding**, yields text/plain Blob and plain record if the read succeeds; source does not sniff or reject binary bytes. Invalid encoding byte preservation depends on host read implementation, not this commonlib. A directly supplied binary Blob with .md path is instead newnote. `U:serviceModules/FileAccessBase.ts:201-206`; `U:serviceModules/ServiceFileAccessBase.ts:265-276`; `U:managers/EntryManager/EntryManagerImpls.ts:252-256`. | write_note accepts str only; write_attachment to .md refused by textual-path policy: `storage_journal.py:979-1017`. | Task 4 test both ingress kinds. Do not label arbitrary binary `.md` bytes automatically newnote while claiming device disk parity. Task 8 must observe invalid-UTF8 host decoding. |
 | .png containing text bytes | Ordinary device disk path reads binary → non-text Blob → **newnote**, independently base64 pieces. Direct programmatic string/text Blob can be **plain** at the same path; no content sniff. `U:serviceModules/FileAccessBase.ts:201-206`; `U:serviceModules/ServiceFileAccessBase.ts:271-275`; `U:managers/EntryManager/EntryManagerImpls.ts:252-256`. | str write to .png rejected; attachment accepted as newnote: `storage_journal.py:990-1017`. | Task 4 represent the distinction explicitly in API semantics/tests; neither extension-only nor content-only blanket rule covers both upstream entry points. |
 
+### Fix round 1: distinct byte-to-text contracts (P-9)
+
+1. **Disk host read:** `U:serviceModules/FileAccessBase.ts:162-167,201-206`
+   selects `adapter.storage.read` / `adapter.vault.read` for plain suffixes.
+   `U:serviceModules/ServiceFileAccessBase.ts:265-276` and
+   `U:common/utils.ts:97-115` wrap the returned string in a text Blob.
+   Commonlib does **not** establish how the native host handles malformed
+   UTF-8. Task 8 must observe it. This peer's `plain_ingress_utf8` therefore
+   refuses invalid plain byte input before publication. Explicit upload
+   `lossy_text=true` uses UTF-8 replacement, reports invalid bytes replaced,
+   and returns stored size/hash. This policy is not a host-parity oracle.
+2. **Blob-to-string chunk preparation:** v3 calls wheels `readString` at
+   `U:string_and_binary/chunks.ts:621,633`; v1/v2 use `Blob.text()` at
+   lines 357,445. Real `octagonal-wheels@0.1.57 dist/binary/base64.js:249-298`
+   uses a permissive manual decoder at <=128 bytes and TextDecoder above
+   that threshold. `A ff B` becomes `AB` in the short branch, while explicit
+   ingress replacement gives `A U+FFFD B`. Truncated sequences, overlong
+   encodings, lone continuation bytes and UTF-16-surrogate encodings are
+   pinned separately in tests. `_wheels_read_string` preserves Task 3c
+   behavior; it is never used for disk byte ingress validation.
+
+Execution of the real pinned dependency (including its real imports), with
+SHA256 verification against the Task 3c fixture, is retained in
+`task-4-fix1-decoder-oracle.mjs/.json` under the Task 4 report directory.
+No test claims to establish the native host's malformed-byte semantics.
+
 ## г. Path identity, case and NFC
 
 | Question | Exact upstream behavior + citation | Our current implementation + citation | Delta / Task 2–5 action |

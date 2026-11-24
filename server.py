@@ -45,7 +45,8 @@ from frontmatter import (
     FrontmatterError, get_properties, split_frontmatter, set_properties,
     delete_properties, add_tags, remove_tags, insert_after_frontmatter,
 )
-from livesync_format import ForbiddenPathError, PATH_IDENTITY_LEGACY
+from livesync_format import (ForbiddenPathError, PATH_IDENTITY_LEGACY,
+                             resolve_doc_type, plain_ingress_utf8, InvalidPlainTextBytes)
 from links import GraphBuilder, extract_links, resolve_link
 from auth_config import StaticBearerTokenVerifier, select_auth_mode
 from oauth_provider import SimpleOAuthProvider
@@ -506,13 +507,14 @@ async def obsidian_search(query: str, regex: bool = False) -> str:
 @_tool
 @_tool_errors(writer=True)
 async def obsidian_upload_attachment(
-    path: str, content_b64: str, *, overwrite: bool = False,
+    path: str, content_b64: str, *, overwrite: bool = False, lossy_text: bool = False,
 ) -> str:
     """Upload a binary attachment (PDF, scan, image) from strict base64.
 
     Decoded data is capped at 32 MiB. Device path rules select plain or
-    newnote storage. Existing files require overwrite=True. Returns input
-    size and SHA-256; fetch exposes valid UTF-8 bodies as text.
+    newnote storage. Existing files require overwrite=True. Malformed UTF-8
+    on plain paths is refused unless lossy_text=True explicitly converts it.
+    Returns stored size and SHA-256, and replaced_bytes for lossy conversion.
     """
     try:
         data = base64.b64decode(content_b64, validate=True)
@@ -523,12 +525,26 @@ async def obsidian_upload_attachment(
             f"Error: attachment exceeds 32 MiB cap ({MAX_ATTACHMENT_BYTES} bytes); "
             f"actual size {len(data)} bytes."
         )
+    replaced_bytes = 0
+    if resolve_doc_type(path, data) == 'plain':
+        try:
+            text, replaced_bytes = plain_ingress_utf8(data, lossy_text=lossy_text)
+        except InvalidPlainTextBytes as error:
+            return f'Error: {error}'
+        data = text.encode('utf-8')
     meta = await _backend().write_attachment(
         path, data, create=True, overwrite=overwrite,
     )
+    # Legacy Blob.text() can strip BOM. Report the saved revision's bytes,
+    # rather than the caller's original input or the pre-split Blob size.
+    stored = await _backend().read_note(meta['path'])
+    if stored is None or stored['rev'] != meta['rev']:
+        raise ConcurrentModification()
+    stored_bytes = stored['text'].encode('utf-8') if stored['is_text'] else stored['data']
     return json.dumps({
-        "path": meta["path"], "size": len(data),
-        "sha256": hashlib.sha256(data).hexdigest(),
+        "path": meta["path"], "size": len(stored_bytes),
+        "sha256": hashlib.sha256(stored_bytes).hexdigest(),
+        **({'replaced_bytes': replaced_bytes} if replaced_bytes else {}),
     }, ensure_ascii=False)
 
 

@@ -89,8 +89,11 @@ Storage follows LiveSync device **disk ingestion**, with case-sensitive suffixes
 `.png`, and extensionless files) uses `newnote` with independently base64-encoded
 pieces, even when the content is textual. There is no content sniffing. Both
 backends accept strings or bytes: strings for a newnote path become UTF-8 bytes;
-bytes for a plain path undergo UTF-8 decoding with replacement of invalid
-sequences (U+FFFD). Native-host invalid-byte behavior still needs live validation.
+bytes for a plain path must be valid UTF-8 or the write is refused before
+publication. Upload callers may explicitly set `lossy_text=true` to replace
+invalid bytes with U+FFFD; the response reports `replaced_bytes`, stored size,
+and stored SHA-256. Newnote bytes remain unchanged. Native-host invalid-byte
+behavior still needs live validation; opt-in replacement is this peer's policy.
 The existing vault splitter determines pieces and their ordered child IDs;
 metadata size is the input Blob byte length after decoding, before splitting.
 
@@ -281,8 +284,11 @@ Storage follows LiveSync device **disk ingestion**, with case-sensitive suffixes
 `.png`, and extensionless files) uses `newnote` with independently base64-encoded
 pieces, even when the content is textual. There is no content sniffing. Both
 backends accept strings or bytes: strings for a newnote path become UTF-8 bytes;
-bytes for a plain path undergo UTF-8 decoding with replacement of invalid
-sequences (U+FFFD). Native-host invalid-byte behavior still needs live validation.
+bytes for a plain path must be valid UTF-8 or the write is refused before
+publication. Upload callers may explicitly set `lossy_text=true` to replace
+invalid bytes with U+FFFD; the response reports `replaced_bytes`, stored size,
+and stored SHA-256. Newnote bytes remain unchanged. Native-host invalid-byte
+behavior still needs live validation; opt-in replacement is this peer's policy.
 The existing vault splitter determines pieces and their ordered child IDs;
 metadata size is the input Blob byte length after decoding, before splitting.
 

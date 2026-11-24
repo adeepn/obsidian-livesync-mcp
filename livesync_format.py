@@ -350,15 +350,42 @@ def resolve_doc_type(path: str, data: str | bytes) -> str:
     return "plain" if _normalize_path(path).endswith(_TEXT_SUFFIXES) else "newnote"
 
 
+class InvalidPlainTextBytes(ValueError):
+    """Reject malformed byte ingress before publishing a plain document."""
+
+
+def plain_ingress_utf8(raw: bytes, *, lossy_text: bool = False) -> tuple[str, int]:
+    """Our explicit byte-input policy, NOT wheels readString.
+
+    FileAccessBase.ts:201-206 delegates disk text reads to the native host;
+    its malformed-byte behavior remains a Task 8 live question. Replacement
+    here is opt-in policy, not a verified emulation of that host adapter.
+    Wheels Blob-to-string decoding inside chunk preparation is independently
+    implemented by content_splitter._wheels_read_string and must remain unchanged.
+    """
+    try:
+        return raw.decode('utf-8'), 0
+    except UnicodeDecodeError:
+        invalid_bytes = len(raw) - len(raw.decode('utf-8', errors='ignore').encode('utf-8'))
+        if not lossy_text:
+            raise InvalidPlainTextBytes(
+                f'invalid UTF-8: {invalid_bytes} invalid bytes; the path extension selects '
+                'plain text. A device text read can store malformed bytes lossily '
+                '(native host semantics remain unverified). Use a non-plain path '
+                'for binary content or explicitly convert with lossy_text=true.'
+            ) from None
+        return raw.decode('utf-8', errors='replace'), invalid_bytes
+
+
 def prepare_file_content(
     path: str, content: str | bytes,
 ) -> tuple[str | bytes, str, int]:
     """Model host reading followed by Blob creation; return body, type, size.
 
-    Host decoding is outside commonlib (FileAccessBase.ts:201-206). Choose
-    UTF-8 replacement decoding for invalid input, retaining BOM, pending
-    Task 8 native-host verification. Size is the resulting Blob byte length
-    (EntryManagerImpls.ts:275-281), not base64 length or pre-decoding size.
+    Host decoding is outside commonlib (FileAccessBase.ts:201-206).
+    Refuse malformed plain byte input by default (P-9); explicit lossy
+    conversion belongs to the upload tool. This is separate from wheels
+    readString used by chunk preparation. See plain_ingress_utf8.
     """
     doc_type = resolve_doc_type(path, content)
     if isinstance(content, str):
@@ -372,7 +399,7 @@ def prepare_file_content(
             raw = content.encode("utf-8")
         return (content if doc_type == "plain" else raw), doc_type, len(raw)
     if doc_type == "plain":
-        text = content.decode("utf-8", errors="replace")
+        text, _ = plain_ingress_utf8(content)
         return text, doc_type, len(text.encode("utf-8"))
     return content, doc_type, len(content)
 
