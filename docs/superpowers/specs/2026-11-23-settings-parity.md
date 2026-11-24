@@ -668,3 +668,19 @@ requirements.lock and installed versions already match.
 Live JWT startup is env-gated by `COUCHDB_TEST_JWT_URL`. The URL was absent in
 this task environment, so live CouchDB acceptance remains NOT DONE; the HTTP
 fake and WebCrypto-generated wire fixtures cover offline behavior.
+
+
+### 2026-11-25 — G4a whole-note text budget
+
+[DECISION] Apply one decoded UTF-8 text budget to plain documents and textual
+newnotes, in direct tools and scans. Explicit nonnegative operator bytes win;
+0 is unlimited. Otherwise resolve max(positive vault MiB * 1024 * 1024 floored,
+256 MiB) against the current backend size policy. The binary64 conversion
+matches commonlib `services/base/VaultService.ts:73-81`. Budget refusals expose
+only typed counts, a closed reason and an actionable variable/download remedy.
+Regex replacement output defaults to the effective text budget; configure its
+bytes independently and configure regex deadlines (default 10 seconds).
+
+[DEFER] P-29 second half: complete metadata index, scan time budget, cursors,
+persistent regex worker, fetch line windows and search page limit. Keep current
+10000-note / 64 MiB aggregate limits and per-note regex processes.

@@ -20,7 +20,8 @@ from contextlib import aclosing, asynccontextmanager
 from contextvars import ContextVar
 from scan_budget import ScanBudget
 from replay_limits import ReplayBudgetExceeded
-from text_eligibility import is_text_characters, DEFAULT_TEXT_SCAN_MAX_BYTES
+from text_eligibility import is_text_characters, DEFAULT_TEXT_SCAN_MAX_BYTES, enforce_text_budget, text_size
+from storage_base import TextBudgetExceeded
 from functools import wraps
 from pathlib import Path
 from typing import Any
@@ -84,6 +85,8 @@ def get_backend(cfg: Config) -> StorageBackend:
         if cfg.sync_max_size_mb is not None:
             result.sync_max_size_mb = cfg.sync_max_size_mb
         result.text_scan_max_bytes = cfg.text_scan_max_bytes
+        result.regex_max_output_bytes = getattr(cfg, "regex_max_output_bytes", 0)
+        result.regex_timeout_seconds = getattr(cfg, "regex_timeout_seconds", regex_runner.DEFAULT_TIMEOUT)
         _configure_device_policy(result, cfg)
         return result
     if cfg.couchdb is None:
@@ -103,6 +106,8 @@ def get_backend(cfg: Config) -> StorageBackend:
     if cfg.sync_max_size_mb is not None:
         result.sync_max_size_mb = cfg.sync_max_size_mb
     result.text_scan_max_bytes = cfg.text_scan_max_bytes
+    result.regex_max_output_bytes = getattr(cfg, "regex_max_output_bytes", 0)
+    result.regex_timeout_seconds = getattr(cfg, "regex_timeout_seconds", regex_runner.DEFAULT_TIMEOUT)
     _configure_device_policy(result, cfg)
     return result
 
@@ -222,6 +227,8 @@ def _storage_message(error: StorageError, *, caller_paths=()) -> str:
 
 def _storage_message_body(error: StorageError, *, caller_paths=()) -> str:
     """Map device outcomes/errors; expose only explicitly safe diagnostics."""
+    if isinstance(error, TextBudgetExceeded):
+        return error.format()
     if isinstance(error, MutationNotApplied):
         return f"Error: note is unchanged; {_safe_storage_detail(error)}"
     if isinstance(error, OutcomeUnknown):
@@ -340,8 +347,8 @@ def _tool_errors(
                 return _publication_text(result, counts)
             finally:
                 publication_replacements.reset(token)
-        except regex_runner.RegexTimeoutError:
-            return "Error: regex pattern too complex or input too large."
+        except (regex_runner.RegexTimeoutError, regex_runner.RegexOutputExceeded) as error:
+            return error.format()
         except StorageError as error:
             try:
                 if isinstance(error, (OutcomeUnknown, WriteSkipped, RenameRefused, WriterUnsupported, MutationNotApplied)):
@@ -422,13 +429,12 @@ def _text_representation(note: NoteContent) -> NoteContent:
     P-8: use the same UTF-8, controls and byte-budget rule as scans.
     Ineligible bodies retain metadata/download behavior; copy backend state.
     """
+    enforce_text_budget(note, getattr(_backend(), "text_scan_max_bytes", DEFAULT_TEXT_SCAN_MAX_BYTES))
     if note["is_text"]:
         return note
     data = note["data"]
     if data is None:
         raise StorageError()
-    if len(data) > getattr(_backend(), 'text_scan_max_bytes', DEFAULT_TEXT_SCAN_MAX_BYTES):
-        return note
     try:
         text = data.decode("utf-8")
         if not is_text_characters(text):
@@ -630,7 +636,7 @@ async def obsidian_search(query: str, regex: bool = False) -> str:
     pattern = query if regex else None
     if regex:
         try:
-            await asyncio.to_thread(regex_runner.apply, query, "", "findall")
+            await asyncio.to_thread(regex_runner.apply, query, "", "findall", timeout=getattr(_backend(), "regex_timeout_seconds", regex_runner.DEFAULT_TIMEOUT))
         except re.error:
             return "Invalid regular expression."
     results, skipped = [], []
@@ -642,7 +648,7 @@ async def obsidian_search(query: str, regex: bool = False) -> str:
             if pattern is not None:
                 try:
                     matches = (await asyncio.to_thread(
-                        regex_runner.apply, pattern, text, "findall"))["matches"]
+                        regex_runner.apply, pattern, text, "findall", timeout=getattr(_backend(), "regex_timeout_seconds", regex_runner.DEFAULT_TIMEOUT)))["matches"]
                 except re.error:
                     return "Invalid regular expression."
                 if matches:
@@ -710,9 +716,10 @@ async def obsidian_download_attachment(path: str, max_bytes: int = 0) -> str:
     note = await _backend().read_note(path)
     if note is None:
         return f"Note '{escape_path(path)}' not found."
-    if note["is_text"]:
+    budget = getattr(_backend(), 'text_scan_max_bytes', DEFAULT_TEXT_SCAN_MAX_BYTES)
+    if note["is_text"] and not (budget and text_size(note) > budget):
         return "Error: textual note; use obsidian_fetch."
-    data = note["data"]
+    data = note['text'].encode('utf-8') if note['is_text'] else note['data']
     if data is None:
         raise StorageError()
     size = len(data)
@@ -739,16 +746,26 @@ async def obsidian_fetch(path: str, include_properties: bool = True, include_sta
         include_properties: Include frontmatter properties in response
         include_stats: Include word/character count statistics
     """
-    note = await _backend().read_note(path)
-    if note is None:
-        return f"Note '{escape_path(path)}' not found."
-    note = _text_representation(note)
-    meta = note["meta"]
+    refusal = None
+    try:
+        reader = getattr(_backend(), 'read_text_note', _backend().read_note)
+        note = await reader(path)
+        if note is None:
+            return f"Note '{escape_path(path)}' not found."
+        if not note['is_text'] and note['data'] is None:
+            note = await _backend().read_note(path)
+        note = _text_representation(note)
+        meta = note['meta']
+    except TextBudgetExceeded as error:
+        refusal = error.as_dict()
+        meta = await _backend().get_meta(path)
     result = {
         key: meta.get(key)
         for key in ("path", "ctime", "mtime", "type", "size")
     }
-    if not note["is_text"]:
+    if refusal is not None:
+        result.update(refusal)
+    elif not note["is_text"]:
         data = note["data"]
         if data is None:
             raise StorageError()
@@ -890,13 +907,16 @@ async def obsidian_update_note(
             if regex:
                 result = await asyncio.to_thread(
                     regex_runner.apply, pattern, existing, "subn",
-                    replacement=replace, flags=0)
+                    replacement=replace, flags=0,
+                    timeout=getattr(_backend(), 'regex_timeout_seconds', regex_runner.DEFAULT_TIMEOUT),
+                    max_output_bytes=(getattr(_backend(), 'regex_max_output_bytes', 0)
+                                      or getattr(_backend(), 'text_scan_max_bytes', DEFAULT_TEXT_SCAN_MAX_BYTES)))
                 new_content, matches = result["result"], result["count"]
             else:
                 new_content, matches = re.subn(pattern, lambda match: replace, existing)
         except re.error:
             return "Error: invalid regex search pattern."
-        except regex_runner.RegexTimeoutError:
+        except (regex_runner.RegexTimeoutError, regex_runner.RegexOutputExceeded):
             raise
         except ValueError:
             return "Error: regex replacement output too large."
@@ -1388,7 +1408,9 @@ async def obsidian_vault_stats() -> str:
         by_ext[ext] = by_ext.get(ext, 0) + 1
     tags = await _tags()
     info = await _backend().backend_info()
-    local_state = {}
+    local_state = {key: info[key] for key in
+                   ('text_budget_bytes', 'regex_max_output_bytes', 'regex_timeout_seconds')
+                   if key in info and type(info[key]) in (int, float)}
     if info.get("backend") == "s3-journal":
         size = info["state_dir_bytes"]
         threshold = info["state_size_warn_mb"]

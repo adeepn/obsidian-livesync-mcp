@@ -52,6 +52,8 @@ from config import CouchDBConfig
 from couchdb_jwt import JWTTokenGenerator
 
 from scan_budget import ScanBudget
+from text_eligibility import TextAccessPolicy, project_note, scan_text
+from storage_base import TextBudgetExceeded
 from text_eligibility import (TextProjection, DEFAULT_TEXT_SCAN_MAX_BYTES,
                               DEFAULT_TEXT_VERDICT_CACHE_ENTRIES)
 
@@ -149,7 +151,7 @@ def _now_ms() -> int:
     return int(time.time() * 1000)
 
 
-class CouchDBBackend(DeviceSelection):
+class CouchDBBackend(TextAccessPolicy, DeviceSelection):
     """LiveSync vault storage served by a CouchDB instance."""
 
     def __init__(
@@ -171,7 +173,7 @@ class CouchDBBackend(DeviceSelection):
             raise ValueError("text verdict cache entries must be positive")
         self.text_verdict_cache_entries = text_verdict_cache_entries
         self._scan_limits = (scan_max_notes, scan_max_bytes)
-        self.text_scan_max_bytes = DEFAULT_TEXT_SCAN_MAX_BYTES
+        self.text_scan_max_bytes = None
         self._text_verdicts = OrderedDict()
         self._jwt = JWTTokenGenerator(jwt_config, clock=jwt_clock) if jwt_config is not None else None
         self._custom_headers = dict(custom_headers)
@@ -502,6 +504,7 @@ class CouchDBBackend(DeviceSelection):
         selection = await self.selection_diagnostics()
         return {
             **selection,
+            **self.text_limits(),
             "tweak_assessment": assessment_fields(self._tweak_assessment),
             "writer_supported": self._writer_unsupported_reason is None and selection["selection_writer_supported"],
             "writer_unsupported_reason": writer_diagnostic(self._writer_unsupported_reason or selection["selection_unsupported_reason"]),
@@ -596,8 +599,8 @@ class CouchDBBackend(DeviceSelection):
         if doc is None or not is_note_document(doc):
             return None
         if doc.get('type') != 'newnote':
-            return await self._content_from_doc(doc)
-        text = await self._scan_newnote(doc)
+            return project_note(await self._content_from_doc(doc), self.text_scan_max_bytes)
+        text = await self._scan_newnote(doc, strict_budget=True)
         meta = self._meta_from_doc(doc)
         return NoteContent(meta=meta, text=text, data=None,
                            is_text=text is not None, rev=meta['rev'])
@@ -667,7 +670,7 @@ class CouchDBBackend(DeviceSelection):
                         continue
                     content = (await self._content_from_doc(doc, chunks)
                                if doc is not None else None)
-                    yield (content["meta"], content["text"]) if content else (meta, None)
+                    yield (content["meta"], scan_text(content["text"], self.text_scan_max_bytes)) if content else (meta, None)
                 except Exception:
                     logger.error('skipping note <omitted>')
                     yield meta, None
@@ -675,11 +678,11 @@ class CouchDBBackend(DeviceSelection):
             del docs, rows, chunks, chunk_rows, doc, content
             inline = row = chunk = None
 
-    async def _scan_newnote(self, doc: dict) -> str | None:
+    async def _scan_newnote(self, doc: dict, *, strict_budget=False) -> str | None:
         doc_id = doc['_id']
         key = (doc['_rev'], self.text_scan_max_bytes)
         cached = self._text_verdicts.pop(doc_id, None)
-        if cached == key:
+        if cached == key and not strict_budget:
             self._remember_nontext(doc_id, key)
             return None
         if doc.get('e_'):
@@ -688,12 +691,20 @@ class CouchDBBackend(DeviceSelection):
         if not isinstance(children, list) or not all(isinstance(c, str) for c in children):
             raise StorageError('invalid children field')
         projection = TextProjection(self.text_scan_max_bytes)
+        eligible = True
         for index, child in enumerate(children):
             piece = (await self._fetch_chunk_datas([child], doc['path'], doc.get('eden')))[0]
             if not projection.feed(piece, final=index == len(children) - 1):
-                self._remember_nontext(doc_id, key)
-                return None
-        return projection.text()
+                eligible = False
+                projection.parts.clear()
+                if not strict_budget:
+                    self._remember_nontext(doc_id, key)
+                    return None
+        if strict_budget and self.text_scan_max_bytes and projection.bytes > self.text_scan_max_bytes:
+            raise TextBudgetExceeded(projection.bytes, self.text_scan_max_bytes)
+        if not eligible:
+            self._remember_nontext(doc_id, key)
+        return projection.text() if eligible else None
 
     def _remember_nontext(self, doc_id: str, key: tuple[str, int]) -> None:
         # Positive verdicts cannot avoid the body I/O needed for a text query.

@@ -25,7 +25,7 @@ This repository is a small Python MCP server for accessing an Obsidian LiveSync 
 - `replay_limits.py`: configurable operational journal/object/refresh budgets, separate from device file-size admission.
 - `regex_runner.py`: disposable-process regex evaluation with deadline/output cap.
 - `scan_budget.py`: aggregate note/byte scan admission and truncation metadata.
-- `text_eligibility.py`: bounded incremental UTF-8/control-character projection of newnote pieces, shared by both backends.
+- `text_eligibility.py`: shared whole-note text budget resolution and incremental UTF-8/control-character projection, shared by both backends.
 - `frontmatter.py`: round-trip YAML frontmatter editing (ruamel.yaml).
 - `links.py`: Obsidian-compatible link extraction, resolution, and graph building.
 - `auth_config.py`: auth-mode selection and the static bearer token verifier.
@@ -154,3 +154,9 @@ private keys in `tests/fixtures/jwt_upstream.json` are test-only, not secrets.
 refresh boundaries, exclusive configuration, transport hygiene and typed stats.
 Its one live startup smoke is skipped unless `COUCHDB_TEST_JWT_URL` is exported
 with JWT credentials and the intended `COUCHDB_DATABASE`.
+
+`scripts/extract_text_budget_vectors.mjs` executes the pinned device size
+predicate and the verified splitter harness for a 12 MiB textual newnote;
+`tests/fixtures/text_budget_upstream.json` records source hashes and published
+dependency integrity. `tests/test_text_access_budget.py` covers both backends,
+exact byte boundaries, unlimited overrides, typed refusals and real-size notes.

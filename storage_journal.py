@@ -36,6 +36,7 @@ from wire_encoding import text_encoder_string, surrogate_count
 from diagnostic_hygiene import (writer_diagnostic, diagnostic, settings_exception_diagnostic, PublicDiagnostic, setting_key,
     DiagnosticCode, assessment_fields, setting_value, fingerprint, cause_name)
 
+from text_eligibility import TextAccessPolicy, project_note, scan_text
 from text_eligibility import (DEFAULT_TEXT_SCAN_MAX_BYTES,
                               DEFAULT_TEXT_VERDICT_CACHE_ENTRIES)
 
@@ -187,7 +188,7 @@ def _as_ms(value: object) -> int:
     return int(value)
 
 
-class JournalBackend(DeviceSelection):
+class JournalBackend(TextAccessPolicy, DeviceSelection):
     """``StorageBackend`` peer for an Obsidian LiveSync journal bucket.
 
     The store under ``state_dir`` is created on the first
@@ -457,6 +458,7 @@ class JournalBackend(DeviceSelection):
         selection = await self.selection_diagnostics()
         return {
             **selection,
+            **self.text_limits(),
             "tweak_assessment": assessment_fields(self._tweak_assessment),
             "writer_supported": self._writer_unsupported_reason is None and selection["selection_writer_supported"],
             "writer_unsupported_reason": writer_diagnostic(self._writer_unsupported_reason or selection["selection_unsupported_reason"]),
@@ -784,9 +786,8 @@ class JournalBackend(DeviceSelection):
         if doc is None or not is_note_document(doc):
             return None
         if doc.get('type') != 'newnote':
-            return await self.read_note(path)
-        text = store.scan_newnote(
-            doc, getattr(self, 'text_scan_max_bytes', DEFAULT_TEXT_SCAN_MAX_BYTES))
+            return project_note(await self.read_note(path), self.text_scan_max_bytes)
+        text = store.scan_newnote(doc, self.text_scan_max_bytes, strict_budget=True)
         meta = self._meta_from_doc(doc)
         return NoteContent(meta=meta, text=text, data=None,
                            is_text=text is not None, rev=meta['rev'])
@@ -847,7 +848,7 @@ class JournalBackend(DeviceSelection):
                     doc, getattr(self, 'text_scan_max_bytes', DEFAULT_TEXT_SCAN_MAX_BYTES))
             content = store.read_note(meta["doc_id"])
             if content is not None:
-                return self._meta_from_doc(content[0]), content[1]
+                return self._meta_from_doc(content[0]), scan_text(content[1], self.text_scan_max_bytes)
         except (StorageUnavailable, ReplayBudgetExceeded):
             raise  # backend-wide condition, not a per-note failure
         except Exception:

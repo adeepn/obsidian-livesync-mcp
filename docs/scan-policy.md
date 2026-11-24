@@ -12,9 +12,13 @@ truncated. Counts and graph conclusions then describe only the scanned subset.
 The CouchDB metadata index uses the same caps, retains no bodies or eden, and
 propagates truncation to these tools. Direct note reads remain available.
 These are aggregate scan limits. Plain-note HTTP responses are loaded before
-actual size accounting; newnote text projection additionally has the per-file
-piece budget described below. Regex replacements have a separate
-10 MiB UTF-8 output cap and a two-second disposable-process deadline.
+actual size accounting. All text access additionally uses the per-file budget
+below. Regex operations retain one disposable process per note; their deadline
+is `LIVESYNC_REGEX_TIMEOUT_SECONDS` (default 10 positive finite seconds).
+Regex replacement output is bounded by `LIVESYNC_REGEX_MAX_OUTPUT_BYTES`
+(default 0 = effective text access budget); a resulting 0 means unlimited.
+Output-size and deadline refusals are distinct and name their respective variable.
+Literal replacement retains its existing behavior.
 
 New and replaced metadata persist canonical, case-preserving paths: separators
 are `/`, leading `./` and trailing slashes are removed, and internal parent
@@ -36,11 +40,28 @@ revision trees and chunks. An unreadable note can be returned without text.
 ### Text scan eligibility
 
 Vault text scans visit every visible note, independent of extension. Plain
-documents retain their text semantics. Newnotes are read one independently
+documents and textual newnotes share one decoded UTF-8 byte budget. Newnotes are read one independently
 base64-encoded piece at a time with strict incremental UTF-8 validation; NUL
 and non-text controls (except tab, CR and LF) reject the file immediately.
-`LIVESYNC_TEXT_SCAN_MAX_BYTES` (default 8388608, positive integer) bounds
-newnote bytes decoded per file. Rejected and oversized files appear in
+`LIVESYNC_TEXT_SCAN_MAX_BYTES` is an optional nonnegative integer: explicit 0
+means unlimited, and any explicit positive bound wins even below the vault
+policy. Unset/empty means max(positive `syncMaxSizeInMB` converted to bytes,
+268435456). Conversion multiplies the binary64 MiB value by 1024 twice, then
+floors the result, matching the device size predicate's integer-byte boundary
+(commonlib `services/base/VaultService.ts:73-81`). Nonpositive vault policies
+use the 256 MiB floor. An overflowing positive binary64 product means
+unlimited (0), matching the device predicate. Resolution follows the current backend size policy,
+including fractional values and every startup re-resolution. This is separate
+from aggregate limits and applies to direct fetch/edit/canvas/properties/tags/
+template reads as well as text scans, for both storage types.
+Within budget, operations use the whole text. Beyond budget, fetch returns
+metadata plus `content_available: false`, actual `size_bytes`, `budget_bytes`,
+`reason: text_budget_exceeded` and a remedy naming the variable; edits raise
+`TextBudgetExceeded` with the same fields, leaving the revision unchanged.
+Complete byte download remains available for either storage type; the caller's
+`max_bytes` still applies. See the [tool matrix](../README.md#text-access-tool-matrix).
+`vault_stats` reports `text_budget_bytes`, `regex_max_output_bytes` and
+`regex_timeout_seconds` as numbers. Rejected and oversized files appear in
 `skipped`, and still count against the overall scan note budget. No extension
 allowlist is used. Fetch and byte downloads retain the stored document type.
 

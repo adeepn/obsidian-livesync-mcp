@@ -134,7 +134,7 @@ async def test_fetch_and_template_use_same_byte_budget(backend, monkeypatch):
     await backend.write_note('large.base', 'needle', create=True)
     fetched = json.loads(await server.obsidian_fetch('large.base'))
     assert 'content' not in fetched
-    assert 'requires a text note' in await server.obsidian_create_from_template(
+    assert 'LIVESYNC_TEXT_SCAN_MAX_BYTES' in await server.obsidian_create_from_template(
         'large.base', 'created.base')
     assert await backend.read_note('created.base') is None
 

@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Settings parity
 
+- Use one operator-overridable whole-note UTF-8 budget for direct text tools
+  and scans across both storage types; default to the larger of the vault size
+  policy and 256 MiB. Explain budget refusals with typed fields and remedies,
+  allow complete beyond-budget byte downloads, and expose effective limits.
+  Configure regex replacement output bytes and regex deadlines (default 10 s).
+
 - Add CouchDB JWT authentication with plugin-exact HS256/HS512 tokens and
   ES256/ES512 raw signatures, per-backend refresh caching, validated exclusive
   auth modes and typed auth observability. Document device-field/server-key

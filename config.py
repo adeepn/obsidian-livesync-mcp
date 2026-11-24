@@ -117,7 +117,9 @@ class Config:
     selection_use_ignore_files: bool | None = None
     selection_ignore_files: tuple[str, ...] | None = None
     text_verdict_cache_entries: int = 4096
-    text_scan_max_bytes: int = 8 * 1024 * 1024
+    text_scan_max_bytes: int | None = None
+    regex_max_output_bytes: int = 0
+    regex_timeout_seconds: float = 10.0
     scan_max_notes: int = 10000
     scan_max_bytes: int = 64 * 1024 * 1024
 
@@ -467,15 +469,29 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
     scan_limits = []
     for key, default in (("LIVESYNC_SCAN_MAX_NOTES", 10000),
                          ("LIVESYNC_SCAN_MAX_BYTES", 64 * 1024 * 1024),
-                         ("LIVESYNC_TEXT_SCAN_MAX_BYTES", 8 * 1024 * 1024),
+                         ("LIVESYNC_TEXT_SCAN_MAX_BYTES", None),
                          ("LIVESYNC_TEXT_VERDICT_CACHE_ENTRIES", 4096)):
         try:
-            value = int(env.get(key, default))
-            if value <= 0:
+            raw = env.get(key, default)
+            value = None if key == "LIVESYNC_TEXT_SCAN_MAX_BYTES" and raw in (None, '') else int(raw)
+            if value is not None and (value < 0 or (value == 0 and key != "LIVESYNC_TEXT_SCAN_MAX_BYTES")):
                 raise ValueError
         except (ValueError, TypeError):
-            raise ConfigError(f"{key} must be a positive integer") from None
+            rule = "a nonnegative integer or empty" if key == "LIVESYNC_TEXT_SCAN_MAX_BYTES" else "a positive integer"
+            raise ConfigError(f"{key} must be {rule}") from None
         scan_limits.append(value)
+    try:
+        regex_max_output_bytes = int(env.get('LIVESYNC_REGEX_MAX_OUTPUT_BYTES', 0))
+        if regex_max_output_bytes < 0:
+            raise ValueError
+    except (ValueError, TypeError):
+        raise ConfigError('LIVESYNC_REGEX_MAX_OUTPUT_BYTES must be a nonnegative integer') from None
+    try:
+        regex_timeout_seconds = float(env.get('LIVESYNC_REGEX_TIMEOUT_SECONDS', 10))
+        if not math.isfinite(regex_timeout_seconds) or regex_timeout_seconds <= 0:
+            raise ValueError
+    except (ValueError, TypeError):
+        raise ConfigError('LIVESYNC_REGEX_TIMEOUT_SECONDS must be positive and finite') from None
     backend = env.get("LIVESYNC_BACKEND", "")
     if not backend:
         raise ConfigError(
@@ -523,6 +539,8 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
         selection_ignore_files=ignore_files if env.get('LIVESYNC_IGNORE_FILES', '') else None,
         text_verdict_cache_entries=scan_limits[3],
         text_scan_max_bytes=scan_limits[2],
+        regex_max_output_bytes=regex_max_output_bytes,
+        regex_timeout_seconds=regex_timeout_seconds,
         scan_max_notes=scan_limits[0],
         scan_max_bytes=scan_limits[1],
         backend=backend,

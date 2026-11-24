@@ -65,6 +65,7 @@ from livesync_format import (
 )
 
 from storage_base import StorageError
+from storage_base import TextBudgetExceeded
 from text_eligibility import TextProjection, DEFAULT_TEXT_VERDICT_CACHE_ENTRIES
 
 logger = logging.getLogger(__name__)
@@ -625,12 +626,14 @@ class JournalStore:
             raise NoteDecodeError(PublicDiagnostic(DiagnosticCode.IS_CORRUPT_INVALID_CHUNK_ENCODING, paths=(DiagnosticPath(path, remote=True),))) from None
         return winner, None, body, False
 
-    def scan_newnote(self, doc: dict, max_bytes: int) -> str | None:
-        key = (doc['_id'], doc['_rev'], max_bytes)
+    def scan_newnote(self, doc: dict, max_bytes: int, *, strict_budget=False) -> str | None:
+        # SQLite INTEGER is signed 64-bit; a BLOB keeps larger budgets exact.
+        cache_budget = max_bytes if max_bytes < 2 ** 63 else str(max_bytes).encode('ascii')
+        key = (doc['_id'], doc['_rev'], cache_budget)
         verdict = self._conn.execute(
             'SELECT rev, budget FROM text_verdicts WHERE doc_id=?',
             (doc['_id'],)).fetchone()
-        if verdict == key[1:]:
+        if verdict == key[1:] and not strict_budget:
             self._remember_nontext(key)
             return None
         if verdict is not None:
@@ -648,7 +651,11 @@ class JournalStore:
             piece = self._chunk_datas([child], inline, doc['path'])[0]
             if not projection.feed(piece, final=index == len(children) - 1):
                 eligible = False
-                break
+                projection.parts.clear()
+                if not strict_budget:
+                    break
+        if strict_budget and max_bytes and projection.bytes > max_bytes:
+            raise TextBudgetExceeded(projection.bytes, max_bytes)
         if not eligible:
             self._remember_nontext(key)
         return projection.text() if eligible else None

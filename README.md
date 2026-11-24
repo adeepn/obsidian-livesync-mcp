@@ -102,7 +102,9 @@ are read only for the selected backend. Empty defaults below mean an empty strin
 | `MCP_PORT` | `8484` | Optional | HTTP port, integer 1–65535 |
 | `LIVESYNC_SCAN_MAX_NOTES` | `10000` | Optional | Positive note count cap per aggregate scan |
 | `LIVESYNC_SCAN_MAX_BYTES` | `67108864` | Optional | Positive aggregate UTF-8 byte cap per scan |
-| `LIVESYNC_TEXT_SCAN_MAX_BYTES` | `8388608` | Positive integer | Per-newnote UTF-8 projection budget |
+| `LIVESYNC_TEXT_SCAN_MAX_BYTES` | `empty` | Nonnegative integer or empty | Whole-note UTF-8 text access budget; empty resolves to max(positive vault size policy, 256 MiB); 0 unlimited |
+| `LIVESYNC_REGEX_MAX_OUTPUT_BYTES` | `0` | Nonnegative integer | Regex replacement output bytes; 0 uses effective text access budget |
+| `LIVESYNC_REGEX_TIMEOUT_SECONDS` | `10` | Positive finite number | Disposable regex process deadline in seconds |
 | `LIVESYNC_TEXT_VERDICT_CACHE_ENTRIES` | `4096` | Positive integer | Negative verdict LRU bound |
 | `LIVESYNC_SYNC_ONLY_REGEX` | `empty` | Optional | Local allow regex list, literal `|[]|` separators |
 | `LIVESYNC_SYNC_IGNORE_REGEX` | `empty` | Optional | Local ignore regex list |
@@ -155,7 +157,7 @@ combination. [Source inventory and caveats](docs/superpowers/specs/2026-11-23-se
 | `hashAlg` | xxhash64, xxhash32, mixed-purejs, sha1, empty | Identical | Upstream UTF-16 length and hash semantics |
 | `customChunkSize` | Number >=0 in UI (default 0) | Identical wherever the plugin terminates | V1 plain cap zero advances one UTF-16 unit; V3 clamps; see [loop refusals](docs/vault-format.md#invalid-writer-parameters) |
 | `minimumChunkSize` | Numeric (default 20) | Identical wherever the plugin terminates | Negative, empty, null and NaN follow upstream coercion; only V2 nonempty plain minima coercing to positive zero loop |
-| `syncMaxSizeInMB` | UI number >=0, default 50; 0 disables | Deliberate difference | Device ordinary-write predicate; oversized rename refuses to protect source |
+| `syncMaxSizeInMB` | UI number >=0, default 50; 0 disables | Supported | Device write admission and automatic text access budget resolution; oversized rename refuses to protect source |
 | `syncOnlyRegEx`, `syncIgnoreRegEx` | ECMAScript pattern lists | Identical when configured | Set local env explicitly; never inferred from milestone |
 | `useIgnoreFiles` | Boolean | Identical | Derived from vault settings unless overridden; active policy requires Node.js 22+ |
 | `ignoreFiles` | Filename list | Identical | Derived from vault settings unless overridden; upstream glob/rule order |
@@ -230,9 +232,14 @@ combination. [Source inventory and caveats](docs/superpowers/specs/2026-11-23-se
 - The peer is an invisible writer: it does not register a device or modify
   milestone/PREFERRED settings. Align device settings separately; review
   [tweak compatibility](docs/tweak-compatibility.md) after upgrades.
-- Reads/search use strict UTF-8/control/budget projection for textual newnotes;
-  scans are bounded, best-effort and may be truncated. Regex replacements have
-  a 10 MiB output cap and two-second deadline. [Scan policy](docs/scan-policy.md).
+- All text access uses one UTF-8 byte budget for plain documents and textual
+  newnotes: unset resolves to max(positive vault size policy in bytes, 256 MiB),
+  explicit `LIVESYNC_TEXT_SCAN_MAX_BYTES` wins, and 0 is unlimited. Newnotes
+  additionally require strict UTF-8/control validation. Beyond-budget fetches
+  explain the refusal and edits preserve the revision; byte download is available.
+  Scans keep their aggregate limits and report skipped paths. Regex replacement
+  output defaults to the effective text budget; its configurable deadline is
+  10 seconds. [Tool matrix and scan policy](docs/scan-policy.md).
 - Custom request headers are local connection credentials, copied from the plugin,
   not inferred from shared vault settings. Invalid HTTP names/control characters
   refuse startup with variable, entry ordinal and rule; correct that entry.
@@ -294,6 +301,22 @@ Use one auth mode: bearer `MCP_API_KEY`, or the complete OAuth group.
 Bearer takes precedence if both are supplied. OAuth uses password + PKCE,
 pre-registered Claude callbacks and resource binding to the configured URL
 plus `/mcp`; DCR is disabled. [Systemd commands, Claude.ai setup and other clients](docs/clients-and-authentication.md).
+
+### Text access tool matrix
+
+| Tools | Within effective text budget | Beyond effective text budget |
+|---|---|---|
+| `obsidian_fetch` | Whole text, properties and optional stats | Metadata, `content_available: false`, `size_bytes`, `budget_bytes`, `reason: text_budget_exceeded`, remedy naming `LIVESYNC_TEXT_SCAN_MAX_BYTES` |
+| `obsidian_update_note` (all modes), properties, tags, canvas, templates | Whole-text operation with existing type/path rules | Typed `TextBudgetExceeded` refusal with the same fields and remedy; no write |
+| Search, tags, links, graph, statistics | Whole eligible text subject to aggregate scan limits | Path in `skipped`; metadata still counts against aggregate limits |
+| `obsidian_download_attachment` | Existing binary/newnote byte download rules; plain text uses fetch | Complete bytes for either storage type, subject to caller `max_bytes` |
+
+`obsidian_vault_stats` exposes `text_budget_bytes`, `regex_max_output_bytes`
+and `regex_timeout_seconds`. Zero bytes means unlimited. Explicit regex output
+limits are independent of the input text budget. Regex size and deadline
+refusals name `LIVESYNC_REGEX_MAX_OUTPUT_BYTES` and
+`LIVESYNC_REGEX_TIMEOUT_SECONDS` respectively. Literal replacement has no
+regex output cap. Device write-size admission still applies after edits.
 
 ## License
 

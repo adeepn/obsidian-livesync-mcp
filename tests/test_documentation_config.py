@@ -244,3 +244,27 @@ def test_jwt_connection_contract_is_documented():
     assert '2026-11-25 — G6' in (ROOT / 'docs/superpowers/specs/2026-11-23-settings-parity.md').read_text()
     for artifact in ('couchdb_jwt.py', 'scripts/extract_jwt_vectors.mjs'):
         assert artifact in (ROOT / 'AGENTS.md').read_text()
+
+
+def test_text_access_budget_defaults_and_documented_controls():
+    from tests.test_config import COUCHDB_ENV
+    cfg = load_config(COUCHDB_ENV)
+    assert cfg.text_scan_max_bytes is None
+    assert cfg.regex_max_output_bytes == 0
+    assert cfg.regex_timeout_seconds == 10
+    for name in ('README.md', '.env.example', 'docs/scan-policy.md', 'docs/tools.md'):
+        text = (ROOT / name).read_text()
+        for variable in ('LIVESYNC_TEXT_SCAN_MAX_BYTES', 'LIVESYNC_REGEX_MAX_OUTPUT_BYTES',
+                         'LIVESYNC_REGEX_TIMEOUT_SECONDS'):
+            assert variable in text
+        assert '256 MiB' in text
+
+    template = dotenv_values(ROOT / '.env.example')
+    assert template['LIVESYNC_TEXT_SCAN_MAX_BYTES'] == ''
+    assert template['LIVESYNC_REGEX_MAX_OUTPUT_BYTES'] == '0'
+    assert template['LIVESYNC_REGEX_TIMEOUT_SECONDS'] == '10'
+    readme = (ROOT / 'README.md').read_text()
+    for key, default in [('LIVESYNC_TEXT_SCAN_MAX_BYTES', 'empty'),
+                         ('LIVESYNC_REGEX_MAX_OUTPUT_BYTES', '0'),
+                         ('LIVESYNC_REGEX_TIMEOUT_SECONDS', '10')]:
+        assert f'| `{key}` | `{default}` |' in readme

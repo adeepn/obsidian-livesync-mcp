@@ -45,6 +45,28 @@ class StorageError(Exception):
         return value.format() if isinstance(value, PublicDiagnostic) else cause_name(type(self))
 
 
+class TextBudgetExceeded(StorageError):
+    """A whole-note text operation exceeded the configured memory budget."""
+    def __init__(self, size_bytes: int, budget_bytes: int):
+        self.size_bytes = size_bytes
+        self.budget_bytes = budget_bytes
+        super().__init__()
+
+    def as_dict(self):
+        size = getattr(self, 'size_bytes', None)
+        budget = getattr(self, 'budget_bytes', None)
+        return dict(content_available=False,
+                    size_bytes=size if type(size) is int and size >= 0 else None,
+                    budget_bytes=budget if type(budget) is int and budget >= 0 else None,
+                    reason='text_budget_exceeded',
+                    remedy='Increase LIVESYNC_TEXT_SCAN_MAX_BYTES or set it to 0; '
+                           'use obsidian_download_attachment for complete bytes.')
+
+    def format(self):
+        import json
+        return json.dumps(self.as_dict())
+
+
 class SelectionRefused(StorageError):
     """A device selection rule excludes a vault path."""
 

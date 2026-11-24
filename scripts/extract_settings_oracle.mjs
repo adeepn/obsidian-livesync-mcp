@@ -125,7 +125,9 @@ async function vector(settings, payload) {
         const [, mode, sizeText, seedText, positionText] = payload.recipe.split(':');
         const size = Number(sizeText), position = Number(positionText);
         const char = String.fromCharCode(97 + Number(seedText));
-        if (mode === 'grouping') {
+        if (mode === 'text-budget') {
+            raw = Buffer.from('a'.repeat(size - 6) + 'needle');
+        } else if (mode === 'grouping') {
             raw = Buffer.from(groupingInput(Number(seedText), position));
         } else if (mode === 'candidate-binary') {
             raw = Buffer.alloc(size, char);
@@ -177,9 +179,9 @@ if (process.env.G3_CELL) {
     const cell = JSON.parse(process.env.G3_CELL);
     try {
         const result = await vector(cell.settings, cell.payload);
-        console.log(JSON.stringify({status:'defined', ...result, strings:pieces,
+        await new Promise(resolve => process.stdout.write(JSON.stringify({status:'defined', ...result, strings:pieces,
             source_sha256:sources, decoder_dependency:dependency, wasm_dependency:wasmDependency, upstream_commit:pin,
-            wasm_sha256:sha(fs.readFileSync(wasmFile)), node:process.version}));
+            wasm_sha256:sha(fs.readFileSync(wasmFile)), node:process.version}) + "\n", resolve));
     } catch (error) {
         console.log(JSON.stringify({status:error.message === 'G3_STEP_LIMIT'?'step_limit':'throws',
             error_class:error.constructor.name}));
