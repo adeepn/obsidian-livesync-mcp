@@ -7,6 +7,8 @@ including the four legacy migration flag combinations, omitted defaults, BOM,
 all textual-newnote suffixes, binary and empty documents. Backend is crossed
 with the array, so backend/value and backend/pair coverage are both complete.
 This proves pairwise interactions, not the exhaustive Cartesian product.
+Supplemental rows cover fence grammar, uppercase paths, binary delimiters and
+minimum overrides. One write per backend probes the larger V3 ceiling.
 
 Avoid only the unnecessary v3/custom=60/binary triple: its >4 MiB multi-piece
 input cannot be admitted at limit=1. All pairs remain covered. Binary cases
@@ -39,9 +41,10 @@ from tests.test_storage_couchdb import fake_vault, stored_doc
 from tests.test_storage_journal import make_backend, params_blob
 
 from tests.settings_oracle_inputs import (
-    BACKENDS, FACTORS, ROWS, CASES, case_id, settings_for, payload,
+    BACKENDS, FACTORS, ROWS, CASES, BRANCH_CASES, case_id, settings_for, payload,
+    grid_cases, grid_payload,
 )
-from tests.settings_oracle import matrix_vector, assert_partition
+from tests.settings_oracle import GRID, matrix_vector, assert_partition
 
 FIXTURES = Path(__file__).parent / 'fixtures'
 HASHES = json.loads((FIXTURES / 'hash_algorithms_upstream.json').read_text())
@@ -234,7 +237,7 @@ async def size_and_outcomes(backend, doc, reader, storage, monkeypatch, writes, 
 
 
 @pytest.mark.parametrize('kind', BACKENDS)
-@pytest.mark.parametrize('case', CASES, ids=case_id)
+@pytest.mark.parametrize('case', CASES + BRANCH_CASES, ids=case_id)
 async def test_settings_full_cycle(tmp_path, monkeypatch, kind, case):
     def no_subprocess(*args, **kwargs):
         pytest.fail('default selection must never launch Node/a subprocess')
@@ -352,3 +355,21 @@ async def test_settings_full_cycle(tmp_path, monkeypatch, kind, case):
         finally:
             if reader:
                 await reader.close()
+
+
+@pytest.mark.parametrize('kind', BACKENDS)
+async def test_settings_v3_ceiling_partition(tmp_path, kind):
+    """One large write per backend keeps the ceiling witness affordable."""
+    name, settings, payload_kind = next(
+        row for row in grid_cases()
+        if row[1].get('chunkSplitterVersion') == 'v3-rabin-karp'
+        and row[1].get('customChunkSize') == 60
+        and row[2] == 'boundary:4194304:png:none:0')
+    suffix, data = grid_payload(payload_kind)
+    path = 'grid' + suffix
+    async with matrix_vault(tmp_path, kind, settings) as (backend, doc, _, _, _):
+        await backend.startup_check()
+        await backend.write_note(path, data, create=True)
+        children = (await doc(path))['children']
+        assert_partition(await pieces_for(backend, children), children, GRID[name])
+        assert (await backend.read_note(path))['data'] == data

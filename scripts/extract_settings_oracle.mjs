@@ -77,7 +77,7 @@ for (const [alg, name] of Object.entries({'':'XXHash32RawHashManager', xxhash32:
 }
 const migration = read('services/base/SettingService.ts');
 const migrateCode = migration.slice(migration.indexOf('if (settings.chunkSplitterVersion == "")'), migration.indexOf('return Promise.resolve(settings);', migration.indexOf('if (settings.chunkSplitterVersion == "")')));
-const input = JSON.parse(execFileSync(process.env.PYTHON || './venv/bin/python', ['-m', 'tests.settings_oracle_inputs'], {maxBuffer:32*1024*1024}));
+const input = JSON.parse(execFileSync(process.env.PYTHON || './venv/bin/python', ['-m', 'tests.settings_oracle_inputs'], {maxBuffer:96*1024*1024}));
 // Intern entire pieces, preserving their exact strings (including surrogate cuts),
 // ordered references and repeated children. No payload bytes are stored separately.
 const pieces = [], pieceIndex = new Map(), vectors = [];
@@ -111,9 +111,32 @@ for (const row of input.matrix) {
     vectors.push({id:row.id, settings:row.settings, payloads});
 }
 const grid = [];
-for (const row of input.grid) grid.push({...row, ...await vector(row.settings, input.payloads[row.payload])});
+const boundaryGroups = new Map();
+for (const row of input.grid) {
+    const v = await vector(row.settings, input.payloads[row.payload]);
+    grid.push({...row, ...v});
+    if (row.payload.startsWith('boundary:') && row.payload.includes(':png:none:')) {
+        const key = JSON.stringify([row.settings.chunkSplitterVersion, row.settings.enableChunkSplitterV2,
+            row.settings.useSegmenter, row.settings.customChunkSize]);
+        if (!boundaryGroups.has(key)) boundaryGroups.set(key, []);
+        boundaryGroups.get(key).push({size:Buffer.from(input.payloads[row.payload].base64, 'base64').length, v});
+    }
+}
+// Measure the cap from actual pinned splitter output, rather than trusting the
+// Python input recipe. The largest probe must split at the measured cap; its
+// siblings must be exactly cap-1 and cap and remain single pieces.
+const boundaryMeasurements = [];
+for (const [settings, probes] of boundaryGroups) {
+    probes.sort((a,b) => a.size - b.size);
+    const above = probes[2];
+    const measured = Buffer.from(pieces[above.v.split_pieces[0]], 'base64').length;
+    if (probes.length !== 3 || above.v.split_pieces.length !== 2 ||
+        probes.some((p,i) => p.size !== measured + i - 1) ||
+        probes.slice(0,2).some(p => p.v.split_pieces.length !== 1)) throw Error(`Boundary probes miss upstream cap: ${settings}`);
+    boundaryMeasurements.push({settings:JSON.parse(settings), maximum:measured});
+}
 const fixture = {upstream_commit:pin, node:process.version, decoder_dependency:dependency, source_sha256:sources,
     wasm_sha256:sha(fs.readFileSync(wasmFile)), inputs_sha256:sha(fs.readFileSync('tests/settings_oracle_inputs.py')),
-    pieces, matrix:vectors, grid};
+    boundary_measurements:boundaryMeasurements, pieces, matrix:vectors, grid};
 fs.writeFileSync(out, gzipSync(JSON.stringify(fixture)+'\n', {level:9}));
 console.log(JSON.stringify({matrix:vectors.length, grid:grid.length, pieces:pieces.length, bytes:fs.statSync(out).size}));
