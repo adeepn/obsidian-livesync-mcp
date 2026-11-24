@@ -57,3 +57,16 @@ def test_unmapped_error_preserves_safe_detail_and_redacts(parent):
     assert 'safe cause' in result
     for private in ('secret', 'internal', 'private', 'hidden'):
         assert private not in result
+
+
+@pytest.mark.parametrize('diagnostic,private', [
+    ('safe cause Authorization: Bearer credential-marker', 'credential-marker'),
+    ('safe cause {"password": "credential-marker"}', 'credential-marker'),
+    ("safe cause {'_rev': 'revision-marker'}", 'revision-marker'),
+    ('safe cause idDerivationKey=key-marker', 'key-marker'),
+    ('safe cause access_key=access-marker secret_key=secret-marker', 'secret-marker'),
+])
+def test_structured_storage_diagnostics_redact_credentials(diagnostic, private):
+    result = server._storage_message(errors.StorageError(diagnostic))
+    assert 'safe cause' in result
+    assert private not in result

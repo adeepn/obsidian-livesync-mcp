@@ -208,9 +208,12 @@ def _safe_storage_detail(error: Exception) -> str:
     """Defense in depth for diagnostics; adapters never forward transport text."""
     detail = re.sub(r"[a-zA-Z][a-zA-Z0-9+.-]*://[^\s]+", "[redacted URL]", str(error))
     detail = re.sub(
-        r"(?i)\b(?:_?rev(?:ision)?|password|passphrase|secret|token|authorization|api[_-]?key)"
-        r"\s*[:=]\s*(?:\"[^\"]*\"|'[^']*'|[^\s;,]+)",
-        "[redacted]", detail,
+        r"(?i)(?<![\w])['\"]?(?:_?rev(?:ision)?|"
+        r"(?:[\w.-]*[_-])?(?:password|passphrase|secret|token|authorization|api[_-]?key|access[_-]?key)|"
+        r"id[_-]?derivation[_-]?key|secret[_-]?key)['\"]?"
+        r"\s*[:=]\s*(?:(?:Bearer|Basic)\s+)?(?:<invalid configuration>|\"[^\"]*\"|'[^']*'|[^\s;,}\]]+)",
+        lambda match: (match.group(0) if match.group(0) ==
+            "idDerivationKey=<invalid configuration>" else "[redacted]"), detail,
     )
     detail = re.sub(r"\b[0-9]+-[0-9a-fA-F]{32}\b", "[redacted revision]", detail)
     return detail or "storage operation failed"
