@@ -175,6 +175,8 @@ combination. [Source inventory and caveats](docs/superpowers/specs/2026-11-23-se
   a device may decline to reflect those files until its settings permit them.
   Plugin encrypted setup exports and CouchDB JWT auth are not supported; copy
   connection fields and use CouchDB username/password instead.
+  Ordinary tools reserve service prefixes/names and dot-prefixed paths;
+  [path admission](docs/vault-format.md#path-admission) lists the exact exclusions.
 - The peer is an invisible writer: it does not register a device or modify
   milestone/PREFERRED settings. Align device settings separately; review
   [tweak compatibility](docs/tweak-compatibility.md) after upgrades.
@@ -239,4 +241,4 @@ plus `/mcp`; DCR is disabled. [Systemd commands, Claude.ai setup and other clien
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+Apache 2.0 — see [LICENSE](LICENSE).

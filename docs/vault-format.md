@@ -56,3 +56,13 @@ exceed the cap by up to three bytes. Binary pieces are independently base64
 encoded. Empty persisted content has no children; duplicate pieces retain
 ordered references. Existing chunks remain readable under their original IDs.
 `backend_info` reports `writer_supported` and `writer_unsupported_reason`.
+
+## Path admission
+
+Ordinary tools reject service prefixes `i:`, `ix:`, `ps:`, `h:`, `f:`;
+first segments `_design`/`_local`; exact service names
+`obsydian_livesync_version`/`syncinfo`; empty paths and any dot-prefixed
+segment. Namespace checks are case-insensitive. Hidden ignore files have a
+separate internal read path; this does not enable public Hidden File Sync.
+See `livesync_format.validate_vault_path`. Select an ordinary path for MCP
+writes; internal metadata is not a public note interface.

@@ -56,7 +56,7 @@ COUCHDB_DATABASE=<plugin-database-name>
 ## S3 journal
 
 Open **Settings → Self-hosted LiveSync → Setup / remote configuration →
-Object Storage Configuration**. Copy **Endpoint URL**, **Access Key ID**,
+S3/MinIO/R2 Configuration**. Copy **Endpoint URL**, **Access Key ID**,
 **Secret Access Key**, **Bucket Name**, **Region**, **Folder Prefix**. Check
 **Use Path-Style Access**: this peer always uses path-style for a configured
 endpoint (`object_storage.py`); there is no path-style env switch. A provider

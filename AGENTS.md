@@ -13,6 +13,15 @@ This repository is a small Python MCP server for accessing an Obsidian LiveSync 
 - `object_storage.py`: S3 object storage adapter using boto3.
 - `storage_journal.py`: append-only LiveSync S3 journal storage backend.
 - `livesync_format.py`: LiveSync document/chunk codecs, device disk-ingestion document typing, path rules, and vault validation.
+- `content_splitter.py`: pinned V1/V2/V2-segmenter/V3 and legacy migration, UTF-16/UTF-8 boundaries and all supported unencrypted chunk hashes.
+- `device_selection.py`: shared backend admission, ignore-file loading and bounded verdict caching.
+- `selection_engine.py`: optional Node capability checks, persistent worker and response validation.
+- `selection_worker.mjs`: id-correlated JSON-lines selection worker with bounded lifecycle.
+- `vendor/selection/`: pinned upstream selection functions and minimatch dependency tree, source URLs and checksums; inspect provenance before updating.
+- `diagnostic_hygiene.py` / `diagnostic_codes.py`: typed public fields, closed reasons, control escaping and opt-in bounded debug sink.
+- `replay_limits.py`: configurable operational journal/object/refresh budgets, separate from device file-size admission.
+- `regex_runner.py`: disposable-process regex evaluation with deadline/output cap.
+- `scan_budget.py`: aggregate note/byte scan admission and truncation metadata.
 - `text_eligibility.py`: bounded incremental UTF-8/control-character projection of newnote pieces, shared by both backends.
 - `frontmatter.py`: round-trip YAML frontmatter editing (ruamel.yaml).
 - `links.py`: Obsidian-compatible link extraction, resolution, and graph building.
@@ -23,7 +32,7 @@ This repository is a small Python MCP server for accessing an Obsidian LiveSync 
 - `.env.example`: required configuration template.
 - `obsidian-mcp.service`: optional systemd deployment unit.
 
-Tests live in `tests/` as `tests/test_<module>.py` (pytest + pytest-asyncio, auto mode via `pytest.ini`); shared doubles are `tests/fake_backend.py` (in-memory backend) and `tests/couchdb_fake.py` (HTTP-level CouchDB double). Keep new modules focused and colocated unless the project grows enough to justify a package layout.
+Tests live in `tests/` as `tests/test_<module>.py` (pytest + pytest-asyncio, auto mode via `pytest.ini`); shared doubles are `tests/fake_backend.py` (in-memory backend) and `tests/couchdb_fake.py` (HTTP-level CouchDB double). `tests/settings_oracle_inputs.py` contains deterministic input recipes only; `tests/settings_oracle.py` loads interned compressed upstream expectations from `tests/fixtures/`. `tests/fake_object_storage.py` supplies an S3 double. Keep new modules focused and colocated unless the project grows enough to justify a package layout.
 
 ## Build, Test, and Development Commands
 
@@ -46,8 +55,33 @@ python run.py
 Run the test suite:
 
 ```bash
-./venv/bin/python -m pytest
+./venv/bin/python -m pytest -q
 ```
+
+The full suite normally takes about 3–4 minutes (equality sweep: about 4m10s;
+allow up to roughly 5 minutes). Run serially to avoid load-dependent timing.
+
+Oracle-backed tests consume committed fixtures offline and never invoke Node.
+Regenerating fixtures requires Node 26.13.1+; see the commands at the top of
+`scripts/extract_*`. **The full suite also includes active-selection integration
+tests that invoke Node 22+** (`test_target_filter.py`, `test_selection_worker.py`).
+The claim that Node is needed only for regeneration is false for the current
+suite; removing that integration dependency is separate implementation work.
+The server itself runs without Node when selection filters are off.
+
+Documentation/configuration contract:
+
+```bash
+./venv/bin/python -m pytest tests/test_documentation_config.py -q
+git ls-files -i -c --exclude-standard
+```
+
+The second command must emit nothing. The test compares README and `.env.example`
+variable inventories with config/replay consumers (plus the separate unsafe-debug
+consumer), and loads documented connection snippets after required field
+substitution. Never add new tracked files under ignored paths.
+Working evidence and suite logs belong in gitignored `.superpowers/`.
+`docs/test-artifacts/` holds final owner acceptance transcripts/outputs only.
 
 Copy `.env.example` to `.env` and set `LIVESYNC_BACKEND`, the backend credentials, and exactly one auth mode before running against real data.
 
