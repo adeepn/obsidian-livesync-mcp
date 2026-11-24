@@ -192,7 +192,7 @@ class Boto3ObjectStorage:
             return MutationNotApplied(public)
         if isinstance(exc, ClientError):
             status = exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
-            if isinstance(status, int) and 400 <= status < 500:
+            if isinstance(status, int) and 400 <= status < 500 and status != 408:
                 return MutationNotApplied(public)
         return OutcomeUnknown(public)
 

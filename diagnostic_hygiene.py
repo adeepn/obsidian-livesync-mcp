@@ -125,6 +125,15 @@ class SettingIssue:
         return f'{setting_key(self.key)}=<invalid: {shape}>' if shape != 'configuration' else f'{setting_key(self.key)}=<invalid configuration>'
 
 
+_STATUS_GUIDANCE = {
+    400: 'the server rejected the request as invalid; do not retry unchanged',
+    405: 'method not allowed (server/configuration mismatch)',
+    408: 'the request timed out; try again later',
+    413: "the request is too large for the server; do not retry unchanged (split the content or raise the server's limit)",
+    429: 'rate limited; wait before retrying',
+}
+
+
 @dataclass(frozen=True)
 class PublicDiagnostic:
     code: DiagnosticCode = DiagnosticCode.FAILED
@@ -148,12 +157,21 @@ class PublicDiagnostic:
         if self.cause_class is not None:
             object.__setattr__(self, 'cause_class', identifier(self.cause_class, '<unexpected cause>'))
 
+    def status_guidance(self):
+        status = numeric_field(self.status)
+        if status == 408 and operation_field(self.operation) in {'PUT', 'POST', 'DELETE'}:
+            return 'the request timed out; the outcome of a write is unknown — re-read before retrying'
+        return _STATUS_GUIDANCE.get(status)
+
     def format(self):
         if self.operation is not None:
             transport = self.transport if type(self.transport) is str and self.transport in {'CouchDB', 'S3'} else 'storage'
             operation = operation_field(self.operation)
             text = (f'{transport} returned HTTP {numeric_field(self.status)} for {operation}'
                     if self.status is not None else f'{transport} {operation} failed')
+            guidance = self.status_guidance()
+            if guidance is not None:
+                text += ': ' + guidance
             cause = identifier(self.cause_class, '<unexpected cause>') if self.cause_class is not None else cause_name(self.cause) if self.cause is not None else None
             if isinstance(self.code, DiagnosticCode) and self.code is not DiagnosticCode.FAILED:
                 text = self.code.value + ': ' + text

@@ -97,3 +97,61 @@ async def test_real_refresh_duration(tmp_path, monkeypatch):
             'configured 1; raise LIVESYNC_JOURNAL_MAX_REFRESH_SECONDS')
     finally:
         await peer.close()
+
+
+GUIDANCE = {
+    400: 'the server rejected the request as invalid; do not retry unchanged',
+    405: 'method not allowed (server/configuration mismatch)',
+    408: 'the request timed out; the outcome of a write is unknown — re-read before retrying',
+    413: "the request is too large for the server; do not retry unchanged (split the content or raise the server's limit)",
+    429: 'rate limited; wait before retrying',
+}
+
+
+@pytest.mark.parametrize('status', [400,405,408,413,429,500,503,499])
+@pytest.mark.parametrize('operation', ['GET','HEAD','LIST','PUT','POST','DELETE'])
+@pytest.mark.parametrize('write', [False, True])
+def test_status_guidance(status, operation, write):
+    import server
+    from storage_base import StorageUnavailable, OutcomeUnknown
+    public = PublicDiagnostic(status=status, operation=operation, transport='CouchDB')
+    error = (OutcomeUnknown if write else StorageUnavailable)(public)
+    text = server._storage_message(error)
+    if status in GUIDANCE:
+        guidance = GUIDANCE[status]
+        if status == 408 and operation not in {'PUT','POST','DELETE'}:
+            guidance = 'the request timed out; try again later'
+        assert f'HTTP {status} for {operation}: {guidance}' in text
+        assert 'storage is unavailable; try again later' not in text
+    elif write:
+        assert 'outcome unknown' in text and 'MAY have been applied' in text
+    else:
+        assert 'storage is unavailable; try again later' in text
+
+
+@pytest.mark.parametrize('status', [400,405,408,413,429,500,503,499])
+@pytest.mark.parametrize('operation', ['GET','HEAD','PUT','POST','DELETE'])
+async def test_couchdb_status_classification(status, operation):
+    import httpx
+    from storage_couchdb import CouchDBBackend
+    from storage_base import StorageError, OutcomeUnknown
+    b = CouchDBBackend('http://test.invalid', 'u', 'p', 'db',
+        transport=httpx.MockTransport(lambda r: httpx.Response(status)))
+    try:
+        with pytest.raises(StorageError) as caught:
+            await b._request(operation, '/db')
+        assert isinstance(caught.value, OutcomeUnknown) == (operation in {'PUT','POST','DELETE'} and (status == 408 or status >= 500))
+    finally:
+        await b.close()
+
+
+@pytest.mark.parametrize('status', [400,405,408,413,429,500,503,499])
+def test_s3_put_status_classification(status):
+    from botocore.exceptions import ClientError
+    from object_storage import Boto3ObjectStorage
+    from tests.test_object_storage import make_cfg
+    from storage_base import OutcomeUnknown
+    adapter = Boto3ObjectStorage(make_cfg())
+    error = adapter._put_failure('a', ClientError({'Error': {'Code':'Failure'},
+        'ResponseMetadata': {'HTTPStatusCode':status}}, 'PutObject'))
+    assert isinstance(error, OutcomeUnknown) == (status == 408 or status >= 500)

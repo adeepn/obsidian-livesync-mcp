@@ -261,6 +261,9 @@ def _storage_message_body(error: StorageError, *, caller_paths=()) -> str:
         StorageUnavailable: "Error: storage is unavailable; try again later.",
     }
     if type(error) in messages:
+        public = getattr(error, 'diagnostic', None)
+        if type(error) is StorageUnavailable and isinstance(public, PublicDiagnostic) and public.status_guidance() is not None:
+            return 'Error: ' + public.format()
         message = messages[type(error)]
         public = getattr(error, 'diagnostic', None)
         if isinstance(public, PublicDiagnostic) and (public.code is not DiagnosticCode.FAILED or public.cause or public.operation is not None):

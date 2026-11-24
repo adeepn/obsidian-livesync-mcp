@@ -229,7 +229,7 @@ class CouchDBBackend(DeviceSelection):
             public = PublicDiagnostic(reason, status=code, operation=method, transport='CouchDB', cause=httpx.HTTPStatusError)
             if code == 409:
                 raise ConcurrentModification(public) from None
-            if code >= 500 and method in {'PUT', 'DELETE'}:
+            if (code == 408 or code >= 500) and method in {'PUT', 'POST', 'DELETE'}:
                 raise OutcomeUnknown(public) from None
             raise StorageUnavailable(public) from None
         return response
