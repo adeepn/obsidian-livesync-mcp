@@ -1093,8 +1093,10 @@ class JournalBackend(DeviceSelection):
         if isinstance(content, bytes):
             check_file_size(path, len(content), self.sync_max_size_mb)
         body, doc_type, size = prepare_file_content(path, content, lossy_text=lossy_text)
-        if isinstance(content, str):
-            check_file_size(path, size, self.sync_max_size_mb)
+        # Device admission uses raw host stat.size; metadata uses Blob.size
+        # (C:EntryManagerImpls.ts:253-274). Lossy decoding can expand bytes.
+        # P-13: also gate the converted Blob before any chunks/publication.
+        check_file_size(path, size, self.sync_max_size_mb)
         return await self._write_content(
             path, body, size, doc_type,
             attachment_data=body if isinstance(body, bytes) else None,

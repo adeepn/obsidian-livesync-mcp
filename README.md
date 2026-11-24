@@ -90,11 +90,14 @@ peer after changing the vault setting. Other selection policies still apply.
 
 Oversized ordinary input is **skipped**, before chunks or metadata are published;
 any previous revision stays intact. Byte input is measured before optional
-lossy text conversion; strings use Blob UTF-8 size. Python backends signal `WriteSkipped` as a
+lossy text conversion; strings use Blob UTF-8 size. After conversion, the
+Blob size is also checked before publication: lossy replacement may expand
+raw input bytes. Either oversized quantity skips the write with previous
+revision intact; the new content was NOT saved. Python backends signal `WriteSkipped` as a
 control-flow outcome. Every MCP mutation tool handles it as JSON, for example:
 
 ```json
-{"status":"skipped","path":"scan.pdf","size":43201331,"syncMaxSizeInMB":40,"message":"skipped: 41.2 MiB (43201331 bytes) exceeds the vault's syncMaxSizeInMB (40); the plugin would not synchronize this file either — raise syncMaxSizeInMB in the plugin settings or pass a smaller file"}
+{"status":"skipped","path":"scan.pdf","size":43201331,"syncMaxSizeInMB":40,"message":"skipped: 41.2 MiB (43201331 bytes) exceeds the vault's syncMaxSizeInMB (40); new content was NOT saved; raise syncMaxSizeInMB in the plugin settings or pass a smaller file"}
 ```
 
 This response does not claim success or persistence. MCP has no host vault file

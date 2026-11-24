@@ -132,13 +132,25 @@ async def test_oversized_malformed_upload_skips_before_decoding(backend, monkeyp
     assert await backend.read_note('malformed.md') is None
 
 
-async def test_lossy_ingress_uses_raw_size_before_conversion(backend, monkeypatch):
-    backend.sync_max_size_mb = 1 / 1048576
+@pytest.mark.parametrize('limit,skipped', [(1, True), (2, True), (3, False)])
+async def test_lossy_ingress_checks_raw_and_converted_blob_size(backend, monkeypatch, limit, skipped):
+    await backend.write_note('malformed.md', 'x', create=True)
+    before = await backend.read_note('malformed.md')
+    backend.sync_max_size_mb = limit / 1048576
     monkeypatch.setattr(server, 'backend', backend)
-    response = json.loads(await server.obsidian_upload_attachment('malformed.md', '/w==', lossy_text=True))
+    if skipped:
+        def forbidden(*args, **kwargs):
+            pytest.fail('oversized converted Blob reached publication')
+        monkeypatch.setattr(backend, '_publish' if isinstance(backend, JournalBackend) else '_put_doc', forbidden)
+    response = json.loads(await server.obsidian_upload_attachment('malformed.md', '/w==', lossy_text=True, overwrite=True))
     assert response['size'] == 3
-    assert response['replaced_bytes'] == 1
-    assert (await backend.read_note('malformed.md'))['text'] == '\ufffd'
+    if skipped:
+        assert response['status'] == 'skipped'
+        assert 'new content was NOT saved' in response['message']
+        assert await backend.read_note('malformed.md') == before
+    else:
+        assert response['replaced_bytes'] == 1
+        assert (await backend.read_note('malformed.md'))['text'] == '\ufffd'
 
 
 async def test_mcp_oversized_rename_reports_refusal(backend, monkeypatch):

@@ -28,8 +28,8 @@ class WriteSkipped(StorageError):
         self.path, self.size, self.maximum = path, size, maximum
         super().__init__(
             f"skipped: {size / 1024**2:.3g} MiB ({size} bytes) exceeds the vault's "
-            f"syncMaxSizeInMB ({maximum:g}); the plugin would not synchronize "
-            "this file either — raise syncMaxSizeInMB in the plugin settings "
+            f"syncMaxSizeInMB ({maximum:g}); new content was NOT saved; "
+            "raise syncMaxSizeInMB in the plugin settings "
             "or pass a smaller file"
         )
 
