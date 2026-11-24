@@ -85,3 +85,51 @@ plain leaf data restores pairs separated by legacy splitter boundaries
 (commonlib `src/common/utils.ts:83-84`). Chunk cuts and IDs are unchanged.
 CouchDB writes have no `transport_replacements` field. The journal's compact
 leaf encoding differs; see [surrogate wire encoding](s3-journal.md#surrogate-wire-encoding).
+
+
+## CouchDB compression
+
+The remote transform is commonlib `src/pouchdb/compress.ts:9-101`, installed by
+`src/services/base/RemoteService.ts:457` at commit
+`484c164450d61deb2e301582b60cb9b5f9fa977f`. It covers every string `data` field,
+including legacy/ordinary notes, newnote documents and leaf chunks. Every read
+recognizes `\u000ELZ\u001D` regardless of the local compression setting.
+Strip that marker; optional `~` selects binary output, followed by base64 of a
+raw DEFLATE stream. Inflate bytes, then either return canonical base64 (`~`)
+or decode as Blob.text(): UTF-8 with U+FFFD replacement and leading BOM removal.
+An empty payload (also `~` alone) yields empty text. Non-string data is unchanged.
+Invalid base64 or deflate raises a sanitized `CompressedDataError` carrying only
+a closed recovery instruction and cause class; restore the document from a
+healthy device or backup. No corrupt marked body is returned or republished.
+
+Writes follow boolean `enableCompression` from PREFERRED, otherwise the first
+readable milestone settings map; absent means false. Non-booleans refuse:
+`enableCompression must be a boolean`; correct the vault setting and restart.
+Conflicting device values are safe and do not require alignment. Already-marked
+values are encoded wire inputs and pass through; their decoded logical value,
+not the marker-prefixed representation, is returned on read. The byte-exact
+compress/decompress identity applies to unmarked source inputs. Compression replaces data only when the marked result is
+shorter in UTF-16 units. Devices use fflate 0.8.3 level 8; the peer uses zlib raw
+deflate level 8. The encoded bytes may differ; both are device-readable streams.
+Journal storage is unchanged and keeps compression forced off.
+
+Published octagonal-wheels 0.1.57 `dist/binary/base64.js:367-408` detects canonical
+base64 after stripping CR/LF. The peer deliberately treats any CR/LF value as
+text: upstream's binary path silently removes line breaks. Without CR/LF the
+base64/text decision matches upstream. Data containing surrogate code points is
+published uncompressed: Blob's USVString conversion would replace unpaired
+surrogates with U+FFFD. Leading-BOM text is also uncompressed, since Blob.text()
+would strip that BOM on read. Every device accepts these uncompressed values.
+Existing compressed values retain upstream decoding losses; those bytes cannot
+be recovered by a reader. These exceptions preserve the caller's data rather
+than imposing a compression requirement on interoperable uncompressed pieces.
+
+Regenerate the offline oracle with Node 26.13.1+:
+
+```bash
+node scripts/extract_compression_vectors.mjs /tmp/settings-parity-commonlib /tmp/task3b-wheels /tmp/task3b-wheels.tgz /tmp/g2-fflate-0.8.3.tgz tests/fixtures/compression_upstream.json
+```
+
+The generator refuses changed pinned sources or dependency tarballs. Its fixture
+records source SHA-256, lockfile dependency versions/integrities and Node version;
+real upstream reads both fflate and Node zlib streams, including invalid UTF-8.

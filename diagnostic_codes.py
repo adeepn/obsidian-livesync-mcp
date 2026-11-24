@@ -12,6 +12,8 @@ class DiagnosticCode(str, Enum):
     IGNORE_NAMES = 'ignoreFiles must contain vault-relative file names without traversal; correct the vault setting or set LIVESYNC_IGNORE_FILES'
     IGNORE_USE_CONFLICT = 'conflicting useIgnoreFiles settings; set LIVESYNC_USE_IGNORE_FILES explicitly'
     IGNORE_NAMES_CONFLICT = 'conflicting ignoreFiles settings; set LIVESYNC_IGNORE_FILES explicitly'
+    COMPRESSION_BOOLEAN = 'enableCompression must be a boolean; correct the vault setting and restart'
+    COMPRESSED_DATA = 'invalid compressed CouchDB data; restore the document from a healthy device or backup before retrying'
     INVALID_SETTING = 'invalid setting'
     REPLAY_FAILED = 'journal file could not be replayed'
     SETTINGS_UNREADABLE = 'vault settings missing or unreadable'

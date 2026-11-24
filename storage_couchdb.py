@@ -53,6 +53,7 @@ from scan_budget import ScanBudget
 from text_eligibility import (TextProjection, DEFAULT_TEXT_SCAN_MAX_BYTES,
                               DEFAULT_TEXT_VERDICT_CACHE_ENTRIES)
 
+from couchdb_compression import compress_doc, decompress_doc
 from wire_encoding import json_stringify
 
 import httpx
@@ -66,7 +67,7 @@ from livesync_format import (
     assemble_text,
     canonical_path,
     resolve_content_splitter, resolve_tweak_startup,
-    resolve_sync_max_size,
+    resolve_sync_max_size, resolve_enable_compression,
     prepare_file_content,
     new_metadata_doc,
     identity_path2id,
@@ -171,6 +172,7 @@ class CouchDBBackend(DeviceSelection):
         self._writer_unsupported_reason = None
         self._splitter = ContentSplitter()
         self.sync_max_size_mb = 50
+        self.enable_compression = False
         self.sync_max_size_mb_override = None
         self._client = httpx.AsyncClient(
             base_url=url if url.endswith("/") else url + "/",
@@ -260,6 +262,7 @@ class CouchDBBackend(DeviceSelection):
             return None
         body = response.json()
         if isinstance(body, dict):
+            body = decompress_doc(body)
             self._validate_identity(body)
             cached = self._text_verdicts.get(doc_id)
             if cached is not None and cached[0] != body.get("_rev"):
@@ -286,7 +289,13 @@ class CouchDBBackend(DeviceSelection):
             # the keys; only the database path can be missing.
             raise StorageUnavailable(PublicDiagnostic(DiagnosticCode.COUCHDB_DATABASE_NOT_FOUND, status=404, operation=response.request.method, transport='CouchDB', cause=httpx.HTTPStatusError))
         rows = response.json().get("rows", [])
-        return rows if isinstance(rows, list) else []
+        if not isinstance(rows, list):
+            return []
+        # RemoteService.ts:457 / compress.ts:94-96 applies to all entry docs,
+        # including leaf batches. Decode before any data use or equality check.
+        return [{**row, 'doc': decompress_doc(row['doc'])}
+                if isinstance(row, dict) and isinstance(row.get('doc'), dict)
+                else row for row in rows]
 
     # -- index (audit C5) ----------------------------------------------------
 
@@ -388,6 +397,7 @@ class CouchDBBackend(DeviceSelection):
         self._tweak_assessment = {"status": "OK", "differing_keys": []}
         self._writer_unsupported_reason = None
         self._splitter = ContentSplitter()
+        self.enable_compression = False
         self.sync_max_size_mb = (50 if self.sync_max_size_mb_override is None
                                  else self.sync_max_size_mb_override)
         await self._db_info()
@@ -412,6 +422,7 @@ class CouchDBBackend(DeviceSelection):
             body = None
         body = body if isinstance(body, dict) else {}
         try:
+            self.enable_compression = resolve_enable_compression(body)
             self.resolve_selection_settings(body)
             if self.sync_max_size_mb_override is None:
                 resolve_sync_max_size(body)  # retain all-device fallback guards
@@ -460,6 +471,7 @@ class CouchDBBackend(DeviceSelection):
             "writer_supported": self._writer_unsupported_reason is None and selection["selection_writer_supported"],
             "writer_unsupported_reason": writer_diagnostic(self._writer_unsupported_reason or selection["selection_unsupported_reason"]),
             "backend": "couchdb",
+            "enableCompression": self.enable_compression is True,
             "path_identity": setting_value(self._path_identity),
             "database": "<value hidden>",
             "doc_count": info["doc_count"] if type(info.get("doc_count")) is int and info["doc_count"] >= 0 else "<value hidden>",
@@ -812,7 +824,8 @@ class CouchDBBackend(DeviceSelection):
         as CouchDB 409s, mapped to ``ConcurrentModification``.
         """
         response = await self._request(
-            "PUT", self._doc_path(doc_id), json_body=body
+            "PUT", self._doc_path(doc_id),
+            json_body=compress_doc(body) if self.enable_compression else body
         )
         if response.status_code == 404:
             # A present database never 404s a document PUT.

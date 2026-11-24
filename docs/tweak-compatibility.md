@@ -23,9 +23,15 @@ devices are to adopt their settings.
 these differences. `LIVESYNC_DISABLE_CHECKING_CONFIG_MISMATCH` defaults to
 `false`; `true` bypasses ordinary semantic differences, matching the device's
 local flag. ID derivation and path-normalization checks precede this gate.
-Encryption and path-obfuscation refusals remain enforced. A CouchDB milestone
-advertising compression also requires alignment: this peer has no CouchDB
-compression adapter (journal framing does not use that option). These flags are local
+Encryption and path-obfuscation refusals remain enforced.
+
+CouchDB compression follows PREFERRED, otherwise the first readable settings
+map (absent means false; non-booleans refuse with a correction instruction).
+Compression disagreement never blocks CouchDB startup: all devices can read both
+forms. The peer advertises its effective value, and `vault_stats` reports the
+typed boolean `enableCompression`. Compressed reads always decode, including
+when the mismatch bypass flag is true. Journal framing does not use this option
+and its existing compatibility policy is unchanged. These flags are local
 policy, not values inferred from milestone tweaks. Restart after changing them.
 `vault_stats` includes `tweak_assessment` with `status` and `differing_keys` only.
 

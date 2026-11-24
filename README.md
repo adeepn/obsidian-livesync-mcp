@@ -101,7 +101,7 @@ are read only for the selected backend. Empty defaults below mean an empty strin
 | `LIVESYNC_USE_IGNORE_FILES` | `empty` | Optional boolean | Empty/unset derives useIgnoreFiles from vault settings; true/false overrides |
 | `LIVESYNC_IGNORE_FILES` | `empty` | Optional | Empty/unset derives ignoreFiles from vault settings; non-empty overrides comma-separated names |
 | `LIVESYNC_SYNC_MAX_SIZE_MB` | `empty` | Finite number or empty | Override vault size policy; <=0 disables |
-| `LIVESYNC_DISABLE_CHECKING_CONFIG_MISMATCH` | `false` | Boolean | Bypass ordinary tweak differences, never identity/E2EE guards |
+| `LIVESYNC_DISABLE_CHECKING_CONFIG_MISMATCH` | `false` | Boolean | Bypass ordinary tweak differences, never identity/E2EE guards; CouchDB compression follows the vault independently |
 | `LIVESYNC_AUTO_ACCEPT_COMPATIBLE_TWEAK` | `true` | Boolean | Align fully advertised compatible-lossy tweaks |
 | `LIVESYNC_JOURNAL_MAX_LINE_BYTES` | `268435456` | Positive integer <2**63 | UTF-8 record bytes |
 | `LIVESYNC_JOURNAL_MAX_INFLATED_BYTES` | `8589934592` | Positive integer <2**63 | Inflated journal bytes |
@@ -151,7 +151,7 @@ combination. [Source inventory and caveats](docs/superpowers/specs/2026-11-23-se
 | `encrypt`, `E2EEAlgorithm`, `useDynamicIterationCount`, `encryptInternalMetadata` | E2EE options | Not supported for E2EE | Encrypted vaults fail startup; no encryption/decryption |
 | `usePathObfuscation` | false / true | Not supported when true | Startup refuses; see issue #4 |
 | `idDerivationVersion`, `idDerivationKey` | 0 legacy / 1 keyed | Identical for unencrypted vaults | Validate version/key configuration; unencrypted IDs follow upstream |
-| `enableCompression` | false / true | Not supported on CouchDB when true | No CouchDB compression adapter; align before startup |
+| `enableCompression` | false / true | Identical | CouchDB always reads compressed data; writes follow the vault (absent: false). Non-lossy CR/LF, surrogate and BOM exceptions below; journal forces off |
 | `suspendParseReplicationResult` | false / true | Deliberate difference | Reads remain available from DB; no filesystem reflection stage |
 | Hidden File Sync / customization sync | `i:`, `ix:` namespaces | Not supported | No local vault folder; hidden ignore files can be read internally |
 | Plugin sync / `usePluginSyncV2` | `ps:` namespace / Boolean | Not supported | Service documents excluded from ordinary tools |
@@ -159,6 +159,16 @@ combination. [Source inventory and caveats](docs/superpowers/specs/2026-11-23-se
 | Reflection/request/cache/concurrency tuning | Various local device options | Not supported as device settings | No host reflection or plugin request engine; [full inventory](docs/superpowers/specs/2026-11-23-settings-parity.md#ж-other-tweak_values-and-production-evidence-boundary) |
 
 ## How the peer differs from a device
+
+- CouchDB compression uses Python zlib raw deflate level 8; bytes may differ
+  from device fflate output, but devices read either stream. The peer preserves
+  CR/LF text instead of treating line-wrapped base64 as binary (upstream loses
+  those line breaks). It publishes data containing surrogate code points or
+  a leading BOM uncompressed to prevent Blob conversion/decoding losses.
+  Reads of existing compressed text match device Blob.text(), including U+FFFD
+  replacement and BOM removal. Invalid base64/deflate refuses with a sanitized
+  error: restore the document from a healthy device or backup. See
+  [compressed document format](docs/vault-format.md#couchdb-compression).
 
 - E2EE and obfuscated paths are unsupported; use an unencrypted, unobfuscated
   vault until [#3](https://github.com/adeepn/obsidian-livesync-mcp/issues/3) /

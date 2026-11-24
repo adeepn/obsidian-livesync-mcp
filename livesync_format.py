@@ -506,6 +506,22 @@ def resolve_ignore_settings(
     return use, names
 
 
+def resolve_enable_compression(milestone_settings: dict) -> bool:
+    """Preferred, otherwise first readable map; absent means false.
+
+    C:common/models/setting.const.defaults.ts:153 and
+    C:pouchdb/compress.ts:85-98: mixed compressed/plain writers are readable.
+    Disagreement is therefore safe; unlike size admission it needs no gate.
+    """
+    values = [settings.get('enableCompression', False)
+              for settings in _milestone_setting_maps(milestone_settings)]
+    if any(type(value) is not bool for value in values):
+        error = UnsupportedVaultSettings(DiagnosticCode.COMPRESSION_BOOLEAN.value)
+        error.diagnostic = PublicDiagnostic(DiagnosticCode.COMPRESSION_BOOLEAN)
+        raise error
+    return values[0]
+
+
 def resolve_sync_max_size(milestone_settings: dict) -> float:
     """Use the identity settings resolution; ambiguous device values fail closed.
 
@@ -888,10 +904,8 @@ def _effective_peer_tweaks(settings: Mapping, *, couchdb_mode: bool) -> dict:
         effective.setdefault(key, value)
     effective['encryptInternalMetadata'] = False
     if couchdb_mode:
-        # C:replication/couchdb/LiveSyncReplicator.ts:332,2097 passes this
-        # to the CouchDB compression adapter; this peer has no such adapter.
-        # Journal framing does not consult enableCompression.
-        effective['enableCompression'] = False
+        # C:pouchdb/compress.ts:85-98: compress writes, always decode reads.
+        effective.setdefault('enableCompression', False)
     return effective
 
 
@@ -906,6 +920,15 @@ def resolve_tweak_startup(milestone: Mapping, *, couchdb_mode: bool = False,
     """
     maps = _milestone_setting_maps(milestone)
     preferred = maps[0]
+    if couchdb_mode:
+        resolve_enable_compression(milestone)
+
+    def assess_startup(left, right):
+        # C:pouchdb/compress.ts:89-96: both representations are readable by
+        # every device, so compression differences never block CouchDB startup.
+        if couchdb_mode:
+            right = {**right, 'enableCompression': left.get('enableCompression', False)}
+        return assess_tweak_compatibility(left, right)
     devices = milestone.get('tweak_values', {})
     # getEffectiveTweakValues advertises internal metadata encryption only
     # for an encrypted, obfuscated CouchDB vault. This peer serves plaintext
@@ -923,7 +946,7 @@ def resolve_tweak_startup(milestone: Mapping, *, couchdb_mode: bool = False,
                 'PATH_IDENTITY_MISMATCH': 3, 'ID_KEY_MISMATCH': 4}
     overall = 'OK'
     for candidate in candidates:
-        assessment = assess_tweak_compatibility(preferred, candidate)
+        assessment = assess_startup(preferred, candidate)
         keys.update(assessment.differing_keys)
         if priority[assessment.status] > priority[overall]:
             overall = assessment.status
@@ -939,7 +962,7 @@ def resolve_tweak_startup(milestone: Mapping, *, couchdb_mode: bool = False,
         for candidate in candidates:
             if select_newer_tweak_side(candidate, winner) == 'CURRENT':
                 winner = candidate
-                winner_assessment = assess_tweak_compatibility(preferred, candidate)
+                winner_assessment = assess_startup(preferred, candidate)
 
     differing_keys = tuple(rule.key for rule in TWEAK_COMPATIBILITY_RULES if rule.key in keys)
     if blocked:
@@ -970,7 +993,7 @@ def resolve_tweak_startup(milestone: Mapping, *, couchdb_mode: bool = False,
                 settings[key] = winner.get(key, value)
     effective_peer = _effective_peer_tweaks(settings, couchdb_mode=couchdb_mode)
     for device in candidates[1:]:
-        assessment = assess_tweak_compatibility(device, effective_peer)
+        assessment = assess_startup(device, effective_peer)
         keys.update(assessment.differing_keys)
         if priority[assessment.status] > priority[overall]:
             overall = assessment.status

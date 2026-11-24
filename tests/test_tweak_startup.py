@@ -37,6 +37,10 @@ async def test_semantic_device_mismatch_refuses_without_secret_values(tmp_path, 
     milestone = {'tweak_values': {'PREFERRED': FULL,
         'device': {**FULL, key: value, 'passphrase': 'MUST-NOT-LEAK'}}}
     async with vault(tmp_path, kind, milestone) as (backend, writes):
+        if key == 'enableCompression' and kind == 'couchdb':
+            await backend.startup_check()
+            assert key not in (await backend.backend_info())['tweak_assessment']['differing_keys']
+            return
         with pytest.raises(UnsupportedVault) as caught:
             await backend.startup_check()
         assert key in str(caught.value)
@@ -177,11 +181,11 @@ async def test_sparse_compared_settings_are_readable(tmp_path, kind, key, value)
         assert not writes()
 
 
-async def test_couchdb_effective_compression_preference_refuses(tmp_path):
+async def test_couchdb_effective_compression_preference_follows(tmp_path):
     milestone = {'tweak_values': {'PREFERRED': {**FULL, 'enableCompression': True}}}
     async with vault(tmp_path, 'couchdb', milestone) as (backend, writes):
-        with pytest.raises(UnsupportedVault, match='enableCompression'):
-            await backend.startup_check()
+        await backend.startup_check()
+        assert backend.enable_compression is True
         assert not writes()
 
 

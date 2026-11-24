@@ -509,3 +509,40 @@ oracle now executes the actual getIgnoreFile catch path (commonlib
 serviceFeatures/targetFilter.ts:102-127); regression coverage exercises both
 backends with storage and decoding failures. Keep this separate fix as a
 follow-up commit without rewriting the derivation commit.
+
+
+### 2026-11-25 — G2 CouchDB compression
+
+[DECISION] Apply the remote document transform at direct/batched read and PUT
+boundaries for all string data fields, including leaves and newnotes. Always
+decode marked reads, including with mismatch bypass enabled. Write according to
+PREFERRED, otherwise the first readable settings map, default false; reject
+non-booleans. Mixed compression settings do not block startup or appear as a
+compression mismatch. Report the effective boolean in vault_stats. Journal
+behavior is unchanged. Sources: commonlib src/pouchdb/compress.ts:9-101,
+src/services/base/RemoteService.ts:457, setting.const.defaults.ts:153 at
+484c164450d61deb2e301582b60cb9b5f9fa977f.
+
+[GOTCHA] Published wheels 0.1.57 binary/base64.js:367-408 strips CR/LF before
+canonical base64 detection. Upstream compressed binary round-trips can therefore
+lose line breaks from plain base64-looking text. The peer treats CR/LF as text.
+Blob USVString conversion also replaces unpaired surrogates; the peer leaves
+any surrogate-containing data uncompressed. Blob.text() removes an initial BOM;
+the peer leaves leading-BOM data uncompressed too. All devices read plain data
+regardless of their compression setting (compress.ts:62-71).
+
+[DECISION] Read already-compressed text with upstream Blob.text() semantics,
+including U+FFFD replacement and BOM removal. G2 requirement 1's invalid-UTF-8
+refusal conflicts with requirement 4's explicit Blob parity; the later explicit
+read-parity requirement governs. Malformed base64/deflate still refuses before
+publication with a typed, sanitized error and restore instruction. The peer uses
+raw zlib level 8; encoded bytes may differ from fflate 0.8.3 but upstream reads
+them identically. The committed oracle executes both directions with verified
+published dependencies, including surrogate, CR/LF, BOM and invalid-byte vectors.
+
+
+[GOTCHA] compressDoc skips already-marked wire inputs. They decode to their
+logical value, not their original encoded representation; an identity assertion
+on the encoded input would contradict that explicit skip/decode contract.
+Malformed marked inputs deliberately refuse rather than mirror the published
+base64 decoder's swallowed-error empty-string result.

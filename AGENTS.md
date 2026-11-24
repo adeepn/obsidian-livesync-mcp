@@ -7,6 +7,7 @@ This repository is a small Python MCP server for accessing an Obsidian LiveSync 
 - `server.py`: FastMCP server setup, all MCP tool definitions, strict UTF-8 text representation of newnotes, auth wiring, and the `get_backend(cfg)` factory that builds the storage backend from configuration.
 - `config.py`: strict environment validation (`load_config`) — backend selection, backend credentials, client auth; rejects placeholder secrets.
 - `storage_base.py`: storage-agnostic `StorageBackend` protocol plus the storage exception hierarchy.
+- `couchdb_compression.py`: unconditional CouchDB document decompression, lossless shorter-only raw-deflate writes, and typed corruption errors.
 - `storage_couchdb.py`: `CouchDBBackend`, the LiveSync-aware CouchDB implementation of the protocol.
 - `wire_encoding.py`: shared well-formed JSON serialization and journal TextEncoder surrogate projection.
 - `journal_codec.py`: LiveSync journal record parsing and serialization.
@@ -53,6 +54,8 @@ production module on disk. Run the fast observability checks with:
 ./venv/bin/python -m pytest tests/test_splitter_observability.py tests/test_splitter_helpers_oracle.py tests/test_settings_oracle_guard.py -q
 ./venv/bin/python scripts/check_splitter_mutations.py .superpowers/sdd/2026-11-23-settings-parity/s1/campaign
 ```
+
+`scripts/extract_compression_vectors.mjs` executes pinned compression functions with integrity-verified published wheels and fflate; `tests/fixtures/compression_upstream.json` records upstream and zlib interoperability vectors.
 
 `scripts/extract_surrogate_vectors.mjs` executes pinned journal records, legacy splitting and verified published dependencies to produce `tests/fixtures/surrogate_wire_upstream.json`.
 

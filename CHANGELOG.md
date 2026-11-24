@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Settings parity
 
+- Read compressed CouchDB documents regardless of the vault setting and compress
+  writes when `enableCompression` is true. Accept mixed device settings; report
+  the effective boolean in `vault_stats`. Preserve CR/LF base64-looking text,
+  surrogate pieces and leading BOMs through non-lossy write exceptions; refuse
+  corrupt marked bodies with sanitized recovery guidance. Keep journal unchanged.
+
 - Handle unreadable ignore files as absent, matching devices, instead of raising
   a NameError from the selection exception handler.
 

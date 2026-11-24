@@ -182,3 +182,18 @@ def test_vault_ignore_derivation_documentation_contract():
     assert 'Missing or unreadable ignore files are treated as absent, matching upstream.' in focused
     assert 'Regex lists stay env-only' in focused
     assert 'including vault useIgnoreFiles=true' in focused
+
+
+def test_couchdb_compression_documentation_contract():
+    readme = (ROOT / 'README.md').read_text()
+    row = next(line for line in readme.splitlines() if line.startswith('| `enableCompression` |'))
+    assert '| Identical |' in row
+    assert 'CR/LF' in row and 'surrogate' in row and 'BOM' in row
+    template = (ROOT / '.env.example').read_text()
+    assert 'enableCompression follows the vault; no environment override' in template
+    focused = (ROOT / 'docs/vault-format.md').read_text()
+    assert 'zlib raw' in focused and 'level 8' in focused
+    assert 'U+FFFD replacement' in focused and 'CompressedDataError' in focused
+    tweaks = (ROOT / 'docs/tweak-compatibility.md').read_text()
+    assert 'no CouchDB compression adapter' not in tweaks
+    assert 'typed boolean `enableCompression`' in tweaks

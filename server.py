@@ -1411,7 +1411,7 @@ async def obsidian_vault_stats() -> str:
     if 'selection_engine_state' in info:
         value = info['selection_engine_state']
         local_state['selection_engine_state'] = value if type(value) is str and value in {'off', 'ready', 'unsupported'} else 'unsupported'
-    for field in ('filters_active', 'selection_writer_supported'):
+    for field in ('filters_active', 'selection_writer_supported', 'enableCompression'):
         if field in info:
             local_state[field] = info[field] if type(info[field]) is bool else False
     if "tweak_assessment" in info:
