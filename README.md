@@ -95,9 +95,11 @@ invalid bytes with U+FFFD; the response reports `replaced_bytes`, stored size,
 and stored SHA-256. Newnote bytes remain unchanged. Native-host invalid-byte
 behavior still needs live validation; opt-in replacement is this peer's policy.
 The existing vault splitter determines pieces and their ordered child IDs;
-metadata size is the actual stored content byte length. For legacy plain
-splitters this accounts for initial BOM removal by Blob.text(); upstream's
-pre-split Blob.size can differ in that case.
+metadata size is the ingested Blob byte length before splitting, including an
+initial BOM. Legacy plain splitters remove that BOM from pieces while keeping
+the original metadata size. Reads accept this mismatch, as the device local
+database does. Device file reflection can refuse nonzero size mismatches unless
+`processSizeMismatchedFiles` is enabled.
 
 Tools expose a separate text representation: eligible newnotes can be fetched
 and edited as text, regardless of extension. Their bytes must pass strict
@@ -293,9 +295,11 @@ invalid bytes with U+FFFD; the response reports `replaced_bytes`, stored size,
 and stored SHA-256. Newnote bytes remain unchanged. Native-host invalid-byte
 behavior still needs live validation; opt-in replacement is this peer's policy.
 The existing vault splitter determines pieces and their ordered child IDs;
-metadata size is the actual stored content byte length. For legacy plain
-splitters this accounts for initial BOM removal by Blob.text(); upstream's
-pre-split Blob.size can differ in that case.
+metadata size is the ingested Blob byte length before splitting, including an
+initial BOM. Legacy plain splitters remove that BOM from pieces while keeping
+the original metadata size. Reads accept this mismatch, as the device local
+database does. Device file reflection can refuse nonzero size mismatches unless
+`processSizeMismatchedFiles` is enabled.
 
 Tools expose a separate text representation: eligible newnotes can be fetched
 and edited as text, regardless of extension. Their bytes must pass strict

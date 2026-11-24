@@ -1087,9 +1087,8 @@ class JournalBackend:
         if not live and not create:
             raise NoteNotFound(f"note not found: {path}")
         pieces = [piece for piece in self._splitter.split(content, path=canonical_path(path)) if piece]
-        # Keep metadata byte size consistent with actual splitter output.
-        if doc_type == 'plain':
-            size = sum(len(piece.encode('utf-8')) for piece in pieces)
+        # P-10 / EntryManagerImpls.ts:280: retain ingested Blob.size even
+        # when a legacy splitter's Blob.text() removes an initial BOM.
         children = [chunk_id_for_piece(piece, hash_alg=self._splitter.hash_alg) for piece in pieces]
         unique = {}
         for chunk_id, piece in zip(children, pieces):

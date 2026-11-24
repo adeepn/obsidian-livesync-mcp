@@ -967,9 +967,8 @@ class CouchDBBackend:
             raise NoteNotFound(f"note not found: {path}")
 
         pieces = [piece for piece in self._splitter.split(content, path=canonical_path(path)) if piece]
-        # Blob.text() in legacy splitters strips BOM; metadata counts saved bytes.
-        if doc_type == 'plain':
-            size = sum(len(piece.encode('utf-8')) for piece in pieces)
+        # P-10 / EntryManagerImpls.ts:280: retain ingested Blob.size even
+        # when a legacy splitter's Blob.text() removes an initial BOM.
         children = [await self._write_chunk(path, piece) for piece in pieces]
         new_mtime = _now_ms() if mtime is None else mtime
         if doc is None:

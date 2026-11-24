@@ -57,7 +57,7 @@ def test_pinned_wheels_wheels_read_string_contract(hex_value, units):
     assert [int.from_bytes(encoded[i:i+2], 'little') for i in range(0,len(encoded),2)] == units
 
 @pytest.mark.parametrize('version', ['v1', 'v2', 'v2-segmenter', 'v3-rabin-karp'])
-async def test_plain_metadata_counts_stored_splitter_bytes(backend, monkeypatch, version):
+async def test_plain_metadata_counts_ingested_blob_bytes(backend, monkeypatch, version):
     from content_splitter import ContentSplitter
     backend._splitter = ContentSplitter({'chunkSplitterVersion': version})
     monkeypatch.setattr(server, 'backend', backend)
@@ -65,6 +65,6 @@ async def test_plain_metadata_counts_stored_splitter_bytes(backend, monkeypatch,
         'bom.md', base64.b64encode(b'\xef\xbb\xbfA').decode()))
     note = await backend.read_note('bom.md')
     stored = note['text'].encode()
-    assert note['meta']['size'] == len(stored)
+    assert note['meta']['size'] == len(b'\xef\xbb\xbfA')
     assert response['size'] == len(stored)
     assert response['sha256'] == hashlib.sha256(stored).hexdigest()
