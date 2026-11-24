@@ -394,9 +394,17 @@ including S3 failures wrapped by journal publication/readback. Operations are
 closed to GET/PUT/POST/DELETE/HEAD/LIST. Causes match the ASCII identifier charset
 `[A-Za-z_][A-Za-z0-9_]{0,63}` or become `<unexpected cause>`. Other identifier-like
 fields retain their closed reason/key/budget/algorithm inventories. Diagnostic
-numbers are strictly `int` (bool excluded), `0 <= x < 2**63`, validated at
-construction and again at rendering; malformed numbers become `<invalid>`.
-Environment replay limits are positive integers below `2**63`, including seconds.
+numbers use per-field types (P-22): counts, sizes/byte limits, depths and HTTP
+status codes are `int`; measured limits and durations accept `int` or finite
+`float`, all in `0 <= x < 2**63`. Process exit statuses are `int` in `[-256, 256]`.
+Booleans are excluded. Numeric fields are validated at construction and again
+at rendering; malformed numbers become `<invalid>`. Measured floats round to
+12 significant digits and render as plain decimals without trailing zeros;
+integers remain exact. Plain notation also applies below `1e-6` and at/above
+`1e16`; out-of-range values remain `<invalid>`.
+Environment replay counts/sizes/depths are positive integers below `2**63`.
+Refresh duration settings accept positive finite integers or floats below
+`2**63`, restoring fractional refresh seconds and refresh intervals.
 
 Free-text paths escape C0/C1, CR/LF/tab, U+2028/U+2029, bidi embeddings/overrides
 U+202A–U+202E and isolates U+2066–U+2069. Zero-width U+200B/U+200C/U+200D and BOM

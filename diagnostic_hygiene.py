@@ -43,12 +43,16 @@ def numeric_field(value, *, kind='integer'):
 
 
 def numeric_text(value, *, kind='integer'):
-    """Canonical decimal text, without exponent notation or float .0 noise."""
+    """Plain decimal text; floats round to 12 significant digits, ints stay exact.
+
+    All valid magnitudes use fixed notation, including below 1e-6 and at/above
+    1e16. Validation precedes rounding; out-of-range values stay invalid.
+    """
     value = numeric_field(value, kind=kind)
     if type(value) is int:
         return str(value)
     if type(value) is float:
-        text = format(Decimal(str(value)), 'f')
+        text = format(Decimal(format(value, '.12g')), 'f')
         return text.rstrip('0').rstrip('.') if '.' in text else text
     return '<invalid>'
 

@@ -10,7 +10,9 @@ from replay_limits import ReplayBudgetExceeded
 from storage_base import WriteSkipped, RenameRefused
 
 VALID = [(0.5, '0.5'), (0.25, '0.25'), (1.5, '1.5'), (0.1, '0.1'),
-         (50, '50'), (50.0, '50'), (1e-7, '0.0000001'), (2**63-1, '9223372036854775807')]
+         (0.1 + 0.2, '0.3'), (1.25, '1.25'), (1048577, '1048577'),
+         (1e-6, '0.000001'), (1e16, '10000000000000000'),
+         (1e-20, '0.00000000000000000001'), (50, '50'), (50.0, '50'), (1e-7, '0.0000001'), (2**63-1, '9223372036854775807')]
 INVALID = ['SECRET', None, {}, [], True, float('nan'), float('inf'), -1, 2**63]
 
 
@@ -187,3 +189,9 @@ def test_other_duration_rejects_invalid(value):
     from tests.test_config import S3_ENV
     with pytest.raises(ConfigError, match='S3_REFRESH_MIN_INTERVAL_SEC'):
         load_config({**S3_ENV, 'S3_REFRESH_MIN_INTERVAL_SEC':value})
+
+
+@pytest.mark.parametrize('value,want', VALID)
+def test_canonical_measured_decimal(value, want):
+    from diagnostic_hygiene import numeric_text
+    assert numeric_text(value, kind='measured') == want
