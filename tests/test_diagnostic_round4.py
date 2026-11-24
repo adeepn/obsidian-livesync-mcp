@@ -155,3 +155,35 @@ def test_s3_put_status_classification(status):
     error = adapter._put_failure('a', ClientError({'Error': {'Code':'Failure'},
         'ResponseMetadata': {'HTTPStatusCode':status}}, 'PutObject'))
     assert isinstance(error, OutcomeUnknown) == (status == 408 or status >= 500)
+
+
+@pytest.mark.parametrize('value', ['0.5','0.25','1.5','0.1','50','50.0','1e-7', 0.5, 50, 50.0, 2**63-1])
+def test_fractional_duration_config(value):
+    from config import load_config
+    from tests.test_config import COUCHDB_ENV
+    cfg = load_config({**COUCHDB_ENV, 'LIVESYNC_JOURNAL_MAX_REFRESH_SECONDS': value})
+    assert cfg.replay_limits.max_refresh_seconds == (int(value) if type(value) is int else float(value))
+
+
+@pytest.mark.parametrize('value', ['nan','inf','-inf','0','-0.1',str(2**63), 2**63,
+    float('nan'), float('inf'), True, None, {}, 'SECRET'])
+def test_invalid_duration_config(value):
+    from config import load_config, ConfigError
+    from tests.test_config import COUCHDB_ENV
+    with pytest.raises(ConfigError, match='LIVESYNC_JOURNAL_MAX_REFRESH_SECONDS'):
+        load_config({**COUCHDB_ENV, 'LIVESYNC_JOURNAL_MAX_REFRESH_SECONDS':value})
+
+
+@pytest.mark.parametrize('value', ['0.5', '0.25', '1e-7', 1.25, 50, 50.0, 2**63-1, str(2**63-1)])
+def test_other_duration_config(value):
+    from config import load_config
+    from tests.test_config import S3_ENV
+    assert load_config({**S3_ENV, 'S3_REFRESH_MIN_INTERVAL_SEC':value}).s3.refresh_min_interval_sec == (int(value) if value in (2**63-1, str(2**63-1)) else float(value))
+
+
+@pytest.mark.parametrize('value', [True, None, {}, float('nan'), float('inf'), str(2**63), 2**63])
+def test_other_duration_rejects_invalid(value):
+    from config import load_config, ConfigError
+    from tests.test_config import S3_ENV
+    with pytest.raises(ConfigError, match='S3_REFRESH_MIN_INTERVAL_SEC'):
+        load_config({**S3_ENV, 'S3_REFRESH_MIN_INTERVAL_SEC':value})

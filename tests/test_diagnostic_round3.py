@@ -136,8 +136,11 @@ def test_s3_adapter_typed_failures(monkeypatch, failure, operation, method):
 def test_config_rejects_invalid_budget_integers(field, value):
     from config import load_config, ConfigError
     from tests.test_config import COUCHDB_ENV
-    with pytest.raises(ConfigError):
-        load_config({**COUCHDB_ENV, 'LIVESYNC_JOURNAL_'+field.upper():value})
+    if field == 'max_refresh_seconds' and value in ('1.5', 1.5):
+        assert load_config({**COUCHDB_ENV, 'LIVESYNC_JOURNAL_'+field.upper():value}).replay_limits.max_refresh_seconds == 1.5
+    else:
+        with pytest.raises(ConfigError):
+            load_config({**COUCHDB_ENV, 'LIVESYNC_JOURNAL_'+field.upper():value})
 
 
 @pytest.mark.parametrize('char', list('\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069\u200b\u200c\u200d\ufeff'))

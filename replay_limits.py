@@ -12,6 +12,7 @@ These are NOT protocol maxima. Journals, old splitters/customChunkSize and
 vault history have no universal bound; exceptionally large inputs need
 operator tuning. None of these defaults depend on syncMaxSizeInMB.
 """
+import math
 from dataclasses import dataclass, fields
 
 from storage_base import StorageError
@@ -57,7 +58,7 @@ class ReplayLimits:
     max_object_bytes: int = 8 * 1024**3
     max_refresh_keys: int = 1_000_000
     max_refresh_bytes: int = 64 * 1024**3
-    max_refresh_seconds: int = 3600
+    max_refresh_seconds: int | float = 3600
 
     @classmethod
     def from_env(cls, env):
@@ -65,13 +66,24 @@ class ReplayLimits:
         for field in fields(cls):
             variable = 'LIVESYNC_JOURNAL_' + field.name.upper()
             raw = env.get(variable, field.default)
+            duration = field.name == 'max_refresh_seconds'
+            requirement = 'finite number' if duration else 'integer'
             try:
-                if type(raw) not in (str, int):
+                if type(raw) not in ((str, int, float) if duration else (str, int)):
                     raise ValueError
-                value = int(raw)
-                if not 0 < value < 2**63:
+                # Preserve exact integer boundaries rather than rounding through float.
+                if type(raw) is int:
+                    value = raw
+                elif duration:
+                    try:
+                        value = int(raw) if type(raw) is str else raw
+                    except ValueError:
+                        value = float(raw)
+                else:
+                    value = int(raw)
+                if not 0 < value < 2**63 or (type(value) is float and not math.isfinite(value)):
                     raise ValueError
             except (ValueError, TypeError, OverflowError):
-                raise ValueError(f'{variable} must be a positive integer below 2**63') from None
+                raise ValueError(f'{variable} must be a positive {requirement} below 2**63') from None
             values[field.name] = value
         return cls(**values)

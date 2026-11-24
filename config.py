@@ -191,17 +191,28 @@ def _load_s3_state(env: Mapping[str, str]) -> tuple[str, float]:
     """
     state_dir = env.get("S3_STATE_DIR", "").strip() or S3_STATE_DIR_DEFAULT
 
-    raw = env.get("S3_REFRESH_MIN_INTERVAL_SEC", "").strip()
-    if not raw:
-        return state_dir, S3_REFRESH_MIN_INTERVAL_DEFAULT
+    raw = env.get("S3_REFRESH_MIN_INTERVAL_SEC", "")
+    if type(raw) is str:
+        raw = raw.strip()
+        if not raw:
+            return state_dir, S3_REFRESH_MIN_INTERVAL_DEFAULT
     try:
-        interval = float(raw)
-        if not math.isfinite(interval) or interval <= 0:
+        if type(raw) not in (str, int, float):
             raise ValueError
-    except ValueError:
+        if type(raw) is int:
+            interval = raw
+        elif type(raw) is str:
+            try:
+                interval = int(raw)
+            except ValueError:
+                interval = float(raw)
+        else:
+            interval = raw
+        if not 0 < interval < 2**63 or (type(interval) is float and not math.isfinite(interval)):
+            raise ValueError
+    except (ValueError, TypeError, OverflowError):
         raise ConfigError(
-            f"S3_REFRESH_MIN_INTERVAL_SEC must be a positive number "
-            f"(got {raw!r})."
+            "S3_REFRESH_MIN_INTERVAL_SEC must be a positive finite number below 2**63"
         ) from None
     return state_dir, interval
 
