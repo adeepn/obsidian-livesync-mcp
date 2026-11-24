@@ -174,7 +174,7 @@ async def test_writers_skip_empty_decoded_text_pieces(tmp_path, backend_kind):
             await backend.close()
 
 
-@pytest.mark.parametrize('setting', [{'hashAlg': 'unknown'}, {'chunkSplitterVersion':'unknown'},
+@pytest.mark.parametrize('setting', [{'hashAlg': 'unknown'}, {'idDerivationVersion':2},
                                      {'idDerivationVersion':1, 'idDerivationKey':'invalid'}])
 @pytest.mark.parametrize('backend_kind', ['couchdb', 'journal'])
 async def test_startup_records_unsupported_chunk_writer(tmp_path, setting, backend_kind):

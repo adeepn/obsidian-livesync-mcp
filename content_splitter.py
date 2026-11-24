@@ -168,14 +168,73 @@ def chunk_id_for_piece(piece: bytes | str, *, hash_alg: str | None = 'xxhash64')
     return 'h:' + digest
 
 
+def _js_truthy(value) -> bool:
+    # Settings are JSON values; empty arrays/objects are truthy in JS.
+    if value is None or value is False:
+        return False
+    if isinstance(value, (int, float)):
+        return value != 0 and not (isinstance(value, float) and math.isnan(value))
+    return value != ''
+
+
+def _splitter_property_key(value) -> str:
+    # Only relevant for malformed JSON setting values: JS == / `in` coerce
+    # arrays to comma-joined strings and plain objects to [object Object].
+    if isinstance(value, list):
+        return ','.join('' if item is None else _splitter_property_key(item) for item in value)
+    if isinstance(value, dict):
+        return '[object Object]'
+    if value is None:
+        return 'null'
+    if isinstance(value, bool):
+        return 'true' if value else 'false'
+    return str(value)
+
+
+def normalize_splitter_settings(tweak_values: Mapping | None = None) -> dict:
+    """Copy the one-pass SettingService.ts:141-158 splitter adjustment.
+
+    Missing version retains this peer's legacy default. Empty version uses
+    legacy flags; an unknown non-empty version becomes empty in the else-if
+    branch and MUST NOT run migration again. Keep the upstream V2.5 spelling
+    here so tweak compatibility can consume the same normalized values.
+    """
+    settings = dict(tweak_values or {})
+    version = settings.get('chunkSplitterVersion')
+    # Upstream uses == "", including false and numeric zero from JSON.
+    key = _splitter_property_key(version)
+    empty = ((isinstance(version, (str, list)) and key == '') or
+             (isinstance(version, (int, float)) and version == 0))
+    if empty:
+        version = ''
+        if _js_truthy(settings.get('enableChunkSplitterV2')):
+            version = 'v2-segmenter' if _js_truthy(settings.get('useSegmenter')) else 'v2'
+    elif key not in (
+            'v1', 'v2', 'v2-segmenter', 'v3-rabin-karp',
+            # ChunkAlgorithmNames is a JS object literal; `in` also sees
+            # Object.prototype. These survive adjustment but fail dispatch.
+            'constructor', '__defineGetter__', '__defineSetter__',
+            'hasOwnProperty', '__lookupGetter__', '__lookupSetter__',
+            'isPrototypeOf', 'propertyIsEnumerable', 'toString',
+            'valueOf', '__proto__', 'toLocaleString'):
+        version = ''
+    settings['chunkSplitterVersion'] = version
+    return settings
+
+
 class ContentSplitter:
     """Configured upstream dispatch; str is a text/plain Blob, bytes binary.
 
     longLineThreshold is unused by all algorithms at the compatibility pin.
     """
 
-    def __init__(self, tweak_values: Mapping | None = None):
+    def __init__(self, tweak_values: Mapping | None = None, *, normalize_settings: bool = False):
         settings = dict(tweak_values or {})
+        # Vault resolution runs SettingService normalization once; direct
+        # dispatch still rejects unknown versions like ContentSplitters.ts.
+        if normalize_settings or settings.get('chunkSplitterVersion', '') == '':
+            settings = normalize_splitter_settings(settings)
+        self.normalized_settings = dict(settings)
         self.minimum_chunk_size = self._number(settings, 'minimumChunkSize', 20)
         custom = self._number(settings, 'customChunkSize', 0, allow_negative=True)
         try:

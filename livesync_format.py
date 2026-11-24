@@ -188,6 +188,8 @@ _RECOGNIZED_TWEAK_KEYS = frozenset(
         "usePathObfuscation",
         "handleFilenameCaseSensitive",
         "chunkSplitterVersion",
+        "enableChunkSplitterV2",
+        "useSegmenter",
         "hashAlg",
         "minimumChunkSize",
         "customChunkSize",
@@ -413,7 +415,7 @@ class UnsupportedWriterSettings(UnsupportedVaultSettings):
 def resolve_content_splitter(milestone_settings: dict) -> ContentSplitter:
     """Resolve preferred tweaks, refusing ambiguous per-device split settings."""
     try:
-        splitters = [ContentSplitter(settings)
+        splitters = [ContentSplitter(settings, normalize_settings=True)
                      for settings in _milestone_setting_maps(milestone_settings)]
     except UnsupportedWriterMode as exc:
         raise UnsupportedWriterSettings(str(exc)) from exc
