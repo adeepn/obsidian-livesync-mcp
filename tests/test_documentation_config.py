@@ -1,0 +1,109 @@
+"""Keep executable documentation aligned with actual environment consumers."""
+import ast
+from dataclasses import fields
+from io import StringIO
+from pathlib import Path
+import re
+import secrets
+
+from dotenv import dotenv_values
+import pytest
+
+from config import load_config
+from replay_limits import ReplayLimits
+
+ROOT = Path(__file__).resolve().parents[1]
+ENV_NAME = r'(?:LIVESYNC|COUCHDB|S3|MCP|OAUTH)_[A-Z0-9_]+'
+
+
+def environment_names():
+    tree = ast.parse((ROOT / 'config.py').read_text())
+    names = {node.value for node in ast.walk(tree)
+             if isinstance(node, ast.Constant) and isinstance(node.value, str)
+             and re.fullmatch(ENV_NAME, node.value) and not node.value.endswith('_')}
+    names |= {'LIVESYNC_JOURNAL_' + field.name.upper() for field in fields(ReplayLimits)}
+    # Deliberately consumed at render time, outside the validated Config.
+    names.add('LIVESYNC_UNSAFE_DEBUG')
+    return names
+
+
+def test_environment_inventory_matches_readme_and_template():
+    actual = environment_names()
+    readme = set(re.findall(r'^\| `(' + ENV_NAME + r')` \|',
+                            (ROOT / 'README.md').read_text(), re.M))
+    template = set(re.findall(r'^(?:# )?(' + ENV_NAME + r')=',
+                              (ROOT / '.env.example').read_text(), re.M))
+    assert readme == actual
+    inline_names = set(re.findall(r'\b(' + ENV_NAME + r')\b', (ROOT / 'README.md').read_text()))
+    assert inline_names <= actual
+    assert template == actual
+
+
+def blocks():
+    for path in [ROOT / 'README.md', ROOT / 'docs/connecting-storage.md']:
+        for index, block in enumerate(re.findall(r'```dotenv\n(.*?)```', path.read_text(), re.S)):
+            yield f'{path.name}-{index}', block
+
+
+@pytest.mark.parametrize('name,block', list(blocks()))
+def test_documented_connection_block_loads(name, block):
+    # The docs explicitly require replacing <...>. These replacements are
+    # generated only in process, never credentials copied from a real vault.
+    values = {
+        '<paste-generated-token>': secrets.token_urlsafe(32),
+        '<CouchDB-server-URI>': 'http://127.0.0.1:5984',
+        '<plugin-username>': 'local-test-user',
+        '<plugin-password>': secrets.token_urlsafe(32),
+        '<plugin-database-name>': 'local-test-vault',
+        '<paste-sls://-setup-URI>': 'sls://testkey:testsecret@http://127.0.0.1:19000?bucket=plan-b-it&region=us-east-1&prefix=livetest/',
+        '<plugin-endpoint-URL>': 'http://127.0.0.1:19000',
+        '<plugin-access-key>': 'testkey',
+        '<plugin-secret-key>': 'testsecret',
+        '<plugin-bucket>': 'plan-b-it',
+    }
+    for marker, value in values.items():
+        block = block.replace(marker, value)
+    assert '<' not in block, name
+    env = dict(dotenv_values(stream=StringIO(block)))
+    if 'LIVESYNC_BACKEND' not in env:
+        # Shared auth block is composed with a backend, as instructed.
+        env.update(LIVESYNC_BACKEND='couchdb', COUCHDB_USER='local-test-user',
+                   COUCHDB_PASSWORD=secrets.token_urlsafe(32), COUCHDB_DATABASE='local-test-vault')
+    env.setdefault('MCP_API_KEY', secrets.token_urlsafe(32))
+    cfg = load_config(env)
+    assert cfg.backend == env['LIVESYNC_BACKEND']
+
+
+def test_no_tracked_files_under_ignored_paths():
+    import subprocess
+    result = subprocess.run(['git', 'ls-files', '-i', '-c', '--exclude-standard'],
+                            cwd=ROOT, check=True, capture_output=True, text=True)
+    assert not result.stdout
+
+
+@pytest.mark.parametrize('connection', ('couchdb', 's3-fields', 's3-uri'))
+@pytest.mark.parametrize('auth', ('bearer', 'oauth'))
+def test_env_template_loads_after_required_configuration(connection, auth):
+    env = dict(dotenv_values(ROOT / '.env.example'))
+    # Follow the template's instructions: choose one backend/auth group and
+    # replace its required secrets. Never write a configured .env to disk.
+    for name in tuple(env):
+        if name.startswith(('COUCHDB_', 'S3_', 'OAUTH_')) or name in ('MCP_API_KEY', 'LIVESYNC_S3_URI'):
+            del env[name]
+    env['LIVESYNC_BACKEND'] = 'couchdb' if connection == 'couchdb' else 's3'
+    if connection == 'couchdb':
+        env.update(COUCHDB_USER='local-test-user', COUCHDB_PASSWORD=secrets.token_urlsafe(32),
+                   COUCHDB_DATABASE='local-test-vault')
+    elif connection == 's3-fields':
+        env.update(S3_ENDPOINT_URL='http://127.0.0.1:19000', S3_ACCESS_KEY_ID='testkey',
+                   S3_SECRET_ACCESS_KEY='testsecret', S3_BUCKET='plan-b-it')
+    else:
+        env['LIVESYNC_S3_URI'] = 'sls://testkey:testsecret@http://127.0.0.1:19000?bucket=plan-b-it'
+    if auth == 'bearer':
+        env['MCP_API_KEY'] = secrets.token_urlsafe(32)
+    else:
+        env.update({name: secrets.token_urlsafe(32) for name in
+                    ('OAUTH_PASSWORD', 'OAUTH_CLIENT_ID', 'OAUTH_CLIENT_SECRET')})
+    cfg = load_config(env)
+    assert bool(cfg.api_key) == (auth == 'bearer')
+    assert cfg.backend == env['LIVESYNC_BACKEND']
