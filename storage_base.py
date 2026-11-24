@@ -404,10 +404,11 @@ class StorageBackend(Protocol):
         ...
 
     def iterate_texts(
-        self, extension: str = ""
+        self, extension: str = "", *, after: str = ""
     ) -> AsyncIterator[tuple[NoteMeta, str | None]]:
         """Stream ``(meta, text)`` for every note with the extension.
 
+        Display paths are sorted strictly after ``after`` before body reads.
         Scans are best-effort in the backend's iteration order; snapshot
         consistency is not guaranteed across a scan. CouchDB may observe
         interleaved changes. The Plan B journal backend must document its

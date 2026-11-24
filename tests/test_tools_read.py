@@ -19,6 +19,10 @@ from storage_base import (
 from tests.fake_backend import FakeBackend
 
 
+def _without_scan(result):
+    return {key: value for key, value in result.items() if key not in ('scan', 'scope')}
+
+
 @pytest.fixture
 def tools(monkeypatch):
     fake = FakeBackend()
@@ -62,7 +66,7 @@ async def test_list_notes_recursive_default(tools):
     server, fake = tools
     for path in ("root.md", "projects/a.md", "projects/deep/b.md", "projects2/c.md"):
         fake.add(path, "")
-    result = json.loads(await server.obsidian_list_notes("projects"))
+    result = json.loads(await server.obsidian_list_notes("projects"))["results"]
     assert [n["path"] for n in result] == ["projects/a.md", "projects/deep/b.md"]
     assert ("list_notes", ("projects", None, True)) in fake.calls
 
@@ -84,9 +88,9 @@ async def test_hub_incoming(tools):
     for i in range(5):
         fake.add(f"{i}.md", "[[Hub]] [[Hub#heading]]")
     fake.add("alone.md", "[[missing]]")
-    hubs = json.loads(await server.obsidian_find_hub_notes())
+    hubs = json.loads(await server.obsidian_find_hub_notes())["results"]
     assert hubs == [{"path": "folder/Hub.md", "incoming": 5, "outgoing": 0, "total": 5}]
-    orphans = json.loads(await server.obsidian_find_orphaned_notes())
+    orphans = json.loads(await server.obsidian_find_orphaned_notes())["results"]
     assert orphans == ["alone.md"]
 
 
@@ -134,6 +138,7 @@ async def test_tags_and_graph_isolate_unreadable_notes(tools):
     fake.add("good.md", "---\ntags: [one]\n---\n#two [[target]]")
     fake.add("target.md", "")
     tags = json.loads(await server.obsidian_get_all_tags())
+    tags.pop("scan")
     assert tags == {"tags": {"one": 1, "two": 1}, "skipped": ["bad.md"]}
     graph = json.loads(await server.obsidian_get_link_graph())
     assert graph["skipped"] == ["bad.md"]
@@ -152,7 +157,7 @@ async def test_graph_resolves_unreadable_target(tools):
     assert set(graph["nodes"]) == {"source.md", "target.md"}
     assert graph["edges"] == [{"from": "source.md", "to": "target.md"}]
     assert graph["skipped"] == ["target.md"]
-    assert json.loads(await module.obsidian_find_orphaned_notes()) == {
+    assert _without_scan(json.loads(await module.obsidian_find_orphaned_notes())) == {
         "orphans": [], "skipped": ["target.md"]}
 
 
@@ -332,9 +337,9 @@ async def test_partial_graph_consumers_report_skipped(tools):
     module, fake = tools
     fake.add("bad.md", None)
     fake.add("good.md", "")
-    assert json.loads(await module.obsidian_find_orphaned_notes()) == {
+    assert _without_scan(json.loads(await module.obsidian_find_orphaned_notes())) == {
         "orphans": ["good.md"], "skipped": ["bad.md"]}
-    assert json.loads(await module.obsidian_find_hub_notes()) == {
+    assert _without_scan(json.loads(await module.obsidian_find_hub_notes())) == {
         "hubs": [], "skipped": ["bad.md"]}
 
 
@@ -454,7 +459,8 @@ async def test_truncated_graph_does_not_label_unread_bodies_orphaned(tools, monk
     result = json.loads(await server.obsidian_find_orphaned_notes())
     assert result['truncated'] is True
     assert result['orphans'] == []
-    assert set(result['skipped']) == {'a.md', 'b.md'}
+    assert result['skipped'] == []
+    assert result['scope'] == 'scanned pages only'
 
 
 def test_app_factory_uses_injected_config_and_isolates_backends():
@@ -526,10 +532,12 @@ async def test_capped_listings_report_counts(tools, monkeypatch, name):
 
 
 @pytest.mark.parametrize('name', ['obsidian_list_notes', 'obsidian_list_templates'])
-async def test_uncapped_listings_keep_list_shape(tools, name):
+async def test_uncapped_listings_add_scan_envelope(tools, name):
     module, fake = tools
     fake.add('templates/a.md', 'body')
-    assert isinstance(json.loads(await getattr(module, name)()), list)
+    result = json.loads(await getattr(module, name)())
+    assert isinstance(result['results'], list)
+    assert result['scan']['stopped_because'] is None
 
 
 async def test_factory_scan_limits_are_frozen_and_reach_backend(monkeypatch):

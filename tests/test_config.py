@@ -127,8 +127,8 @@ def test_port_accepts_boundaries(port):
 @pytest.mark.parametrize('key', ['LIVESYNC_SCAN_MAX_NOTES', 'LIVESYNC_SCAN_MAX_BYTES', 'LIVESYNC_TEXT_SCAN_MAX_BYTES'])
 @pytest.mark.parametrize('value', ['invalid', '0', '-1'])
 def test_invalid_scan_limits_fail_config_validation(key, value):
-    if key == 'LIVESYNC_TEXT_SCAN_MAX_BYTES' and value == '0':
-        assert load_config({**COUCHDB_ENV, key: value}).text_scan_max_bytes == 0
+    if value == '0':
+        assert getattr(load_config({**COUCHDB_ENV, key: value}), key.lower().removeprefix('livesync_')) == 0
         return
     with pytest.raises(ConfigError, match=key):
         load_config({**COUCHDB_ENV, key: value})

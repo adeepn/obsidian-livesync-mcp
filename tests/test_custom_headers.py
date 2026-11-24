@@ -202,7 +202,7 @@ async def test_header_observability_and_factory(monkeypatch, tmp_path):
         # Avoid startup: only the statistics projection is under test here.
         async def notes(*args, **kwargs): return []
         async def tags(*args, **kwargs): return {'tags':[], 'skipped':0}
-        monkeypatch.setattr(server, '_scan_notes', notes)
+        monkeypatch.setattr(journal, 'list_notes', notes)
         monkeypatch.setattr(server, '_tags', tags)
         monkeypatch.setattr(journal, 'refresh', notes)
         result = json.loads(await server.obsidian_vault_stats())

@@ -268,3 +268,43 @@ def test_text_access_budget_defaults_and_documented_controls():
                          ('LIVESYNC_REGEX_MAX_OUTPUT_BYTES', '0'),
                          ('LIVESYNC_REGEX_TIMEOUT_SECONDS', '10')]:
         assert f'| `{key}` | `{default}` |' in readme
+
+
+def test_complete_scan_defaults_and_documented_pagination():
+    """Pin peer controls, not upstream wire oracle values.
+
+    Commonlib serviceModules/ServiceFileAccessBase.ts:287-290 enumerates all
+    files; pagination and optional operational budgets are peer transport.
+    """
+    from tests.test_config import COUCHDB_ENV
+    cfg = load_config(COUCHDB_ENV)
+    defaults = {
+        'LIVESYNC_SCAN_MAX_NOTES': '0',
+        'LIVESYNC_SCAN_MAX_BYTES': '0',
+        'LIVESYNC_SCAN_MAX_SECONDS': '20',
+        'LIVESYNC_TEXT_VERDICT_CACHE_ENTRIES': '65536',
+    }
+    assert (cfg.scan_max_notes, cfg.scan_max_bytes, cfg.scan_max_seconds,
+            cfg.text_verdict_cache_entries) == (0, 0, 20, 65536)
+    template = dotenv_values(ROOT / '.env.example')
+    readme = (ROOT / 'README.md').read_text()
+    for key, value in defaults.items():
+        assert template[key] == value
+        assert f'| `{key}` | `{value}` |' in readme
+    for name in ('README.md', 'docs/scan-policy.md', 'docs/tools.md'):
+        text = (ROOT / name).read_text()
+        for token in ('cursor', 'next_cursor', 'elapsed_ms', 'stopped_because',
+                      'start_line', 'end_line', 'scans_busy'):
+            assert token in text
+    tools = (ROOT / 'docs/tools.md').read_text()
+    for tool in ('obsidian_search', 'obsidian_list_notes', 'obsidian_get_all_tags',
+                 'obsidian_get_links', 'obsidian_get_link_graph',
+                 'obsidian_find_orphaned_notes', 'obsidian_find_hub_notes',
+                 'obsidian_list_templates', 'obsidian_vault_stats'):
+        assert f'`{tool}`' in tools
+    policy = (ROOT / 'docs/scan-policy.md').read_text()
+    for token in ('index_complete', 'index_ids_collected', 'index_docs_indexed',
+                  'index_next_skip', 'update_seq', 'scanned pages only',
+                  'persistent', 'total_lines', 'returned_lines'):
+        assert token in policy
+    assert '2026-11-25 — G4b' in (ROOT / 'docs/superpowers/specs/2026-11-23-settings-parity.md').read_text()

@@ -513,7 +513,9 @@ async def test_listing_and_iteration_exclude_hidden_segments():
 
 def test_iterate_texts_signature_is_pinned():
     parameters = inspect.signature(CouchDBBackend.iterate_texts).parameters
-    assert list(parameters) == ["self", "extension"]
+    assert list(parameters) == ["self", "extension", "after"]
+    assert parameters["after"].default == ""
+    assert parameters["after"].kind == inspect.Parameter.KEYWORD_ONLY
     assert parameters["extension"].default == ""
 
 

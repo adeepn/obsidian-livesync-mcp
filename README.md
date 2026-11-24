@@ -100,12 +100,13 @@ are read only for the selected backend. Empty defaults below mean an empty strin
 | `MCP_SERVER_URL` | `https://localhost:8484` | Optional | External server base URL used for auth resource binding |
 | `MCP_HOST` | `0.0.0.0` | Optional | HTTP bind address |
 | `MCP_PORT` | `8484` | Optional | HTTP port, integer 1–65535 |
-| `LIVESYNC_SCAN_MAX_NOTES` | `10000` | Optional | Positive note count cap per aggregate scan |
-| `LIVESYNC_SCAN_MAX_BYTES` | `67108864` | Optional | Positive aggregate UTF-8 byte cap per scan |
+| `LIVESYNC_SCAN_MAX_NOTES` | `0` | Nonnegative integer | Aggregate note cap; 0 unlimited |
+| `LIVESYNC_SCAN_MAX_BYTES` | `0` | Nonnegative integer | Aggregate UTF-8 input byte cap; 0 unlimited |
+| `LIVESYNC_SCAN_MAX_SECONDS` | `20` | Nonnegative finite number | Aggregate scan and index time budget including scan-slot waiting; 0 unlimited |
 | `LIVESYNC_TEXT_SCAN_MAX_BYTES` | `empty` | Nonnegative integer or empty | Whole-note UTF-8 text access budget; empty resolves to max(positive vault size policy, 256 MiB); 0 unlimited |
 | `LIVESYNC_REGEX_MAX_OUTPUT_BYTES` | `0` | Nonnegative integer | Regex replacement output bytes; 0 uses effective text access budget |
-| `LIVESYNC_REGEX_TIMEOUT_SECONDS` | `10` | Positive finite number | Disposable regex process deadline in seconds |
-| `LIVESYNC_TEXT_VERDICT_CACHE_ENTRIES` | `4096` | Positive integer | Negative verdict LRU bound |
+| `LIVESYNC_REGEX_TIMEOUT_SECONDS` | `10` | Positive finite number | Persistent isolated regex worker request deadline in seconds |
+| `LIVESYNC_TEXT_VERDICT_CACHE_ENTRIES` | `65536` | Positive integer | Negative verdict LRU bound |
 | `LIVESYNC_SYNC_ONLY_REGEX` | `empty` | Optional | Local allow regex list, literal `|[]|` separators |
 | `LIVESYNC_SYNC_IGNORE_REGEX` | `empty` | Optional | Local ignore regex list |
 | `LIVESYNC_USE_IGNORE_FILES` | `empty` | Optional boolean | Empty/unset derives useIgnoreFiles from vault settings; true/false overrides |
@@ -157,7 +158,7 @@ combination. [Source inventory and caveats](docs/superpowers/specs/2026-11-23-se
 | `hashAlg` | xxhash64, xxhash32, mixed-purejs, sha1, empty | Identical | Upstream UTF-16 length and hash semantics |
 | `customChunkSize` | Number >=0 in UI (default 0) | Identical wherever the plugin terminates | V1 plain cap zero advances one UTF-16 unit; V3 clamps; see [loop refusals](docs/vault-format.md#invalid-writer-parameters) |
 | `minimumChunkSize` | Numeric (default 20) | Identical wherever the plugin terminates | Negative, empty, null and NaN follow upstream coercion; only V2 nonempty plain minima coercing to positive zero loop |
-| `syncMaxSizeInMB` | UI number >=0, default 50; 0 disables | Supported | Device write admission and automatic text access budget resolution; oversized rename refuses to protect source |
+| `syncMaxSizeInMB` | UI number >=0, default 50; 0 disables | Supported | Device write admission and automatic text access budget resolution; textual files remain scan-eligible independent of extension; aggregate caps default unlimited; oversized rename refuses to protect source |
 | `syncOnlyRegEx`, `syncIgnoreRegEx` | ECMAScript pattern lists | Identical when configured | Set local env explicitly; never inferred from milestone |
 | `useIgnoreFiles` | Boolean | Identical | Derived from vault settings unless overridden; active policy requires Node.js 22+ |
 | `ignoreFiles` | Filename list | Identical | Derived from vault settings unless overridden; upstream glob/rule order |
@@ -237,8 +238,20 @@ combination. [Source inventory and caveats](docs/superpowers/specs/2026-11-23-se
   explicit `LIVESYNC_TEXT_SCAN_MAX_BYTES` wins, and 0 is unlimited. Newnotes
   additionally require strict UTF-8/control validation. Beyond-budget fetches
   explain the refusal and edits preserve the revision; byte download is available.
-  Scans keep their aggregate limits and report skipped paths. Regex replacement
-  output defaults to the effective text budget; its configurable deadline is
+  Scans report skipped paths and have no default note/byte cap. Each call has a
+  20-second time budget (0 disables it), including scan-slot waiting; a busy
+  refusal has reason `scans_busy` and retry guidance. Optional operator caps and
+  response limits produce `truncated: true`, `next_cursor`, and a `scan` object
+  with notes, bytes, `elapsed_ms`, configured maxima and `stopped_because`.
+  Pass the opaque `cursor` to continue strictly after the last processed display
+  path; paths created or renamed behind it between pages can be missed or
+  repeated. The CouchDB metadata index resumes by database update sequence and
+  explicitly reports incomplete state. Search defaults to 200 matching notes;
+  other growing responses page by 200 source notes. List responses use a
+  `results` envelope so even complete responses can carry `scan` metadata.
+  Fetch accepts inclusive `start_line` / `end_line` windows after full text
+  validation. Regex uses one persistent isolated worker; replacement output
+  defaults to the effective text budget and request deadlines default to
   10 seconds. [Tool matrix and scan policy](docs/scan-policy.md).
 - Custom request headers are local connection credentials, copied from the plugin,
   not inferred from shared vault settings. Invalid HTTP names/control characters

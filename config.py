@@ -116,12 +116,13 @@ class Config:
     selection_ignore: str = ''
     selection_use_ignore_files: bool | None = None
     selection_ignore_files: tuple[str, ...] | None = None
-    text_verdict_cache_entries: int = 4096
+    text_verdict_cache_entries: int = 65536
     text_scan_max_bytes: int | None = None
     regex_max_output_bytes: int = 0
     regex_timeout_seconds: float = 10.0
-    scan_max_notes: int = 10000
-    scan_max_bytes: int = 64 * 1024 * 1024
+    scan_max_notes: int = 0
+    scan_max_bytes: int = 0
+    scan_max_seconds: float = 20.0
 
 
 def parse_s3_uri(uri: str) -> S3Config:
@@ -467,17 +468,22 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
     except ValueError:
         raise ConfigError('LIVESYNC_SYNC_MAX_SIZE_MB must be a finite number or empty') from None
     scan_limits = []
-    for key, default in (("LIVESYNC_SCAN_MAX_NOTES", 10000),
-                         ("LIVESYNC_SCAN_MAX_BYTES", 64 * 1024 * 1024),
+    for key, default in (("LIVESYNC_SCAN_MAX_NOTES", 0),
+                         ("LIVESYNC_SCAN_MAX_BYTES", 0),
                          ("LIVESYNC_TEXT_SCAN_MAX_BYTES", None),
-                         ("LIVESYNC_TEXT_VERDICT_CACHE_ENTRIES", 4096)):
+                         ("LIVESYNC_TEXT_VERDICT_CACHE_ENTRIES", 65536)):
         try:
             raw = env.get(key, default)
             value = None if key == "LIVESYNC_TEXT_SCAN_MAX_BYTES" and raw in (None, '') else int(raw)
-            if value is not None and (value < 0 or (value == 0 and key != "LIVESYNC_TEXT_SCAN_MAX_BYTES")):
+            if value is not None and (value < 0 or (value == 0 and key == "LIVESYNC_TEXT_VERDICT_CACHE_ENTRIES")):
                 raise ValueError
         except (ValueError, TypeError):
-            rule = "a nonnegative integer or empty" if key == "LIVESYNC_TEXT_SCAN_MAX_BYTES" else "a positive integer"
+            if key == "LIVESYNC_TEXT_SCAN_MAX_BYTES":
+                rule = "a nonnegative integer or empty"
+            elif key == "LIVESYNC_TEXT_VERDICT_CACHE_ENTRIES":
+                rule = "a positive integer"
+            else:
+                rule = "a nonnegative integer"
             raise ConfigError(f"{key} must be {rule}") from None
         scan_limits.append(value)
     try:
@@ -492,6 +498,12 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
             raise ValueError
     except (ValueError, TypeError):
         raise ConfigError('LIVESYNC_REGEX_TIMEOUT_SECONDS must be positive and finite') from None
+    try:
+        scan_max_seconds = float(env.get('LIVESYNC_SCAN_MAX_SECONDS', 20))
+        if not math.isfinite(scan_max_seconds) or scan_max_seconds < 0:
+            raise ValueError
+    except (ValueError, TypeError):
+        raise ConfigError('LIVESYNC_SCAN_MAX_SECONDS must be nonnegative and finite') from None
     backend = env.get("LIVESYNC_BACKEND", "")
     if not backend:
         raise ConfigError(
@@ -543,6 +555,7 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
         regex_timeout_seconds=regex_timeout_seconds,
         scan_max_notes=scan_limits[0],
         scan_max_bytes=scan_limits[1],
+        scan_max_seconds=scan_max_seconds,
         backend=backend,
         couchdb=couchdb,
         s3=s3,

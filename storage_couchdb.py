@@ -39,7 +39,7 @@ from diagnostic_hygiene import (writer_diagnostic, diagnostic, settings_exceptio
     DiagnosticCode, assessment_fields, setting_value, fingerprint, unsafe_debug,
     cause_name, operation_field, numeric_field)
 
-from collections import OrderedDict
+from collections import OrderedDict, deque
 import asyncio
 from device_selection import DeviceSelection
 
@@ -51,7 +51,7 @@ from typing import AsyncIterator, Callable
 from config import CouchDBConfig
 from couchdb_jwt import JWTTokenGenerator
 
-from scan_budget import ScanBudget
+from scan_budget import ScanBudget, active_scan_budget
 from text_eligibility import TextAccessPolicy, project_note, scan_text
 from storage_base import TextBudgetExceeded
 from text_eligibility import (TextProjection, DEFAULT_TEXT_SCAN_MAX_BYTES,
@@ -166,13 +166,17 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
         jwt_config: CouchDBConfig | None = None,
         jwt_clock: Callable[[], float] = time.time,
         text_verdict_cache_entries: int = DEFAULT_TEXT_VERDICT_CACHE_ENTRIES,
-        scan_max_notes: int = 10000,
-        scan_max_bytes: int = 64 * 1024 * 1024,
+        scan_max_notes: int = 0,
+        scan_max_bytes: int = 0,
+        scan_max_seconds: float = 20,
+        scan_clock: Callable[[], float] = time.monotonic,
     ) -> None:
         if text_verdict_cache_entries <= 0:
             raise ValueError("text verdict cache entries must be positive")
         self.text_verdict_cache_entries = text_verdict_cache_entries
         self._scan_limits = (scan_max_notes, scan_max_bytes)
+        self.scan_max_seconds = scan_max_seconds
+        self._scan_clock = scan_clock
         self.text_scan_max_bytes = None
         self._text_verdicts = OrderedDict()
         self._jwt = JWTTokenGenerator(jwt_config, clock=jwt_clock) if jwt_config is not None else None
@@ -201,6 +205,8 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
         # update_seq (audit C5).
         self._index: dict[str, dict] | None = None
         self._index_seq: object | None = None
+        self._index_lock = asyncio.Lock()
+        self._reset_index_progress()
 
     # -- low-level HTTP -----------------------------------------------------
 
@@ -336,96 +342,149 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
 
     # -- index (audit C5) ----------------------------------------------------
 
-    async def _note_doc_ids(self) -> list[str]:
-        """All candidate note ids without pulling any chunk bodies.
+    def _reset_index_progress(self) -> None:
+        self._index = {}
+        self._index_ids: list[str] = []
+        self._index_range = 0
+        self._index_skip = 0
+        self._index_doc_offset = 0
+        self._index_pending: deque[dict | None] = deque()
+        self.index_truncated = True
 
-        Two ``_all_docs`` ranges skip the entire ``h:`` chunk namespace:
-        CouchDB orders ``_all_docs`` bytewise, every chunk id sorts inside
-        ``"h:"``..``"h;"`` (``:`` is 0x3A, ``;`` is 0x3B), and no note id
-        can start with ``h:`` (validate_vault_path forbids it). Service
-        ids outside that range are filtered here.
+    async def _note_doc_ids(self) -> list[str]:
+        """Collect one page, retaining the next range/skip across calls.
+
+        Upstream commonlib/pouchdb/LiveSyncLocalDB.ts:481-536 enumerates
+        all pages and ranges. The peer schedules this work across requests;
+        it never treats a partial metadata index as a complete vault.
+        Two ranges exclude the entire h: chunk namespace (audit C5).
         """
-        ids: list[str] = []
-        budget = ScanBudget(*self._scan_limits)
         range_params = (
             {"endkey": json.dumps("h:")},
             {"startkey": json.dumps("h;")},
         )
-        for extra in range_params:
-            skip = 0
-            while True:
-                params = {"limit": str(_PAGE_SIZE), "skip": str(skip), **extra}
-                response = await self._request(
-                    "GET", f"{self._db_path}/_all_docs", params=params
-                )
-                if response.status_code == 404:
-                    # A present database never 404s on _all_docs.
-                    raise StorageUnavailable(PublicDiagnostic(DiagnosticCode.COUCHDB_DATABASE_NOT_FOUND, status=404, operation=response.request.method, transport='CouchDB', cause=httpx.HTTPStatusError))
-                rows = response.json().get("rows", [])
-                for row in rows:
-                    if not isinstance(row, dict):
-                        continue
-                    if row.get("error") is not None:
-                        continue
-                    if (row.get("value") or {}).get("deleted"):
-                        continue  # hard CouchDB tombstone
-                    doc_id = row.get("id") or row.get("key")
-                    if isinstance(doc_id, str) and not is_service_document_id(doc_id):
-                        if not budget.admit(doc_id, len(doc_id.encode())):
-                            self.index_truncated = True
-                            return ids
-                        ids.append(doc_id)
-                if len(rows) < _PAGE_SIZE:
-                    break
-                skip += _PAGE_SIZE
-        return ids
+        if self._index_range == len(range_params):
+            return self._index_ids
+        params = {"limit": str(_PAGE_SIZE), "skip": str(self._index_skip),
+                  **range_params[self._index_range]}
+        response = await self._request(
+            "GET", f"{self._db_path}/_all_docs", params=params)
+        if response.status_code == 404:
+            raise StorageUnavailable(PublicDiagnostic(DiagnosticCode.COUCHDB_DATABASE_NOT_FOUND, status=404, operation=response.request.method, transport='CouchDB', cause=httpx.HTTPStatusError))
+        rows = response.json().get("rows", [])
+        for row in rows:
+            if not isinstance(row, dict) or row.get("error") is not None:
+                continue
+            if (row.get("value") or {}).get("deleted"):
+                continue
+            doc_id = row.get("id") or row.get("key")
+            if isinstance(doc_id, str) and not is_service_document_id(doc_id):
+                self._index_ids.append(doc_id)
+        if len(rows) < _PAGE_SIZE:
+            self._index_range += 1
+            self._index_skip = 0
+        else:
+            self._index_skip += len(rows)
+        return self._index_ids
+
+    def _compact_index_doc(self, row: object) -> dict | None:
+        doc = row.get("doc") if isinstance(row, dict) else None
+        if not isinstance(doc, dict) or not is_note_document(doc):
+            return None
+        self._validate_identity(doc)
+        path = doc.get("path")
+        path = path if isinstance(path, str) and path else str(doc.get("_id", ""))
+        if _has_hidden_segment(path):
+            return None
+        try:
+            meta = self._meta_from_doc(doc)
+        except StorageError:
+            logger.error('skipping note <omitted>: invalid metadata')
+            return None
+        # Never retain body, children, or eden in the index or resume state.
+        compact = {key: doc[key] for key in
+                   ("_id", "_rev", "path", "type", "ctime", "mtime")
+                   if key in doc}
+        compact["size"] = meta["size"]
+        return compact
 
     async def _load_index(self) -> dict[str, dict]:
-        self.index_truncated = False
-        ids = await self._note_doc_ids()
-        budget = ScanBudget(*self._scan_limits)
-        index: dict[str, dict] = {}
-        for start in range(0, len(ids), _PAGE_SIZE):
-            batch = ids[start : start + _PAGE_SIZE]
-            rows = await self._post_all_docs(batch, include_docs=True)
-            for row in rows:
-                doc = row.get("doc") if isinstance(row, dict) else None
-                if isinstance(doc, dict) and is_note_document(doc):
-                    self._validate_identity(doc)
-                    path = doc.get("path")
-                    path = (
-                        path
-                        if isinstance(path, str) and path
-                        else str(doc.get("_id", ""))
-                    )
-                    if _has_hidden_segment(path):
-                        continue  # hidden files never surface as notes
-                    # Body/chunk/eden payloads must never live in the index.
-                    try:
-                        meta = self._meta_from_doc(doc)
-                    except StorageError:
-                        logger.error('skipping note <omitted>: invalid metadata')
-                        continue
-                    compact = {key: doc[key] for key in
-                               ("_id", "_rev", "path", "type", "ctime", "mtime")
-                               if key in doc}
-                    compact["size"] = meta["size"]
+        """Continue the current update-sequence's compact index.
+
+        IDs, enumeration offset and processed-document offset are cached
+        in memory. A timeout does not discard already fetched metadata.
+        The active aggregate deadline includes index I/O and slot waiting.
+        """
+        budget = ScanBudget(*self._scan_limits,
+                            max_seconds=self.scan_max_seconds,
+                            clock=self._scan_clock)
+        active = active_scan_budget.get()
+
+        def expired():
+            return budget.expired() or (active is not None and active.expired())
+
+        self.index_truncated = True
+        while not expired():
+            if self._index_pending:
+                compact = self._index_pending[0]
+                if compact is not None:
+                    path = compact.get("path") or compact["_id"]
                     if not budget.admit(path, len(json.dumps(compact).encode())):
-                        self.index_truncated = True
-                        return index
-                    index[str(doc["_id"])] = compact
-        return index
+                        break
+                    self._index[compact["_id"]] = compact
+                self._index_pending.popleft()
+                self._index_doc_offset += 1
+                continue
+            if self._index_doc_offset == len(self._index_ids):
+                if self._index_range == 2:
+                    self.index_truncated = False
+                    break
+                await self._note_doc_ids()
+                continue
+            batch = self._index_ids[self._index_doc_offset:
+                                    self._index_doc_offset + _PAGE_SIZE]
+            rows = await self._post_all_docs(batch, include_docs=True)
+            # _all_docs {keys} emits one row per requested key in key order.
+            # Compact the bounded page even if network I/O used its deadline:
+            # the next call can then progress without refetching a slow page.
+            self._index_pending.extend(self._compact_index_doc(row)
+                                       for row in rows[:len(batch)])
+            self._index_pending.extend(None for _ in range(len(batch) - len(rows)))
+        return self._index
 
     async def _current_index(self) -> dict[str, dict]:
-        info = await self._db_info()
-        update_seq = info.get("update_seq")
-        if self._index is None or self._index_seq != update_seq:
-            self._index = await self._load_index()
-            self._index_seq = update_seq
+        active = active_scan_budget.get()
+        if active is not None:
+            views = getattr(active, 'index_views', None)
+            if views is None:
+                views = active.index_views = {}
+            if id(self) in views:
+                return views[id(self)][0]
+        async with self._index_lock:
+            # Recheck after waiting: another consumer in this aggregate may
+            # already have established its metadata/resolution namespace.
+            if active is not None and id(self) in views:
+                return views[id(self)][0]
+            info = await self._db_info()
+            update_seq = info.get("update_seq")
+            if self._index_seq != update_seq:
+                self._reset_index_progress()
+                self._index_seq = update_seq
+            if self.index_truncated:
+                await self._load_index()
             for doc_id, (rev, _) in list(self._text_verdicts.items()):
                 if self._index.get(doc_id, {}).get('_rev') != rev:
                     self._text_verdicts.pop(doc_id, None)
-        return self._index
+            if active is not None:
+                # Graph resolution and body traversal must use one available
+                # namespace. A second index consumer must not silently finish
+                # the index while the first consumer retains a partial view.
+                # Keep incompleteness sticky for the aggregate response even
+                # when another concurrent scan advances the shared index.
+                view = dict(self._index)
+                views[id(self)] = (view, self.index_truncated)
+                return view
+            return self._index
 
     # -- StorageBackend: lifecycle -------------------------------------------
 
@@ -494,9 +553,11 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
         """
         if not force:
             return
-        info = await self._db_info()
-        self._index = await self._load_index()
-        self._index_seq = info.get("update_seq")
+        async with self._index_lock:
+            info = await self._db_info()
+            self._reset_index_progress()
+            self._index_seq = info.get("update_seq")
+            await self._load_index()
         await self.refresh_selection_files()
 
     async def backend_info(self) -> dict:
@@ -509,6 +570,10 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
             "writer_supported": self._writer_unsupported_reason is None and selection["selection_writer_supported"],
             "writer_unsupported_reason": writer_diagnostic(self._writer_unsupported_reason or selection["selection_unsupported_reason"]),
             "backend": "couchdb",
+            "index_complete": not self.index_truncated and self._index_seq == info.get("update_seq"),
+            "index_ids_collected": len(self._index_ids),
+            "index_docs_indexed": len(self._index),
+            "index_next_skip": self._index_skip,
             "auth_mode": "jwt" if self._jwt else "basic",
             "jwt_algorithm": self._jwt.algorithm if self._jwt else None,
             "custom_headers_configured": bool(self._custom_headers),
@@ -606,14 +671,16 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
                            is_text=text is not None, rev=meta['rev'])
 
     async def iterate_texts(
-        self, extension: str = ""
+        self, extension: str = "", *, after: str = ""
     ) -> AsyncIterator[tuple[NoteMeta, str | None]]:
         index = await self._current_index()
         ordered = sorted(
             index.values(),
             key=lambda doc: str(doc.get("path") or doc.get("_id") or ""),
         )
-        candidates = [doc for doc in ordered if _matches_extension(
+        candidates = [doc for doc in ordered
+                      if str(doc.get("path") or doc.get("_id") or "") > after
+                      and _matches_extension(
             str(doc.get("path") or doc.get("_id") or ""), extension
         )]
         for start in range(0, len(candidates), _TEXT_WINDOW_SIZE):

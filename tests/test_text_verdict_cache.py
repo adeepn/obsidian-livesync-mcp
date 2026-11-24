@@ -143,7 +143,7 @@ async def test_cache_limit_configuration_and_factory():
     peer = server.get_backend(cfg)
     assert peer.text_verdict_cache_entries == 7
     await peer.close()
-    assert load_config(COUCHDB_ENV).text_verdict_cache_entries == 4096
+    assert load_config(COUCHDB_ENV).text_verdict_cache_entries == 65536
 
 
 @pytest.mark.parametrize('value', ['0', '-1', 'no'])

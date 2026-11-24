@@ -793,7 +793,7 @@ class JournalBackend(TextAccessPolicy, DeviceSelection):
                            is_text=text is not None, rev=meta['rev'])
 
     async def iterate_texts(
-        self, extension: str = ""
+        self, extension: str = "", *, after: str = ""
     ) -> AsyncIterator[tuple[NoteMeta, str | None]]:
         """Stream ``(meta, text)`` for every note matching ``extension``.
 
@@ -815,6 +815,8 @@ class JournalBackend(TextAccessPolicy, DeviceSelection):
                 continue
             path = doc.get("path")
             path = path if isinstance(path, str) and path else doc_id
+            if path <= after:
+                continue
             if _has_hidden_segment(path):
                 continue
             if not _matches_extension(path, extension):

@@ -1,41 +1,110 @@
 # Vault scans and text eligibility
 
-### Vault scan limits
+## Complete scans, optional budgets
 
-`LIVESYNC_SCAN_MAX_NOTES` (default `10000`) and `LIVESYNC_SCAN_MAX_BYTES`
-(default `67108864`, 64 MiB) must be positive integers. They bound aggregate
-UTF-8 body and metadata input to search, tags, graph, links and statistics.
-At most two vault scans run concurrently. Partial responses include
-`"truncated": true` and `scan` counts (`notes`, `bytes`, and configured maxima).
-Previously list-shaped responses become `{ "results": [...], ... }` when
-truncated. Counts and graph conclusions then describe only the scanned subset.
-The CouchDB metadata index uses the same caps, retains no bodies or eden, and
-propagates truncation to these tools. Direct note reads remain available.
-These are aggregate scan limits. Plain-note HTTP responses are loaded before
-actual size accounting. All text access additionally uses the per-file budget
-below. Regex operations retain one disposable process per note; their deadline
-is `LIVESYNC_REGEX_TIMEOUT_SECONDS` (default 10 positive finite seconds).
-Regex replacement output is bounded by `LIVESYNC_REGEX_MAX_OUTPUT_BYTES`
-(default 0 = effective text access budget); a resulting 0 means unlimited.
-Output-size and deadline refusals are distinct and name their respective variable.
-Literal replacement retains its existing behavior.
+The peer has no default aggregate note or byte cap. `LIVESYNC_SCAN_MAX_NOTES`
+and `LIVESYNC_SCAN_MAX_BYTES` default to `0` (unlimited); positive integers
+bound admitted source notes and UTF-8 metadata/body input. These controls are
+separate from the whole-note text access budget below and the device's file-size
+policy. Upstream commonlib `serviceModules/ServiceFileAccessBase.ts:287-290`
+returns every file; these peer controls never redefine vault eligibility.
+
+`LIVESYNC_SCAN_MAX_SECONDS` defaults to `20`, accepts nonnegative finite seconds,
+and uses `0` for unlimited. Elapsed time includes waiting for one of two scan
+slots. A call unable to acquire a slot before its deadline returns typed
+`reason: scans_busy` with retry guidance naming the variable. Time checks use
+an injectable monotonic clock for deterministic tests.
+
+Every aggregate scan returns `scan: {notes, bytes, elapsed_ms, max_notes,
+max_bytes, max_seconds, stopped_because}`. A complete call has a null stop
+reason. An early stop additionally returns `truncated: true` and `next_cursor`;
+`stopped_because` is one of `notes`, `bytes`, `time`, `index`, or `limit`.
+Former list-shaped tool results use a `results` envelope, including complete
+calls; message-only results use `message`, so all can carry scan metadata.
+Existing result-field names and meanings remain otherwise unchanged.
+
+## Cursors, limits and composition
+
+Every aggregate tool accepts opaque `cursor: str = ""`. Pass `next_cursor`
+from the preceding response without editing it. Each page processes display
+paths sorting strictly after the last fully processed path. Both backends
+iterate text in display-path order; metadata listings use that order too.
+On a static vault with a complete metadata index, consecutive pages have no
+missing or duplicate source notes. This is not a snapshot: notes created or
+renamed behind the cursor between calls can be missed or repeated.
+
+`obsidian_search` accepts `limit=200` matching notes per page; `0` is unlimited.
+List, tags, graph, links, orphan, hub and template tools accept `limit=200`
+source notes per page; `obsidian_vault_stats` accepts `limit=0` by default.
+A positive limit stops a page with reason `limit` and a continuation cursor.
+With a complete metadata index, one source note's outgoing links are processed completely before moving
+the cursor. Search pages contain that page's matches; tag pages contain that
+page's counts (sum them). Graph pages contain links discovered in that page's
+source notes (concatenate edges). Backlinks, orphans and hubs explicitly say
+`scanned pages only`: they cannot prove whole-vault conclusions from a partial
+page. See [the per-tool table](tools.md#aggregate-tool-pagination).
+
+## Resumable CouchDB metadata index
+
+Index enumeration follows upstream commonlib `pouchdb/LiveSyncLocalDB.ts:481-536`
+full paged enumeration rather than silently hiding notes beyond a fixed cap.
+The peer caches collected IDs, next range/skip offset and compact indexed
+metadata in memory, keyed by database `update_seq`. Later calls continue
+incomplete work. A changed sequence restarts the index; bodies, chunks and Eden
+are never retained in metadata. Optional note/byte limits and the time budget
+bound each indexing call. While incomplete, tools serve available indexed
+metadata and return `truncated: true`, reason `index`; vault counts are lower
+bounds, never a complete-vault claim.
+
+Vault stats expose typed `index_complete`, `index_ids_collected`,
+`index_docs_indexed`, and `index_next_skip`, together with the configured scan
+budgets. Cold-index pages need special care: CouchDB ID order can differ from
+display-path order, so an incomplete index may later discover paths behind an
+already returned cursor. Graph resolution can also lack targets not yet indexed.
+Finish indexing and restart pagination without a
+cursor before relying on full-vault composition.
+
+## Fetch line windows
+
+`obsidian_fetch` accepts optional `start_line` / `end_line`: positive, 1-based,
+inclusive bounds, with either omitted. It first reads and validates the entire
+text against the text access budget, then uses `str.splitlines(keepends=True)`
+and returns the requested window plus `total_lines`, `returned_lines`, and
+`truncated`. An end beyond the last line is clamped by normal slicing. With
+both parameters omitted the existing whole-note content and response shape
+are preserved. Properties and statistics describe the full original note.
+
+## Persistent regex isolation
+
+Regex search and replacement share one lazily started persistent isolated
+worker per server process, using JSON-lines pipes. Each request is stateless;
+the worker receives only pattern, text, operation, replacement and flags. It
+inherits no listening sockets or credential environment. The per-request hard
+deadline is `LIVESYNC_REGEX_TIMEOUT_SECONDS` (default 10 positive finite
+seconds). A timeout or crash terminates and reaps the child; the next request
+starts a fresh worker. Shutdown and abrupt event-loop closure also close it.
+A timed-out search note appears in `errors` for that path and scanning continues.
+A timed-out replacement refuses before writing and names the deadline variable.
+Diagnostics never echo pattern or body text. Pattern validation, result shapes
+and the maximum of ten matches per note remain unchanged.
+
+Replacement output is bounded by `LIVESYNC_REGEX_MAX_OUTPUT_BYTES` (default
+0 = effective text access budget); a resulting 0 means unlimited. Size and
+deadline refusals are distinct and name their respective variable. Literal
+replacement retains its existing behavior.
+
+## Consistency and paths
+
+Scans do not guarantee a snapshot: CouchDB changes can interleave between
+metadata windows and chunk reads, and journal refresh can interleave with local
+state scans. Epoch/wipe recovery retains local revision trees and chunks.
+Unreadable notes appear in `skipped`. Successful publication means a durable
+write, not a promise that it remains the eventual winner.
 
 New and replaced metadata persist canonical, case-preserving paths: separators
 are `/`, leading `./` and trailing slashes are removed, and internal parent
 segments resolve (`folder/../b.md` becomes `b.md`). Parent traversal above the
 vault root remains forbidden. Existing records are not migrated automatically.
-
-
-## Vault-wide scan consistency
-
-Search, tags, graph, listings, and statistics are best-effort scans in backend
-iteration order. They do not guarantee a snapshot across the scan: CouchDB
-changes can be interleaved between metadata windows and chunk fetches. Results
-can therefore combine observations from different times; a successful mutation
-means durable publication, not a promise that it remains the eventual winner.
-The S3 journal backend also uses best-effort scans of its local state.
-Refresh can interleave with a scan; epoch and remote-wipe recovery retain local
-revision trees and chunks. An unreadable note can be returned without text.
 
 ### Text scan eligibility
 
@@ -74,7 +143,7 @@ reads on later scans of the same revision. Positive verdicts are not cached:
 querying text requires streaming the body again. Each document retains at most
 one negative verdict for its revision and byte budget; superseded verdicts are
 dropped on rewrite/replay or when a new revision/budget is observed.
-`LIVESYNC_TEXT_VERDICT_CACHE_ENTRIES` (default 4096, positive integer) caps
+`LIVESYNC_TEXT_VERDICT_CACHE_ENTRIES` (default 65536, positive integer) caps
 the number of cached documents with LRU eviction on both backends. Journal
 verdicts live in SQLite (old caches are pruned on open) and survive dedupe
 resets; CouchDB verdicts live in process memory and are cleared on

@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Settings parity
 
+- Complete aggregate scans and the CouchDB metadata index by default, with
+  unlimited note/byte defaults, resumable indexing, configurable time budgets,
+  opaque continuation cursors and response page limits. Add fetch line windows,
+  persistent isolated regex evaluation and typed per-note timeout reporting.
+  Raise the negative text-verdict cache default to 65536 documents.
+
 - Use one operator-overridable whole-note UTF-8 budget for direct text tools
   and scans across both storage types; default to the larger of the vault size
   policy and 256 MiB. Explain budget refusals with typed fields and remedies,

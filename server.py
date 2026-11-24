@@ -18,7 +18,7 @@ import binascii
 import hashlib
 from contextlib import aclosing, asynccontextmanager
 from contextvars import ContextVar
-from scan_budget import ScanBudget
+from scan_budget import ScanBudget, active_scan_budget
 from replay_limits import ReplayBudgetExceeded
 from text_eligibility import is_text_characters, DEFAULT_TEXT_SCAN_MAX_BYTES, enforce_text_budget, text_size
 from storage_base import TextBudgetExceeded
@@ -101,6 +101,7 @@ def get_backend(cfg: Config) -> StorageBackend:
         text_verdict_cache_entries=cfg.text_verdict_cache_entries,
         scan_max_notes=cfg.scan_max_notes,
         scan_max_bytes=cfg.scan_max_bytes,
+        scan_max_seconds=getattr(cfg, "scan_max_seconds", 20),
     )
     result.sync_max_size_mb_override = cfg.sync_max_size_mb
     if cfg.sync_max_size_mb is not None:
@@ -117,7 +118,7 @@ def get_backend(cfg: Config) -> StorageBackend:
 backend: StorageBackend | None = None
 _active_backend: ContextVar[StorageBackend | None] = ContextVar("active_backend")
 _tool_handlers = []
-_active_scan_limits = ContextVar("active_scan_limits", default=(10000, 64 * 1024 * 1024))
+_active_scan_limits = ContextVar("active_scan_limits", default=(0, 0, 20))
 
 
 def _backend() -> StorageBackend | None:
@@ -150,6 +151,7 @@ def create_app(cfg: Config) -> FastMCP:
             yield
         finally:
             try:
+                regex_runner.close()
                 await startup_backend.close()
             finally:
                 state["backend"] = None
@@ -200,7 +202,7 @@ def create_app(cfg: Config) -> FastMCP:
         @wraps(handler)
         async def bound(*args, **kwargs):
             token = _active_backend.set(state["backend"])
-            limits_token = _active_scan_limits.set((cfg.scan_max_notes, cfg.scan_max_bytes))
+            limits_token = _active_scan_limits.set((cfg.scan_max_notes, cfg.scan_max_bytes, cfg.scan_max_seconds))
             try:
                 return await handler(*args, **kwargs)
             finally:
@@ -328,6 +330,7 @@ def _tool_errors(
         if _backend() is None:
             return "Error: server not started; storage backend is unavailable."
         try:
+            regex_runner.bind_loop(asyncio.get_running_loop())
             is_write = writer
             if is_write and read_action is not None:
                 arguments = signature.bind(*args, **kwargs)
@@ -500,74 +503,176 @@ def _entry_id(entry: Any) -> Any:
 
 
 _scan_semaphore = asyncio.Semaphore(2)
-_scan_budget = ContextVar("scan_budget", default=None)
+_scan_budget = active_scan_budget
+_scan_clock = time.monotonic
+
+
+def _decode_cursor(cursor):
+    if not cursor:
+        return ''
+    try:
+        value = json.loads(base64.b64decode(cursor, altchars=b'-_', validate=True))
+        if not isinstance(value, dict) or value.get('v') != 1 or not isinstance(value.get('after'), str):
+            raise ValueError
+        return value['after']
+    except (ValueError, TypeError, UnicodeError):
+        raise ValueError('Invalid scan cursor; restart without cursor.') from None
+
+
+def _encode_cursor(path):
+    return base64.urlsafe_b64encode(json.dumps(
+        {'v': 1, 'after': path}, ensure_ascii=True).encode()).decode()
 
 
 def _vault_scan(handler):
     @wraps(handler)
     async def scanned(*args, **kwargs):
-        async with _scan_semaphore:
-            budget = ScanBudget(*_active_scan_limits.get())
-            token = _scan_budget.set(budget)
+        bound = inspect.signature(handler).bind(*args, **kwargs)
+        bound.apply_defaults()
+        cursor = bound.arguments.get('cursor', '')
+        limit = bound.arguments.get('limit', 0)
+        try:
+            after = _decode_cursor(cursor)
+        except ValueError:
+            return json.dumps({'reason': 'invalid_cursor', 'message':
+                               'Invalid scan cursor; restart without cursor.'})
+        if type(limit) is not int or limit < 0:
+            return json.dumps({'reason': 'invalid_limit', 'message': 'limit must be a nonnegative integer.'})
+        budget = ScanBudget(*_active_scan_limits.get(), clock=_scan_clock)
+        budget.after, budget.last_path, budget.limit = after, after, limit
+        acquired = False
+        token = _scan_budget.set(budget)
+        try:
+            remaining = budget.remaining()
             try:
-                response = await handler(*args, **kwargs)
-                if getattr(_backend(), "index_truncated", False):
-                    budget.truncated = True
-                if budget.truncated:
-                    try:
-                        result = json.loads(response)
-                    except (ValueError, TypeError):
-                        result = {"message": response}
-                    if not isinstance(result, dict):
-                        result = {"results": result}
-                    if (handler.__name__ in ("obsidian_list_notes", "obsidian_list_templates")
-                            and not budget.paths):
-                        result = {
-                            "results": [],
-                            "message": "Results truncated; narrow the folder/extension filter.",
-                        }
-                    result.update(truncated=True, scan=budget.report())
-                    if hasattr(budget, "total"):
-                        result.update(returned=len(result["results"]) if "results" in result
-                                      else result.get("total_notes", len(budget.paths)),
-                                      total=budget.total)
-                        if getattr(_backend(), "index_truncated", False):
-                            result["total_is_lower_bound"] = True
-                    return json.dumps(result, ensure_ascii=False, indent=2)
-                return response
-            finally:
-                _scan_budget.reset(token)
+                if remaining is None:
+                    await _scan_semaphore.acquire()
+                else:
+                    await asyncio.wait_for(_scan_semaphore.acquire(), remaining)
+                acquired = True
+            except TimeoutError:
+                return json.dumps({'reason': 'scans_busy', 'message':
+                    'Scans busy; retry, or increase LIVESYNC_SCAN_MAX_SECONDS.'})
+            response = await handler(*args, **kwargs)
+            if budget.expired():
+                budget.stop('time')
+            index_incomplete = (getattr(_backend(), 'index_truncated', False)
+                                or any(view[1] for view in getattr(budget, 'index_views', {}).values()))
+            if index_incomplete:
+                budget.stop('index')
+                budget.stopped_because = 'index'
+            try:
+                result = json.loads(response)
+            except (ValueError, TypeError):
+                result = {'message': response}
+            if not isinstance(result, dict):
+                result = {'results': result}
+            if handler.__name__ in ('obsidian_list_notes', 'obsidian_list_templates') and 'results' not in result:
+                result['results'] = []
+            if budget.truncated and handler.__name__ in ('obsidian_list_notes', 'obsidian_list_templates') and not budget.paths:
+                result = {'results': [], 'message': 'Results truncated; narrow the folder/extension filter, retry with next_cursor or raise the scan budget.'}
+            if index_incomplete:
+                if 'index_complete' in result:
+                    result['index_complete'] = False
+                result['index_incomplete'] = True
+                result['remedy'] = ('Continue calls until index_complete is true in obsidian_vault_stats, '
+                                    'then restart pagination without cursor; partial index paths can arrive behind a cursor.')
+            result['scan'] = budget.report()
+            if budget.truncated:
+                result.update(truncated=True, next_cursor=_encode_cursor(budget.last_path))
+                if hasattr(budget, 'total'):
+                    result.update(returned=len(result['results']) if 'results' in result
+                                  else result.get('total_notes', len(budget.paths)), total=budget.total)
+                    if index_incomplete:
+                        result['total_is_lower_bound'] = True
+            if handler.__name__ in ('obsidian_get_links', 'obsidian_find_hub_notes',
+                                    'obsidian_find_orphaned_notes'):
+                result['scope'] = 'scanned pages only'
+            return json.dumps(result, ensure_ascii=False, indent=2)
+        finally:
+            if acquired:
+                _scan_semaphore.release()
+            _scan_budget.reset(token)
     return scanned
+
+
+async def _scan_await(awaitable):
+    budget = _scan_budget.get()
+    remaining = budget.remaining() if budget else None
+    try:
+        return await awaitable if remaining is None else await asyncio.wait_for(awaitable, remaining)
+    except TimeoutError:
+        if budget:
+            budget.stop('time')
+        return None
 
 
 async def _scan_notes(**filters):
     result = []
     budget = _scan_budget.get()
-    notes = await _backend().list_notes(**filters)
+    notes = await _scan_await(_backend().list_notes(**filters))
+    if notes is None:
+        return result
+    notes = sorted(notes, key=lambda meta: meta['path'])
     if budget:
         budget.total = len(notes)
     for meta in notes:
-        if budget and not budget.admit(meta["path"], len(json.dumps(meta).encode())):
+        path = meta['path']
+        if budget and path <= budget.after:
+            continue
+        if budget and budget.limit and len(result) >= budget.limit:
+            budget.stop('limit')
+            break
+        if budget and not budget.admit(path, len(json.dumps(meta).encode())):
             break
         result.append(meta)
+        if budget:
+            budget.last_path = path
     return result
 
 
 async def _scan_texts():
     budget = _scan_budget.get()
-    async with aclosing(_backend().iterate_texts()) as texts:
-        async for meta, text in texts:
-            size = len(meta["path"].encode()) + (len(text.encode()) if text else 0)
-            if budget and not budget.admit(meta["path"], size):
+    count = 0
+    iterator = (_backend().iterate_texts(after=budget.after) if budget and budget.after
+                else _backend().iterate_texts())
+    async with aclosing(iterator) as texts:
+        while True:
+            if budget and budget.expired():
+                budget.stop('time')
                 break
+            try:
+                row = await _scan_await(anext(texts))
+            except StopAsyncIteration:
+                break
+            if row is None:
+                break
+            meta, text = row
+            del row
+            path = meta['path']
+            if budget and path <= budget.after:
+                continue
+            if budget and budget.limit and count >= budget.limit:
+                budget.stop('limit')
+                break
+            size = len(path.encode()) + (len(text.encode()) if text else 0)
+            if budget and not budget.admit(path, size):
+                break
+            count += 1
+            if budget:
+                budget.last_path = path
             yield meta, text
             del text
 
 
-
-async def _graph() -> dict:
-    paths = [meta["path"] for meta in await _scan_notes()]
-    identity = (await _backend().backend_info()).get(
+async def _graph(namespace=None) -> dict:
+    # Resolve each page's out-links against the COMPLETE available metadata,
+    # without spending the same admission budget in a separate metadata pass.
+    metadata = await _scan_await(_backend().list_notes()) or []
+    paths = sorted(meta['path'] for meta in metadata)
+    if namespace is not None:
+        namespace.extend(paths)
+    identity = (await _scan_await(_backend().backend_info()) or {}).get(
         "path_identity", PATH_IDENTITY_LEGACY)
     graph = GraphBuilder(paths, path_identity=identity)
     processed = set()
@@ -580,15 +685,19 @@ async def _graph() -> dict:
             else:
                 graph.add(meta["path"], text)
             del text
-    skipped.extend(path for path in paths if path not in processed)
-    return {**graph.result(), "skipped": skipped}
+    result = graph.result()
+    if _scan_budget.get() is not None:
+        result['nodes'] = [path for path in paths if path in processed]
+    return {**result, "skipped": skipped}
 
 
-async def _tags() -> dict:
+async def _tags(metadata=None) -> dict:
     counts, skipped, errors = {}, [], {}
     async with aclosing(_scan_texts()) as texts:
         async for meta, text in texts:
             path = meta["path"]
+            if metadata is not None:
+                metadata.append(meta)
             if text is None:
                 skipped.append(path)
                 continue
@@ -617,13 +726,21 @@ async def _tags() -> dict:
     return result
 
 
+async def _regex_apply(pattern, text, op):
+    timeout = getattr(_backend(), 'regex_timeout_seconds', regex_runner.DEFAULT_TIMEOUT)
+    budget = _scan_budget.get()
+    if budget and budget.remaining() is not None:
+        timeout = min(timeout, max(.000001, budget.remaining()))
+    return await asyncio.to_thread(regex_runner.apply, pattern, text, op, timeout=timeout)
+
+
 # === TOOLS ===
 
 # 1. obsidian-search
 @_tool
 @_tool_errors
 @_vault_scan
-async def obsidian_search(query: str, regex: bool = False) -> str:
+async def obsidian_search(query: str, regex: bool = False, cursor: str = "", limit: int = 200) -> str:
     """Search notes in the vault by content.
 
     Best-effort scan in backend iteration order; snapshot consistency is
@@ -636,10 +753,13 @@ async def obsidian_search(query: str, regex: bool = False) -> str:
     pattern = query if regex else None
     if regex:
         try:
-            await asyncio.to_thread(regex_runner.apply, query, "", "findall", timeout=getattr(_backend(), "regex_timeout_seconds", regex_runner.DEFAULT_TIMEOUT))
+            await _regex_apply(query, "", "findall")
         except re.error:
             return "Invalid regular expression."
-    results, skipped = [], []
+    results, skipped, errors = [], [], {}
+    budget = _scan_budget.get()
+    if budget:
+        budget.limit = 0
     async with aclosing(_scan_texts()) as texts:
         async for meta, text in texts:
             if text is None:
@@ -647,8 +767,10 @@ async def obsidian_search(query: str, regex: bool = False) -> str:
                 continue
             if pattern is not None:
                 try:
-                    matches = (await asyncio.to_thread(
-                        regex_runner.apply, pattern, text, "findall", timeout=getattr(_backend(), "regex_timeout_seconds", regex_runner.DEFAULT_TIMEOUT)))["matches"]
+                    matches = (await _regex_apply(pattern, text, "findall"))["matches"]
+                except regex_runner.RegexTimeoutError as error:
+                    errors[meta['path']] = error.format()
+                    continue
                 except re.error:
                     return "Invalid regular expression."
                 if matches:
@@ -659,9 +781,14 @@ async def obsidian_search(query: str, regex: bool = False) -> str:
                     "path": meta["path"],
                     "context": text[max(0, index - 50):index + len(query) + 50],
                 })
-    return json.dumps(
-        {"results": results, "skipped": skipped}, ensure_ascii=False, indent=2
-    )
+            if limit and len(results) >= limit:
+                if budget:
+                    budget.stop('limit')
+                break
+    result = {"results": results, "skipped": skipped}
+    if errors:
+        result['errors'] = errors
+    return json.dumps(result, ensure_ascii=False, indent=2)
 
 
 @_tool
@@ -738,7 +865,7 @@ async def obsidian_download_attachment(path: str, max_bytes: int = 0) -> str:
 # 2. obsidian-fetch
 @_tool
 @_tool_errors
-async def obsidian_fetch(path: str, include_properties: bool = True, include_stats: bool = False) -> str:
+async def obsidian_fetch(path: str, include_properties: bool = True, include_stats: bool = False, start_line: int | None = None, end_line: int | None = None) -> str:
     """Fetch the content and metadata of a note, base, or canvas file.
 
     Args:
@@ -746,6 +873,10 @@ async def obsidian_fetch(path: str, include_properties: bool = True, include_sta
         include_properties: Include frontmatter properties in response
         include_stats: Include word/character count statistics
     """
+    if any(value is not None and (type(value) is not int or value < 1)
+           for value in (start_line, end_line)) or (start_line is not None and end_line is not None and end_line < start_line):
+        return json.dumps({'reason': 'invalid_line_window', 'message':
+                           'Use positive 1-based inclusive lines with end_line >= start_line.'})
     refusal = None
     try:
         reader = getattr(_backend(), 'read_text_note', _backend().read_note)
@@ -775,6 +906,13 @@ async def obsidian_fetch(path: str, include_properties: bool = True, include_sta
         if content is None:
             raise StorageError()
         result["content"] = content
+        # commonlib ServiceFileAccessBase.ts:141-148 reads whole text; a window
+        # changes only peer transport, never validation or properties/stats.
+        if start_line is not None or end_line is not None:
+            lines = content.splitlines(keepends=True)
+            selected = lines[(start_line or 1) - 1:end_line]
+            result.update(content=''.join(selected), total_lines=len(lines),
+                          returned_lines=len(selected), truncated=len(selected) < len(lines))
         if include_properties:
             result["properties"] = (
                 get_properties(content) if path.endswith(".md") else {}
@@ -986,6 +1124,7 @@ async def obsidian_duplicate_note(path: str, new_path: str = "") -> str:
 async def obsidian_list_notes(
     folder: str = "",
     extension: str = "",
+    cursor: str = "", limit: int = 200,
 ) -> str:
     """List notes in the vault, optionally filtered by folder and extension.
 
@@ -1106,7 +1245,7 @@ async def obsidian_manage_tags(
 @_tool
 @_tool_errors
 @_vault_scan
-async def obsidian_get_all_tags() -> str:
+async def obsidian_get_all_tags(cursor: str = "", limit: int = 200) -> str:
     """Get all tags across the vault with usage counts.
 
     Best-effort scan in backend iteration order; snapshot consistency is
@@ -1122,6 +1261,7 @@ async def obsidian_get_all_tags() -> str:
 async def obsidian_get_links(
     path: str,
     direction: str = "both",
+    cursor: str = "", limit: int = 200,
 ) -> str:
     """Get links for a note.
 
@@ -1134,10 +1274,11 @@ async def obsidian_get_links(
     """
     if direction not in ("out", "in", "both"):
         return "Invalid direction. Use: out, in, both."
-    graph = await _graph()
-    identity = (await _backend().backend_info()).get(
+    namespace = []
+    graph = await _graph(namespace)
+    identity = (await _scan_await(_backend().backend_info()) or {}).get(
         "path_identity", PATH_IDENTITY_LEGACY)
-    resolved = resolve_link(path, graph["nodes"], path_identity=identity)
+    resolved = resolve_link(path, namespace, path_identity=identity)
     result = {"path": resolved or path, "skipped": graph["skipped"]}
     if direction in ("out", "both"):
         result["outgoing"] = [
@@ -1154,7 +1295,7 @@ async def obsidian_get_links(
 @_tool
 @_tool_errors
 @_vault_scan
-async def obsidian_get_link_graph() -> str:
+async def obsidian_get_link_graph(cursor: str = "", limit: int = 200) -> str:
     """Get the full link graph of the vault (all nodes and edges).
 
     Best-effort scan in backend iteration order; snapshot consistency is
@@ -1167,7 +1308,7 @@ async def obsidian_get_link_graph() -> str:
 @_tool
 @_tool_errors
 @_vault_scan
-async def obsidian_find_orphaned_notes() -> str:
+async def obsidian_find_orphaned_notes(cursor: str = "", limit: int = 200) -> str:
     """Find notes that have no incoming or outgoing links.
 
     Best-effort scan in backend iteration order; snapshot consistency is
@@ -1181,7 +1322,7 @@ async def obsidian_find_orphaned_notes() -> str:
     # Unreadable bodies may contain outgoing links, so cannot prove orphanhood.
     skipped = set(graph["skipped"])
     orphans = [n for n in graph["nodes"] if n not in connected and n not in skipped]
-    if graph["skipped"]:
+    if graph["skipped"] or (_scan_budget.get() and _scan_budget.get().truncated):
         return json.dumps(
             {"orphans": orphans, "skipped": graph["skipped"]},
             ensure_ascii=False, indent=2,
@@ -1195,7 +1336,7 @@ async def obsidian_find_orphaned_notes() -> str:
 @_tool
 @_tool_errors
 @_vault_scan
-async def obsidian_find_hub_notes(min_links: int = 3) -> str:
+async def obsidian_find_hub_notes(min_links: int = 3, cursor: str = "", limit: int = 200) -> str:
     """Find the most connected notes in the vault.
 
     Best-effort scan in backend iteration order; snapshot consistency is
@@ -1221,7 +1362,7 @@ async def obsidian_find_hub_notes(min_links: int = 3) -> str:
         if total >= min_links:
             hubs.append({"path": node, "incoming": counts["in"], "outgoing": counts["out"], "total": total})
     hubs.sort(key=lambda x: x["total"], reverse=True)
-    if graph["skipped"]:
+    if graph["skipped"] or (_scan_budget.get() and _scan_budget.get().truncated):
         return json.dumps(
             {"hubs": hubs, "skipped": graph["skipped"]},
             ensure_ascii=False, indent=2,
@@ -1394,23 +1535,33 @@ async def obsidian_canvas_edge(
 @_tool
 @_tool_errors
 @_vault_scan
-async def obsidian_vault_stats() -> str:
+async def obsidian_vault_stats(cursor: str = "", limit: int = 0) -> str:
     """Get aggregate statistics for the entire vault.
 
     Best-effort scan in backend iteration order; snapshot consistency is
     not guaranteed. Concurrent changes may be interleaved during the scan.
     """
-    notes = await _scan_notes()
+    metadata = await _scan_await(_backend().list_notes()) or []
+    budget = _scan_budget.get()
+    if budget:
+        budget.total = len(metadata)
+    notes = []
+    tags = await _tags(notes)
     by_ext = {}
     for note in notes:
         path = note["path"]
         ext = path.rsplit(".", 1)[-1] if "." in path else "unknown"
         by_ext[ext] = by_ext.get(ext, 0) + 1
-    tags = await _tags()
-    info = await _backend().backend_info()
+    info = await _scan_await(_backend().backend_info()) or {}
     local_state = {key: info[key] for key in
                    ('text_budget_bytes', 'regex_max_output_bytes', 'regex_timeout_seconds')
                    if key in info and type(info[key]) in (int, float)}
+    for field in ('index_ids_collected', 'index_docs_indexed', 'index_next_skip'):
+        if field in info:
+            value = info[field]
+            local_state[field] = value if type(value) is int and value >= 0 else 0
+    if 'index_complete' in info:
+        local_state['index_complete'] = info['index_complete'] if type(info['index_complete']) is bool else False
     if info.get("backend") == "s3-journal":
         size = info["state_dir_bytes"]
         threshold = info["state_size_warn_mb"]
@@ -1500,7 +1651,7 @@ async def obsidian_create_from_template(
 @_tool
 @_tool_errors
 @_vault_scan
-async def obsidian_list_templates(folder: str = "templates") -> str:
+async def obsidian_list_templates(folder: str = "templates", cursor: str = "", limit: int = 200) -> str:
     """List available templates in the templates folder.
 
     Best-effort scan in backend iteration order; snapshot consistency is

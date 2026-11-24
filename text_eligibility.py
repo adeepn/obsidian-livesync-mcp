@@ -4,7 +4,7 @@ import codecs
 import math
 
 DEFAULT_TEXT_SCAN_MAX_BYTES = 256 * 1024 * 1024
-DEFAULT_TEXT_VERDICT_CACHE_ENTRIES = 4096
+DEFAULT_TEXT_VERDICT_CACHE_ENTRIES = 65536
 
 
 def is_text_characters(text: str) -> bool:

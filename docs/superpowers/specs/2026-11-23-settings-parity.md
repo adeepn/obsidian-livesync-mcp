@@ -684,3 +684,31 @@ bytes independently and configure regex deadlines (default 10 seconds).
 [DEFER] P-29 second half: complete metadata index, scan time budget, cursors,
 persistent regex worker, fetch line windows and search page limit. Keep current
 10000-note / 64 MiB aggregate limits and per-note regex processes.
+
+
+### 2026-11-25 — G4b complete scans and continuation
+
+[DECISION] Remove default aggregate note/byte caps (0 = unlimited), retain
+operator overrides, and add a 20-second configurable aggregate/index time
+budget including scan-slot waiting. Use typed stop reasons and opaque cursors
+after fully processed display paths, with search match limits and source-note
+page limits for other growing aggregate tools. List responses gain a results
+and scan envelope. Backlinks, hubs and orphans describe scanned pages only.
+
+[DECISION] Cache incomplete CouchDB metadata progress by update_seq and resume
+later calls, retaining compact metadata only. Expose typed index completeness
+and progress alongside scan budgets; partial counts remain lower bounds.
+Upstream commonlib serviceModules/ServiceFileAccessBase.ts:287-290 returns all
+files, and pouchdb/LiveSyncLocalDB.ts:481-536 enumerates database pages.
+
+[GOTCHA] Cold index enumeration follows document IDs, which need not sort like
+display paths. An incomplete index can discover a path behind an earlier cursor
+and lack graph-resolution targets until they are indexed. Finish indexing and restart pagination before relying on complete coverage.
+Concurrent creations/renames behind any cursor can also be missed or repeated.
+
+[DECISION] Fetch windows are a transport projection after whole-note text
+validation; omitted bounds preserve the prior response shape. Reuse one
+isolated persistent regex worker with hard request deadlines, kill/restart on
+failure, and synchronous lifecycle cleanup. Per-note search timeouts continue
+scanning; replacement timeouts refuse before publication. Negative text-verdict
+cache capacity defaults to 65536. No upstream wire-format fixture changes.
