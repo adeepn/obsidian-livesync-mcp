@@ -615,3 +615,29 @@ Worktree-scoped compileall and diff/ignored-file checks pass. Bare compileall
 exits zero but reports the environment's absent system python313.zip; no
 interpreter installation changes are part of this task. Post-commit full-suite
 evidence is kept in the ignored G3 task directory.
+
+
+### 2026-11-25 — G5: custom connection headers and S3 addressing
+
+[DECISION] Add independent COUCHDB_CUSTOM_HEADERS / S3_CUSTOM_HEADERS text or
+JSON configuration and S3_FORCE_PATH_STYLE (true by default). Copy each
+plugin dialog's **Custom Headers** field; these local credentials are never
+inferred from milestone settings. Validate HTTP token names/control-free
+values without echoing names or values. Report presence/count only.
+
+[GOTCHA] commonlib `common/utils.ts:459-469` truncates text values after the
+second colon segment; JSON preserves colons. Text duplicate exact-case keys
+retain the last value. The native parser fixture records execution outputs
+and source hash; it has no published package dependencies.
+
+[DECISION] CouchDB credentials stay within the configured origin and redirects
+are not followed. S3 applies headers at botocore before-send after signing and
+preparation, including fallback requests (`MinioStorageAdapter.ts:54-100`).
+With configured endpoints, forcePathStyle maps to path/virtual addressing;
+SDK DNS/IP/bucket rules still apply. Python and JavaScript SDK endpoint edge
+cases and non-ASCII header transport are not claimed byte-identical.
+
+[DECISION] Suppress free-form SDK/HTTP logs process-wide when proxy headers
+are used; keep typed application diagnostics. Credentials must not escape
+through debug tracebacks. See tests/test_custom_headers.py and the G5 evidence
+directory for RED/GREEN, mutation and final full-suite verification.

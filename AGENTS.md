@@ -64,6 +64,10 @@ partitions, IDs, backend lifecycles and pre-mutation loop refusals.
 
 `scripts/extract_compression_vectors.mjs` executes pinned compression functions with integrity-verified published wheels and fflate; `tests/fixtures/compression_upstream.json` records upstream and zlib interoperability vectors.
 
+`scripts/extract_header_vectors.mjs` executes the pinned native-JavaScript header parser
+(no package dependencies); `tests/fixtures/headers_upstream.json` records its source
+hash and outputs. `tests/test_custom_headers.py` covers config, wire and secrets.
+
 `scripts/extract_surrogate_vectors.mjs` executes pinned journal records, legacy splitting and verified published dependencies to produce `tests/fixtures/surrogate_wire_upstream.json`.
 
 Tests live in `tests/` as `tests/test_<module>.py` (pytest + pytest-asyncio, auto mode via `pytest.ini`); shared doubles are `tests/fake_backend.py` (in-memory backend) and `tests/couchdb_fake.py` (HTTP-level CouchDB double). `tests/settings_oracle_inputs.py` contains deterministic input recipes only; `tests/settings_oracle.py` loads interned compressed upstream expectations from `tests/fixtures/`. `tests/fake_object_storage.py` supplies an S3 double. Keep new modules focused and colocated unless the project grows enough to justify a package layout.

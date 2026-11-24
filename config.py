@@ -8,9 +8,11 @@ copied from ``.env.example`` are rejected at startup (spec section 6).
 
 from __future__ import annotations
 
+import json
 import math
 import os
-from dataclasses import dataclass, replace
+import re
+from dataclasses import dataclass, field, replace
 from typing import Literal, Mapping
 from urllib.parse import parse_qs
 
@@ -57,6 +59,8 @@ class CouchDBConfig:
     user: str
     password: str
     database: str
+    # common/models/setting.const.defaults.ts:196-197: empty connection headers.
+    custom_headers: tuple[tuple[str, str], ...] = field(default=(), repr=False)
 
 
 @dataclass(frozen=True)
@@ -79,6 +83,10 @@ class S3Config:
     state_dir: str = S3_STATE_DIR_DEFAULT
     refresh_min_interval_sec: float = S3_REFRESH_MIN_INTERVAL_DEFAULT
     state_size_warn_mb: int = 0
+    # common/models/setting.const.defaults.ts:196-197: empty connection headers.
+    custom_headers: tuple[tuple[str, str], ...] = field(default=(), repr=False)
+    # common/models/setting.const.defaults.ts:210.
+    force_path_style: bool = True
 
 
 @dataclass(frozen=True)
@@ -155,6 +163,84 @@ def parse_s3_uri(uri: str) -> S3Config:
     )
 
 
+# Commonlib common/utils.ts:459-469 (484c164): split(":", 2) discards
+# additional colon segments; trim is ECMAScript String.trim, not Python strip.
+_JS_SPACE = " \t\n\r\v\f\u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff"
+_FIELD_NAME = re.compile(r"[!#$%&'*+.^_`|~0-9A-Za-z-]+", re.ASCII)
+
+
+def _load_custom_headers(env: Mapping[str, str], name: str) -> tuple[tuple[str, str], ...]:
+    raw = env.get(name, "")
+
+    def fail(ordinal: int, rule: str):
+        raise ConfigError(f"{name} entry {ordinal}: {rule}; correct the header configuration.") from None
+
+    if raw.lstrip(_JS_SPACE).startswith(("{", "[")):
+        try:
+            # Preserve pairs so duplicate JSON keys cannot disappear in json.loads.
+            pairs = json.loads(raw, object_pairs_hook=lambda items: items)
+        except json.JSONDecodeError as exc:
+            # Count only top-level commas preceding the syntax error; never
+            # include the decoder's message or document in a public exception.
+            ordinal, depth, quoted, escaped = 1, 0, False, False
+            for char in raw[:exc.pos]:
+                if quoted:
+                    if escaped:
+                        escaped = False
+                    elif char == "\\":
+                        escaped = True
+                    elif char == '"':
+                        quoted = False
+                elif char == '"':
+                    quoted = True
+                elif char in "{[":
+                    depth += 1
+                elif char in "}]":
+                    depth -= 1
+                elif char == "," and depth == 1:
+                    ordinal += 1
+            fail(ordinal, "invalid JSON object")
+        except (ValueError, TypeError, RecursionError):
+            fail(1, "invalid JSON object")
+        if not raw.lstrip(_JS_SPACE).startswith("{") or not isinstance(pairs, list):
+            fail(1, "expected JSON object of strings")
+        entries = []
+        seen = set()
+        for ordinal, pair in enumerate(pairs, 1):
+            key, value = pair
+            if key in seen:
+                fail(ordinal, "duplicate JSON name")
+            seen.add(key)
+            if type(value) is not str:
+                fail(ordinal, "JSON values must be strings")
+            entries.append((ordinal, key, value))
+    else:
+        entries = []
+        for ordinal, line in enumerate(raw.split("\n"), 1):
+            parts = line.split(":", 2)
+            if len(parts) < 2:
+                continue
+            key, value = (part.strip(_JS_SPACE) for part in parts[:2])
+            if key and value:
+                entries.append((ordinal, key, value))
+    headers = {}
+    for ordinal, key, value in entries:
+        if not _FIELD_NAME.fullmatch(key):
+            fail(ordinal, "HTTP field name must be an RFC 9110 token")
+        if any(ord(c) < 32 or 127 <= ord(c) <= 159 for c in value):
+            fail(ordinal, "HTTP value must not contain control characters")
+        # RemoteService.ts:360 creates native Fetch Headers (ByteString).
+        # The S3 Node HTTP transport likewise requires one-byte field octets.
+        if any(ord(c) > 255 for c in value):
+            fail(ordinal, "HTTP transport requires Latin-1 values; encode proxy credentials as ASCII")
+        # JS {} has a prototype setter; assigning a string to __proto__ does
+        # not create an own header (utils.ts:460,465). JSON has no such setter.
+        if key == "__proto__" and not raw.lstrip(_JS_SPACE).startswith("{"):
+            continue
+        headers[key] = value
+    return tuple(headers.items())
+
+
 def _read(env: Mapping[str, str], name: str) -> str:
     value = env.get(name, "")
     if not value:
@@ -178,6 +264,7 @@ def _load_couchdb(env: Mapping[str, str]) -> CouchDBConfig:
         user=_read(env, "COUCHDB_USER"),
         password=password,
         database=_read(env, "COUCHDB_DATABASE"),
+        custom_headers=_load_custom_headers(env, "COUCHDB_CUSTOM_HEADERS"),
     )
 
 
@@ -258,8 +345,13 @@ def _load_s3(env: Mapping[str, str]) -> S3Config:
             raise ValueError
     except ValueError:
         raise ConfigError("S3_STATE_SIZE_WARN_MB must be a non-negative integer") from None
+    style = env.get("S3_FORCE_PATH_STYLE", "true")
+    if style not in ("true", "false"):
+        raise ConfigError("S3_FORCE_PATH_STYLE must be true or false")
     return replace(
         connection,
+        custom_headers=_load_custom_headers(env, "S3_CUSTOM_HEADERS"),
+        force_path_style=style == "true",
         state_dir=state_dir,
         refresh_min_interval_sec=refresh_sec,
         state_size_warn_mb=warn_mb,

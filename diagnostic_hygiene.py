@@ -270,3 +270,24 @@ def invalid_setting(key: str, value: object) -> str:
     shape = {str:'string', int:'number', float:'number', bool:'boolean',
              type(None):'null', list:'array', tuple:'array'}.get(type(value), 'object')
     return f'{setting_key(key)}=<invalid: {shape}>'
+
+
+class _NoTransportDiagnostics(logging.Filter):
+    """Transport debug records can contain credentials or raw exception text."""
+
+    def filter(self, record):
+        return False
+
+
+def silence_transport_logging():
+    """Keep SDK/HTTP diagnostics closed when proxy credentials are configured.
+
+    SDK debug tracebacks and response bodies cannot be safely projected from
+    their free-form records. Application diagnostics retain typed fields only.
+    These modules are imported by the transports before this function is used.
+    """
+    for name in tuple(logging.Logger.manager.loggerDict):
+        if name.split('.')[0] in {'botocore', 'boto3', 'urllib3', 'httpx', 'httpcore'}:
+            target = logging.getLogger(name)
+            if not any(isinstance(f, _NoTransportDiagnostics) for f in target.filters):
+                target.addFilter(_NoTransportDiagnostics())

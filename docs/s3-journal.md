@@ -91,3 +91,23 @@ There is no encoding setting. Re-read the published note to inspect the same
 text other devices receive. See the dated upstream [GOTCHA] in the settings
 parity spec and `tests/fixtures/surrogate_wire_upstream.json` for executable
 upstream frame bytes and decoded records.
+
+
+## Custom connection headers and addressing
+
+`S3_CUSTOM_HEADERS` accepts plugin **Custom Headers** lines or a JSON object.
+These custom headers are applied on every final signed S3 request, including
+GET, LIST pages, HEAD, PUT, conditional PUT and exists+put fallback. The
+botocore `before-send.s3` hook runs after signing/preparation and can override
+any SDK header, matching `MinioStorageAdapter.ts:86-100`. Invalid overrides can
+break authentication; remove them or use the proxy's required header names.
+`S3_FORCE_PATH_STYLE` defaults to `true`, matching upstream defaults:210 and
+the existing peer. Set false for virtual-host addressing. Like upstream
+`MinioStorageAdapter.ts:61-67`, this option applies to configured endpoints;
+without one, SDK endpoint rules apply. DNS-compatible bucket/host names and
+appropriate TLS certificates are required; IPs and incompatible bucket names
+may fall back to path style under SDK rules. The Python and JavaScript SDKs
+may differ in endpoint resolution edge cases.
+See [proxy examples and credential handling](connecting-storage.md#reverse-proxies-and-auth-proxies).
+Only typed `custom_headers_configured` and `custom_headers_count` diagnostics
+are exposed, never header names or values.

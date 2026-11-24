@@ -58,9 +58,13 @@ COUCHDB_DATABASE=<plugin-database-name>
 Open **Settings → Self-hosted LiveSync → Setup / remote configuration →
 S3/MinIO/R2 Configuration**. Copy **Endpoint URL**, **Access Key ID**,
 **Secret Access Key**, **Bucket Name**, **Region**, **Folder Prefix**. Check
-**Use Path-Style Access**: this peer always uses path-style for a configured
-endpoint (`object_storage.py`); there is no path-style env switch. A provider
-requiring virtual-host addressing is not supported by this adapter.
+**Use Path-Style Access**: copy this choice with `S3_FORCE_PATH_STYLE=true`
+(the default) or `S3_FORCE_PATH_STYLE=false` for virtual-host addressing.
+Virtual-host-only providers require false. DNS and the TLS certificate must
+cover `bucket.endpoint-host`; an IP endpoint or a bucket name unsuitable for
+DNS may cause the SDK to fall back to path style. Use a DNS-compatible bucket
+and hostname for virtual-host access. Like upstream, the switch applies only
+when an endpoint is configured; without one, AWS SDK endpoint rules apply.
 
 The audited plugin's **Copy the current settings to a Setup URI** (often called
 “Copy setup URI”) produces an encrypted settings link, not this peer's S3 URI.
@@ -139,3 +143,82 @@ because syncOnlyRegEx/syncIgnoreRegEx are absent from TweakValuesTemplate.
 Reads bypass all filters, including explicit filters; the database remains the
 source of truth even when devices keep local files that later become ignored.
 See [selection filters](selection-filters.md) for syntax and diagnostics.
+
+
+## Reverse proxies and auth proxies
+
+Copy **Custom Headers** from the CouchDB or S3/MinIO/R2 setup dialog into
+`COUCHDB_CUSTOM_HEADERS` or `S3_CUSTOM_HEADERS`, respectively. The exact labels
+at the pin are in `SetupRemoteCouchDB.svelte:229-234` and
+`SetupRemoteBucket.svelte:230-235`. These are local connection credentials;
+they are independent of the shared vault settings and of MCP client auth.
+Keep them in a protected environment file or launcher secret store.
+
+For an HTTPS reverse proxy, use the server base URL including its optional
+path prefix; the database remains a separate field. Example (replace marked
+fields and the illustrative proxy credential):
+
+```dotenv
+LIVESYNC_BACKEND=couchdb
+COUCHDB_URL=https://vault.example.org/livesync/
+COUCHDB_USER=<plugin-username>
+COUCHDB_PASSWORD=<plugin-password>
+COUCHDB_DATABASE=<plugin-database-name>
+COUCHDB_CUSTOM_HEADERS="X-Proxy-Token: example-only\nX-Client: obsidian-peer"
+```
+
+For a direct IP endpoint use, for example, `COUCHDB_URL=http://127.0.0.1:5984`
+or `S3_ENDPOINT_URL=http://127.0.0.1:9000`; retain the port and optional proxy
+path prefix. For HTTPS use a certificate valid for that IP, or use its valid
+DNS hostname. The CouchDB peer does not follow redirects; configure the final
+server URL so credentials cannot be forwarded to another host.
+
+In a `.env` file, python-dotenv expands `\n` inside double quotes into real
+newlines. Literal shell or systemd environment values do not necessarily do
+this. For those launchers use a JSON object of string to string; outer single
+quotes below belong to dotenv, not to the value passed to the process:
+
+```dotenv
+LIVESYNC_BACKEND=s3
+S3_ENDPOINT_URL=https://objects.example.org
+S3_ACCESS_KEY_ID=<plugin-access-key>
+S3_SECRET_ACCESS_KEY=<plugin-secret-key>
+S3_BUCKET=<plugin-bucket>
+S3_REGION=auto
+S3_CUSTOM_HEADERS='{"X-Proxy-Token":"example-only","X-Client":"obsidian-peer"}'
+S3_FORCE_PATH_STYLE=false
+```
+
+Either variable accepts either syntax, independently. Empty means no custom
+headers. Text parsing follows commonlib `common/utils.ts:459-469`: split on
+newlines, trim key/value, ignore lines with either empty, last duplicate
+**exact-case** key wins. Upstream splits at most two colon segments and
+therefore `X-Value: first:second` becomes `first`; use JSON to retain colons.
+JSON strings retain their whitespace; duplicate JSON keys are rejected.
+Invalid JSON, non-string JSON values, invalid RFC 9110 token names and control
+characters in resulting values fail startup. The error names only the variable,
+entry ordinal (line number in text, member number in JSON) and broken rule;
+correct that entry. No header name or credential value is echoed.
+
+CouchDB sends headers on metadata, document, attachment and `_local` requests
+at the configured origin. Like normal device replication
+(`RemoteService.ts:360-369`), custom headers
+append to existing headers, including Authorization and Content-Type. An
+Authorization entry therefore combines with Basic auth; use the proxy's own
+header name when it expects a separate token. S3 applies headers to every final
+signed wire request,
+including conditional publication and the exists+put fallback. S3 headers can
+override SDK headers, including Authorization; use this only when the proxy
+expects it. Incorrect overrides can invalidate an AWS signature: remove the
+override or configure the proxy's required header instead.
+
+`backend_info` and `obsidian_vault_stats` expose only `custom_headers_configured`
+(boolean) and `custom_headers_count` (integer). They reveal no header names or
+values. SDK/HTTP library logging is suppressed process-wide after a connection
+with custom headers is constructed, including debug tracebacks; typed application
+diagnostics remain available. HTTP header values use Latin-1 octets, like the
+device Fetch ByteString
+contract. Code points above U+00FF cannot be sent as such HTTP field values;
+encode those proxy credentials in ASCII (for example the proxy's documented
+base64 token format). These offline tests establish configuration and wire behavior,
+not connectivity to a particular reverse proxy.

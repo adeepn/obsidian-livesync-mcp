@@ -1,0 +1,89 @@
+{
+  "remote_source": "src/services/base/RemoteService.ts:360-369",
+  "remote_source_sha256": "950c4157daf29d089851394e0b75aa9a7d1a69e892aa78e662599f52bad356ce",
+  "merge_vectors": [
+    {
+      "base": {
+        "Authorization": "Basic test",
+        "Content-Type": "application/json"
+      },
+      "custom": {
+        "Authorization": "proxy",
+        "Content-Type": "custom",
+        "X-Proxy": "secret"
+      },
+      "expected": {
+        "authorization": "Basic test, proxy",
+        "content-type": "application/json, custom",
+        "x-proxy": "secret"
+      }
+    },
+    {
+      "base": {
+        "Authorization": "Basic test"
+      },
+      "custom": {
+        "X-Proxy": "  spaced  ",
+        "X-Latin": "café"
+      },
+      "expected": {
+        "authorization": "Basic test",
+        "x-latin": "café",
+        "x-proxy": "spaced"
+      }
+    }
+  ],
+  "upstream_commit": "484c164450d61deb2e301582b60cb9b5f9fa977f",
+  "source": "src/common/utils.ts:459-469",
+  "source_sha256": "162d7416ff00469d98e38a8be62854cc62eaba689605889937f37cf9243c3fed",
+  "node": "v26.13.1",
+  "dependencies": [],
+  "vectors": [
+    {
+      "input": "",
+      "expected": {}
+    },
+    {
+      "input": "\n \n",
+      "expected": {}
+    },
+    {
+      "input": " X-Test : first \nX-Test: last\nOther: ok ",
+      "expected": {
+        "X-Test": "last",
+        "Other": "ok"
+      }
+    },
+    {
+      "input": "No colon\n: absent\nEmpty: \nValid: yes",
+      "expected": {
+        "Valid": "yes"
+      }
+    },
+    {
+      "input": "Url: https://proxy.example/path",
+      "expected": {
+        "Url": "https"
+      }
+    },
+    {
+      "input": "A: one\na: two",
+      "expected": {
+        "A": "one",
+        "a": "two"
+      }
+    },
+    {
+      "input": "﻿Key : ﻿value ",
+      "expected": {
+        "Key": "value"
+      }
+    },
+    {
+      "input": "__proto__: ignored\nconstructor: set",
+      "expected": {
+        "constructor": "set"
+      }
+    }
+  ]
+}

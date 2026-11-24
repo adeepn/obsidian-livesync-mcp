@@ -71,6 +71,7 @@ are read only for the selected backend. Empty defaults below mean an empty strin
 | Variable | Default | Requirement | Purpose |
 | --- | --- | --- | --- |
 | `LIVESYNC_BACKEND` | none | Required | Select `couchdb` or `s3` |
+| `COUCHDB_CUSTOM_HEADERS` | empty | Optional | Plugin Custom Headers lines or JSON object; credential values; see [connection examples](docs/connecting-storage.md#reverse-proxies-and-auth-proxies) |
 | `COUCHDB_URL` | `http://localhost:5984` | Optional | CouchDB server base URL |
 | `COUCHDB_USER` | none | Required for CouchDB | Database username |
 | `COUCHDB_PASSWORD` | none | Required for CouchDB | Database password |
@@ -81,6 +82,8 @@ are read only for the selected backend. Empty defaults below mean an empty strin
 | `S3_SECRET_ACCESS_KEY` | none | Required for S3 fields | Object-storage secret key |
 | `S3_BUCKET` | none | Required for S3 fields | Existing LiveSync journal bucket |
 | `S3_REGION` | `auto` (fields); empty if omitted in URI | Optional | Object-storage region |
+| `S3_CUSTOM_HEADERS` | empty | Optional | Plugin Custom Headers lines or JSON object, applied after signing on every S3 request |
+| `S3_FORCE_PATH_STYLE` | `true` | Optional | `true` path style, `false` virtual-host style for configured endpoints |
 | `S3_PREFIX` | empty | Optional | Literal key prefix, including trailing slash if needed |
 | `S3_STATE_DIR` | `./data` | Optional | Dedicated persistent local replica directory |
 | `S3_REFRESH_MIN_INTERVAL_SEC` | `5` | Optional | Positive finite seconds below `2**63` between refresh attempts |
@@ -135,6 +138,9 @@ combination. [Source inventory and caveats](docs/superpowers/specs/2026-11-23-se
 
 | Setting | Plugin values | Status | Peer behavior |
 |---|---|---|---|
+| `couchDB_CustomHeaders` | Key: Value lines | Identical for valid HTTP headers | Configure COUCHDB_CUSTOM_HEADERS locally; all database requests, origin restricted |
+| `bucketCustomHeaders` | Key: Value lines | Identical for valid HTTP headers | Configure S3_CUSTOM_HEADERS locally; final wire overrides, including signed headers |
+| `forcePathStyle` | Boolean, default true | Identical for configured endpoints | S3_FORCE_PATH_STYLE=true/false; SDK addressing rules still apply |
 | `pathNormalizationVersion` | 0 legacy / 1 NFC | Identical | Both, independently of filename case; collisions refuse |
 | `handleFilenameCaseSensitive` | false / true | Identical | Legacy, NFC, case-sensitive and NFC+case-sensitive identities |
 | `chunkSplitterVersion` | v1, v2, v2-segmenter, v3-rabin-karp, legacy empty | Identical | All writers; legacy split-surrogate pieces retain device IDs and transport encoding; v2-segmenter equals v2 at this pin |
@@ -212,8 +218,14 @@ combination. [Source inventory and caveats](docs/superpowers/specs/2026-11-23-se
 - Reads/search use strict UTF-8/control/budget projection for textual newnotes;
   scans are bounded, best-effort and may be truncated. Regex replacements have
   a 10 MiB output cap and two-second deadline. [Scan policy](docs/scan-policy.md).
-- S3 custom endpoints use path-style addressing; virtual-host-only providers
-  need an adapter change. Publication has an exists+put race fallback on stores
+- Custom request headers are local connection credentials, copied from the plugin,
+  not inferred from shared vault settings. Invalid HTTP names/control characters
+  refuse startup with variable, entry ordinal and rule; correct that entry.
+  Text form follows upstream colon truncation; use JSON for colon-containing values.
+  Transport library logs are suppressed process-wide once custom headers are used;
+  application diagnostics report typed presence/count only.
+- S3 custom endpoints default to path-style addressing; virtual-host-only providers
+  must set S3_FORCE_PATH_STYLE=false. Publication has an exists+put race fallback on stores
   without conditional writes. [S3 operation](docs/s3-journal.md).
 
 ## Outcome reporting

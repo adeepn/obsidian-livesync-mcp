@@ -461,6 +461,8 @@ class JournalBackend(DeviceSelection):
             "writer_supported": self._writer_unsupported_reason is None and selection["selection_writer_supported"],
             "writer_unsupported_reason": writer_diagnostic(self._writer_unsupported_reason or selection["selection_unsupported_reason"]),
             "backend": "s3-journal",
+            "custom_headers_configured": bool(getattr(self._object_storage, "custom_headers_count", 0)),
+            "custom_headers_count": getattr(self._object_storage, "custom_headers_count", 0),
             "protocol_notes": list(self._protocol_notes),
             "state_dir_path": "<value hidden>",
             "state_dir_bytes": store.state_size_bytes() if store else 0,

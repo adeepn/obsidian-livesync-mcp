@@ -56,6 +56,8 @@ from text_eligibility import (TextProjection, DEFAULT_TEXT_SCAN_MAX_BYTES,
 from couchdb_compression import compress_doc, decompress_doc
 from wire_encoding import json_stringify
 
+import base64
+
 import httpx
 
 from content_splitter import ContentSplitter, chunk_id_for_piece
@@ -156,6 +158,7 @@ class CouchDBBackend(DeviceSelection):
         database: str,
         *,
         transport: httpx.AsyncBaseTransport | None = None,
+        custom_headers: tuple[tuple[str, str], ...] = (),
         text_verdict_cache_entries: int = DEFAULT_TEXT_VERDICT_CACHE_ENTRIES,
         scan_max_notes: int = 10000,
         scan_max_bytes: int = 64 * 1024 * 1024,
@@ -166,6 +169,8 @@ class CouchDBBackend(DeviceSelection):
         self._scan_limits = (scan_max_notes, scan_max_bytes)
         self.text_scan_max_bytes = DEFAULT_TEXT_SCAN_MAX_BYTES
         self._text_verdicts = OrderedDict()
+        self._custom_headers = dict(custom_headers)
+        self._auth_header = "Basic " + base64.b64encode(f"{username}:{password}".encode()).decode("ascii")
         self._database = database
         self._path_identity = PATH_IDENTITY_LEGACY
         self._tweak_assessment = {"status": "OK", "differing_keys": []}
@@ -180,6 +185,11 @@ class CouchDBBackend(DeviceSelection):
             transport=transport,
             timeout=httpx.Timeout(5.0, read=30.0, write=30.0, pool=5.0),
         )
+        if custom_headers:
+            # AsyncClient imports httpcore lazily: install filters only after
+            # constructing its transport, including on the first connection.
+            from diagnostic_hygiene import silence_transport_logging
+            silence_transport_logging()
         # Note metadata index (doc id -> metadata doc), cached per
         # update_seq (audit C5).
         self._index: dict[str, dict] | None = None
@@ -208,13 +218,32 @@ class CouchDBBackend(DeviceSelection):
         other error status and every transport failure raises a storage
         exception whose message carries no URL, database or revision.
         """
+        # LiveSyncReplicator.ts:2071-2098 passes custom headers to the
+        # database connection; diagnostics/couchdb.ts:45 uses them as well.
+        # Do not allow absolute/network-path URLs to send credentials elsewhere.
+        target = self._client.base_url.join(path)
+        if (target.scheme, target.host, target.port) != (
+            self._client.base_url.scheme, self._client.base_url.host, self._client.base_url.port
+        ):
+            raise StorageUnavailable(PublicDiagnostic(operation=method, transport='CouchDB'))
         try:
             # PouchDB adapter-http 9.0.0 lib/index.es.js:765-773.
             body = ({} if json_body is None else {
                 "content": json_stringify(json_body).encode("utf-8"),
                 "headers": {"Content-Type": "application/json"},
             })
-            response = await self._client.request(method, path, params=params, **body)
+            # RemoteService.ts:360-369 uses Headers.append, including auth
+            # and Content-Type. Fetch headers are case-insensitive ByteStrings.
+            headers = httpx.Headers(body.pop("headers", {}), encoding="latin-1")
+            headers["Authorization"] = self._auth_header
+            for key, value in self._custom_headers.items():
+                value = value.strip(" \t")
+                if key in headers:
+                    value = headers[key] + ", " + value
+                headers[key] = value
+            response = await self._client.request(
+                method, path, params=params, headers=headers, auth=None, **body
+            )
         except httpx.HTTPError as exc:
             logger.warning('CouchDB <omitted> <omitted> failed: <omitted>; cause: %s', cause_name(type(exc)))
             if method in {"PUT", "DELETE"} and not isinstance(
@@ -227,7 +256,8 @@ class CouchDBBackend(DeviceSelection):
         if code == 404 and method in {'GET', 'HEAD'}:
             return response  # missing notes are an ordinary absence
         if code >= 400:
-            unsafe_debug(logger, response.text)
+            if not self._custom_headers:
+                unsafe_debug(logger, response.text)
             logger.warning('CouchDB %s status: %s', operation_field(method), numeric_field(code))
             reason = (DiagnosticCode.COUCHDB_DATABASE_NOT_FOUND if code == 404 else
                       DiagnosticCode.COUCHDB_AUTHORIZATION_ERROR if code in {401, 403} else
@@ -471,6 +501,8 @@ class CouchDBBackend(DeviceSelection):
             "writer_supported": self._writer_unsupported_reason is None and selection["selection_writer_supported"],
             "writer_unsupported_reason": writer_diagnostic(self._writer_unsupported_reason or selection["selection_unsupported_reason"]),
             "backend": "couchdb",
+            "custom_headers_configured": bool(self._custom_headers),
+            "custom_headers_count": len(self._custom_headers),
             "enableCompression": self.enable_compression is True,
             "path_identity": setting_value(self._path_identity),
             "database": "<value hidden>",

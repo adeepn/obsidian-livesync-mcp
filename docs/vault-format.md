@@ -173,3 +173,17 @@ node scripts/extract_compression_vectors.mjs /tmp/settings-parity-commonlib /tmp
 The generator refuses changed pinned sources or dependency tarballs. Its fixture
 records source SHA-256, lockfile dependency versions/integrities and Node version;
 real upstream reads both fflate and Node zlib streams, including invalid UTF-8.
+
+
+## CouchDB request headers
+
+`COUCHDB_CUSTOM_HEADERS` supplies custom headers on every request to the
+configured database server, including metadata, documents, attachments and
+`_local` documents. Absolute URLs to other origins are refused and redirects
+are not followed. Like normal device replication
+(`RemoteService.ts:360-369`), custom values
+append to existing headers, including the Basic Authorization header.
+Headers do not change the
+stored vault format. See [proxy configuration](connecting-storage.md#reverse-proxies-and-auth-proxies)
+for text/JSON forms, validation, typed count diagnostics and secret handling.
+Upstream: `LiveSyncReplicator.ts:2071-2098`, `diagnostics/couchdb.ts:45`.

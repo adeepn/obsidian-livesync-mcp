@@ -209,3 +209,19 @@ def test_legacy_parameter_recovery_documented():
         assert name in focused and name in (ROOT / '.env.example').read_text()
     for term in ('864', 'UTF-16', 'single code point', 'null', 'NaN', 'Recovery'):
         assert term in focused
+
+
+def test_custom_header_connection_contract():
+    for variable in ('COUCHDB_CUSTOM_HEADERS', 'S3_CUSTOM_HEADERS', 'S3_FORCE_PATH_STYLE'):
+        assert variable in environment_names()
+        assert variable in (ROOT / 'docs/connecting-storage.md').read_text()
+    readme = (ROOT / 'README.md').read_text()
+    for setting in ('couchDB_CustomHeaders', 'bucketCustomHeaders', 'forcePathStyle'):
+        assert f'| `{setting}` |' in readme
+    assert 'set S3_FORCE_PATH_STYLE=false' in readme
+    connection = (ROOT / 'docs/connecting-storage.md').read_text()
+    for term in ('Custom Headers', 'JSON object', 'python-dotenv', 'entry', 'control', 'https://', '127.0.0.1'):
+        assert term in connection
+    for name in ('docs/s3-journal.md', 'docs/vault-format.md', 'CHANGELOG.md'):
+        assert 'custom headers' in (ROOT / name).read_text()
+    assert '2026-11-25 — G5' in (ROOT / 'docs/superpowers/specs/2026-11-23-settings-parity.md').read_text()

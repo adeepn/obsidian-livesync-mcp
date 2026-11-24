@@ -93,6 +93,7 @@ def get_backend(cfg: Config) -> StorageBackend:
         username=cfg.couchdb.user,
         password=cfg.couchdb.password,
         database=cfg.couchdb.database,
+        custom_headers=cfg.couchdb.custom_headers,
         text_verdict_cache_entries=cfg.text_verdict_cache_entries,
         scan_max_notes=cfg.scan_max_notes,
         scan_max_bytes=cfg.scan_max_bytes,
@@ -1411,9 +1412,12 @@ async def obsidian_vault_stats() -> str:
     if 'selection_engine_state' in info:
         value = info['selection_engine_state']
         local_state['selection_engine_state'] = value if type(value) is str and value in {'off', 'ready', 'unsupported'} else 'unsupported'
-    for field in ('filters_active', 'selection_writer_supported', 'enableCompression'):
+    for field in ('filters_active', 'selection_writer_supported', 'enableCompression', 'custom_headers_configured'):
         if field in info:
             local_state[field] = info[field] if type(info[field]) is bool else False
+    if "custom_headers_count" in info:
+        count = info["custom_headers_count"]
+        local_state["custom_headers_count"] = count if type(count) is int and 0 <= count < 2**63 else 0
     if "tweak_assessment" in info:
         assessment = info["tweak_assessment"]
         local_state["tweak_assessment"] = assessment_fields(assessment)

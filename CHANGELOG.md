@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Settings parity
 
+- Support custom headers for CouchDB and S3 auth proxies using plugin text or
+  JSON configuration, with startup validation and credential-safe diagnostics.
+  Apply S3 headers after signing on every request; expose typed presence/count.
+  Add S3_FORCE_PATH_STYLE=false for virtual-host providers; retain true by default.
+
 - Match terminating legacy splitter edge parameters: zero-cap V1 plain text,
   negative and JavaScript-coerced minima, empty inputs and V3 clamps. Refuse
   only proven plugin loops with setting names and recovery guidance; retain

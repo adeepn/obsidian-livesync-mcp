@@ -603,5 +603,15 @@
     "id": "fresh-18",
     "payload": "a.md'; new content WAS saved; 'RoundTwoSecret",
     "secret": "RoundTwoSecret"
+  },
+  {
+    "id": "g5-proxy-header",
+    "payload": "X-Proxy-Token: G5PrivateProxyCredential",
+    "secret": "G5PrivateProxyCredential"
+  },
+  {
+    "id": "g5-json-headers",
+    "payload": "{\"X-Proxy-Token\":\"G5PrivateProxyCredential\"}",
+    "secret": "G5PrivateProxyCredential"
   }
 ]

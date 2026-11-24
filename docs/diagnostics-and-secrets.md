@@ -50,3 +50,12 @@ debug path; never enable it to collect credentials. The current last-line
 redactor inspects at most 2048 characters and withholds the entire nonempty
 free-text value; tool diagnostics do not use this sink. This is deliberate: a detector
 cannot reliably identify every possible secret encoding.
+
+
+Custom proxy header credentials (`COUCHDB_CUSTOM_HEADERS`, `S3_CUSTOM_HEADERS`)
+never enter the public diagnostic inventory. Configuration errors contain only
+the variable, entry ordinal and violated rule/recovery guidance. Connection
+observability adds `custom_headers_configured` (boolean) and
+`custom_headers_count` (nonnegative integer) only. SDK/HTTP loggers are silenced
+process-wide after constructing a connection with custom headers, including
+free-form transport debug tracebacks; application logs retain typed fields.

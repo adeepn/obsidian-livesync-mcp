@@ -101,10 +101,9 @@ def _is_missing(exc: ClientError) -> bool:
 class Boto3ObjectStorage:
     """boto3 implementation of :class:`JournalObjectStorage`.
 
-    The client uses path-style addressing when ``cfg.endpoint`` is set
-    (MinIO and other S3-compatible stores; AWS proper with an empty
-    endpoint keeps boto3's default virtual-hosted addressing and needs
-    ``region`` in the URI). Connect/read timeouts are 5/30 seconds and
+    With a configured endpoint, ``cfg.force_path_style`` selects path or
+    virtual-host addressing (path by default). AWS proper with an empty
+    endpoint keeps boto3's default addressing and needs ``region`` in the URI. Connect/read timeouts are 5/30 seconds and
     retries are disabled (one attempt) — the journal write path performs
     its own read-back verification and prefers loud, immediate failure.
 
@@ -140,9 +139,24 @@ class Boto3ObjectStorage:
         }
         if cfg.endpoint:
             client_kwargs["endpoint_url"] = cfg.endpoint
-            client_config.s3 = {"addressing_style": "path"}
+            # MinioStorageAdapter.ts:61-67 only sets forcePathStyle with an endpoint.
+            client_config.s3 = {"addressing_style": "path" if cfg.force_path_style else "virtual"}
 
         self._client = boto3.client("s3", **client_kwargs)
+        self.custom_headers_count = len(cfg.custom_headers)
+        if cfg.custom_headers:
+            from diagnostic_hygiene import silence_transport_logging
+            silence_transport_logging()
+            headers = dict(cfg.custom_headers)
+
+            def add_custom_headers(request, **kwargs):
+                # botocore endpoint.py:265-281 emits before-send after signing
+                # and preparation, on each attempt. Mirror commonlib
+                # MinioStorageAdapter.ts:86-100 finalizeRequest priority low.
+                for key, value in headers.items():
+                    request.headers[key] = value.encode("latin-1")
+
+            self._client.meta.events.register_last("before-send.s3", add_custom_headers)
 
     # -- Key translation -----------------------------------------------------
 
