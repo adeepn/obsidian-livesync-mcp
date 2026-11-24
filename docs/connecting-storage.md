@@ -104,6 +104,10 @@ There is no dedicated health endpoint; these tool calls check storage access too
 
 ## First access and smoke check
 
+Existing process environment variables take precedence over `.env` (`run.py`
+calls python-dotenv with its default `override=False`). The systemd unit uses
+`EnvironmentFile=`; the interactive shell does not load `.env` automatically.
+
 1. Save `.env` locally, with shared auth plus exactly one backend block.
 2. Start `./venv/bin/python run.py` from the repository root.
 3. Add the `/mcp` streamable HTTP URL and bearer token to the MCP client.

@@ -14,7 +14,9 @@ volume and network speed; there is no fixed completion time. Large histories
 may need multiple refresh calls because replay has per-call budgets.
 
 Monitor `obsidian_vault_stats` → `local_state`: `path`, `bytes`,
-`human_readable_size`, `warn_threshold_mb`, and `warning`. Size is a best-effort
+`human_readable_size`, `warn_threshold_mb`, and `warning`. `path` is redacted
+as `<value hidden>`; use the configured `S3_STATE_DIR` for filesystem commands.
+Size is a best-effort
 sum of logical SQLite/sidecar and chunk-file bytes, measured once per call;
 it may differ from filesystem allocated space reported by `du`.
 Set `S3_STATE_SIZE_WARN_MB=1024`, for example, to warn above 1024 MiB
@@ -57,7 +59,9 @@ without changing the local store or writing remote objects; refresh and retry.
 
 Changing path identity quarantines the **whole** old state directory at
 `<state_dir>.quarantine/<UTC timestamp and unique suffix>/state` and opens a fresh
-store at the configured path. A WARNING names the archive and restoration steps.
+store at the configured path. A WARNING reports quarantine and restoration
+steps with paths/identity values omitted. Find the archive using the configured
+state path and the quarantine pattern above.
 No archive is deleted automatically. To restore, stop all processes using this
 state, move the current directory aside, move the archived `state` back to the
 configured path, and restore the old path-identity settings before starting.
