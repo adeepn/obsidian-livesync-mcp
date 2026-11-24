@@ -82,6 +82,22 @@ const input = JSON.parse(execFileSync(process.env.PYTHON || './venv/bin/python',
 // ordered references and repeated children. No payload bytes are stored separately.
 const pieces = [], pieceIndex = new Map(), vectors = [];
 const cache = new Map(), idCache = new Map();
+const candidatePatches = new Map();
+function candidatePatch(seed) {
+    if (candidatePatches.has(seed)) return candidatePatches.get(seed);
+    let state = 0;
+    for (let i = 0; i < 45; i++) state = (state * 31 + 97 + seed) >>> 0;
+    for (let first = 0; first < 256; first++) for (let second = 0; second < 256; second++) {
+        const base = (((state * 31 + first) * 31 + second) * 31) >>> 0;
+        const last = ((1 - base) % 25600 + 25600) % 25600;
+        if (last < 256 && ((base + last) >>> 0) % 25600 === 1) {
+            const patch = Uint8Array.of(first, second, last);
+            candidatePatches.set(seed, patch);
+            return patch;
+        }
+    }
+    throw Error('Cannot construct binary candidate input');
+}
 async function vector(settings, payload) {
     const cacheKey = JSON.stringify([settings, payload]);
     if (cache.has(cacheKey)) return cache.get(cacheKey);
@@ -95,14 +111,29 @@ async function vector(settings, payload) {
         const [, mode, sizeText, seedText, positionText] = payload.recipe.split(':');
         const size = Number(sizeText), position = Number(positionText);
         const char = String.fromCharCode(97 + Number(seedText));
-        if (['json', 'png', 'pdf'].includes(mode)) {
+        if (mode === 'candidate-binary') {
+            raw = Buffer.alloc(size, char);
+            raw.set(candidatePatch(Number(seedText)), position - 3);
+        } else if (mode.startsWith('lf-')) {
+            raw = Buffer.alloc(size, char);
+            raw[position] = 10;
+        } else if (mode.startsWith('hint-')) {
+            raw = Buffer.from(mode.endsWith('-binary') ? char.repeat(size) :
+                'before\n```js\n' + char + ',' + char + ';' + char + '\n```\nafter\n');
+        } else if (['json', 'png', 'pdf'].includes(mode)) {
             raw = Buffer.alloc(size, char);
             if (size >= 3000000) for (let i = 99999; i < size; i += 100000) raw[i] = {json:44, png:0, pdf:47}[mode];
             if (position >= 0 && position < size) raw[position] = {json:44, png:0, pdf:47}[mode];
         } else {
-            const text = mode === 'fence' ? '```\n' + char.repeat(size - 4) + '\n```\ntail' :
-                mode === 'line' ? char.repeat(position - 1) + '\n' + char.repeat(size - position) :
-                mode === 'pair' ? char.repeat(position) + '🙂' + char.repeat(size - position) : char.repeat(size);
+            let text;
+            if (mode === 'fence') {
+                const body = char.repeat(size - 4), middle = Math.floor(body.length / 2);
+                text = '```\n' + body.slice(0, middle) + ',' + body.slice(middle + 1) + '\n```\ntail';
+            } else if (mode === 'line') text = char.repeat(position - 1) + '\n' + char.repeat(size - position);
+            else if (mode.startsWith('pair')) {
+                const scalar = {pair:0x1f642, 'pair-low':0x10000, 'pair-high':0x10ffff}[mode];
+                text = char.repeat(position) + String.fromCodePoint(scalar) + char.repeat(size - position);
+            } else text = char.repeat(size);
             raw = Buffer.from(text);
         }
     } else raw = Buffer.from(payload.base64, 'base64');
@@ -129,10 +160,18 @@ for (const row of input.matrix) {
 }
 const grid = [];
 const boundaryGroups = new Map();
+const candidateMeasurements = [];
 for (const row of input.grid) {
     if (grid.length % 500 === 0) console.error(`grid ${grid.length}/${input.grid.length}`);
     const v = await vector(row.settings, input.payloads[row.payload]);
     grid.push({...row, ...v});
+    if (row.payload.startsWith('eq:candidate-binary:')) {
+        const requested = Number(row.payload.split(':')[4]);
+        const measured = Buffer.from(pieces[v.split_pieces[0]], 'base64').length;
+        if (row.settings.minimumChunkSize <= requested && measured !== requested)
+            throw Error('Binary candidate probe misses requested upstream minimum');
+        candidateMeasurements.push({id:row.id, requested, measured});
+    }
     if (row.payload.startsWith('boundary:') && row.payload.includes(':png:none:')) {
         const key = JSON.stringify([row.settings.chunkSplitterVersion, row.settings.enableChunkSplitterV2,
             row.settings.useSegmenter, row.settings.customChunkSize]);
@@ -166,7 +205,7 @@ for (const small of [true, false]) {
     for (const size of sizes) scalarProbes.push({size, path:small?'probe.json':'probe.png',
         minimum:vm.runInContext(`binaryMinimumScalar(${size}, ${small})`, ctx)});
 }
-const fixture = {scalar_probes:scalarProbes, upstream_commit:pin, node:process.version, decoder_dependency:dependency, source_sha256:sources,
+const fixture = {candidate_measurements:candidateMeasurements, scalar_probes:scalarProbes, upstream_commit:pin, node:process.version, decoder_dependency:dependency, source_sha256:sources,
     wasm_sha256:sha(fs.readFileSync(wasmFile)), inputs_sha256:sha(fs.readFileSync('tests/settings_oracle_inputs.py')),
     boundary_measurements:boundaryMeasurements, pieces, matrix:vectors, grid};
 fs.writeFileSync(out, gzipSync(JSON.stringify(fixture)+'\n', {level:9}));

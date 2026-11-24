@@ -42,7 +42,7 @@ from tests.test_storage_journal import make_backend, params_blob
 
 from tests.settings_oracle_inputs import (
     BACKENDS, FACTORS, ROWS, CASES, BRANCH_CASES, case_id, settings_for, payload,
-    grid_cases, grid_payload, grid_path, PARTITION_CASES,
+    grid_cases, grid_payload, grid_path, PARTITION_CASES, PERSISTED_EQUALITY_CASES,
 )
 from tests.settings_oracle import GRID, matrix_vector, assert_partition
 
@@ -411,3 +411,20 @@ async def test_settings_text_partition(tmp_path, kind, case):
         else:
             field = 'data' if isinstance(text, bytes) else 'text'
             assert (await backend.read_note(path))[field] == text
+
+
+@pytest.mark.parametrize('kind', BACKENDS)
+@pytest.mark.parametrize('case', PERSISTED_EQUALITY_CASES, ids=case_id)
+async def test_settings_persisted_equality_witness(tmp_path, kind, case):
+    """Compare actual stored leaves first: Z1, Z2 and fence exact equality."""
+    settings = settings_for(case)
+    path = grid_path(case[-1])
+    data = grid_payload(case[-1])[1]
+    vector = GRID[case_id(case)]
+    async with matrix_vault(tmp_path, kind, settings) as (backend, doc, _, _, _):
+        await backend.startup_check()
+        await backend.write_note(path, data, create=True)
+        children = (await doc(path))['children']
+        assert_partition(await pieces_for(backend, children), children, vector)
+        note = await backend.read_note(path)
+        assert note['data' if isinstance(data, bytes) else 'text'] == data

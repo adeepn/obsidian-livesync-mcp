@@ -166,12 +166,44 @@ HINT_KINDS = tuple('hint-' + ext for ext in ('MD', 'Canvas', 'TXT', 'json', 'bar
 BASE_GRID_KINDS = GRID_KINDS
 GRID_KINDS += FENCE_KINDS + HINT_KINDS + ('cyrillic-emoji', 'binary-empty', 'binary-nul', 'json-clamp', 'pdf-far-lf')
 
+@lru_cache(maxsize=3)
+def _candidate_patch(seed):
+    # Input construction only: choose a 48-byte window whose unsigned base-31
+    # polynomial is 1 modulo the default binary gap (25600). Expected pieces
+    # and IDs still come exclusively from the actual pinned upstream splitter.
+    state = 0
+    for _ in range(45):
+        state = (state * 31 + 97 + seed) & 0xffffffff
+    for first in range(256):
+        for second in range(256):
+            base = (((state * 31 + first) * 31 + second) * 31) & 0xffffffff
+            last = (1 - base) % 25600
+            if last < 256 and ((base + last) & 0xffffffff) % 25600 == 1:
+                return bytes((first, second, last))
+    raise AssertionError('cannot construct binary candidate input')
+
+
 @lru_cache(maxsize=8)
 def grid_payload(kind):
     if kind.startswith('eq:'):
         _, mode, size, seed, position = kind.split(':')
         size, seed, position = int(size), int(seed), int(position)
         char = chr(97 + seed)
+        if mode == 'candidate-binary':
+            data = bytearray(char.encode() * size)
+            data[position - 3:position] = _candidate_patch(seed)
+            return '.png', bytes(data)
+        if mode.startswith('lf-'):
+            data = bytearray(char.encode() * size)
+            data[position] = 10
+            return '.' + mode[3:], bytes(data)
+        if mode.startswith('hint-'):
+            _, ext, variant, content_kind = mode.split('-')
+            ext = (ext[:-1] if variant == 'minus' else ext + 'x' if variant == 'plus'
+                   else ext.upper() if variant == 'upper' else ext)
+            content = (char.encode() * size if content_kind == 'binary' else
+                       'before\n```js\n' + char + ',' + char + ';' + char + '\n```\nafter\n')
+            return '.' + ext, content
         if mode in ('json', 'png', 'pdf'):
             data = bytearray(char.encode() * size)
             if size >= 3000000:
@@ -180,11 +212,14 @@ def grid_payload(kind):
                 data[position] = {'json': 44, 'png': 0, 'pdf': 47}[mode]
             return '.' + mode, bytes(data)
         if mode == 'fence':
-            return '.md', '```\n' + char * (size - 4) + '\n```\ntail'
+            body = char * (size - 4)
+            middle = len(body) // 2
+            return '.md', '```\n' + body[:middle] + ',' + body[middle + 1:] + '\n```\ntail'
         if mode == 'line':
             return '.md', char * (position - 1) + '\n' + char * (size - position)
-        if mode == 'pair':
-            return '.md', char * position + '🙂' + char * (size - position)
+        if mode in ('pair', 'pair-low', 'pair-high'):
+            scalar = {'pair': '🙂', 'pair-low': '\U00010000', 'pair-high': '\U0010ffff'}[mode]
+            return '.md', char * position + scalar + char * (size - position)
         return ('.MD' if mode == 'upper' else '.md'), char * size
     if kind.startswith("random:"):
         _, alphabet, seed, length = kind.split(":")
@@ -368,8 +403,9 @@ for seed in (0, 1, 2):
             for mode in ('md', 'upper', 'png'):
                 _equality('legacy maximum / terminal offset', version, 0, 5,
                           mode, 102400 + delta, seed)
-            _equality('UTF16 surrogate protection', version, 0, 5,
-                      'pair', 102402, seed, 102399 + delta)
+            for mode in ('pair', 'pair-low', 'pair-high'):
+                _equality('UTF16 surrogate protection', version, 0, 5,
+                          mode, 102402, seed, 102399 + delta)
             for ext in ('json', 'pdf', 'png'):
                 for position in (100 + delta, 10000 + delta, 102400 + delta):
                     _equality('binary delimiter min/max/search', version, 0, 5,
@@ -430,16 +466,57 @@ for seed in (0, 1, 2):
                 _equality('empty / rolling window / decoder short path',
                           'v3-rabin-karp', 0, 20, mode,
                           max(0, threshold + delta), seed)
+# Positive suffix and one-character-short/long neighbors, text and binary
+# Blobs. Binary .md/.txt/.canvas exposes V3's path hint independently of MIME;
+# ordinary backend ingress converts these paths to text before the splitter.
+for version, ext, variant, seed, content_kind in product(
+        FACTORS[1][1],
+        ('md', 'txt', 'canvas'), ('minus', 'equal', 'plus', 'upper'), (0, 1, 2), ('text', 'binary')):
+    _equality('plainSplit suffix comparison', version, 0, 5,
+              f'hint-{ext}-{variant}-{content_kind}', 2049, seed)
+
+# Preferred delimiters are absent: reach the actual LF fallback, including
+# its minimum search position and maximum cut. V1 intentionally ignores LF.
+for version, ext, delta, seed in product(
+        ('v1', 'v2', 'v2-segmenter', 'legacy-00', 'legacy-01', 'legacy-10', 'legacy-11'),
+        ('json', 'pdf', 'png'), (-1, 0, 1), (0, 1, 2)):
+    size, minimum = (125, 10) if ext == 'json' else (102410, 10000)
+    _equality('binary LF fallback min/max/search', version, 0, 5,
+              'lf-' + ext, size, seed, minimum + delta)
+    _equality('binary LF fallback min/max/search', version, 0, 5,
+              'lf-' + ext, 102410, seed, 102400 + delta)
+for seed, delta in product((0, 1, 2), (-1, 0, 1)):
+    _equality('V3 binary candidate minimum equality', 'v3-rabin-karp', 0,
+              25600 + delta, 'candidate-binary', 26001, seed, 25600)
+
 # The reported Z1 witness is byte-for-byte fixed, independently of seeds.
 Z1_CASE = ('legacy', 'v2', 'xxhash64', 0, 5, 'default', 'z1')
 EQUALITY_CASES.append(Z1_CASE)
 PARTITION_CASES.append(Z1_CASE)
+# Write-first tests establish actual persisted differences, without a raw-split
+# assertion stopping execution before either backend is opened.
+PERSISTED_EQUALITY_CASES = [Z1_CASE,
+    ('legacy', 'v3-rabin-karp', 'xxhash64', 0, 1024, 'default', 'eq:md:2049:0:-1'),
+    ('legacy', 'v1', 'xxhash64', 0, 5, 'default', 'eq:fence:2047:0:-1')]
+
+PERSISTED_EQUALITY_CASES += [
+    ('legacy', 'v3-rabin-karp', 'xxhash64', 0, 25600, 'default',
+     f'eq:candidate-binary:26001:{seed}:25600') for seed in (0, 1, 2)]
+PARTITION_CASES += [
+    ('legacy', 'v2', 'xxhash64', 0, 5, 'default', f'eq:{mode}:102402:0:102399')
+    for mode in ('pair-low', 'pair-high')]
 PARTITION_CASES += [c for c in EQUALITY_CASES if c[-1] == 'eq:png:2049:0:-1']
 
 
 def grid_path(kind):
     if kind.startswith('eq:'):
         mode = kind.split(':')[1]
+        if mode == 'candidate-binary':
+            return 'equality.png'
+        if mode.startswith('lf-'):
+            return 'equality.' + mode[3:]
+        if mode.startswith('hint-'):
+            return 'equality' + grid_payload(kind)[0]
         return 'equality.' + (mode if mode in ('json', 'png', 'pdf') else 'MD' if mode == 'upper' else 'md')
     if kind == 'random:ascii:198:300':
         return 'witness.md'
@@ -478,5 +555,5 @@ if __name__ == '__main__':
                           'boundary': pack('boundary.png', b'\x00' * 1048576),
                           'boundary-plus': pack('boundary.png', b'\x00' * 1048576 + b'x'),
                           'uncertain': pack('uncertain.md', 'accepted')},
-                      'payloads': {k: ({'recipe': k, 'path': grid_path(k), 'text': k.split(':')[1] not in ('json', 'png', 'pdf')} if k.startswith('eq:') else pack(grid_path(k), grid_payload(k)[1], grid=True))
+                      'payloads': {k: ({'recipe': k, 'path': grid_path(k), 'text': k.split(':')[1] not in ('json', 'png', 'pdf') and not k.split(':')[1].endswith('-binary') and not k.split(':')[1].startswith('lf-')} if k.startswith('eq:') else pack(grid_path(k), grid_payload(k)[1], grid=True))
                                    for k in dict.fromkeys(k for _, _, k in grid_cases())}}))

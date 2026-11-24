@@ -59,7 +59,7 @@ def test_upstream_scalar_minimum_boundaries():
 
 def test_equality_catalogue_is_complete():
     from tests.settings_oracle_inputs import EQUALITY_CASES, EQUALITY_OPERATORS
-    assert len(EQUALITY_OPERATORS) == 16
+    assert len(EQUALITY_OPERATORS) == 19
     names = {case_id(c) for c in EQUALITY_CASES}
     assert names <= set(GRID)
     for label, cases in EQUALITY_OPERATORS.items():
