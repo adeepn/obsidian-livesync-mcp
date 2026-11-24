@@ -61,6 +61,7 @@ def get_backend(cfg: Config) -> StorageBackend:
             Path(cfg.s3.state_dir),
             cfg.s3.refresh_min_interval_sec,
             state_size_warn_mb=cfg.s3.state_size_warn_mb,
+            text_verdict_cache_entries=cfg.text_verdict_cache_entries,
         )
         result.text_scan_max_bytes = cfg.text_scan_max_bytes
         return result
@@ -71,6 +72,7 @@ def get_backend(cfg: Config) -> StorageBackend:
         username=cfg.couchdb.user,
         password=cfg.couchdb.password,
         database=cfg.couchdb.database,
+        text_verdict_cache_entries=cfg.text_verdict_cache_entries,
         scan_max_notes=cfg.scan_max_notes,
         scan_max_bytes=cfg.scan_max_bytes,
     )

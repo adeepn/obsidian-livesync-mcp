@@ -62,7 +62,7 @@ from livesync_format import (
 )
 
 from storage_base import StorageError
-from text_eligibility import TextProjection
+from text_eligibility import TextProjection, DEFAULT_TEXT_VERDICT_CACHE_ENTRIES
 
 logger = logging.getLogger(__name__)
 
@@ -183,7 +183,11 @@ class JournalStore:
             total += sum(file_size(Path(root) / name) for name in files)
         return total
 
-    def __init__(self, state_dir: Path, path_identity: str):
+    def __init__(self, state_dir: Path, path_identity: str, *,
+                 text_verdict_cache_entries: int = DEFAULT_TEXT_VERDICT_CACHE_ENTRIES):
+        if text_verdict_cache_entries <= 0:
+            raise ValueError("text verdict cache entries must be positive")
+        self.text_verdict_cache_entries = text_verdict_cache_entries
         if path_identity not in (
             PATH_IDENTITY_LEGACY, PATH_IDENTITY_NFC,
             PATH_IDENTITY_CASE_SENSITIVE, PATH_IDENTITY_NFC_CASE_SENSITIVE,
@@ -227,6 +231,16 @@ class JournalStore:
         self._conn.execute("""CREATE TABLE IF NOT EXISTS text_verdicts (
             doc_id TEXT, rev TEXT, budget INTEGER, eligible INTEGER,
             PRIMARY KEY(doc_id, rev, budget))""")
+
+        # Disposable cache migration: remove old positives and obsolete
+        # revisions/budgets before enforcing one row per document.
+        with self._conn:
+            self._conn.execute('DELETE FROM text_verdicts WHERE eligible != 0')
+            self._conn.execute('DELETE FROM text_verdicts WHERE rowid NOT IN '
+                               '(SELECT MAX(rowid) FROM text_verdicts GROUP BY doc_id)')
+            self._conn.execute('CREATE UNIQUE INDEX IF NOT EXISTS '
+                               'text_verdict_document ON text_verdicts(doc_id)')
+            self._trim_text_verdicts()
 
         stored_identity = self._meta_get(_META_PATH_IDENTITY)
         if stored_identity is None:
@@ -285,6 +299,7 @@ class JournalStore:
     def _insert_doc(self, name: str, doc: object) -> None:
         gen, rev_hash = self._validate_doc(name, doc)
         doc_id = doc["_id"]
+        self._conn.execute("DELETE FROM text_verdicts WHERE doc_id=?", (doc_id,))
         self._conn.execute(
             "INSERT OR IGNORE INTO docs(doc_id, gen, rev_hash, doc_json) "
             "VALUES (?, ?, ?, ?)",
@@ -542,10 +557,14 @@ class JournalStore:
     def scan_newnote(self, doc: dict, max_bytes: int) -> str | None:
         key = (doc['_id'], doc['_rev'], max_bytes)
         verdict = self._conn.execute(
-            'SELECT eligible FROM text_verdicts WHERE doc_id=? AND rev=? AND budget=?',
-            key).fetchone()
-        if verdict is not None and not verdict[0]:
+            'SELECT rev, budget FROM text_verdicts WHERE doc_id=?',
+            (doc['_id'],)).fetchone()
+        if verdict == key[1:]:
+            self._remember_nontext(key)
             return None
+        if verdict is not None:
+            with self._conn:
+                self._conn.execute('DELETE FROM text_verdicts WHERE doc_id=?', (doc['_id'],))
         if doc.get('e_'):
             raise EncryptedNoteError(_ENCRYPTED_MESSAGE.format(path=doc['path']))
         children = doc.get('children') or []
@@ -559,10 +578,22 @@ class JournalStore:
             if not projection.feed(piece, final=index == len(children) - 1):
                 eligible = False
                 break
-        self._conn.execute('INSERT OR REPLACE INTO text_verdicts VALUES (?, ?, ?, ?)',
-                           (*key, int(eligible)))
-        self._conn.commit()
+        if not eligible:
+            self._remember_nontext(key)
         return projection.text() if eligible else None
+
+    def _remember_nontext(self, key: tuple[str, str, int]) -> None:
+        # Reinsert on a hit so rowid orders least-to-most recently used.
+        with self._conn:
+            self._conn.execute('DELETE FROM text_verdicts WHERE doc_id=?', (key[0],))
+            self._conn.execute('INSERT INTO text_verdicts VALUES (?, ?, ?, 0)', key)
+            self._trim_text_verdicts()
+
+    def _trim_text_verdicts(self) -> None:
+        self._conn.execute(
+            'DELETE FROM text_verdicts WHERE rowid IN '
+            '(SELECT rowid FROM text_verdicts ORDER BY rowid DESC LIMIT -1 OFFSET ?)',
+            (self.text_verdict_cache_entries,))
 
     def _chunk_datas(
         self, children: list[str], inline: dict[str, str], path: str

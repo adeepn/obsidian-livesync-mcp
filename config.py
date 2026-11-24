@@ -93,6 +93,7 @@ class Config:
     oauth_password: str
     oauth_client_id: str
     oauth_client_secret: str
+    text_verdict_cache_entries: int = 4096
     text_scan_max_bytes: int = 8 * 1024 * 1024
     scan_max_notes: int = 10000
     scan_max_bytes: int = 64 * 1024 * 1024
@@ -301,7 +302,8 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
     scan_limits = []
     for key, default in (("LIVESYNC_SCAN_MAX_NOTES", 10000),
                          ("LIVESYNC_SCAN_MAX_BYTES", 64 * 1024 * 1024),
-                         ("LIVESYNC_TEXT_SCAN_MAX_BYTES", 8 * 1024 * 1024)):
+                         ("LIVESYNC_TEXT_SCAN_MAX_BYTES", 8 * 1024 * 1024),
+                         ("LIVESYNC_TEXT_VERDICT_CACHE_ENTRIES", 4096)):
         try:
             value = int(env.get(key, default))
             if value <= 0:
@@ -329,6 +331,7 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
     api_key, oauth_password, oauth_client_id, oauth_client_secret = _load_auth(env)
 
     return Config(
+        text_verdict_cache_entries=scan_limits[3],
         text_scan_max_bytes=scan_limits[2],
         scan_max_notes=scan_limits[0],
         scan_max_bytes=scan_limits[1],

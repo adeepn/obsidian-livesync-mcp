@@ -35,6 +35,7 @@ without reassembling content, so binary notes travel chunk-wise
 
 from __future__ import annotations
 
+from collections import OrderedDict
 import json
 import logging
 import time
@@ -42,7 +43,8 @@ import urllib.parse
 from typing import AsyncIterator
 
 from scan_budget import ScanBudget
-from text_eligibility import TextProjection, DEFAULT_TEXT_SCAN_MAX_BYTES
+from text_eligibility import (TextProjection, DEFAULT_TEXT_SCAN_MAX_BYTES,
+                              DEFAULT_TEXT_VERDICT_CACHE_ENTRIES)
 
 import httpx
 
@@ -141,12 +143,16 @@ class CouchDBBackend:
         database: str,
         *,
         transport: httpx.AsyncBaseTransport | None = None,
+        text_verdict_cache_entries: int = DEFAULT_TEXT_VERDICT_CACHE_ENTRIES,
         scan_max_notes: int = 10000,
         scan_max_bytes: int = 64 * 1024 * 1024,
     ) -> None:
+        if text_verdict_cache_entries <= 0:
+            raise ValueError("text verdict cache entries must be positive")
+        self.text_verdict_cache_entries = text_verdict_cache_entries
         self._scan_limits = (scan_max_notes, scan_max_bytes)
         self.text_scan_max_bytes = DEFAULT_TEXT_SCAN_MAX_BYTES
-        self._text_verdicts = {}
+        self._text_verdicts = OrderedDict()
         self._database = database
         self._path_identity = PATH_IDENTITY_LEGACY
         self._writer_unsupported_reason = None
@@ -237,10 +243,14 @@ class CouchDBBackend:
         if response.status_code == 404:
             if _is_db_missing(response):
                 raise StorageUnavailable("CouchDB database not found")
+            self._text_verdicts.pop(doc_id, None)
             return None
         body = response.json()
         if isinstance(body, dict):
             self._validate_identity(body)
+            cached = self._text_verdicts.get(doc_id)
+            if cached is not None and cached[0] != body.get("_rev"):
+                self._text_verdicts.pop(doc_id, None)
             return body
         return None
 
@@ -353,11 +363,15 @@ class CouchDBBackend:
         if self._index is None or self._index_seq != update_seq:
             self._index = await self._load_index()
             self._index_seq = update_seq
+            for doc_id, (rev, _) in list(self._text_verdicts.items()):
+                if self._index.get(doc_id, {}).get('_rev') != rev:
+                    self._text_verdicts.pop(doc_id, None)
         return self._index
 
     # -- StorageBackend: lifecycle -------------------------------------------
 
     async def startup_check(self) -> None:
+        self._text_verdicts.clear()
         self._writer_unsupported_reason = None
         self._splitter = ContentSplitter()
         await self._db_info()
@@ -421,6 +435,7 @@ class CouchDBBackend:
         }
 
     async def close(self) -> None:
+        self._text_verdicts.clear()
         await self._client.aclose()
 
     # -- StorageBackend: reads -----------------------------------------------
@@ -577,8 +592,11 @@ class CouchDBBackend:
             inline = row = chunk = None
 
     async def _scan_newnote(self, doc: dict) -> str | None:
-        key = (doc['_id'], doc['_rev'], self.text_scan_max_bytes)
-        if self._text_verdicts.get(key) is False:
+        doc_id = doc['_id']
+        key = (doc['_rev'], self.text_scan_max_bytes)
+        cached = self._text_verdicts.pop(doc_id, None)
+        if cached == key:
+            self._remember_nontext(doc_id, key)
             return None
         if doc.get('e_'):
             raise UnsupportedVault('encrypted note')
@@ -589,10 +607,16 @@ class CouchDBBackend:
         for index, child in enumerate(children):
             piece = (await self._fetch_chunk_datas([child], doc['path'], doc.get('eden')))[0]
             if not projection.feed(piece, final=index == len(children) - 1):
-                self._text_verdicts[key] = False
+                self._remember_nontext(doc_id, key)
                 return None
-        self._text_verdicts[key] = True
         return projection.text()
+
+    def _remember_nontext(self, doc_id: str, key: tuple[str, int]) -> None:
+        # Positive verdicts cannot avoid the body I/O needed for a text query.
+        self._text_verdicts[doc_id] = key
+        self._text_verdicts.move_to_end(doc_id)
+        while len(self._text_verdicts) > self.text_verdict_cache_entries:
+            self._text_verdicts.popitem(last=False)
 
     # -- note decoding -------------------------------------------------------
 
@@ -806,6 +830,7 @@ class CouchDBBackend:
                 "CouchDB PUT %s -> unexpected acknowledgement body", doc_id
             )
             raise StorageError("CouchDB rejected the document write")
+        self._text_verdicts.pop(doc_id, None)
         return result["rev"]
 
     async def _write_chunk(self, path: str, data: str) -> str:

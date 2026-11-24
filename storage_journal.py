@@ -31,7 +31,8 @@ before applying it locally; rename publishes both revisions in one file.
 
 from __future__ import annotations
 
-from text_eligibility import DEFAULT_TEXT_SCAN_MAX_BYTES
+from text_eligibility import (DEFAULT_TEXT_SCAN_MAX_BYTES,
+                              DEFAULT_TEXT_VERDICT_CACHE_ENTRIES)
 
 import json
 import logging
@@ -189,6 +190,7 @@ class JournalBackend:
         state_dir: Path,
         refresh_min_interval: float = 5.0,
         *,
+        text_verdict_cache_entries: int = DEFAULT_TEXT_VERDICT_CACHE_ENTRIES,
         state_size_warn_mb: int = 0,
         max_refresh_keys: int = MAX_REFRESH_KEYS,
         max_refresh_bytes: int = MAX_REFRESH_BYTES,
@@ -201,6 +203,9 @@ class JournalBackend:
                       max_inflated_bytes, max_records, max_line_bytes):
             if value <= 0 or not math.isfinite(value):
                 raise ValueError("journal limits must be positive and finite")
+        if text_verdict_cache_entries <= 0:
+            raise ValueError("text verdict cache entries must be positive")
+        self.text_verdict_cache_entries = text_verdict_cache_entries
         self.max_refresh_keys = max_refresh_keys
         self.max_refresh_bytes = max_refresh_bytes
         self.max_refresh_seconds = max_refresh_seconds
@@ -272,7 +277,9 @@ class JournalBackend:
         if self._store is not None:
             self._store.close()
             self._store = None
-        self._store = JournalStore(self._state_dir, identity)
+        self._store = JournalStore(
+            self._state_dir, identity,
+            text_verdict_cache_entries=self.text_verdict_cache_entries)
 
         epoch = self._load_sync_parameters_epoch()
         if epoch is None:

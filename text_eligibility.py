@@ -3,6 +3,7 @@ import base64
 import codecs
 
 DEFAULT_TEXT_SCAN_MAX_BYTES = 8 * 1024 * 1024
+DEFAULT_TEXT_VERDICT_CACHE_ENTRIES = 4096
 
 
 def is_text_characters(text: str) -> bool:

@@ -568,6 +568,12 @@ until the first binary/control byte or the byte budget; a textual `.base`
 needs all its pieces, bounded by that budget. With `k` all-text prefix pieces,
 a later binary PDF piece costs `k + 1` reads; a wholly textual PDF under budget
 is eligible by the same rule as any other newnote. Negative verdicts avoid body
-reads on later scans of the same revision; positive verdicts still require
-streaming the text to run each query. Journal verdicts live in SQLite and
-CouchDB verdicts in process memory, keyed by document/revision and budget.
+reads on later scans of the same revision. Positive verdicts are not cached:
+querying text requires streaming the body again. Each document retains at most
+one negative verdict for its revision and byte budget; superseded verdicts are
+dropped on rewrite/replay or when a new revision/budget is observed.
+`LIVESYNC_TEXT_VERDICT_CACHE_ENTRIES` (default 4096, positive integer) caps
+the number of cached documents with LRU eviction on both backends. Journal
+verdicts live in SQLite (old caches are pruned on open) and are cleared on
+state reset; CouchDB verdicts live in process memory and are cleared on
+startup/close.
