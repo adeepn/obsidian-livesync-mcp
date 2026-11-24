@@ -1,0 +1,6 @@
+{
+  "source": "reviewer round-1 saved outputs; caller echoes excluded",
+  "diagnostic_evaluations": 22644,
+  "rejected_by_strengthened_assertions": 7905,
+  "purpose": "Confirm the new residual-secret assertions reject recorded vulnerable outputs, without emulating an upstream oracle."
+}

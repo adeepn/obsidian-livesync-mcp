@@ -1,6 +1,10 @@
 """P-19: origin-aware diagnostics; reviewer corpus is data, not an oracle."""
 import asyncio
 import inspect
+import html
+import re
+import unicodedata
+from urllib.parse import unquote
 import json
 import time
 from pathlib import Path
@@ -13,6 +17,24 @@ from tests.fake_backend import FakeBackend
 from tests.test_storage_messages import descendants
 
 CORPUS = json.loads((Path(__file__).parent / 'fixtures/diagnostic_attack_corpus.json').read_text())
+
+
+def assert_no_remote_secret(output, case):
+    """Inspect residual encodings as well as every six-character secret window."""
+    def canonical(value):
+        value = unicodedata.normalize('NFKC', html.unescape(unquote(value)))
+        return ''.join(c for c in value if c not in '\u200b\u00ad\u0301\x00')
+    normalized = canonical(output)
+    secret = canonical(case['secret'])
+    assert secret not in normalized
+    for i in range(max(0, len(secret) - 5)):
+        assert secret[i:i+6] not in normalized
+    assert not re.search(r'[0-9a-fA-F]{32,}', output)
+    assert not re.search(r'(?:AKIA|ASIA)[A-Z0-9]{16}', output)
+    assert not re.search(r'(?:ghp_|gho_|sk-|xoxb-|AIza)[A-Za-z0-9_-]{20,}', output)
+    assert not re.search(r'eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+', output)
+    assert '-----BEGIN' not in output
+    assert not re.search(r'[A-Za-z0-9+/=_-]{40,}', output)
 
 
 def escape(value):
@@ -43,10 +65,7 @@ async def test_remote_exception_corpus_all_routes(monkeypatch, case):
                 if actions[0]: args[actions[0]] = action
                 outputs.append(await handler(**args))
         for output in outputs:
-            secret = case['secret']
-            assert secret not in output
-            for i in range(max(0, len(secret)-5)):
-                assert secret[i:i+6] not in output
+            assert_no_remote_secret(output, case)
 
 
 @pytest.mark.parametrize('path', [c['payload'] for c in CORPUS] + ['password: ordinary.md', 'a'+'1'*64+'.md', 'ＢＥＡＲＥＲ note.md', 'ak:sk@host.md', 'e\u0301.md'])
@@ -67,7 +86,7 @@ async def test_caller_path_identity(monkeypatch, path):
 
 
 @pytest.mark.parametrize('size', [1024, 100_000, 1_000_000])
-@pytest.mark.parametrize('char', ['a', '.', '%', '{'])
+@pytest.mark.parametrize('char', ['a', '.', '%', '{', '%2525', '{\"password\":'])
 async def test_last_line_event_loop_budget(size, char):
     value = char * size
     start = time.perf_counter()
@@ -90,7 +109,7 @@ async def test_real_backend_diagnostic_projection(tmp_path, monkeypatch, case, k
         outputs = [json.dumps(await b.backend_info()), await server.obsidian_create_note('note.md','body'),
                    await server.obsidian_vault_stats()]
         for out in outputs:
-            assert case['secret'] not in out
+            assert_no_remote_secret(out, case)
 
 
 @pytest.mark.parametrize('case', CORPUS, ids=lambda c:c['id'])
@@ -105,7 +124,7 @@ async def test_real_replay_hostile_name(tmp_path, case):
         with pytest.raises(errors.StorageError) as caught:
             await b.refresh(force=True)
         out = server._storage_message(caught.value)
-        assert case['secret'] not in out
+        assert_no_remote_secret(out, case)
         assert journal_name(name) in out
         assert 'cause:' in out
     finally:
@@ -154,7 +173,7 @@ async def test_unexpected_exception_boundary(monkeypatch, case):
     monkeypatch.setattr(server, 'backend', b)
     b.errors['refresh'] = ValueError(case['payload'])
     out = await server.obsidian_create_note('note.md','body')
-    assert case['secret'] not in out
+    assert_no_remote_secret(out, case)
     assert 'ValueError' in out
     assert 'note.md' in out
 
@@ -206,7 +225,7 @@ async def test_real_setting_values_hidden(tmp_path, case, kind, monkeypatch):
         await b.startup_check()
         monkeypatch.setattr(server,'backend',b)
         out = json.dumps(await b.backend_info()) + await server.obsidian_create_note('note.md','body')
-        assert case['secret'] not in out
+        assert_no_remote_secret(out, case)
 
 
 async def test_backend_config_and_remote_observability_are_not_text(tmp_path):
