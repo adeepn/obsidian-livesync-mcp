@@ -17,7 +17,7 @@ import hashlib
 from contextlib import aclosing, asynccontextmanager
 from contextvars import ContextVar
 from scan_budget import ScanBudget
-from text_eligibility import is_text_characters
+from text_eligibility import is_text_characters, DEFAULT_TEXT_SCAN_MAX_BYTES
 from functools import wraps
 from pathlib import Path
 from typing import Any
@@ -267,14 +267,16 @@ class _TextRequiredError(StorageError):
 def _text_representation(note: NoteContent) -> NoteContent:
     """Expose valid UTF-8 newnotes as text without changing storage type.
 
-    P-6: no extension or content-type heuristics; failed strict decoding
-    keeps binary metadata/download behavior. Copy to preserve backend state.
+    P-8: use the same UTF-8, controls and byte-budget rule as scans.
+    Ineligible bodies retain metadata/download behavior; copy backend state.
     """
     if note["is_text"]:
         return note
     data = note["data"]
     if data is None:
         raise StorageError()
+    if len(data) > getattr(_backend(), 'text_scan_max_bytes', DEFAULT_TEXT_SCAN_MAX_BYTES):
+        return note
     try:
         text = data.decode("utf-8")
         if not is_text_characters(text):
