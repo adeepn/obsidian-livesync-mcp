@@ -22,7 +22,7 @@ E2EE и path obfuscation остаются неподдержанными (#3/#4)
 единственными отличиями от устройства**: operational budgets, command/event
 rename protection, local-only survivors, invisible writer и отсутствие host
 reflection перечислены в README. Source audit 1.0.52 не заменяет live validation
-1.0.50; [pin](../../upstream-pin.md) и [Task 8](../plans/2026-11-23-settings-parity.md).
+1.0.50; [pin](../../upstream-pin.md) и [Task 8](../../live-check-parity-checklist.md).
 
 
 > **SUPERSEDED — политика записи, Task 4 / fix round 1 (2026-11-24).**

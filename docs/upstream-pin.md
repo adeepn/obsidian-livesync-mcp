@@ -28,7 +28,7 @@ settings combination or plugin 1.0.52. The sanitized real milestone was not
 captured then. Native-host invalid-byte decoding remains an open experiment.
 
 Task 8 must update this section only after the
-[parity live acceptance](superpowers/plans/2026-11-23-settings-parity.md), including the actual
+[parity live acceptance](live-check-parity-checklist.md), including the actual
 client version, sanitized settings, large attachments, mutations and decoding
 experiments. Preparing a checklist/script is not live validation.
 

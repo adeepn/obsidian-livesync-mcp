@@ -225,7 +225,7 @@ one `upstream-drift` issue; failures do not close alerts. Run
 `scripts/check_upstream.sh` with authenticated `gh`. Review drift, extend tests
 and update the pin by PR. Monthly scratch-bucket smoke:
 [existing checklist](docs/live-check-s3-checklist.md); settings parity acceptance:
-[Task 8 plan](docs/superpowers/plans/2026-11-23-settings-parity.md).
+[owner checklist](docs/live-check-parity-checklist.md).
 
 ## Security, systemd, clients and authentication
 
