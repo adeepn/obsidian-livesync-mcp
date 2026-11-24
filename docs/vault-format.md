@@ -66,3 +66,11 @@ segment. Namespace checks are case-insensitive. Hidden ignore files have a
 separate internal read path; this does not enable public Hidden File Sync.
 See `livesync_format.validate_vault_path`. Select an ordinary path for MCP
 writes; internal metadata is not a public note interface.
+
+## Invalid writer parameters
+
+V1/V2 require a positive derived piece cap; V2 plain text requires a positive
+minimum. Zero can leave the upstream legacy loops nonterminating, so these
+configurations are refused. Negative/nonnumeric minimums and other invalid
+writer parameters are unsupported. These guard refusals are outside the
+“identical for valid settings” claim; V3 retains its own floor/clamp semantics.

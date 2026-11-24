@@ -138,7 +138,7 @@ combination. [Source inventory and caveats](docs/superpowers/specs/2026-11-23-se
 | `enableChunkSplitterV2`, `useSegmenter` | false / true (legacy migration) | Identical | One-pass migration of empty version; unknown version normalization follows upstream |
 | `hashAlg` | xxhash64, xxhash32, mixed-purejs, sha1, empty | Identical | Upstream UTF-16 length and hash semantics |
 | `customChunkSize` | Number >=0 in UI (default 0) | Identical | Absolute cap derived from setting; V3 floor/ceiling retained |
-| `minimumChunkSize` | Numeric (default 20) | Identical | Algorithm-specific minimum, including derived binary minimum |
+| `minimumChunkSize` | Numeric (default 20) | Identical for valid values; V2 plain 0 not supported | Algorithm-specific minimum; V2 plain requires >0; negative/nonnumeric values refuse |
 | `syncMaxSizeInMB` | UI number >=0, default 50; 0 disables | Deliberate difference | Device ordinary-write predicate; oversized rename refuses to protect source |
 | `syncOnlyRegEx`, `syncIgnoreRegEx` | ECMAScript pattern lists | Identical when configured | Set local env explicitly; never inferred from milestone |
 | `useIgnoreFiles`, `ignoreFiles` | Boolean / filename list | Identical when configured | Local env; upstream glob/rule order, Node.js 22+ required |
@@ -177,6 +177,9 @@ combination. [Source inventory and caveats](docs/superpowers/specs/2026-11-23-se
   connection fields and use CouchDB username/password instead.
   Ordinary tools reserve service prefixes/names and dot-prefixed paths;
   [path admission](docs/vault-format.md#path-admission) lists the exact exclusions.
+- Nonpositive legacy piece caps and V2 plain-text minimums are unsupported;
+  invalid numeric writer parameters refuse instead of risking a nonterminating
+  upstream loop. Keep legacy caps and V2 plain minimum positive.
 - The peer is an invisible writer: it does not register a device or modify
   milestone/PREFERRED settings. Align device settings separately; review
   [tweak compatibility](docs/tweak-compatibility.md) after upgrades.
