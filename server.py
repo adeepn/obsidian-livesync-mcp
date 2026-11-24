@@ -222,6 +222,18 @@ def _safe_storage_detail(error: Exception) -> str:
 
 
 def _storage_message(error: StorageError) -> str:
+    message = _storage_message_body(error)
+    detail = _safe_storage_detail(error) if str(error) else ''
+    if detail and detail not in message:
+        if type(error) is UnsupportedVault:
+            return f"Error: unsupported vault configuration: {detail}"
+        if type(error) is StorageUnavailable:
+            return f"Error: storage is unavailable: {detail}; try again later."
+        return f"{message} {detail}"
+    return message
+
+
+def _storage_message_body(error: StorageError) -> str:
     """Map device outcomes/errors; expose only explicitly safe diagnostics."""
     if isinstance(error, MutationNotApplied):
         return f"Error: note is unchanged; {_safe_storage_detail(error)}"

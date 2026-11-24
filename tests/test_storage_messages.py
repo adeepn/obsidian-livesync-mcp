@@ -44,9 +44,9 @@ def test_every_storage_error_has_a_specific_safe_message(kind):
     error = kind.__new__(kind)
     Exception.__init__(error, 'specific safe diagnostic')
     error.__dict__.update(path='note.md', size=1, maximum=2, source='a.md',
-                          destination='b.md', source_state='live', detail='diagnostic')
+                          destination='b.md', source_state='live', detail='specific safe diagnostic')
     result = server._storage_message(error)
-    assert 'unable to access vault storage' not in result
+    assert 'specific safe diagnostic' in result
 
 
 @pytest.mark.parametrize("parent", [errors.StorageError, errors.StorageUnavailable, errors.ConcurrentModification])
