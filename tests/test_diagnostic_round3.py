@@ -47,6 +47,9 @@ def test_numeric_channels_are_bounded_integers(value, channel, late):
         error = E.WriteSkipped('a', 1 if late or channel != 'size' else value,
                               2 if late or channel != 'maximum' else value)
     if late: object.__setattr__(error, channel, value)
+    if channel == 'maximum' and value == 1.5:
+        assert 'syncMaxSizeInMB (1.5)' in error.format()
+        return
     if channel == 'status' and value is None:
         assert 'GET failed' in error.format()  # Optional status means no HTTP response.
         return
@@ -155,7 +158,10 @@ async def test_real_stored_path_display(char, monkeypatch):
 def test_rename_numeric_fields_are_revalidated(value, field):
     error = E.RenameRefused('a','b',1,2)
     setattr(error, field, value)
-    assert '<invalid>' in error.format() and 'SECRET' not in error.format()
+    if field == 'maximum' and value == 1.5:
+        assert 'syncMaxSizeInMB (1.5)' in error.format()
+    else:
+        assert '<invalid>' in error.format() and 'SECRET' not in error.format()
 
 
 @pytest.mark.parametrize('value', ['PUT\nSuccess', 'GET SECRET', 'A'*65, None, True, {}])

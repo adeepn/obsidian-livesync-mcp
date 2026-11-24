@@ -27,19 +27,21 @@ class ReplayBudgetExceeded(StorageError, ValueError):
                  *, decoder_capacity: int | None = _ABSENT):
         from diagnostic_hygiene import numeric_field, setting_key
         self.budget = setting_key(budget)
-        self.observed, self.limit = numeric_field(observed), numeric_field(limit)
+        kind = 'measured' if self.budget == 'max_refresh_seconds' else 'integer'
+        self.observed, self.limit = numeric_field(observed, kind=kind), numeric_field(limit, kind=kind)
         self.has_decoder_capacity = decoder_capacity is not _ABSENT
         self.decoder_capacity = numeric_field(decoder_capacity) if self.has_decoder_capacity else None
         self.variable = 'LIVESYNC_JOURNAL_' + self.budget.upper()
         super().__init__()
 
     def format(self):
-        from diagnostic_hygiene import setting_key, numeric_field
+        from diagnostic_hygiene import setting_key, numeric_field, numeric_text
         budget = setting_key(getattr(self, 'budget', None))
         if budget == '<unexpected key>':
             return 'replay budget exceeded'
+        kind = 'measured' if budget == 'max_refresh_seconds' else 'integer'
         variable = 'LIVESYNC_JOURNAL_' + budget.upper()
-        text = f'{budget} budget limit reached: observed {numeric_field(self.observed)}, configured {numeric_field(self.limit)}; raise {variable}'
+        text = f'{budget} budget limit reached: observed {numeric_text(self.observed, kind=kind)}, configured {numeric_text(self.limit, kind=kind)}; raise {variable}'
         if getattr(self, 'has_decoder_capacity', False):
             text += (f'; decoder capacity {numeric_field(self.decoder_capacity)} exhausted; '
                      'raising the variable alone cannot admit this input; reduce nesting')

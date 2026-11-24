@@ -9,7 +9,7 @@ payloads and tracebacks (audit C7, P-19).
 
 from __future__ import annotations
 
-from diagnostic_hygiene import (PublicDiagnostic, DiagnosticPath, diagnostic, path_field, setting_key, numeric_field, cause_name)
+from diagnostic_hygiene import (PublicDiagnostic, DiagnosticPath, diagnostic, path_field, setting_key, numeric_field, numeric_text, cause_name)
 
 from typing import AsyncIterator, Protocol, TypedDict, runtime_checkable
 
@@ -63,11 +63,11 @@ class WriteSkipped(StorageError):
     """
 
     def __init__(self, path: str, size: int, maximum: float):
-        self.path, self.size, self.maximum = DiagnosticPath(path, remote=False), numeric_field(size), numeric_field(maximum)
+        self.path, self.size, self.maximum = DiagnosticPath(path, remote=False), numeric_field(size), numeric_field(maximum, kind='measured')
         super().__init__()
 
     def format(self):
-        size, maximum = numeric_field(self.size), numeric_field(self.maximum)
+        size, maximum = numeric_field(self.size), numeric_text(self.maximum, kind='measured')
         mib = f"{size / 1024**2:.3g}" if type(size) is int else size
         return (
             f"skipped: {mib} MiB ({size} bytes) exceeds the vault's "
@@ -79,7 +79,7 @@ class WriteSkipped(StorageError):
     def as_dict(self, *, caller_path=None):
         path = caller_path or self.path
         return dict(status="skipped", path=path.value if isinstance(path, DiagnosticPath) else '<path unavailable>', size=numeric_field(self.size),
-                    syncMaxSizeInMB=numeric_field(self.maximum), message=self.format())
+                    syncMaxSizeInMB=numeric_field(self.maximum, kind='measured'), message=self.format())
 
 
 class RenameRefused(StorageError):
@@ -87,11 +87,11 @@ class RenameRefused(StorageError):
 
     def __init__(self, source: str, destination: str, size: int, maximum: float):
         self.source, self.destination = DiagnosticPath(source, remote=False), DiagnosticPath(destination, remote=False)
-        self.size, self.maximum = numeric_field(size), numeric_field(maximum)
+        self.size, self.maximum = numeric_field(size), numeric_field(maximum, kind='measured')
         super().__init__()
 
     def format(self):
-        size, maximum = numeric_field(self.size), numeric_field(self.maximum)
+        size, maximum = numeric_field(self.size), numeric_text(self.maximum, kind='measured')
         return (
             f"move was not performed: {size} bytes exceeds the vault's "
             f"syncMaxSizeInMB ({maximum}). A device would drop the source "

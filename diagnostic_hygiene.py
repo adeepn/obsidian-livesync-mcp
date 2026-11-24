@@ -1,5 +1,7 @@
 """Typed diagnostic construction. Free text is never a public message source."""
 from dataclasses import dataclass
+import math
+from decimal import Decimal
 import hashlib
 import logging
 import os
@@ -28,9 +30,27 @@ def escape_path(value: str, *, remote: bool = False) -> str:
     return _CONTROLS.sub(visible, value)
 
 
-def numeric_field(value):
-    """Fail closed without coercion, including bool and oversized integers."""
-    return value if type(value) is int and 0 <= value < 2**63 else '<invalid>'
+def numeric_field(value, *, kind='integer'):
+    """Validate only built-in numbers against the declared field contract."""
+    if kind == 'exit':
+        valid = type(value) is int and -256 <= value <= 256
+    elif kind == 'measured':
+        valid = (type(value) in (int, float) and 0 <= value < 2**63
+                 and (type(value) is int or math.isfinite(value)))
+    else:
+        valid = type(value) is int and 0 <= value < 2**63
+    return value if valid else '<invalid>'
+
+
+def numeric_text(value, *, kind='integer'):
+    """Canonical decimal text, without exponent notation or float .0 noise."""
+    value = numeric_field(value, kind=kind)
+    if type(value) is int:
+        return str(value)
+    if type(value) is float:
+        text = format(Decimal(str(value)), 'f')
+        return text.rstrip('0').rstrip('.') if '.' in text else text
+    return '<invalid>'
 
 
 def identifier(value, fallback='<unexpected identifier>'):
@@ -122,7 +142,7 @@ class PublicDiagnostic:
 
     def __post_init__(self):
         if self.status is not None:
-            object.__setattr__(self, 'status', numeric_field(self.status))
+            object.__setattr__(self, 'status', numeric_field(self.status, kind='exit' if self.code is DiagnosticCode.SELECTION_ENGINE else 'integer'))
         if self.operation is not None:
             object.__setattr__(self, 'operation', operation_field(self.operation))
         if self.cause_class is not None:
@@ -153,7 +173,7 @@ class PublicDiagnostic:
             } else '<value hidden>'
             result += ': ' + cause
             if self.status is not None:
-                result += f' (status {numeric_field(self.status)})'
+                result += f" (status {numeric_text(self.status, kind='exit')})"
             result += '; install Node.js 22+ in the service PATH or disable selection filters'
         if self.paths:
             result += "; note: " + " -> ".join(path_field(p) for p in self.paths)
