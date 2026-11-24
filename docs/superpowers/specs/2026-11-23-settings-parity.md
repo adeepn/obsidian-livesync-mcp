@@ -500,3 +500,12 @@ serviceModules/ServiceFileHandlerBase/events.ts:217-219 at the audited pin.
 The two service files are in commonlib, rather than the plugin checkout named
 in the task premise. Existing journal refresh did not reread milestone settings;
 G1 adds that check for ignore-file policy.
+
+
+2026-11-24 G1 follow-up: [GOTCHA] The existing unreadable-ignore handler named
+StorageError without importing it, so storage/decoding failures raised NameError.
+Import the exception and retain the upstream absent-file result. The tweak
+oracle now executes the actual getIgnoreFile catch path (commonlib
+serviceFeatures/targetFilter.ts:102-127); regression coverage exercises both
+backends with storage and decoding failures. Keep this separate fix as a
+follow-up commit without rewriting the derivation commit.

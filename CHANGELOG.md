@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Settings parity
 
+- Handle unreadable ignore files as absent, matching devices, instead of raising
+  a NameError from the selection exception handler.
+
 - Derive ignore-file selection independently from vault settings unless the
   operator overrides each variable. Recheck journal milestone changes and
   engine capability before writes; report typed setting sources. Vault-enabled

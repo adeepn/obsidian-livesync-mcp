@@ -4,7 +4,7 @@ Incoming reflection: C:serviceModules/ServiceFileHandlerBase/events.ts:217-219.
 import json
 import pytest
 import livesync_format as fmt
-from storage_base import SelectionRefused, UnsupportedVault
+from storage_base import SelectionRefused, UnsupportedVault, StorageUnavailable
 from tests.test_tweak_startup import vault
 from tests.test_storage_journal import make_backend, healthy_bucket
 from storage_journal import MILESTONE_KEY
@@ -261,3 +261,18 @@ async def test_reads_bypass_inherited_and_explicit_filters(tmp_path, kind):
         b.selection_only = 'never-match'
         b.selection_ignore = 'later-ignored'
         assert (await b.read_note('later-ignored.md'))['text'] == 'retained'
+
+
+@pytest.mark.parametrize('kind', ['couchdb', 's3'])
+@pytest.mark.parametrize('error', [ValueError, StorageUnavailable])
+async def test_unreadable_ignore_file_matches_upstream(tmp_path, kind, error, monkeypatch):
+    # C:serviceFeatures/targetFilter.ts:102-127 treats unreadable files as absent.
+    from tests.test_tweak_differential import FIXTURE
+    async with vault(tmp_path, kind, milestone(useIgnoreFiles=True)) as (b, writes):
+        await b.startup_check()
+        async def unreadable(path):
+            raise error('synthetic read failure')
+        monkeypatch.setattr(b, '_read_selection_file', unreadable)
+        assert await b._selection_lines('.gitignore') is FIXTURE['selection']['unreadable']
+        await b.write_note('admitted.md', 'retained', create=True)
+        assert (await b.read_note('admitted.md'))['text'] == 'retained'

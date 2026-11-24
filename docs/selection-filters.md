@@ -82,6 +82,7 @@ their own latency. Reproduce with `PYTHONPATH=. ./venv/bin/python
 scripts/benchmark_selection.py MODE`, where MODE is `one-shot`, `worker`,
 `cache`, `journal-worker`, or `journal-cache`.
 
+Missing or unreadable ignore files are treated as absent, matching upstream.
 Ignore files are ordinary vault metadata, including hidden `.gitignore` files stored under the `i:` prefix;
 the peer reads their content through the backend, without exposing hidden files
 through public note tools. Files are read through for each write, so changes

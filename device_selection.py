@@ -9,7 +9,7 @@ from collections import OrderedDict
 from livesync_format import (canonical_path, TargetVerdict, resolve_ignore_settings,
                              UnsupportedVaultSettings)
 from selection_engine import SelectionWorker, EngineFailure
-from storage_base import SelectionRefused, WriterUnsupported, UnsupportedVault
+from storage_base import SelectionRefused, WriterUnsupported, UnsupportedVault, StorageError
 
 
 class DeviceSelection:

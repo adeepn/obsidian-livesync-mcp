@@ -36,7 +36,8 @@ This repository is a small Python MCP server for accessing an Obsidian LiveSync 
 `tests/test_selection_settings.py` covers independent vault-derived ignore settings,
 backend admission, refresh, cache invalidation and typed source diagnostics.
 `scripts/extract_tweak_vectors.mjs` records real upstream template keys, ignore
-defaults and name splitting as well as tweak compatibility vectors.
+defaults, name splitting and unreadable-file behaviour as well as tweak
+compatibility vectors.
 
 `scripts/extract_settings_oracle.mjs` also records direct published encoder and
 raw-hash conversion vectors in `tests/fixtures/settings_oracle_upstream.json.gz`.

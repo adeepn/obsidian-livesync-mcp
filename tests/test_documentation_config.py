@@ -179,5 +179,6 @@ def test_vault_ignore_derivation_documentation_contract():
         assert 'Derived from vault settings unless overridden' in row
     focused = (ROOT / 'docs/selection-filters.md').read_text()
     assert 'Reads bypass all selection filters, including explicitly configured filters.' in focused
+    assert 'Missing or unreadable ignore files are treated as absent, matching upstream.' in focused
     assert 'Regex lists stay env-only' in focused
     assert 'including vault useIgnoreFiles=true' in focused

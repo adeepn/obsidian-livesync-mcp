@@ -145,8 +145,17 @@ const refreshEnd=filterSource.indexOf('    const invalidateIgnoreFileCache', ref
 if(refreshBegin<0||refreshEnd<0) throw Error('Ignore refresh boundary');
 const splitIgnore=vm.compileFunction('let ignoreFiles=[]; const host={services:{setting:{currentSettings:()=>settings}}};\n'
     +filterSource.slice(refreshBegin,refreshEnd)+'\nrefreshSettings(); return ignoreFiles;', ['settings']);
+// C:targetFilter.ts:102-127 catches storage read failures and returns false.
+const readBegin=filterSource.indexOf('    const getIgnoreFile = async');
+const readEnd=filterSource.indexOf('    host.services.setting.onSettingRealised', readBegin);
+if(readBegin<0||readEnd<0) throw Error('Ignore read boundary');
+const readIgnore=vm.compileFunction(stripTypeScriptTypes(
+    'const ignoreFileCacheMap=new Map(); const log=()=>{}; const LOG_LEVEL_DEBUG=0, LOG_LEVEL_VERBOSE=0;\n'
+    +filterSource.slice(readBegin,readEnd),{mode:'strip'})+'\nreturn getIgnoreFile(".gitignore");', ['host']);
+const unreadable=await readIgnore({serviceModules:{storageAccess:{
+    isExistsIncludeHidden:async()=>true,readHiddenFileText:async()=>{throw Error('synthetic read failure');}}}});
 const defaults=modules.get('common/models/setting.const.defaults.ts').namespace.DEFAULT_SETTINGS;
-const selection={templateKeys:Object.keys(definitions.TweakValuesTemplate),
+const selection={unreadable,templateKeys:Object.keys(definitions.TweakValuesTemplate),
     defaults:{useIgnoreFiles:defaults.useIgnoreFiles,ignoreFiles:defaults.ignoreFiles},
     names:['.gitignore',' a, b ','a,,b','\ufeffa\ufeff,\u0085b\u0085',' .gitignore , rules '].map(ignoreFiles=>
         ({input:ignoreFiles,expected:splitIgnore({ignoreFiles})})),
