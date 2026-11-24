@@ -34,6 +34,9 @@ from __future__ import annotations
 from text_eligibility import (DEFAULT_TEXT_SCAN_MAX_BYTES,
                               DEFAULT_TEXT_VERDICT_CACHE_ENTRIES)
 
+import asyncio
+from device_selection import DeviceSelection
+
 import json
 import logging
 import math
@@ -173,7 +176,7 @@ def _as_ms(value: object) -> int:
     return int(value)
 
 
-class JournalBackend:
+class JournalBackend(DeviceSelection):
     """``StorageBackend`` peer for an Obsidian LiveSync journal bucket.
 
     The store under ``state_dir`` is created on the first
@@ -291,6 +294,7 @@ class JournalBackend:
                     "files exist; the vault may be encrypted or incompatible"
                 )
             self._probe_remote_wipe(epoch=None)
+            await self.refresh_selection_files()
             return
         if self._store.epoch != epoch:
             # The setter wipes docs/processed/meta and chunk files, so the
@@ -304,6 +308,8 @@ class JournalBackend:
             self._clear_refresh_clock()
         else:
             self._probe_remote_wipe(epoch)
+
+        await self.refresh_selection_files()
 
     async def refresh(self, force: bool = False) -> None:
         """Replay journal files missing from the processed ledger.
@@ -377,6 +383,8 @@ class JournalBackend:
             self._last_refresh = time.monotonic()
             self._last_refresh_at = datetime.now(timezone.utc)
 
+        await self.refresh_selection_files()
+
     def _check_refresh_time(self, point: str) -> None:
         if self._refresh_deadline is not None and time.monotonic() >= self._refresh_deadline:
             raise _RefreshBudgetStop(f"wall-clock at {point!r}")
@@ -401,9 +409,11 @@ class JournalBackend:
     async def backend_info(self) -> dict:
         """Diagnostics for ``vault_stats`` and startup logs."""
         store = self._store
+        selection = await asyncio.to_thread(self.selection_info)
         return {
-            "writer_supported": self._writer_unsupported_reason is None,
-            "writer_unsupported_reason": self._writer_unsupported_reason,
+            **selection,
+            "writer_supported": self._writer_unsupported_reason is None and selection["selection_writer_supported"],
+            "writer_unsupported_reason": self._writer_unsupported_reason or selection["selection_unsupported_reason"],
             "backend": "s3-journal",
             "protocol_notes": list(self._protocol_notes),
             "state_dir_path": str(self._state_dir),
@@ -1052,6 +1062,7 @@ class JournalBackend:
         """
         self.check_writer_support()
         validate_vault_path(path)
+        await self.check_selection(path)
         body, doc_type, size = prepare_file_content(path, content)
         return await self._write_content(
             path, body, size, doc_type,
@@ -1067,6 +1078,7 @@ class JournalBackend:
         """Capped byte-input alias for write_note; type still follows path."""
         self.check_writer_support()
         validate_vault_path(path)
+        await self.check_selection(path)
         if len(data) > MAX_ATTACHMENT_BYTES:
             raise ValueError(
                 f"attachment exceeds 32 MiB cap ({MAX_ATTACHMENT_BYTES} bytes); "
@@ -1129,6 +1141,7 @@ class JournalBackend:
         """Append a soft deletion, preserving all body references."""
         self.check_writer_support()
         validate_vault_path(path)
+        await self.check_selection(path)
         store = self._require_store("delete_note")
         parent = store.winner(self._doc_id(path))
         self._check_expected_rev(parent, expected_rev)
@@ -1172,6 +1185,11 @@ class JournalBackend:
         self.check_writer_support()
         validate_vault_path(path)
         validate_vault_path(new_path)
+        await self.check_selection(new_path)
+        source_selection = await self.selection_for(path)
+        if not source_selection.writer_supported:
+            raise WriterUnsupported(source_selection.reason)
+        preserve_source = not source_selection.allowed
         new_path = canonical_path(new_path)
         if path == new_path:
             return await self.get_meta(path)
@@ -1189,7 +1207,7 @@ class JournalBackend:
             retired = self._next_revision(
                 soft_delete_revision(source, int(time.time() * 1000)), source
             )
-            self._publish([], [body, retired])
+            self._publish([], [body] if preserve_source else [body, retired])
         return self._meta_from_doc(body)
 
     async def copy_note(
@@ -1199,7 +1217,22 @@ class JournalBackend:
         self.check_writer_support()
         validate_vault_path(path)
         validate_vault_path(new_path)
+        await self.check_selection(new_path)
         source = self._source_doc(path)
         body = self._copy_revision(source, new_path, overwrite)
         self._publish([], [body])
         return self._meta_from_doc(body)
+
+    async def _read_selection_file(self, path):
+        store = self._require_store('ignore files')
+        candidates = ['i:' + path, path] if _has_hidden_segment(path) else [path]
+        content = None
+        for candidate in candidates:
+            doc_id = self._path2id(store, candidate)
+            if store.winner(doc_id) is not None:
+                content = store.read_ignore_file(doc_id)
+                break
+        if content is None:
+            return None
+        _, text, data, is_text = content
+        return text if is_text else data.decode('utf-8', errors='replace')

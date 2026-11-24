@@ -36,6 +36,9 @@ without reassembling content, so binary notes travel chunk-wise
 from __future__ import annotations
 
 from collections import OrderedDict
+import asyncio
+from device_selection import DeviceSelection
+
 import json
 import logging
 import time
@@ -132,7 +135,7 @@ def _now_ms() -> int:
     return int(time.time() * 1000)
 
 
-class CouchDBBackend:
+class CouchDBBackend(DeviceSelection):
     """LiveSync vault storage served by a CouchDB instance."""
 
     def __init__(
@@ -393,6 +396,7 @@ class CouchDBBackend:
         if milestone.status_code != 200:
             if _is_db_missing(milestone):
                 raise StorageUnavailable("CouchDB database not found")
+            await self.refresh_selection_files()
             return  # no milestone document: pre-E2EE or fresh vault
         try:
             body = milestone.json()
@@ -408,6 +412,8 @@ class CouchDBBackend:
         except UnsupportedVaultSettings as exc:
             raise UnsupportedVault(str(exc)) from exc
 
+        await self.refresh_selection_files()
+
     def _path2id(self, path: str) -> str:
         return identity_path2id(path, self._path_identity)
 
@@ -421,12 +427,15 @@ class CouchDBBackend:
         info = await self._db_info()
         self._index = await self._load_index()
         self._index_seq = info.get("update_seq")
+        await self.refresh_selection_files()
 
     async def backend_info(self) -> dict:
         info = await self._db_info()
+        selection = await asyncio.to_thread(self.selection_info)
         return {
-            "writer_supported": self._writer_unsupported_reason is None,
-            "writer_unsupported_reason": self._writer_unsupported_reason,
+            **selection,
+            "writer_supported": self._writer_unsupported_reason is None and selection["selection_writer_supported"],
+            "writer_unsupported_reason": self._writer_unsupported_reason or selection["selection_unsupported_reason"],
             "backend": "couchdb",
             "path_identity": self._path_identity,
             "database": self._database,
@@ -950,6 +959,7 @@ class CouchDBBackend:
         """
         self.check_writer_support()
         validate_vault_path(path)
+        await self.check_selection(path)
         body, doc_type, size = prepare_file_content(path, content)
         return await self._write_content(
             path, body, size, doc_type,
@@ -964,6 +974,7 @@ class CouchDBBackend:
         """Capped byte-input alias for write_note; type still follows path."""
         self.check_writer_support()
         validate_vault_path(path)
+        await self.check_selection(path)
         if len(data) > MAX_ATTACHMENT_BYTES:
             raise ValueError(
                 f"attachment exceeds 32 MiB cap ({MAX_ATTACHMENT_BYTES} bytes); "
@@ -1031,6 +1042,7 @@ class CouchDBBackend:
         """
         self.check_writer_support()
         validate_vault_path(path)
+        await self.check_selection(path)
         doc = await self._get_doc(self._path2id(path), conflicts=True)
         self._check_expected_rev(doc, path, expected_rev)
         if doc is None or doc.get("deleted"):
@@ -1053,6 +1065,11 @@ class CouchDBBackend:
         self.check_writer_support()
         validate_vault_path(path)
         validate_vault_path(new_path)
+        await self.check_selection(new_path)
+        source_selection = await self.selection_for(path)
+        if not source_selection.writer_supported:
+            raise WriterUnsupported(source_selection.reason)
+        preserve_source = not source_selection.allowed
         new_path = canonical_path(new_path)
         if path == new_path:
             return await self.get_meta(path)
@@ -1072,6 +1089,8 @@ class CouchDBBackend:
         if target is not None:
             body["_rev"] = target["_rev"]  # replace the old revision
         body["_rev"] = await self._put_doc(self._path2id(new_path), body)
+        if preserve_source:
+            return self._meta_from_doc(body)
         try:
             await self._soft_delete(doc, path, _now_ms())
         except Exception as exc:
@@ -1093,6 +1112,7 @@ class CouchDBBackend:
         self.check_writer_support()
         validate_vault_path(path)
         validate_vault_path(new_path)
+        await self.check_selection(new_path)
         doc = await self._get_note_doc(path)
         target = await self._target_doc_for_write(new_path, overwrite=overwrite)
         body = self._moved_body(doc, new_path, _now_ms())
@@ -1100,3 +1120,18 @@ class CouchDBBackend:
             body["_rev"] = target["_rev"]  # replace the old revision
         body["_rev"] = await self._put_doc(self._path2id(new_path), body)
         return self._meta_from_doc(body)
+
+    async def _read_selection_file(self, path):
+        # Hidden ignore files are ordinary stored metadata, outside tool read gates.
+        candidates = ['i:' + path, path] if _has_hidden_segment(path) else [path]
+        doc = None
+        for candidate in candidates:
+            doc = await self._get_doc(self._path2id(candidate))
+            if doc is not None:
+                break
+        if doc is None or doc.get('deleted') or doc.get('_deleted') or doc.get('e_'):
+            return None
+        content = await self._content_from_doc(doc)
+        if content is None:
+            return None
+        return content['text'] if content['is_text'] else content['data'].decode('utf-8', errors='replace')

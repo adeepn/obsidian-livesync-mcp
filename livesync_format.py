@@ -17,6 +17,8 @@ typed, v1 compares Unicode NFC forms — see ``path2id`` and
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import base64
 import binascii
 import unicodedata
@@ -566,3 +568,47 @@ def clone_metadata(doc: dict, **overrides) -> dict:
     callers explicitly override or remove them for the intended operation.
     """
     return deepcopy({**doc, **overrides})
+
+
+@dataclass(frozen=True)
+class TargetVerdict:
+    """Device selection decision, including fail-closed engine diagnostics."""
+
+    allowed: bool
+    rule: str | None = None
+    writer_supported: bool = True
+    reason: str | None = None
+
+
+def parse_custom_regexp_list(source: str) -> tuple[str, ...]:
+    """common/utils.ts: remove only LF and ASCII space; preserve duplicates."""
+    return tuple(item for item in source.replace('\n', '').replace(' ', '').split('|[]|') if item)
+
+
+def is_target_file(path: str, *, only_patterns: str = '', ignore_patterns: str = '',
+                   case_sensitive: bool = False, ignore_files: dict | None = None,
+                   ignore_names: tuple[str, ...] = ()) -> TargetVerdict:
+    """Execute pinned device selection using ECMAScript and upstream minimatch.
+
+    No storage access or mutation. Node is needed only for active filters;
+    Python regex is deliberately never substituted for ECMAScript RegExp.
+    """
+    import json
+    import subprocess
+    from pathlib import Path
+
+    if not only_patterns and not ignore_patterns and ignore_files is None:
+        return TargetVerdict(True)
+    payload = dict(path=path, only_patterns=only_patterns, ignore_patterns=ignore_patterns,
+                   case_sensitive=case_sensitive, ignore_files=ignore_files,
+                   ignore_names=ignore_names)
+    try:
+        result = subprocess.run(
+            ['node', str(Path(__file__).parent / 'vendor/selection/runner.mjs')],
+            input=json.dumps(payload), capture_output=True, text=True, timeout=5,
+            check=True,
+        )
+        return TargetVerdict(**json.loads(result.stdout))
+    except (OSError, subprocess.SubprocessError, ValueError, TypeError):
+        return TargetVerdict(False, writer_supported=False,
+                             reason='Device selection engine unavailable or timed out; Node.js 22+ required')

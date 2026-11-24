@@ -501,6 +501,24 @@ class JournalStore:
         winner = self.winner(doc_id)
         if winner is None or not is_note_document(winner):
             return None
+        return self._read_note_content(winner)
+
+    def read_ignore_file(self, doc_id: str):
+        """Decode only a configured ignore document, including hidden i: metadata.
+
+        Public note reads retain their service-namespace gate. This private
+        backend seam never lists or exposes internal documents to MCP callers.
+        """
+        winner = self.winner(doc_id)
+        if (winner is None or winner.get('deleted') or winner.get('_deleted')
+                or winner.get('type') not in ('plain', 'newnote', 'notes')):
+            return None
+        if not doc_id.startswith('i:') and not is_note_document(winner):
+            return None
+        return self._read_note_content(winner)
+
+    def _read_note_content(self, winner: dict):
+        doc_id = winner['_id']
         path = _display_path(winner, doc_id)
 
         if winner.get("e_"):
@@ -519,7 +537,7 @@ class JournalStore:
                 ) from None
             return winner, text, None, True
 
-        # is_note_document guarantees doc_type in ("plain", "newnote") here.
+        # Both entry points restrict non-legacy content to plain/newnote.
         children = winner.get("children")
         if children is None:
             children = []

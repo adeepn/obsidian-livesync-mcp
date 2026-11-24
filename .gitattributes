@@ -1,0 +1,2 @@
+# Preserve generated/upstream distributions byte-for-byte, including whitespace.
+vendor/selection/** -whitespace

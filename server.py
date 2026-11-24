@@ -51,6 +51,14 @@ from links import GraphBuilder, extract_links, resolve_link
 from auth_config import StaticBearerTokenVerifier, select_auth_mode
 from oauth_provider import SimpleOAuthProvider
 
+
+def _configure_selection(result, cfg):
+    result.selection_only = getattr(cfg, 'selection_only', '')
+    result.selection_ignore = getattr(cfg, 'selection_ignore', '')
+    result.selection_use_ignore_files = getattr(cfg, 'selection_use_ignore_files', False)
+    result.selection_ignore_files = getattr(cfg, 'selection_ignore_files', ())
+
+
 def get_backend(cfg: Config) -> StorageBackend:
     """Construct the selected storage implementation."""
     if cfg.backend == "s3":
@@ -64,6 +72,7 @@ def get_backend(cfg: Config) -> StorageBackend:
             text_verdict_cache_entries=cfg.text_verdict_cache_entries,
         )
         result.text_scan_max_bytes = cfg.text_scan_max_bytes
+        _configure_selection(result, cfg)
         return result
     if cfg.couchdb is None:
         raise ConfigError("CouchDB configuration is required.")
@@ -77,6 +86,7 @@ def get_backend(cfg: Config) -> StorageBackend:
         scan_max_bytes=cfg.scan_max_bytes,
     )
     result.text_scan_max_bytes = cfg.text_scan_max_bytes
+    _configure_selection(result, cfg)
     return result
 
 

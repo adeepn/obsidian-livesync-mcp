@@ -281,6 +281,56 @@ are read only for the selected backend. Empty defaults below mean an empty strin
 | `LIVESYNC_SCAN_MAX_NOTES` | `10000` | Optional | Positive note count cap per aggregate scan |
 | `LIVESYNC_SCAN_MAX_BYTES` | `67108864` | Optional | Positive aggregate UTF-8 byte cap per scan |
 
+### Device file selection
+
+Set these local settings explicitly to match the device whose selection policy
+this peer should use. They are never inferred from milestone/PREFERRED tweaks.
+Defaults select every path permitted by the existing ordinary-file write gate.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `LIVESYNC_SYNC_ONLY_REGEX` | empty | Require any allow expression to match when the parsed list is nonempty |
+| `LIVESYNC_SYNC_IGNORE_REGEX` | empty | Reject when any ignore expression matches |
+| `LIVESYNC_USE_IGNORE_FILES` | `false` | Enable vault ignore files (`true` or `false`) |
+| `LIVESYNC_IGNORE_FILES` | empty | Comma-separated vault-relative ignore file names, e.g. `.gitignore,.syncignore` |
+
+Regex lists use **`|[]|`**, not commas or newlines. ASCII spaces and LF are
+removed; quotes are literal, empty items are discarded, duplicates remain.
+`!!` inverts an individual expression. Patterns use ECMAScript RegExp search
+against the complete path, without implicit anchors, with `i` unless the vault
+uses case-sensitive filenames. `/foo/g` is literal regex source, not JS literal
+syntax; `g`, `y`, `u`, and `v` flags cannot be configured by these settings.
+For example, `\.md$|[]|\.canvas$` allows either suffix.
+
+Active filters require **Node.js 22+** in the service PATH. The peer runs pinned
+upstream functions and vendored minimatch, rather than translating to Python
+regex/glob. Invalid expressions, a missing engine, or an evaluation exceeding
+five seconds refuse writes; `backend_info` reports `filters_active`,
+`writer_supported`, and a reason. Empty settings require no Node runtime.
+The regex engine runs in an isolated subprocess; configured expressions cannot
+execute JS code. This adds one engine invocation per filtered write/check.
+
+Ignore files are ordinary vault metadata, including hidden `.gitignore` files stored under the `i:` prefix;
+the peer reads their content through the backend, without exposing hidden files
+through public note tools. Files are read through for each write, so changes
+seen by CouchDB or the S3 peer's refreshed local state take effect immediately.
+The nearest ancestor file with a matching rule decides; configured file order
+breaks ties. Matching uses upstream minimatch with `dot`, `nocase`, `flipNegate`
+on Linux paths. This resembles gitignore but differs: matching always ignores
+case, leading `/` is not a root anchor, and a matching directory rule ending
+in `/` returns immediately, preventing later negation. See the differential
+fixtures for exact behavior.
+
+Excluded create/update/delete and rename destinations return a clean error
+before chunks or metadata are published. Existing excluded notes remain in
+storage. As upstream does, renaming an excluded source to an allowed
+path creates the destination while preserving the excluded source; an excluded
+destination leaves the source unchanged. Copy checks the destination.
+This is command preflight: the peer has no local filesystem copy at an excluded
+destination. In contrast, a plugin rename **event after a disk move** classifies
+selected-source/excluded-destination as source DELETE. The peer rejects that
+command before making any storage changes, preserving its only copy.
+
 ### S3 journal backend
 
 Storage follows LiveSync device **disk ingestion**, with case-sensitive suffixes:
