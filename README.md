@@ -99,17 +99,13 @@ control-flow outcome. Every MCP mutation tool handles it as JSON, for example:
 
 This response does not claim success or persistence. MCP has no host vault file
 to retain. Copy creates a new file and uses the size gate; delete remains allowed.
-Rename has a distinct admission rule: an oversized destination is outside sync,
-so a selected source DB entry is retired and **no destination is saved**. The
-move tool returns JSON `status: "moved_out_of_sync"`, `source_retired: true`,
-`destination_published: false`, plus source/path/size/limit/message. If the source
-path is also outside selection, it stays unchanged (`status: "skipped"`,
-`source_retired: false`). A literal same-path rename remains a no-op. This mirrors
-the plugin's DB effect after its disk move: the plugin retains the moved file
-locally, whereas MCP has no local vault copy. Source revision history/chunks are
-not purged. The source admission rule is
-`C:managers/StorageEventManager/admission.ts:78-108,124-130`, with guarded deletion
-in `C:serviceModules/ServiceFileHandlerBase/selection.ts:18-60`.
+Rename with an oversized destination is refused before any mutation: source
+revision/content and destination remain unchanged. The error names the size
+and vault limit and states that the move was not performed. A device drops the
+source from sync after moving its disk file; this peer has no host storage and
+would lose the only copy (P-13). A literal same-path rename remains a no-op.
+The upstream admission rule is
+`C:managers/StorageEventManager/admission.ts:78-108,124-130`.
 Received oversized revisions remain stored and readable, and existing DB
 revisions are not excluded from journal packing. The plugin can skip reflecting
 such revisions into its host vault until its settings allow them; this peer

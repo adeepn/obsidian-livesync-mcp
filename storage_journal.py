@@ -82,7 +82,7 @@ from object_storage import JournalObjectStorage, ObjectSizeLimit, MAX_OBJECT_BYT
 from storage_base import (
     check_file_size,
     WriteSkipped,
-    RenameOutOfSync,
+    RenameRefused,
     ConcurrentModification,
     NoteContent,
     NoteExists,
@@ -1202,9 +1202,7 @@ class JournalBackend(DeviceSelection):
     ) -> NoteMeta:
         """Publish destination and source soft deletion in ONE journal.
 
-        Exception: outer device size admission maps an oversized destination
-        to source-only retirement, reported as RenameOutOfSync. MCP has no
-        moved host file to retain, so no destination is claimed saved.
+        Oversized destinations are refused before publication (P-13).
 
         Same-path is a no-op; identity-preserving renames update only the
         display path and mtime. Single-file publication has no partial phases,
@@ -1224,19 +1222,13 @@ class JournalBackend(DeviceSelection):
         if path == new_path:
             return await self.get_meta(path)
         source = self._source_doc(path)
-        # Full event admission matters: oversized RENAME becomes source DELETE.
-        # C:managers/StorageEventManager/admission.ts:78-108,124-130;
-        # C:serviceModules/ServiceFileHandlerBase/selection.ts:18-60.
+        # Device admission converts oversized RENAME to DELETE(source).
+        # P-13: this peer lacks the device's retained host file; refuse first.
         try:
             check_file_size(new_path, source.get('size', 0), self.sync_max_size_mb)
         except WriteSkipped:
-            if not preserve_source:
-                retired = self._next_revision(
-                    soft_delete_revision(source, int(time.time() * 1000)), source)
-                self._publish([], [retired])
-            raise RenameOutOfSync(path, new_path, source.get('size', 0),
-                                  self.sync_max_size_mb,
-                                  source_retired=not preserve_source) from None
+            raise RenameRefused(path, new_path, source.get('size', 0),
+                                self.sync_max_size_mb) from None
 
         if self._doc_id(path) == self._doc_id(new_path):
             body = self._next_revision(

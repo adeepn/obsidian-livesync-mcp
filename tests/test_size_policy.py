@@ -39,21 +39,23 @@ async def test_skip_keeps_revision_and_publishes_nothing(backend, method, monkey
     assert (await backend.read_note('a.pdf'))['data'] == b'old'
 
 
-async def test_existing_oversized_rename_retires_source_but_delete_is_allowed(backend):
-    from storage_base import WriteSkipped, RenameOutOfSync
-    await backend.write_note('a.pdf', b'existing', create=True)
+@pytest.mark.parametrize('existing_target', [False, True])
+async def test_oversized_rename_refuses_without_publication(backend, monkeypatch, existing_target):
+    from storage_base import RenameRefused
+    before = await backend.write_note('a.pdf', b'existing', create=True)
+    if existing_target:
+        await backend.write_note('moved.pdf', b'target', create=True)
+    target = await backend.read_note('moved.pdf')
     backend.sync_max_size_mb = 1 / 1048576
-    with pytest.raises(WriteSkipped):
-        await backend.copy_note('a.pdf', 'copy.pdf')
-    with pytest.raises(RenameOutOfSync) as caught:
-        await backend.rename_note('a.pdf', 'moved.pdf')
-    assert caught.value.source_retired
-    assert await backend.read_note('a.pdf') is None
-    assert await backend.read_note('moved.pdf') is None
-    backend.sync_max_size_mb = 0
-    await backend.write_note('delete.pdf', b'existing', create=True)
-    backend.sync_max_size_mb = 1 / 1048576
-    assert await backend.delete_note('delete.pdf')
+    def forbidden(*args, **kwargs):
+        pytest.fail('refused rename reached publication')
+    monkeypatch.setattr(backend, '_publish' if isinstance(backend, JournalBackend) else '_put_doc', forbidden)
+    with pytest.raises(RenameRefused, match='move was not performed'):
+        await backend.rename_note('a.pdf', 'moved.pdf', overwrite=True)
+    source = await backend.read_note('a.pdf')
+    assert source['rev'] == before['rev']
+    assert source['data'] == b'existing'
+    assert await backend.read_note('moved.pdf') == target
 
 
 async def test_mcp_skip_is_structured_and_not_success(backend, monkeypatch):
@@ -139,44 +141,27 @@ async def test_lossy_ingress_uses_raw_size_before_conversion(backend, monkeypatc
     assert (await backend.read_note('malformed.md'))['text'] == '\ufffd'
 
 
-async def test_mcp_oversized_rename_reports_source_retirement(backend, monkeypatch):
+async def test_mcp_oversized_rename_reports_refusal(backend, monkeypatch):
     await backend.write_note('rename-source.pdf', b'existing', create=True)
     backend.sync_max_size_mb = 1 / 1048576
     monkeypatch.setattr(server, 'backend', backend)
-    response = json.loads(await server.obsidian_move_note('rename-source.pdf', 'rename-target.pdf'))
-    assert response['status'] == 'moved_out_of_sync'
-    assert response['source_retired'] is True
-    assert response['destination_published'] is False
-    assert await backend.read_note('rename-source.pdf') is None
+    response = await server.obsidian_move_note('rename-source.pdf', 'rename-target.pdf')
+    assert 'Error:' in response
+    for detail in ['8 bytes', 'syncMaxSizeInMB', 'move was not performed', 'only copy']:
+        assert detail in response
+    assert (await backend.read_note('rename-source.pdf'))['data'] == b'existing'
     assert await backend.read_note('rename-target.pdf') is None
 
 
 async def test_oversized_rename_unselected_source_is_preserved(backend):
-    from storage_base import RenameOutOfSync
+    from storage_base import RenameRefused
     meta = await backend.write_note('excluded-source.pdf', b'existing', create=True)
     backend.selection_ignore = 'excluded-source'
     backend.sync_max_size_mb = 1 / 1048576
-    with pytest.raises(RenameOutOfSync) as caught:
+    with pytest.raises(RenameRefused):
         await backend.rename_note('excluded-source.pdf', 'outside-target.pdf')
-    assert caught.value.source_retired is False
     assert (await backend.read_note('excluded-source.pdf'))['rev'] == meta['rev']
     assert await backend.read_note('outside-target.pdf') is None
-
-
-async def test_oversized_rename_retirement_failure_preserves_source(backend, monkeypatch):
-    from storage_base import StorageError
-    meta = await backend.write_note('failure-source.pdf', b'existing', create=True)
-    backend.sync_max_size_mb = 1 / 1048576
-    def sync_failure(*args, **kwargs):
-        raise StorageError('injected retirement failure')
-    async def async_failure(*args, **kwargs):
-        raise StorageError('injected retirement failure')
-    monkeypatch.setattr(backend, '_publish' if isinstance(backend, JournalBackend) else '_soft_delete',
-                        sync_failure if isinstance(backend, JournalBackend) else async_failure)
-    with pytest.raises(StorageError, match='injected retirement failure'):
-        await backend.rename_note('failure-source.pdf', 'failure-target.pdf')
-    assert (await backend.read_note('failure-source.pdf'))['rev'] == meta['rev']
-    assert await backend.read_note('failure-target.pdf') is None
 
 
 def test_raising_positive_limit_does_not_disable_selection():
@@ -198,3 +183,29 @@ async def test_note_create_and_update_tools_report_skip(backend, monkeypatch):
         assert json.loads(result)['status'] == 'skipped'
     assert await backend.read_note('tool-new.md') is None
     assert (await backend.read_note('tool-existing.md'))['rev'] == meta['rev']
+
+
+@pytest.mark.parametrize('operation', ['create', 'update', 'upload', 'copy', 'move', 'filtered_move', 'missing_delete'])
+async def test_unsuccessful_tool_preserves_every_readable_note(backend, monkeypatch, operation):
+    await backend.write_note('invariant.md', 'old', create=True)
+    await backend.write_note('target.md', 'target', create=True)
+    before = {p: await backend.read_note(p) for p in ['invariant.md', 'target.md']}
+    backend.sync_max_size_mb = 1 / 1048576
+    monkeypatch.setattr(server, 'backend', backend)
+    if operation == 'filtered_move':
+        backend.selection_ignore = 'target'
+    calls = {
+        'create': lambda: server.obsidian_create_note('invariant.md', 'too large'),
+        'update': lambda: server.obsidian_update_note('invariant.md', 'overwrite', 'too large'),
+        'upload': lambda: server.obsidian_upload_attachment('invariant.md', 'bGFyZ2U='),
+        'copy': lambda: server.obsidian_duplicate_note('invariant.md', 'target.md'),
+        'move': lambda: server.obsidian_move_note('invariant.md', 'target.md'),
+        'filtered_move': lambda: server.obsidian_move_note('invariant.md', 'target.md'),
+        'missing_delete': lambda: server.obsidian_delete_note('absent.md'),
+    }
+    result = await calls[operation]()
+    assert 'Error:' in result or 'not found' in result or json.loads(result)['status'] in ['skipped', 'refused']
+    for path, note in before.items():
+        after = await backend.read_note(path)
+        assert after['data'] == note['data']
+        assert after['rev'] == note['rev']

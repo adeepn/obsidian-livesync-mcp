@@ -38,31 +38,16 @@ class WriteSkipped(StorageError):
                     syncMaxSizeInMB=self.maximum, message=str(self))
 
 
-class RenameOutOfSync(StorageError):
-    """Rename admission excluded the destination; a distinct device outcome.
+class RenameRefused(StorageError):
+    """P-13: refuse device source retirement without a retained host copy."""
 
-    C:managers/StorageEventManager/admission.ts:78-108,124-130 turns this
-    into DELETE(source), not RENAME. Source retirement must finish before
-    signaling source_retired=True. No destination DB revision is published.
-    """
-
-    def __init__(self, source: str, destination: str, size: int, maximum: float,
-                 *, source_retired: bool):
-        self.source, self.destination = source, destination
-        self.size, self.maximum = size, maximum
-        self.source_retired = source_retired
+    def __init__(self, source: str, destination: str, size: int, maximum: float):
         super().__init__(
-            f"rename destination exceeds syncMaxSizeInMB ({maximum:g}); "
-            + ("source DB entry retired; " if source_retired else "source DB entry preserved; ")
-            + "no destination saved. The plugin retains the moved file in its "
-            "local vault; this MCP peer has no local vault file."
+            f"move was not performed: {size} bytes exceeds the vault's "
+            f"syncMaxSizeInMB ({maximum:g}). A device would drop the source "
+            "from sync because it still has the file on disk; this peer "
+            "would lose the only copy."
         )
-
-    def as_dict(self) -> dict:
-        return dict(status='moved_out_of_sync' if self.source_retired else 'skipped',
-                    source=self.source, path=self.destination, size=self.size,
-                    syncMaxSizeInMB=self.maximum, source_retired=self.source_retired,
-                    destination_published=False, message=str(self))
 
 
 def check_file_size(path: str, size: int, maximum: float) -> None:
@@ -271,12 +256,7 @@ class StorageBackend(Protocol):
     async def rename_note(
         self, path: str, new_path: str, *, overwrite: bool = False
     ) -> NoteMeta:
-        """Move existing references; oversized destination signals RenameOutOfSync.
-
-        Device rename admission retires a selected source without saving an
-        oversized destination. MCP has no disk copy to retain; report this
-        outcome explicitly instead of claiming a durable destination.
-        """
+        """Move references; refuse oversized destinations before any mutation."""
         ...
 
     async def copy_note(

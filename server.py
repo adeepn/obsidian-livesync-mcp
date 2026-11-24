@@ -35,7 +35,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 from config import Config, ConfigError, load_config
 from storage_base import (
     WriteSkipped,
-    RenameOutOfSync,
+    RenameRefused,
     RenamePartialError, UnresolvedConflicts,
     WriterUnsupported, StorageBackend, StorageError, NoteNotFound, NoteExists,
     ConcurrentModification, UnsupportedVault, StorageUnavailable, NoteContent,
@@ -207,9 +207,9 @@ def _storage_message(error: StorageError) -> str:
     """Map device outcomes/errors; expose only explicitly safe diagnostics."""
     if isinstance(error, ReplayBudgetExceeded):
         return f"Error: {error}"
-    if isinstance(error, (WriteSkipped, RenameOutOfSync)):
+    if isinstance(error, WriteSkipped):
         return json.dumps(error.as_dict(), ensure_ascii=False)
-    if isinstance(error, WriterUnsupported):
+    if isinstance(error, (WriterUnsupported, RenameRefused)):
         return f"Error: {error}"
     if isinstance(error, RenamePartialError):
         if error.source_state != "live":
@@ -805,9 +805,8 @@ async def obsidian_delete_note(path: str) -> str:
 async def obsidian_move_note(path: str, new_path: str) -> str:
     """Move or rename a note.
 
-    Oversized destination follows device rename admission: source DB entry
-    is retired without saving the destination. Returns moved_out_of_sync JSON;
-    this peer has no local disk copy, unlike the plugin's moved vault file.
+    Oversized destinations are refused before mutation: this peer lacks the
+    retained disk copy that makes source retirement safe on a device.
 
     Args:
         path: Current path of the note

@@ -75,7 +75,7 @@ from livesync_format import (
 from storage_base import (
     check_file_size,
     WriteSkipped,
-    RenameOutOfSync,
+    RenameRefused,
     ConcurrentModification,
     RenamePartialError,
     UnresolvedConflicts,
@@ -1073,9 +1073,8 @@ class CouchDBBackend(DeviceSelection):
         ``path`` field in a single revision (D1 — no delete); otherwise
         a new metadata document with the *same* ``children`` ids is PUT
         first, and only then is the source soft-deleted, so a failed
-        copy can duplicate a note but never lose one. Exception: outer device
-        size admission maps an oversized destination to source-only retirement,
-        reported as RenameOutOfSync (MCP has no moved host file to retain).
+        copy can duplicate a note but never lose one. Oversized destinations
+        are refused before publication (P-13).
         """
         self.check_writer_support()
         validate_vault_path(path)
@@ -1090,17 +1089,13 @@ class CouchDBBackend(DeviceSelection):
             return await self.get_meta(path)
 
         doc = await self._get_note_doc(path)
-        # Full event admission matters: oversized RENAME becomes source DELETE.
-        # C:managers/StorageEventManager/admission.ts:78-108,124-130;
-        # C:serviceModules/ServiceFileHandlerBase/selection.ts:18-60.
+        # Device admission converts oversized RENAME to DELETE(source).
+        # P-13: this peer lacks the device's retained host file; refuse first.
         try:
             check_file_size(new_path, doc.get('size', 0), self.sync_max_size_mb)
         except WriteSkipped:
-            if not preserve_source:
-                await self._soft_delete(doc, path, _now_ms())
-            raise RenameOutOfSync(path, new_path, doc.get('size', 0),
-                                  self.sync_max_size_mb,
-                                  source_retired=not preserve_source) from None
+            raise RenameRefused(path, new_path, doc.get('size', 0),
+                                self.sync_max_size_mb) from None
 
         if self._path2id(new_path) == self._path2id(path):
             # One document, two spellings: one revision, path updated.
