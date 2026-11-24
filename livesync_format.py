@@ -420,8 +420,8 @@ def resolve_content_splitter(milestone_settings: dict) -> ContentSplitter:
     except ValueError as exc:
         raise UnsupportedVaultSettings(str(exc)) from exc
     first = splitters[0]
-    if any((s.minimum_chunk_size, s.absolute_max_piece_size, s.hash_alg) !=
-           (first.minimum_chunk_size, first.absolute_max_piece_size, first.hash_alg)
+    if any((s.version, s.minimum_chunk_size, s.absolute_max_piece_size, s.hash_alg) !=
+           (first.version, first.minimum_chunk_size, first.absolute_max_piece_size, first.hash_alg)
            for s in splitters[1:]):
         raise UnsupportedVaultSettings('conflicting chunk splitter settings')
     return first

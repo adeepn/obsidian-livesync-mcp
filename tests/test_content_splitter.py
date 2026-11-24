@@ -21,7 +21,7 @@ def test_upstream_boundary_vectors(vector):
     from content_splitter import ContentSplitter
     raw = zlib.decompress(base64.b64decode(vector['input_deflate_b64']))
     data = raw.decode() if vector['text'] else raw
-    splitter = ContentSplitter({'customChunkSize': vector['maximum'] / 102400 - 1,
+    splitter = ContentSplitter({'chunkSplitterVersion': 'v3-rabin-karp', 'customChunkSize': vector['maximum'] / 102400 - 1,
                                 'minimumChunkSize': vector['minimum']})
     pieces = splitter.split(data, plain_split=vector['plain'])
     decoded = [p.encode() if vector['text'] else base64.b64decode(p, validate=True) for p in pieces]
@@ -33,7 +33,7 @@ def test_upstream_boundary_vectors(vector):
 @pytest.mark.parametrize('data', ['', b''])
 def test_empty_input_has_no_children(data):
     from content_splitter import ContentSplitter
-    assert ContentSplitter().split(data) == []
+    assert ContentSplitter({'chunkSplitterVersion': 'v3-rabin-karp'}).split(data) == []
 
 
 def test_hash_spec_consistency_and_distinctness():
@@ -45,12 +45,12 @@ def test_hash_spec_consistency_and_distinctness():
 def test_direct_worker_spec_text_survives():
     from content_splitter import ContentSplitter
     vector = FIXTURE['direct_worker']
-    pieces = ContentSplitter({'minimumChunkSize': 1}).split(vector['input'])
+    pieces = ContentSplitter({'chunkSplitterVersion': 'v3-rabin-karp', 'minimumChunkSize': 1}).split(vector['input'])
     for expected in vector['contains']:
         assert expected in ''.join(pieces)
 
 @pytest.mark.parametrize('settings', [
-    {'chunkSplitterVersion': 'v2'}, {'hashAlg': 'unknown'},
+    {'chunkSplitterVersion': 'unknown'}, {'hashAlg': 'unknown'},
     {'minimumChunkSize': -1}, {'minimumChunkSize': float('nan')},
     {'customChunkSize': float('inf')}, {'customChunkSize': True},
     {'idDerivationVersion': 1}, {'idDerivationVersion': 2},
@@ -71,7 +71,7 @@ def test_valid_unencrypted_independent_key_retains_plain_hash():
 def test_long_line_threshold_has_no_v3_effect():
     from content_splitter import ContentSplitter
     text = 'x' * 10000
-    assert ContentSplitter({'longLineThreshold': 1}).split(text) == ContentSplitter({'longLineThreshold': 99999}).split(text)
+    assert ContentSplitter({'chunkSplitterVersion': 'v3-rabin-karp', 'longLineThreshold': 1}).split(text) == ContentSplitter({'chunkSplitterVersion': 'v3-rabin-karp', 'longLineThreshold': 99999}).split(text)
 
 
 @pytest.mark.parametrize('backend_kind', ['couchdb', 'journal'])
@@ -79,7 +79,7 @@ def test_long_line_threshold_has_no_v3_effect():
 async def test_writers_publish_ordered_pieces_with_repeated_ids(tmp_path, backend_kind, binary):
     from tests.test_storage_couchdb import fake_vault, stored_doc
     from tests.test_storage_journal import make_backend, params_blob, MILESTONE_KEY, SYNC_PARAMETERS_KEY
-    settings = {'pathNormalizationVersion': 0, 'customChunkSize': 1}
+    settings = {'chunkSplitterVersion': 'v3-rabin-karp', 'pathNormalizationVersion': 0, 'customChunkSize': 1}
     milestone = {'tweak_values': {'PREFERRED': settings}}
     path = 'split.png' if binary else 'split.md'
     data = bytes(420 * 1024) if binary else '\0' * 3000
@@ -144,14 +144,14 @@ def test_raw_binary_piece_is_hashed_after_base64_encoding():
                                           (4194303, 33792), (4194304, 102400)])
 def test_adaptive_text_thresholds_and_exact_four_mib_switch(size, first):
     from content_splitter import ContentSplitter
-    pieces = ContentSplitter().split('\0' * size)
+    pieces = ContentSplitter({'chunkSplitterVersion': 'v3-rabin-karp'}).split('\0' * size)
     assert len(pieces[0].encode()) == first
     assert sum(len(p) for p in pieces) == size
 
 
 def test_binary_path_hint_changes_thresholds_but_preserves_base64():
     from content_splitter import ContentSplitter
-    pieces = ContentSplitter().split(bytes(3000), path='binary.md')
+    pieces = ContentSplitter({'chunkSplitterVersion': 'v3-rabin-karp'}).split(bytes(3000), path='binary.md')
     assert [len(base64.b64decode(p, validate=True)) for p in pieces] == [1024, 1024, 952]
 
 
@@ -174,7 +174,7 @@ async def test_writers_skip_empty_decoded_text_pieces(tmp_path, backend_kind):
             await backend.close()
 
 
-@pytest.mark.parametrize('setting', [{'hashAlg': 'unknown'}, {'chunkSplitterVersion':'v2'},
+@pytest.mark.parametrize('setting', [{'hashAlg': 'unknown'}, {'chunkSplitterVersion':'unknown'},
                                      {'idDerivationVersion':1, 'idDerivationKey':'invalid'}])
 @pytest.mark.parametrize('backend_kind', ['couchdb', 'journal'])
 async def test_startup_records_unsupported_chunk_writer(tmp_path, setting, backend_kind):
@@ -197,11 +197,13 @@ async def test_startup_records_unsupported_chunk_writer(tmp_path, setting, backe
 
 async def test_journal_refuses_colliding_pieces_before_publication(tmp_path, monkeypatch):
     import storage_journal
+    from content_splitter import ContentSplitter
     from storage_base import StorageError
     from tests.test_storage_journal import make_backend
     backend, storage = make_backend(tmp_path)
     try:
         await backend.startup_check()
+        backend._splitter = ContentSplitter({'chunkSplitterVersion':'v3-rabin-karp'})
         monkeypatch.setattr(storage_journal, 'chunk_id_for_piece', lambda piece, **kwargs: 'h:collision')
         with pytest.raises(StorageError, match='different data'):
             await backend.write_note('collision.md', '\0' * 1024 + '\x01' * 1024, create=True)

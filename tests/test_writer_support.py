@@ -44,8 +44,8 @@ async def vault(tmp_path, kind, settings):
 
 @pytest.mark.parametrize('kind', ['couchdb', 'journal'])
 @pytest.mark.parametrize('settings', [
-    {'chunkSplitterVersion': 'v2'}, {'hashAlg': 'unknown'},
-    {'chunkSplitterVersion': 'v2', 'hashAlg': 'unknown'},
+    {'chunkSplitterVersion': 'unknown'}, {'hashAlg': 'unknown'},
+    {'chunkSplitterVersion': 'unknown', 'hashAlg': 'unknown'},
     {'idDerivationVersion': 2},
     {'idDerivationVersion': 1},
 ])
@@ -113,7 +113,7 @@ async def test_backend_overflow_is_clean_storage_error(tmp_path, kind, key, valu
 
 
 @pytest.mark.parametrize('kind', ['couchdb', 'journal'])
-@pytest.mark.parametrize('settings', [{'chunkSplitterVersion': 'v2'}, {'hashAlg': 'unknown'}])
+@pytest.mark.parametrize('settings', [{'chunkSplitterVersion': 'unknown'}, {'hashAlg': 'unknown'}])
 async def test_mcp_lifespan_serves_read_and_clean_writer_error(tmp_path, kind, settings, monkeypatch):
     import server
     from config import load_config
@@ -152,13 +152,13 @@ async def test_mcp_lifespan_serves_read_and_clean_writer_error(tmp_path, kind, s
 ])
 async def test_rejected_write_tool_does_not_replay_pending_journal(tmp_path, monkeypatch, tool, args):
     import server
-    async with vault(tmp_path, 'journal', {'chunkSplitterVersion': 'v2'}) as (backend, snapshot, writes):
+    async with vault(tmp_path, 'journal', {'chunkSplitterVersion': 'unknown'}) as (backend, snapshot, writes):
         await backend.startup_check()
         monkeypatch.setattr(server, 'backend', backend)
         assert backend._store.winner('old.md') is None
         before = await snapshot()
         result = await getattr(server, tool)(*args)
-        assert result.startswith('Error: vault uses chunkSplitterVersion=v2; peer writes')
+        assert result.startswith('Error: vault uses chunkSplitterVersion=unknown; peer writes')
         assert await snapshot() == before
         assert not writes()
         # Read actions on mixed tools still refresh and reconstruct content.

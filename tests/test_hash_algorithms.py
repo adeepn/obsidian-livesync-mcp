@@ -42,7 +42,7 @@ async def test_backend_hash_setting_roundtrip(tmp_path, alg, kind):
     from storage_journal import JournalBackend
     milestone = {'tweak_values': {'PREFERRED': {'pathNormalizationVersion': 0, 'hashAlg': alg}}}
     content = 'Привет🙂-123\n' * 300
-    expected = [chunk_id_for_piece(p, hash_alg=alg) for p in ContentSplitter().split(content, path='hash.md')]
+    expected = [chunk_id_for_piece(p, hash_alg=alg) for p in ContentSplitter().split(content, path='hash.md') if p]
     if kind == 'couchdb':
         async with fake_vault({'_local/obsydian_livesync_milestone': milestone}) as (backend, raw, _):
             await backend.startup_check()
