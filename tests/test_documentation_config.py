@@ -17,13 +17,13 @@ ENV_NAME = r'(?:LIVESYNC|COUCHDB|S3|MCP|OAUTH)_[A-Z0-9_]+'
 
 
 def environment_names():
-    tree = ast.parse((ROOT / 'config.py').read_text())
-    names = {node.value for node in ast.walk(tree)
+    # Include the separate render-time debug consumer, deriving its spelling
+    # from actual source instead of hardcoding a second inventory.
+    trees = [ast.parse((ROOT / name).read_text()) for name in ('config.py', 'diagnostic_hygiene.py')]
+    names = {node.value for tree in trees for node in ast.walk(tree)
              if isinstance(node, ast.Constant) and isinstance(node.value, str)
              and re.fullmatch(ENV_NAME, node.value) and not node.value.endswith('_')}
     names |= {'LIVESYNC_JOURNAL_' + field.name.upper() for field in fields(ReplayLimits)}
-    # Deliberately consumed at render time, outside the validated Config.
-    names.add('LIVESYNC_UNSAFE_DEBUG')
     return names
 
 
