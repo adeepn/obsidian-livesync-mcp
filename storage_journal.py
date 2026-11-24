@@ -1048,7 +1048,7 @@ class JournalBackend(DeviceSelection):
             for doc in journal.docs:
                 validate_document_identity(doc, store.path_identity)
             store.apply_journal(name, journal.chunks, journal.docs)
-            store.last_sent_key = name
+            store.finish_bookkeeping(lambda: setattr(store, "last_sent_key", name))
         except StorageError:
             raise
         except (ValueError, OSError, sqlite3.Error) as exc:

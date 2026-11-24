@@ -312,7 +312,7 @@ class JournalStore:
             with self._conn:
                 for doc in docs or []:
                     self._insert_doc(name, doc)
-            self.mark_processed(name)
+            self.finish_bookkeeping(lambda: self.mark_processed(name))
         finally:
             for tmp_file, _ in staged:
                 tmp_file.unlink(missing_ok=True)
@@ -380,6 +380,16 @@ class JournalStore:
             "SELECT 1 FROM processed WHERE name = ?", (name,)
         ).fetchone()
         return row is not None
+
+    def finish_bookkeeping(self, action) -> None:
+        """Retry tracking after metadata commit; replay repairs exhausted attempts."""
+        for attempt in range(3):
+            try:
+                action()
+                return
+            except (OSError, sqlite3.Error):
+                if attempt == 2:
+                    logger.warning("completed journal bookkeeping deferred to replay")
 
     def mark_processed(self, name: str) -> None:
         with self._conn:
