@@ -28,12 +28,11 @@ Design notes:
   trees and chunks survive, including notes absent from rebuilt remote history.
 - *Path identity*: the mode resolved at startup
   (:func:`livesync_format.resolve_path_identity`) is stored on first open;
-  reopening the same state directory with a different mode is a state-dir
-  configuration error. The store never derives or rewrites ids — NFC
-  normalization already happened when the journal's doc ids were produced.
+  reopening with a different mode quarantines the whole old state directory
+  beside it before starting fresh. IDs are never mixed or rewritten.
 
-The store performs no I/O outside ``state_dir`` and only uses the standard
-library.
+The store uses only the standard library; identity quarantine is a sibling
+of ``state_dir`` so old documents and chunks remain recoverable.
 """
 
 from __future__ import annotations
@@ -45,6 +44,7 @@ import re
 import sqlite3
 import stat
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 
 from livesync_format import (
@@ -156,16 +156,16 @@ def _private_directory(path: Path) -> None:
 class JournalStore:
     """Local journal-peer state rooted at ``state_dir``.
 
-    All persistence lives under ``state_dir``: the SQLite database and the
-    ``chunks/`` tree. See the module docstring for the format and the
-    revision-tree semantics.
+    Active persistence lives under ``state_dir``: the SQLite database and the
+    ``chunks/`` tree. Identity changes archive it in a sibling quarantine.
+    See the module docstring for the format and revision-tree semantics.
     """
 
     def state_size_bytes(self) -> int:
         """Logical bytes in SQLite (including WAL/SHM) and the chunk tree.
 
-        Best-effort measurement: a concurrent reset may remove files during
-        the walk. Do not follow symlinks outside this peer's state.
+        Best-effort measurement: external state maintenance may move files
+        during the walk. Do not follow symlinks outside this peer's state.
         """
         paths = [self.state_dir / name for name in
                  (_DB_FILENAME, _DB_FILENAME + "-wal", _DB_FILENAME + "-shm")]
@@ -224,6 +224,33 @@ class JournalStore:
         os.close(descriptor)
         db_path.chmod(0o600)
         self._conn = sqlite3.connect(db_path)
+        # Check identity before migrations can change the old database.
+        has_meta = self._conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='meta'"
+        ).fetchone()
+        stored_identity = self._meta_get(_META_PATH_IDENTITY) if has_meta else None
+        if stored_identity is not None and stored_identity != path_identity:
+            self._conn.close()
+            quarantine_root = self.state_dir.with_name(self.state_dir.name + ".quarantine")
+            if quarantine_root.is_symlink():
+                raise StorageError("quarantine directory is a symlink; refusing to move state")
+            _private_directory(quarantine_root)
+            # Reserve a unique sibling destination; never overwrite an archive.
+            stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ-")
+            destination = Path(tempfile.mkdtemp(prefix=stamp, dir=quarantine_root))
+            # If the move fails, retain both the source and reservation.
+            self.state_dir.rename(destination / "state")
+            archived = destination / "state"
+            logger.warning(
+                "journal path identity changed %r -> %r; old state quarantined at %s. "
+                "To restore: stop all peers using this state directory, move the "
+                "current state aside, move %s back to %s and configure identity %r",
+                stored_identity, path_identity, archived, archived,
+                self.state_dir, stored_identity,
+            )
+            self.__init__(self.state_dir, path_identity,
+                          text_verdict_cache_entries=text_verdict_cache_entries)
+            return
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA synchronous=NORMAL")
         self._conn.executescript(_SCHEMA_V1)
@@ -248,14 +275,6 @@ class JournalStore:
         stored_identity = self._meta_get(_META_PATH_IDENTITY)
         if stored_identity is None:
             self._meta_set(_META_PATH_IDENTITY, path_identity)
-        elif stored_identity != path_identity:
-            self._conn.close()
-            raise ValueError(
-                f"journal state at {str(self.state_dir)!r} uses path "
-                f"identity {stored_identity!r} but {path_identity!r} was "
-                "configured; the state directory belongs to a different "
-                "vault configuration"
-            )
 
     # -- Journal replay ------------------------------------------------------
 

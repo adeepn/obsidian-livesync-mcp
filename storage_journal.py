@@ -187,9 +187,9 @@ class JournalBackend(DeviceSelection):
     The store under ``state_dir`` is created on the first
     :meth:`startup_check`, after the milestone has fixed the vault's path
     identity; reopening the same state directory against a vault with a
-    different identity is a configuration error (``ValueError`` from the
-    store). All object access is synchronous per the
-    :class:`JournalObjectStorage` protocol.
+    different identity quarantines the old directory and starts fresh.
+    All object access is synchronous per the :class:`JournalObjectStorage`
+    protocol.
     """
 
     def __init__(
@@ -288,8 +288,7 @@ class JournalBackend(DeviceSelection):
             except UnsupportedVaultSettings as exc:
                 raise UnsupportedVault(str(exc)) from exc
 
-        # A differing identity for an existing state directory is a
-        # configuration error and propagates as ValueError from the store.
+        # Identity changes quarantine the old state without mixing IDs.
         # A repeated startup replaces the previous connection cleanly.
         if self._store is not None:
             self._store.close()

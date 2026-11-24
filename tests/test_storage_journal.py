@@ -193,13 +193,15 @@ class TestStartup:
         backend, _ = make_backend(tmp_path, healthy_bucket())
         await backend.startup_check()
         assert (await backend.backend_info())["path_identity"] == "legacy"
+        await backend.close()
 
         backend, storage = make_backend(
             tmp_path, healthy_bucket(**{MILESTONE_KEY: milestone_blob(path_version=1)})
         )
-        # Same state dir, now NFC: a state-configuration error (ValueError).
-        with pytest.raises(ValueError, match="path identity"):
-            await backend.startup_check()
+        # Same state dir, now NFC: archive old state without mixing IDs.
+        await backend.startup_check()
+        assert backend._store.path_identity == "nfc"
+        assert list((tmp_path / "state.quarantine").glob("*/state/journal.sqlite3"))
         await backend.close()
 
     async def test_fresh_empty_bucket_defaults_to_legacy(self, tmp_path, caplog):

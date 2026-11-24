@@ -179,3 +179,74 @@ async def test_preappend_epoch_change_is_read_only(tmp_path):
         await assert_preserved(backend, before)
     finally:
         await backend.close()
+
+
+@pytest.mark.parametrize('same_backend', [False, True])
+async def test_identity_change_quarantines_complete_openable_old_state(tmp_path, caplog, same_backend):
+    import logging
+    from journal_store import JournalStore
+    from storage_journal import MILESTONE_KEY
+    from tests.test_storage_journal import milestone_blob
+    backend, storage = make_backend(tmp_path, healthy_bucket())
+    await backend.startup_check()
+    await backend.write_note('only.md', 'irreplaceable', create=True)
+    await backend.write_attachment('other.pdf', b'\x00\xffretained', create=True)
+    before = await readable(backend)
+    state = backend._store.state_dir
+    (state / 'sentinel').write_bytes(b'keep unknown files too')
+    chunks = snapshot(backend._store)['chunks']
+    # Close the SQLite WAL before recording stable files for byte comparison.
+    await backend.close()
+    old_files = {str(p.relative_to(state)): p.read_bytes()
+                 for p in state.rglob('*') if p.is_file()}
+    if not same_backend:
+        backend = JournalBackend(storage, state)
+    else:
+        await backend.startup_check()  # active connection at identity switch
+    storage._objects[MILESTONE_KEY] = milestone_blob(path_version=1)
+    try:
+        with caplog.at_level(logging.WARNING):
+            await backend.startup_check()
+        archives = list(state.with_name(state.name + '.quarantine').glob('*/state'))
+        assert len(archives) == 1
+        archived = archives[0]
+        for name, data in old_files.items():
+            assert (archived / name).read_bytes() == data, name
+        assert not (state / 'sentinel').exists()
+        assert backend._store.path_identity == 'nfc'
+        assert backend._store.note_ids() == []
+        assert str(archived) in caplog.text
+        assert 'restore' in caplog.text and 'legacy' in caplog.text
+        old = JournalStore(archived, 'legacy')
+        try:
+            assert snapshot(old)['chunks'] == chunks
+            for path, note in before.items():
+                doc, text, data, is_text = old.read_note(path)
+                assert (text, data, doc['_rev']) == (note['text'], note['data'], note['rev'])
+        finally:
+            old.close()
+        await backend.refresh(force=True)
+        await assert_preserved(backend, before)
+    finally:
+        await backend.close()
+
+
+async def test_failed_quarantine_move_preserves_old_store(tmp_path, monkeypatch):
+    from pathlib import Path
+    from journal_store import JournalStore
+    backend, _ = make_backend(tmp_path)
+    await backend.startup_check()
+    await backend.write_note('only.md', 'irreplaceable', create=True)
+    state = backend._store.state_dir
+    await backend.close()
+    def fail_move(*args):
+        raise OSError('injected quarantine rename failure')
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, 'rename', fail_move)
+        with pytest.raises(OSError, match='injected quarantine rename failure'):
+            JournalStore(state, 'nfc')
+    old = JournalStore(state, 'legacy')
+    try:
+        assert old.read_note('only.md')[1] == 'irreplaceable'
+    finally:
+        old.close()

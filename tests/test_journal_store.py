@@ -3,8 +3,8 @@
 Covers the Task 3 interface consumed by Tasks 5-7: ``pick_winner`` (the
 deterministic winner rule for CouchDB-style ``<gen>-<hash>`` revisions),
 ``JournalStore.apply_journal`` (idempotent journal replay with per-file
-transactions), epoch resets that wipe both tables and chunk files, path
-identity enforcement on reopen, and note reads (children order, eden inline
+transactions), dedupe resets that retain tables and chunk files, path
+identity quarantine on reopen, and note reads (children order, eden inline
 chunks, legacy ``notes`` bodies, binary ``newnote`` bodies, E2EE refusal,
 per-note corruption isolation in ``iterate_notes``).
 """
@@ -474,13 +474,14 @@ class TestPathIdentity:
         with pytest.raises(ValueError, match="path identity"):
             JournalStore(tmp_path / "state", "weird")
 
-    def test_identity_mismatch_on_reopen_raises(self, tmp_path):
+    def test_identity_mismatch_on_reopen_quarantines(self, tmp_path):
         state = tmp_path / "state"
         JournalStore(state, PATH_IDENTITY_LEGACY).close()
-        with pytest.raises(ValueError, match="path identity"):
-            JournalStore(state, PATH_IDENTITY_NFC)
-        # The stored identity survives the refused reopen.
-        reopened = JournalStore(state, PATH_IDENTITY_LEGACY)
+        fresh = JournalStore(state, PATH_IDENTITY_NFC)
+        assert fresh.path_identity == PATH_IDENTITY_NFC
+        fresh.close()
+        archived = next(state.with_name(state.name + ".quarantine").glob("*/state"))
+        reopened = JournalStore(archived, PATH_IDENTITY_LEGACY)
         reopened.close()
 
     def test_unicode_doc_id_untouched_in_nfc_mode(self, tmp_path):
@@ -704,8 +705,11 @@ def test_state_size_bytes_includes_sqlite_sidecars_and_nested_chunks(store):
 
 
 @pytest.mark.parametrize("identity", ["case-sensitive", "nfc-case-sensitive"])
-def test_sensitive_identity_migration_requires_rebuild(tmp_path, identity):
+def test_sensitive_identity_migration_quarantines(tmp_path, identity):
     store = JournalStore(tmp_path, identity)
     store.close()
-    with pytest.raises(ValueError, match="identity"):
-        JournalStore(tmp_path, "legacy")
+    fresh = JournalStore(tmp_path, "legacy")
+    fresh.close()
+    archived = next(tmp_path.with_name(tmp_path.name + ".quarantine").glob("*/state"))
+    old = JournalStore(archived, identity)
+    old.close()
