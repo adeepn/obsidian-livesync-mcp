@@ -17,10 +17,13 @@ typed, v1 compares Unicode NFC forms — see ``path2id`` and
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from collections.abc import Mapping
+from types import MappingProxyType
 
 import base64
 import binascii
+import math
 import unicodedata
 from copy import deepcopy
 
@@ -238,7 +241,7 @@ def _milestone_setting_maps(milestone_settings: dict) -> list[dict]:
     maps = [
         settings
         for settings in candidates
-        if _RECOGNIZED_TWEAK_KEYS & settings.keys()
+        if (_RECOGNIZED_TWEAK_KEYS | {rule.key for rule in TWEAK_COMPATIBILITY_RULES}) & settings.keys()
     ]
     if not maps:
         raise UnsupportedVaultSettings(_UNREADABLE_SETTINGS_REASON)
@@ -622,3 +625,304 @@ def is_target_file(path: str, *, only_patterns: str = '', ignore_patterns: str =
         return evaluate(payload)
     except EngineFailure as exc:
         return TargetVerdict(False, writer_supported=False, reason=str(exc))
+
+
+# C:common/models/tweak.definition.ts:24-67, pinned in docs/upstream-pin.md.
+# (key, template value, reconstruction, known default, compatible lossy order)
+_TWEAK_UNDEFINED = object()
+
+
+@dataclass(frozen=True)
+class TweakRule:
+    key: str
+    template_value: object
+    reconstruction: str = 'none'
+    known_default: object = _TWEAK_UNDEFINED
+    compatible_lossy_order: int | None = None
+
+
+TWEAK_COMPATIBILITY_RULES = (
+    TweakRule('minimumChunkSize', 20), TweakRule('longLineThreshold', 250),
+    TweakRule('encrypt', False, 'required'),
+    TweakRule('usePathObfuscation', False, 'required'),
+    TweakRule('idDerivationVersion', 0, 'required', 0),
+    TweakRule('pathNormalizationVersion', 0, 'required', 0),
+    TweakRule('encryptInternalMetadata', False, 'none', False),
+    TweakRule('enableCompression', False), TweakRule('useEden', False),
+    TweakRule('customChunkSize', 0, 'recommended', compatible_lossy_order=1),
+    TweakRule('useDynamicIterationCount', False, 'required'),
+    TweakRule('hashAlg', 'xxhash64', 'recommended', compatible_lossy_order=0),
+    TweakRule('enableChunkSplitterV2', False), TweakRule('maxChunksInEden', 10),
+    TweakRule('maxTotalLengthInEden', 1024), TweakRule('maxAgeInEden', 10),
+    TweakRule('usePluginSyncV2', False, 'none', False),
+    TweakRule('handleFilenameCaseSensitive', False, 'required', False),
+    TweakRule('useSegmenter', False), TweakRule('E2EEAlgorithm', 'v2', 'none', 'v2'),
+    TweakRule('chunkSplitterVersion', 'v3-rabin-karp', 'recommended',
+              'v3-rabin-karp', 2),
+)
+
+# C:tweak.definition.ts:113-150. Recommendations are snapshotted for adoption,
+# but never participate in semantic comparison.
+_TWEAK_TEMPLATE_KEYS = frozenset(rule.key for rule in TWEAK_COMPATIBILITY_RULES) | {
+    'useIgnoreFiles', 'useCustomRequestHandler', 'batch_size', 'batches_limit',
+    'useTimeouts', 'readChunksOnline', 'hashCacheMaxCount', 'hashCacheMaxAmount',
+    'concurrencyOfReadChunksOnline', 'minimumIntervalOfReadChunksOnline',
+    'ignoreFiles', 'syncMaxSizeInMB', 'tweakModified',
+}
+
+
+def _tweak_number(value: int | float) -> float:
+    """JSON numbers have binary64 precision in the upstream JS runtime."""
+    try:
+        return float(value)
+    except OverflowError:
+        return -math.inf if value < 0 else math.inf
+
+
+def _tweak_equal(left: object, right: object) -> bool:
+    """JS strict equality for JSON primitives; objects compare by identity."""
+    if isinstance(left, bool) or isinstance(right, bool):
+        return type(left) is type(right) and left == right
+    if isinstance(left, (int, float)) and isinstance(right, (int, float)):
+        return _tweak_number(left) == _tweak_number(right)
+    if isinstance(left, (dict, list)) or isinstance(right, (dict, list)):
+        return left is right
+    return type(left) is type(right) and left == right
+
+
+@dataclass(frozen=True)
+class TweakValue:
+    present: bool
+    raw_value: object
+    effective_value: object
+
+
+@dataclass(frozen=True)
+class TweakEntry:
+    key: str
+    current: TweakValue
+    preferred: TweakValue
+    relation: str
+
+
+@dataclass(frozen=True)
+class TweakTransition:
+    changes: Mapping
+    reconstruction: str
+    reasons: tuple[tuple[str, str], ...]
+
+
+@dataclass(frozen=True)
+class TweakAssessment:
+    status: str
+    differing_keys: tuple[str, ...]
+    alignment: str
+    representation_differs: bool
+    entries: tuple[TweakEntry, ...]
+    adopt_preferred: TweakTransition
+    adopt_current: TweakTransition
+    only_compatible_lossy_differences: bool
+    current_values: Mapping = field(repr=False)
+    preferred_values: Mapping = field(repr=False)
+
+    def summary(self) -> dict:
+        return dict(status=self.status, differing_keys=list(self.differing_keys))
+
+
+def _tweak_transition(entries, source_side, target_side) -> TweakTransition:
+    changes, reasons = {}, []
+    reconstruction = 'none'
+    for entry, rule in zip(entries, TWEAK_COMPATIBILITY_RULES):
+        source, target = getattr(entry, source_side), getattr(entry, target_side)
+        differs = not _tweak_equal(source.effective_value, target.effective_value)
+        fill = not target.present and source.present
+        if source.effective_value is _TWEAK_UNDEFINED or not (differs or fill):
+            continue
+        if entry.key != 'idDerivationVersion':
+            changes[entry.key] = source.effective_value
+        if entry.relation == 'equal' or rule.reconstruction == 'none':
+            continue
+        reasons.append((entry.key, rule.reconstruction))
+        if reconstruction != 'required':
+            reconstruction = rule.reconstruction
+    return TweakTransition(MappingProxyType(changes), reconstruction, tuple(reasons))
+
+
+def assess_tweak_compatibility(preferred: Mapping, candidate: Mapping) -> TweakAssessment:
+    """Assess one-pass normalized settings without mutating or exposing secrets.
+
+    C:common/models/tweak.compatibility.ts:47-65,148-191. The public argument
+    order is preferred, candidate (upstream takes current, preferred).
+    SettingService.ts:141-158 migration runs once on each input first, using
+    the Task 3c helper. Template values are NOT implied compatibility defaults.
+    """
+    from content_splitter import normalize_splitter_settings
+    return _assess_normalized_tweaks(normalize_splitter_settings(preferred),
+                                     normalize_splitter_settings(candidate))
+
+
+def _assess_normalized_tweaks(preferred: Mapping, candidate: Mapping) -> TweakAssessment:
+    def snapshot(values):
+        return {k: _tweak_number(v) if type(v) is int else v
+                for k, v in values.items() if k in _TWEAK_TEMPLATE_KEYS}
+    current, remote = snapshot(candidate), snapshot(preferred)
+    current_keyed = current.get('encrypt') is not False and current.get('usePathObfuscation') is not False
+    remote_keyed = remote.get('encrypt') is not False and remote.get('usePathObfuscation') is not False
+    entries = []
+    representation_differs = False
+    for rule in TWEAK_COMPATIBILITY_RULES:
+        def value(side):
+            raw = side.get(rule.key, _TWEAK_UNDEFINED)
+            return TweakValue(rule.key in side, raw,
+                              rule.known_default if raw is _TWEAK_UNDEFINED else raw)
+        local, preferred_value = value(current), value(remote)
+        if rule.key == 'idDerivationVersion' and not current_keyed and not remote_keyed:
+            relation = 'equal'
+        elif (not local.present or not preferred_value.present) and rule.known_default is _TWEAK_UNDEFINED:
+            relation = 'unadvertised'
+        else:
+            relation = 'equal' if _tweak_equal(local.effective_value, preferred_value.effective_value) else 'different'
+        representation_differs |= (local.present != preferred_value.present or
+            not _tweak_equal(local.raw_value, preferred_value.raw_value))
+        entries.append(TweakEntry(rule.key, local, preferred_value, relation))
+    entries = tuple(entries)
+    keys = tuple(e.key for e in entries if e.relation == 'different')
+    lossy_keys = {r.key for r in TWEAK_COMPATIBILITY_RULES if r.compatible_lossy_order is not None}
+    lossy = bool(keys) and set(keys) <= lossy_keys and not any(e.relation == 'unadvertised' for e in entries)
+    status = ('ID_KEY_MISMATCH' if 'idDerivationVersion' in keys else
+              'PATH_IDENTITY_MISMATCH' if 'pathNormalizationVersion' in keys else
+              'LOSSY_AUTO_ACCEPTABLE' if lossy else 'MISMATCHED' if keys else 'OK')
+    return TweakAssessment(status, keys, 'mismatched' if keys else 'matched',
+        representation_differs, entries,
+        _tweak_transition(entries, 'preferred', 'current'),
+        _tweak_transition(entries, 'current', 'preferred'), lossy,
+        MappingProxyType(current), MappingProxyType(remote))
+
+
+def select_newer_tweak_side(current: Mapping, preferred: Mapping) -> str:
+    """P:ModuleResolveMismatchedTweaks.ts:120-132; booleans aren't numbers."""
+    def modified(side):
+        value = side.get('tweakModified')
+        return _tweak_number(value) if type(value) in (int, float) and value > 0 else 0
+    return 'CURRENT' if modified(current) > modified(preferred) else 'REMOTE'
+
+
+@dataclass(frozen=True)
+class TweakStartup:
+    settings: Mapping = field(repr=False)
+    status: str = 'OK'
+    differing_keys: tuple[str, ...] = ()
+    winners: tuple[str, ...] = ()
+
+    def summary(self):
+        return dict(status=self.status, differing_keys=list(self.differing_keys))
+
+
+def _effective_peer_tweaks(settings: Mapping, *, couchdb_mode: bool) -> dict:
+    """Concrete writer defaults; never advertise an unavailable adapter feature."""
+    effective = dict(settings)
+    for key, value in dict(minimumChunkSize=20, customChunkSize=0, hashAlg='xxhash64',
+            idDerivationVersion=0, pathNormalizationVersion=0, encrypt=False,
+            usePathObfuscation=False, handleFilenameCaseSensitive=False).items():
+        effective.setdefault(key, value)
+    effective['encryptInternalMetadata'] = False
+    if couchdb_mode:
+        # C:replication/couchdb/LiveSyncReplicator.ts:332,2097 passes this
+        # to the CouchDB compression adapter; this peer has no such adapter.
+        # Journal framing does not consult enableCompression.
+        effective['enableCompression'] = False
+    return effective
+
+
+def resolve_tweak_startup(milestone: Mapping, *, couchdb_mode: bool = False,
+        disable_checking_config_mismatch: bool = False,
+        auto_accept_compatible_tweak: bool = True) -> TweakStartup:
+    """Resolve writer settings and assess every advertised device before I/O.
+
+    C:LiveSyncDBFunctions.ts:79-118 uses PREFERRED or the current settings in
+    both transports. Checking other advertised devices is this peer's explicit
+    startup policy; it does not edit their snapshots or publish PREFERRED.
+    """
+    maps = _milestone_setting_maps(milestone)
+    preferred = maps[0]
+    devices = milestone.get('tweak_values', {})
+    # getEffectiveTweakValues advertises internal metadata encryption only
+    # for an encrypted, obfuscated CouchDB vault. This peer serves plaintext
+    # only; journal devices always advertise false (C:LiveSyncDBFunctions:19-24).
+    peer = _effective_peer_tweaks(preferred, couchdb_mode=couchdb_mode)
+    candidates = [peer]
+    if isinstance(devices, dict):
+        candidates.extend(v for k, v in devices.items()
+                          if k != _PREFERRED_DEVICE_ID and isinstance(v, dict))
+    winner = preferred
+    winner_assessment = None
+    has_lossy_alignment = False
+    winners, keys, blocked = [], set(), []
+    priority = {'OK': 0, 'LOSSY_AUTO_ACCEPTABLE': 1, 'MISMATCHED': 2,
+                'PATH_IDENTITY_MISMATCH': 3, 'ID_KEY_MISMATCH': 4}
+    overall = 'OK'
+    for candidate in candidates:
+        assessment = assess_tweak_compatibility(preferred, candidate)
+        keys.update(assessment.differing_keys)
+        if priority[assessment.status] > priority[overall]:
+            overall = assessment.status
+        gated = (disable_checking_config_mismatch is True and
+                 assessment.status not in ('ID_KEY_MISMATCH', 'PATH_IDENTITY_MISMATCH'))
+        if assessment.status != 'OK' and not gated:
+            if assessment.only_compatible_lossy_differences and auto_accept_compatible_tweak is True:
+                has_lossy_alignment = True
+                winners.append(select_newer_tweak_side(candidate, preferred))
+            else:
+                blocked.append(assessment)
+    if has_lossy_alignment:
+        for candidate in candidates:
+            if select_newer_tweak_side(candidate, winner) == 'CURRENT':
+                winner = candidate
+                winner_assessment = assess_tweak_compatibility(preferred, candidate)
+
+    differing_keys = tuple(rule.key for rule in TWEAK_COMPATIBILITY_RULES if rule.key in keys)
+    if blocked:
+        error = UnsupportedVaultSettings(
+            'vault tweak settings differ: ' + ', '.join(differing_keys) +
+            '; devices require alignment with PREFERRED before synchronizing')
+        error.tweak_assessment = dict(status=overall, differing_keys=list(differing_keys))
+        raise error
+    # Encryption and obfuscation remain unsupported even with the gate off.
+    for candidate in candidates:
+        for key, reason in _UNSUPPORTED_SETTINGS:
+            if candidate.get(key):
+                # Preserve the separate cryptographic-ID classification above.
+                raise UnsupportedVaultSettings(reason)
+    settings = dict(preferred)
+    if winner_assessment is not None:
+        # P:ModuleResolveMismatchedTweaks.ts:66-81: preserve omitted target
+        # settings, adopt recommendations, and never transfer the ID key/mode.
+        compared = {rule.key for rule in TWEAK_COMPATIBILITY_RULES}
+        settings.update({k: v for k, v in winner.items()
+                         if k in _TWEAK_TEMPLATE_KEYS and k not in compared})
+        for key, value in winner_assessment.adopt_current.changes.items():
+            if key == 'chunkSplitterVersion' and key not in winner:
+                settings.pop(key, None)
+            else:
+                # Keep the raw splitter input so the writer migration runs
+                # exactly once, including unknown-version -> empty cases.
+                settings[key] = winner.get(key, value)
+    effective_peer = _effective_peer_tweaks(settings, couchdb_mode=couchdb_mode)
+    for device in candidates[1:]:
+        assessment = assess_tweak_compatibility(device, effective_peer)
+        keys.update(assessment.differing_keys)
+        if priority[assessment.status] > priority[overall]:
+            overall = assessment.status
+        gated = (disable_checking_config_mismatch is True and
+                 assessment.status not in ('ID_KEY_MISMATCH', 'PATH_IDENTITY_MISMATCH'))
+        if assessment.status != 'OK' and not gated and not (
+                assessment.only_compatible_lossy_differences and auto_accept_compatible_tweak is True):
+            blocked.append(assessment)
+    differing_keys = tuple(rule.key for rule in TWEAK_COMPATIBILITY_RULES if rule.key in keys)
+    if blocked:
+        error = UnsupportedVaultSettings(
+            'vault tweak settings differ: ' + ', '.join(differing_keys) +
+            '; devices require alignment with PREFERRED before synchronizing')
+        error.tweak_assessment = dict(status=overall, differing_keys=list(differing_keys))
+        raise error
+    return TweakStartup(MappingProxyType(settings), overall, differing_keys, tuple(winners))

@@ -55,7 +55,9 @@ from auth_config import StaticBearerTokenVerifier, select_auth_mode
 from oauth_provider import SimpleOAuthProvider
 
 
-def _configure_selection(result, cfg):
+def _configure_device_policy(result, cfg):
+    result.disable_checking_config_mismatch = getattr(cfg, 'disable_checking_config_mismatch', False)
+    result.auto_accept_compatible_tweak = getattr(cfg, 'auto_accept_compatible_tweak', True)
     result.selection_only = getattr(cfg, 'selection_only', '')
     result.selection_ignore = getattr(cfg, 'selection_ignore', '')
     result.selection_use_ignore_files = getattr(cfg, 'selection_use_ignore_files', False)
@@ -80,7 +82,7 @@ def get_backend(cfg: Config) -> StorageBackend:
         if cfg.sync_max_size_mb is not None:
             result.sync_max_size_mb = cfg.sync_max_size_mb
         result.text_scan_max_bytes = cfg.text_scan_max_bytes
-        _configure_selection(result, cfg)
+        _configure_device_policy(result, cfg)
         return result
     if cfg.couchdb is None:
         raise ConfigError("CouchDB configuration is required.")
@@ -97,7 +99,7 @@ def get_backend(cfg: Config) -> StorageBackend:
     if cfg.sync_max_size_mb is not None:
         result.sync_max_size_mb = cfg.sync_max_size_mb
     result.text_scan_max_bytes = cfg.text_scan_max_bytes
-    _configure_selection(result, cfg)
+    _configure_device_policy(result, cfg)
     return result
 
 

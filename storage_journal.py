@@ -66,7 +66,7 @@ from livesync_format import (
     UnsupportedWriterSettings,
     assemble_binary,
     canonical_path,
-    resolve_content_splitter,
+    resolve_content_splitter, resolve_tweak_startup,
     resolve_sync_max_size,
     clone_metadata,
     prepare_file_content,
@@ -232,6 +232,7 @@ class JournalBackend(DeviceSelection):
         self.state_size_warn_mb = state_size_warn_mb
         self.refresh_min_interval = refresh_min_interval
         self._store: JournalStore | None = None
+        self._tweak_assessment = {"status": "OK", "differing_keys": []}
         self._writer_unsupported_reason = None
         self._splitter = ContentSplitter()
         self.sync_max_size_mb = 50
@@ -256,6 +257,7 @@ class JournalBackend(DeviceSelection):
         fresh vault with legacy path identity (logged).
         """
         await self.selection_startup()
+        self._tweak_assessment = {"status": "OK", "differing_keys": []}
         self._writer_unsupported_reason = None
         milestone = self._load_milestone()
         if milestone is None:
@@ -279,6 +281,15 @@ class JournalBackend(DeviceSelection):
                     "remote marked as rebuilt; peer performs full replay"
                 )
             try:
+                if self.sync_max_size_mb_override is None:
+                    resolve_sync_max_size(milestone)  # retain all-device fallback guards
+                resolved = resolve_tweak_startup(milestone,
+                    disable_checking_config_mismatch=getattr(self, 'disable_checking_config_mismatch', False),
+                    auto_accept_compatible_tweak=getattr(self, 'auto_accept_compatible_tweak', True))
+                self._tweak_assessment = resolved.summary()
+                for side in resolved.winners:
+                    logger.info("tweak alignment: %s; keys: %s", side, ', '.join(resolved.differing_keys))
+                milestone = dict(resolved.settings)
                 identity = resolve_path_identity(milestone)
                 self.sync_max_size_mb = (resolve_sync_max_size(milestone)
                     if self.sync_max_size_mb_override is None else self.sync_max_size_mb_override)
@@ -287,6 +298,7 @@ class JournalBackend(DeviceSelection):
                 self._splitter = None
                 self._writer_unsupported_reason = str(exc)
             except UnsupportedVaultSettings as exc:
+                self._tweak_assessment = getattr(exc, "tweak_assessment", self._tweak_assessment)
                 raise UnsupportedVault(str(exc)) from exc
 
         # Identity changes quarantine the old state without mixing IDs.
@@ -426,6 +438,7 @@ class JournalBackend(DeviceSelection):
         selection = await self.selection_diagnostics()
         return {
             **selection,
+            "tweak_assessment": dict(self._tweak_assessment),
             "writer_supported": self._writer_unsupported_reason is None and selection["selection_writer_supported"],
             "writer_unsupported_reason": self._writer_unsupported_reason or selection["selection_unsupported_reason"],
             "backend": "s3-journal",

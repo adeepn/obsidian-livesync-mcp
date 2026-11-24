@@ -97,6 +97,8 @@ class Config:
     oauth_client_secret: str
     replay_limits: ReplayLimits = ReplayLimits()
     sync_max_size_mb: float | None = None
+    disable_checking_config_mismatch: bool = False
+    auto_accept_compatible_tweak: bool = True
     selection_only: str = ''
     selection_ignore: str = ''
     selection_use_ignore_files: bool = False
@@ -311,6 +313,13 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
         replay_limits = ReplayLimits.from_env(env)
     except ValueError as exc:
         raise ConfigError(str(exc)) from None
+    tweak_policy = {}
+    for key, default in (('LIVESYNC_DISABLE_CHECKING_CONFIG_MISMATCH', 'false'),
+                         ('LIVESYNC_AUTO_ACCEPT_COMPATIBLE_TWEAK', 'true')):
+        value = env.get(key, default).strip().lower()
+        if value not in ('true', 'false'):
+            raise ConfigError(f'{key} must be true or false')
+        tweak_policy[key] = value == 'true'
     size_override = env.get('LIVESYNC_SYNC_MAX_SIZE_MB', '').strip()
     try:
         sync_max_size_mb = float(size_override) if size_override else None
@@ -369,6 +378,8 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
     return Config(
         replay_limits=replay_limits,
         sync_max_size_mb=sync_max_size_mb,
+        disable_checking_config_mismatch=tweak_policy['LIVESYNC_DISABLE_CHECKING_CONFIG_MISMATCH'],
+        auto_accept_compatible_tweak=tweak_policy['LIVESYNC_AUTO_ACCEPT_COMPATIBLE_TWEAK'],
         selection_only=env.get('LIVESYNC_SYNC_ONLY_REGEX', ''),
         selection_ignore=env.get('LIVESYNC_SYNC_IGNORE_REGEX', ''),
         selection_use_ignore_files=use_ignore == 'true',

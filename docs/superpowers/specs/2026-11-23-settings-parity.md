@@ -167,13 +167,42 @@ limit and variable, as documented in README; it is not invalid JSON syntax.
 
 ## Tweak compatibility and peer startup requirements
 
-**Premises:** devices compare effective local tweak_values with milestone PREFERRED, falling back to current values when PREFERRED is absent. idDerivationVersion differences can return ID_KEY_MISMATCH; pathNormalizationVersion mismatch returns MISMATCHED before the disableCheckingConfigMismatch gate. Other assessed mismatches return MISMATCHED when that gate is enabled. `U:pouchdb/LiveSyncDBFunctions.ts:79-118`. Journal ensureBucketIsCompatible invokes this check, and connectivity returns false on MISMATCHED while retaining preferred values and assessment. `U:replication/journal/LiveSyncJournalReplicator.ts:209-249,542-553`.
+**Premises:** devices compare effective local tweak_values with milestone PREFERRED, falling back to current values when PREFERRED is absent. idDerivationVersion differences can return ID_KEY_MISMATCH; pathNormalizationVersion mismatch returns MISMATCHED before the disableCheckingConfigMismatch gate. Other assessed mismatches return MISMATCHED when checking is enabled (`!disableCheckingConfigMismatch`). `U:pouchdb/LiveSyncDBFunctions.ts:79-118`. Journal ensureBucketIsCompatible invokes this check, and connectivity returns false on MISMATCHED while retaining preferred values and assessment. `U:replication/journal/LiveSyncJournalReplicator.ts:209-249,542-553`.
 
 **Execution trace:** assessTweakCompatibility iterates TweakCompatibilityRules, resolves missing values using declared known defaults, distinguishes equal/different/unadvertised, and does not equate a representation-only difference with a semantic mismatch. A missing value without a known default is unadvertised. idDerivationVersion is treated as equal when neither side uses keyed document IDs. Alignment is mismatched when any assessed entry is different. `U:common/models/tweak.compatibility.ts:57-65,148-191`. Recommendation-only template keys are not all compatibility-comparison keys: the rule inventory is `U:common/models/tweak.definition.ts:24-67`.
 
 When every difference is compatible-lossy (customChunkSize, hashAlg, chunkSplitterVersion) and no entry is unadvertised, plugin auto-accept may align settings if autoAcceptCompatibleTweak is true (undefined is saved as true). The greater positive tweakModified timestamp wins. If both are absent/nonpositive, or positive timestamps tie, REMOTE wins; if only one side has a positive timestamp, that side wins. `U:common/models/tweak.definition.ts:34-36,61-65`; `U:common/models/tweak.compatibility.ts:177-191`; `P:modules/coreFeatures/ModuleResolveMismatchedTweaks.ts:120-151`.
 
 [DECISION] **Peer-parity requirement, added to Task 2 startup settings validation:** before serving vault operations or publishing journal records, compare the peer's effective supported settings against PREFERRED with the same assessment meaning. Detect semantic mismatches and refuse startup with the differing key names; do not silently proceed or silently adopt settings. Preserve absent/known-default/unadvertised distinctions, the pre-gate path-normalization rejection, and the separate ID-configuration refusal. Report key names without secret values. A fail-closed peer does not need the plugin's interactive/automatic resolution UI, but must explain that alignment is required. This is a requirement for subsequent implementation, not a claim that the current peer implements the check.
+
+Task 5b implements the assessment and startup checks in both backends. `backend_info`
+reports only classification and differing keys. CouchDB obtains the same PREFERRED
+snapshot from `_local/obsydian_livesync_milestone`: `U:pouchdb/LiveSyncDBFunctions.ts:177-203`,
+`U:replication/couchdb/LiveSyncReplicator.ts:2304-2305,2358-2372`,
+`U:common/models/db.const.ts:4`. Device snapshots are checked independently against
+that baseline and the concrete effective writer; this extra peer startup policy
+does not mutate their advertised values. Unadvertised relations remain intact
+within each pair. The CouchDB peer advertises enableCompression=false because it
+has no compression adapter, unlike the upstream CouchDB writer
+(`U:replication/couchdb/LiveSyncReplicator.ts:332,2097`). Journal framing does not
+use that adapter.
+The peer advertises `encryptInternalMetadata=false` for its plaintext writer,
+matching `getEffectiveTweakValues` (`U:pouchdb/LiveSyncDBFunctions.ts:19-24`).
+
+[DECISION] Automatic lossy alignment applies the upstream timestamp winner to the
+local writer, with a log. The plugin additionally publishes PREFERRED for a CURRENT
+winner (`P:modules/coreFeatures/ModuleResolveMismatchedTweaks.ts:317-340`). The peer
+leaves that remote publication to explicit device alignment, as required by the
+Task 5b execution brief; automatic local startup does not change remote settings.
+A CURRENT winner therefore does not prove the other devices have aligned.
+
+[DECISION] The public peer assessment runs the Task 3c one-pass splitter migration
+on each input before comparison. The pinned assessment itself does not migrate;
+its raw missing `chunkSplitterVersion` uses the declared v3 default, whereas the
+migration maps a missing version to empty (the existing peer legacy writer path).
+Differential fixtures retain both raw and normalized oracle assessments so this
+boundary is explicit. `U:services/base/SettingService.ts:141-158`;
+`U:common/models/tweak.compatibility.ts:57-65,148-191`.
 
 **Rejected paths:** serializing identical logical records does not establish compatibility; unused writer knobs can still be compared and block a peer. tweakModified selects an alignment side, not journal ordering. Regex filters and reflection suspension are local controls outside tweak_values and must not be fabricated from PREFERRED.
 

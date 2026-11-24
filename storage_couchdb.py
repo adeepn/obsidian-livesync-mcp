@@ -59,7 +59,7 @@ from livesync_format import (
     assemble_binary,
     assemble_text,
     canonical_path,
-    resolve_content_splitter,
+    resolve_content_splitter, resolve_tweak_startup,
     resolve_sync_max_size,
     prepare_file_content,
     new_metadata_doc,
@@ -161,6 +161,7 @@ class CouchDBBackend(DeviceSelection):
         self._text_verdicts = OrderedDict()
         self._database = database
         self._path_identity = PATH_IDENTITY_LEGACY
+        self._tweak_assessment = {"status": "OK", "differing_keys": []}
         self._writer_unsupported_reason = None
         self._splitter = ContentSplitter()
         self.sync_max_size_mb = 50
@@ -387,6 +388,7 @@ class CouchDBBackend(DeviceSelection):
     async def startup_check(self) -> None:
         await self.selection_startup()
         self._text_verdicts.clear()
+        self._tweak_assessment = {"status": "OK", "differing_keys": []}
         self._writer_unsupported_reason = None
         self._splitter = ContentSplitter()
         self.sync_max_size_mb = (50 if self.sync_max_size_mb_override is None
@@ -418,6 +420,15 @@ class CouchDBBackend(DeviceSelection):
             body = None
         body = body if isinstance(body, dict) else {}
         try:
+            if self.sync_max_size_mb_override is None:
+                resolve_sync_max_size(body)  # retain all-device fallback guards
+            resolved = resolve_tweak_startup(body, couchdb_mode=True,
+                disable_checking_config_mismatch=getattr(self, 'disable_checking_config_mismatch', False),
+                auto_accept_compatible_tweak=getattr(self, 'auto_accept_compatible_tweak', True))
+            self._tweak_assessment = resolved.summary()
+            for side in resolved.winners:
+                logger.info("tweak alignment: %s; keys: %s", side, ', '.join(resolved.differing_keys))
+            body = dict(resolved.settings)
             self._path_identity = resolve_path_identity(body)
             self.sync_max_size_mb = (resolve_sync_max_size(body)
                 if self.sync_max_size_mb_override is None else self.sync_max_size_mb_override)
@@ -426,6 +437,7 @@ class CouchDBBackend(DeviceSelection):
             self._splitter = None
             self._writer_unsupported_reason = str(exc)
         except UnsupportedVaultSettings as exc:
+            self._tweak_assessment = getattr(exc, "tweak_assessment", self._tweak_assessment)
             raise UnsupportedVault(str(exc)) from exc
 
         await self.refresh_selection_files()
@@ -450,6 +462,7 @@ class CouchDBBackend(DeviceSelection):
         selection = await self.selection_diagnostics()
         return {
             **selection,
+            "tweak_assessment": dict(self._tweak_assessment),
             "writer_supported": self._writer_unsupported_reason is None and selection["selection_writer_supported"],
             "writer_unsupported_reason": self._writer_unsupported_reason or selection["selection_unsupported_reason"],
             "backend": "couchdb",

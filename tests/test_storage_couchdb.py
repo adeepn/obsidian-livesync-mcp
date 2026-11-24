@@ -1146,14 +1146,15 @@ async def test_startup_unreadable_device_settings_fail_closed(entries):
             await backend.startup_check()
 
 
-async def test_startup_preferred_settings_override_device_entries():
+async def test_startup_preferred_does_not_hide_diverging_device():
     docs = {'_local/obsydian_livesync_milestone': {'tweak_values': {
         'PREFERRED': {'encrypt': False, 'handleFilenameCaseSensitive': False,
                       'pathNormalizationVersion': 0},
         'device-a': {'encrypt': True},
     }}}
     async with fake_backend(docs) as (backend, _):
-        await backend.startup_check()
+        with pytest.raises(UnsupportedVault, match='encrypt.*devices require alignment'):
+            await backend.startup_check()
 
 
 @pytest.mark.parametrize('wrapped', [False, True])

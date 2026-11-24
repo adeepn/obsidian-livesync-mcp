@@ -264,3 +264,34 @@ def test_state_size_warning_threshold(raw, expected):
 def test_state_size_warning_threshold_invalid(raw):
     with pytest.raises(ConfigError, match="S3_STATE_SIZE_WARN_MB"):
         load_config({**S3_ENV, "S3_STATE_SIZE_WARN_MB": raw})
+
+
+@pytest.mark.parametrize('variable,field,default', [
+    ('LIVESYNC_DISABLE_CHECKING_CONFIG_MISMATCH', 'disable_checking_config_mismatch', False),
+    ('LIVESYNC_AUTO_ACCEPT_COMPATIBLE_TWEAK', 'auto_accept_compatible_tweak', True),
+])
+def test_local_tweak_policy_flags(variable, field, default):
+    assert getattr(load_config(COUCHDB_ENV), field) is default
+    for value, expected in [('true', True), ('false', False)]:
+        config = load_config({**COUCHDB_ENV, variable: value})
+        assert getattr(config, field) is expected
+    for invalid in ('1', 'yes', '', 'private-invalid-value'):
+        with pytest.raises(ConfigError) as caught:
+            load_config({**COUCHDB_ENV, variable: invalid})
+        assert variable in str(caught.value)
+        assert invalid != 'private-invalid-value' or invalid not in str(caught.value)
+
+
+@pytest.mark.parametrize('backend_kind', ['couchdb', 's3'])
+async def test_factory_passes_local_tweak_policy(backend_kind):
+    import server
+    env = {**COUCHDB_ENV, 'LIVESYNC_BACKEND': backend_kind,
+        'LIVESYNC_S3_URI': 'sls://access-key:secret-key@https://localhost?bucket=vault&region=auto&prefix=notes',
+        'LIVESYNC_DISABLE_CHECKING_CONFIG_MISMATCH': 'true',
+        'LIVESYNC_AUTO_ACCEPT_COMPATIBLE_TWEAK': 'false'}
+    backend = server.get_backend(load_config(env))
+    try:
+        assert backend.disable_checking_config_mismatch is True
+        assert backend.auto_accept_compatible_tweak is False
+    finally:
+        await backend.close()
