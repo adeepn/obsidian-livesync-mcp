@@ -58,7 +58,6 @@ from livesync_format import (
     assemble_text,
     extract_inline_chunks,
     is_note_document,
-    is_text_doc,
     legacy_body,
 )
 
@@ -520,9 +519,7 @@ class JournalStore:
             ) from None
 
         if not children:
-            if doc_type == "plain" or (
-                not winner.get("eden") and is_text_doc(doc_type, path)
-            ):
+            if doc_type == "plain":
                 return winner, "", None, True
             return winner, None, b"", False
 
@@ -535,14 +532,7 @@ class JournalStore:
             raise ValueError(
                 f"note {path!r} is corrupt: invalid chunk encoding"
             ) from None
-        is_text = is_text_doc(doc_type, path)
-        text: str | None = None
-        if is_text:
-            try:
-                text = body.decode("utf-8")
-            except UnicodeDecodeError:
-                is_text = False
-        return winner, text, body, is_text
+        return winner, None, body, False
 
     def _chunk_datas(
         self, children: list[str], inline: dict[str, str], path: str

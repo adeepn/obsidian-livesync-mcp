@@ -21,6 +21,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Resolve plain/newnote storage from the exact case-sensitive LiveSync device disk-reading suffixes in both backends; accept strings and bytes through one writer and retain attachment aliases and existing size caps
+- Expose strictly valid UTF-8 newnotes as editable text in MCP tools while retaining path-derived storage types; keep metadata/download behavior for non-UTF-8 attachments
+
 - Expanded the connection guide with plugin credential sources, both S3 configuration forms, a complete environment reference, local replica monitoring/reset procedures, and the native-peer architecture rationale
 - Rewrote the storage layer: all 20 tools now operate through a storage-agnostic `StorageBackend` interface, with a LiveSync-aware `CouchDBBackend` implementation (soft-delete visibility, chunked documents, optimistic locking, error messages free of internal URLs and revisions)
 - Rewrote frontmatter handling on `ruamel.yaml` round-trip editing: comments, quoting and key order are preserved; tag add/remove coerce types instead of corrupting YAML

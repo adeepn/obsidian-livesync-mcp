@@ -8,17 +8,14 @@ import pytest
 from livesync_format import (
     PATH_IDENTITY_LEGACY,
     PATH_IDENTITY_NFC,
-    WRITABLE_BINARY_EXTENSIONS,
     ForbiddenPathError,
     TEXT_EXTENSIONS,
     UnsupportedVaultSettings,
     assemble_binary,
     assemble_text,
     chunk_id_for,
-    doc_type_for,
     encode_newnote,
     is_text_doc,
-    is_writable_text_path,
     new_metadata_doc,
     path2id,
     resolve_path_identity,
@@ -108,50 +105,19 @@ def test_validate_empty_path():
 
 def test_is_text_doc():
     assert is_text_doc("plain", "x.bin") is True
-    assert is_text_doc("newnote", "a.md") is True
+    assert is_text_doc("newnote", "a.md") is False
     assert is_text_doc("newnote", "a.png") is False
-    assert is_text_doc(None, "a.md") is True
+    assert is_text_doc(None, "a.md") is False
 
 
 @pytest.mark.parametrize("extension", sorted(TEXT_EXTENSIONS))
 def test_is_text_doc_text_extensions(extension):
-    assert is_text_doc("newnote", "note" + extension) is True
+    assert is_text_doc("newnote", "note" + extension) is False
 
 
 @pytest.mark.parametrize("extension", [".png", ".jpg", ".pdf", ".bin"])
 def test_is_text_doc_binary_extensions(extension):
     assert is_text_doc("newnote", "note" + extension) is False
-
-
-def test_is_writable_text_path_write_side_policy():
-    # The write allowlist is the inverse of the read classification:
-    # everything textual the tools advertise is writable, including
-    # extensions upstream never classifies as text (.base, .json,
-    # .yaml) and text-ish formats (.svg, .canvas).
-    for path in [
-        "Tasks.base", "DB.base", "note.md", "Board.canvas", "logo.svg",
-        "data.json", "conf.yaml", "no-extension", "notes.txt",
-    ]:
-        assert is_writable_text_path(path) is True, path
-
-
-@pytest.mark.parametrize(
-    "extension",
-    sorted(WRITABLE_BINARY_EXTENSIONS),
-)
-def test_is_writable_text_path_binary_denylist(extension):
-    assert is_writable_text_path("file" + extension) is False
-
-
-def test_is_writable_text_path_denylist_is_case_insensitive():
-    assert is_writable_text_path("Photo.PNG") is False
-    assert is_writable_text_path("Archive.ZIP") is False
-
-
-def test_is_writable_text_path_svg_is_not_a_binary_extension():
-    # Regression guard: svg is XML text and must stay writable even if
-    # someone "completes" the image denylist carelessly.
-    assert ".svg" not in WRITABLE_BINARY_EXTENSIONS
 
 
 # --- Document and chunk codecs (task 3) ---
@@ -250,25 +216,12 @@ def test_soft_delete_keeps_body():
     assert original["type"] == "plain"
 
 
-def test_doc_type_for():
-    # Audit B3: any text is written as type "plain" regardless of extension.
-    assert doc_type_for("x.md") == "plain"
-    assert doc_type_for("x.base") == "plain"
-
-
-@pytest.mark.parametrize('suffix', ['/', '/.', '\\', '\\.'])
-@pytest.mark.parametrize('name', ['image.png', 'image.PNG', 'archive.zip'])
-def test_normalized_binary_paths_refuse_text_writes(name, suffix):
-    assert path2id(name + suffix) == path2id(name)
-    assert not is_writable_text_path(name + suffix)
-
-
-@pytest.mark.parametrize('path,expected', [
-    ('note.md/', True), ('note.md/.', True), ('note.md\\.', True),
-    ('image.png/.', False), ('note.MD/.', False), ('note.json/', False),
+@pytest.mark.parametrize('path', [
+    'note.md/', 'note.md/.', 'note.md\\.',
+    'image.png/.', 'note.MD/.', 'note.json/',
 ])
-def test_text_doc_classification_uses_normalized_path(path, expected):
-    assert is_text_doc('newnote', path) is expected
+def test_text_doc_type_overrides_path(path):
+    assert is_text_doc('newnote', path) is False
     assert is_text_doc('plain', path)
 
 

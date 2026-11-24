@@ -13,7 +13,6 @@ import pytest
 
 from livesync_format import ForbiddenPathError, chunk_id_for
 from storage_base import (
-    BinaryNoteError,
     ConcurrentModification,
     RenamePartialError,
     NoteExists,
@@ -669,28 +668,6 @@ async def test_overwrite_missing_refused():
     assert mutation_free(log, len(log))
 
 
-async def test_write_requires_text():
-    # Spec §5: binary paths cannot receive textual writes, and the
-    # refusal happens before any HTTP request (spec §7.5).
-    async with fake_backend({}) as (backend, log):
-        with pytest.raises(BinaryNoteError):
-            await backend.write_note("img.png", "not really a png")
-    assert log == []
-
-
-async def test_write_allows_textual_base_files():
-    # .base is textual YAML advertised by the tools (fetch/create);
-    # the write-side policy is a binary denylist, not the upstream
-    # read classification, so .base must be writable as plain text.
-    async with fake_backend({}) as (backend, _log):
-        meta = await backend.write_note(
-            "Tasks.base", "views: []", create=True
-        )
-        content = await backend.read_note("Tasks.base")
-    assert meta["type"] == "plain"
-    assert content["text"] == "views: []"
-
-
 async def test_write_size_is_decoded_bytes():
     # Spec §7.4: size is the decoded body length, not the chunk length.
     content = "Съешь ещё этих мягких булок"
@@ -1229,14 +1206,6 @@ async def test_encrypted_inline_eden_refused():
             await backend.read_note('a.md')
 
 
-@pytest.mark.parametrize('path', ['image.png/', 'image.png/.', 'image.PNG\\.'])
-async def test_write_normalized_binary_path_refused_before_io(path):
-    async with fake_backend() as (backend, log):
-        with pytest.raises(BinaryNoteError):
-            await backend.write_note(path, 'text', create=True)
-    assert not log
-
-
 @pytest.mark.parametrize('winner', [
     {'data': 'same', 'type': 'leaf'},
     {'data': 'different', 'type': 'leaf'},
@@ -1291,7 +1260,7 @@ async def test_folder_identity_is_case_insensitive(path, folder):
         assert [m['path'] for m in await backend.list_notes(folder=folder)] == [path]
 
 
-@pytest.mark.parametrize('extension,is_text', [('.md', True), ('.canvas', True),
+@pytest.mark.parametrize('extension,is_text', [('.md', False), ('.canvas', False),
                                               ('.png', False)])
 async def test_empty_newnote_classification(extension, is_text):
     path = 'empty' + extension
@@ -1301,7 +1270,7 @@ async def test_empty_newnote_classification(extension, is_text):
         assert content['is_text'] is is_text
         assert content['text'] == ('' if is_text else None)
         if extension == '.md':
-            assert [text async for _, text in backend.iterate_texts()] == ['']
+            assert [text async for _, text in backend.iterate_texts()] == [None]
             await backend.write_note(path, 'edited')
             assert (await backend.read_note(path))['text'] == 'edited'
 

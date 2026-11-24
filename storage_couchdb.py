@@ -54,9 +54,7 @@ from livesync_format import (
     assemble_text,
     canonical_path,
     resolve_content_splitter,
-    doc_type_for,
-    is_text_doc,
-    is_writable_text_path,
+    prepare_file_content,
     new_metadata_doc,
     identity_path2id,
     validate_document_identity,
@@ -69,7 +67,6 @@ from livesync_format import (
 )
 from storage_base import (
     MAX_ATTACHMENT_BYTES,
-    BinaryNoteError,
     ConcurrentModification,
     RenamePartialError,
     UnresolvedConflicts,
@@ -610,9 +607,7 @@ class CouchDBBackend:
                 f"note {path!r} is corrupt: invalid children field"
             )
         if not children:
-            if doc_type == "plain" or (
-                not doc.get("eden") and is_text_doc(doc_type, path)
-            ):
+            if doc_type == "plain":
                 return NoteContent(
                     meta=meta, text="", data=None, is_text=True,
                     rev=meta["rev"],
@@ -637,15 +632,8 @@ class CouchDBBackend:
             raise StorageError(
                 f"note {path!r} is corrupt: invalid chunk encoding"
             ) from None
-        is_text = is_text_doc(doc_type, path)
-        text: str | None = None
-        if is_text:
-            try:
-                text = body.decode("utf-8")
-            except UnicodeDecodeError:
-                is_text = False
         return NoteContent(
-            meta=meta, text=text, data=body, is_text=is_text,
+            meta=meta, text=None, data=body, is_text=False,
             rev=meta["rev"],
         )
 
@@ -883,34 +871,23 @@ class CouchDBBackend:
     async def write_note(
         self,
         path: str,
-        content: str,
+        content: str | bytes,
         *,
         create: bool = False,
         overwrite: bool = False,
         mtime: int | None = None,
         expected_rev: str | None = None,
     ) -> NoteMeta:
-        """Write a textual body under the central D1/D2 rules.
+        """Ingest file content using device path-based disk-reading rules.
 
-        Namespace validation (spec §7.5) and the binary-path refusal
-        (spec §5) precede every HTTP request. New chunks are PUT before
-        the metadata document; the metadata revision carries the old
-        ``_rev`` (optimistic locking), and a soft-deleted note is only
-        resurrected through an explicit ``create`` (audit B12).
-        ``expected_rev`` (from the caller's read) is compared against the
-        GET inside this write and refuses the write entirely on mismatch
-        — a device edit that landed in between is never overwritten.
+        Only explicit create resurrects a tombstone. expected_rev protects
+        read-modify-write operations before publishing any chunks.
         """
         self.check_writer_support()
         validate_vault_path(path)
-        if not is_writable_text_path(path):
-            raise BinaryNoteError(
-                f"note {path!r} has a binary extension; "
-                "this server writes textual notes only"
-            )
-
+        body, doc_type, size = prepare_file_content(path, content)
         return await self._write_content(
-            path, content, len(content.encode("utf-8")), doc_type_for(path),
+            path, body, size, doc_type,
             create=create, overwrite=overwrite, mtime=mtime,
             expected_rev=expected_rev,
         )
@@ -919,19 +896,17 @@ class CouchDBBackend:
         self, path: str, data: bytes, *, create: bool = False,
         overwrite: bool = False, expected_rev: str | None = None,
     ) -> NoteMeta:
-        """Write a binary LiveSync newnote; cap decoded data at 32 MiB."""
+        """Capped byte-input alias for write_note; type still follows path."""
         self.check_writer_support()
         validate_vault_path(path)
-        if is_writable_text_path(path):
-            raise BinaryNoteError(f"note {path!r}: textual path; use write_note")
         if len(data) > MAX_ATTACHMENT_BYTES:
             raise ValueError(
                 f"attachment exceeds 32 MiB cap ({MAX_ATTACHMENT_BYTES} bytes); "
                 f"actual size {len(data)} bytes"
             )
-        return await self._write_content(
-            path, data, len(data), "newnote",
-            create=create, overwrite=overwrite, expected_rev=expected_rev,
+        return await self.write_note(
+            path, data, create=create, overwrite=overwrite,
+            expected_rev=expected_rev,
         )
 
     async def _write_content(
@@ -952,7 +927,7 @@ class CouchDBBackend:
             raise NoteNotFound(f"note not found: {path}")
 
         children = [await self._write_chunk(path, piece)
-                    for piece in self._splitter.split(content, path=path) if piece]
+                    for piece in self._splitter.split(content, path=canonical_path(path)) if piece]
         new_mtime = _now_ms() if mtime is None else mtime
         if doc is None:
             body = new_metadata_doc(

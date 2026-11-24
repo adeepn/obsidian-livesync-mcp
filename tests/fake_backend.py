@@ -2,7 +2,7 @@
 
 from copy import deepcopy
 
-from livesync_format import is_text_doc
+from livesync_format import is_text_doc, prepare_file_content
 from storage_base import (
     ConcurrentModification, NoteExists, NoteNotFound, StorageError,
 )
@@ -116,7 +116,10 @@ class FakeBackend:
             raise NoteExists(path)
         if path not in self.notes and not create:
             raise NoteNotFound(path)
-        self.add(path, content, mtime=mtime if mtime is not None else 2)
+        body, doc_type, _ = prepare_file_content(path, content)
+        self.add(path, text=body if doc_type == "plain" else None,
+                 data=body if doc_type == "newnote" else None,
+                 mtime=mtime if mtime is not None else 2)
         return deepcopy(self.notes[path]["meta"])
 
     async def write_attachment(self, path, data, *, create=False,
@@ -128,7 +131,9 @@ class FakeBackend:
             raise NoteExists(path)
         if path not in self.notes and not create:
             raise NoteNotFound(path)
-        self.add(path, data=data)
+        body, doc_type, _ = prepare_file_content(path, data)
+        self.add(path, text=body if doc_type == "plain" else None,
+                 data=body if doc_type == "newnote" else None)
         return deepcopy(self.notes[path]["meta"])
 
     async def delete_note(self, path, expected_rev=None):

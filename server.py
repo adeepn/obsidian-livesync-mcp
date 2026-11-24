@@ -34,7 +34,7 @@ from config import Config, ConfigError, load_config
 from storage_base import (
     MAX_ATTACHMENT_BYTES,
     RenamePartialError, UnresolvedConflicts,
-    WriterUnsupported, StorageBackend, StorageError, NoteNotFound, NoteExists, BinaryNoteError,
+    WriterUnsupported, StorageBackend, StorageError, NoteNotFound, NoteExists,
     ConcurrentModification, UnsupportedVault, StorageUnavailable, NoteContent,
 )
 from storage_couchdb import CouchDBBackend
@@ -200,7 +200,7 @@ def _storage_message(error: StorageError) -> str:
         ),
         NoteNotFound: "Note not found.",
         NoteExists: "Error: note already exists.",
-        BinaryNoteError: "Error: this operation requires a text note.",
+        _TextRequiredError: "Error: this operation requires a text note.",
         ConcurrentModification: (
             "Error: note changed concurrently; read it again and retry."
         ),
@@ -254,6 +254,28 @@ def _tool_errors(
 
 # Compatibility readers for canvas tools and shared text validation.
 # These deliberately reference the module backend, never a captured client.
+class _TextRequiredError(StorageError):
+    """A text tool received bytes that are not valid UTF-8."""
+
+
+def _text_representation(note: NoteContent) -> NoteContent:
+    """Expose valid UTF-8 newnotes as text without changing storage type.
+
+    P-6: no extension or content-type heuristics; failed strict decoding
+    keeps binary metadata/download behavior. Copy to preserve backend state.
+    """
+    if note["is_text"]:
+        return note
+    data = note["data"]
+    if data is None:
+        raise StorageError()
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        return note
+    return {**note, "text": text, "is_text": True}
+
+
 async def _read_text_note(path: str) -> NoteContent | None:
     """Textual note content together with the revision it was read at.
 
@@ -264,8 +286,9 @@ async def _read_text_note(path: str) -> NoteContent | None:
     note = await _backend().read_note(path)
     if note is None:
         return None
+    note = _text_representation(note)
     if not note["is_text"]:
-        raise BinaryNoteError()
+        raise _TextRequiredError()
     return note
 
 
@@ -364,6 +387,23 @@ async def _scan_texts():
     budget = _scan_budget.get()
     async with aclosing(_backend().iterate_texts()) as texts:
         async for meta, text in texts:
+            if text is None and meta.get("type") == "newnote":
+                # Storage keeps newnotes as bytes; scans use the same strict
+                # UTF-8 presentation as fetch and read-modify-write tools.
+                try:
+                    note = await _read_text_note(meta["path"])
+                    if note is not None:
+                        meta, text = note["meta"], note["text"]
+                except StorageUnavailable:
+                    raise  # Backend-wide failure, like iterate_texts.
+                except _TextRequiredError:
+                    pass
+                except Exception:
+                    # Match backend per-note scan isolation (including I/O
+                    # and SQLite failures); never retry failed plain reads.
+                    logging.getLogger(__name__).exception(
+                        "skipping note %s: UTF-8 scan read failed", meta["path"]
+                    )
             size = len(meta["path"].encode()) + (len(text.encode()) if text else 0)
             if budget and not budget.admit(meta["path"], size):
                 break
@@ -478,10 +518,9 @@ async def obsidian_upload_attachment(
 ) -> str:
     """Upload a binary attachment (PDF, scan, image) from strict base64.
 
-    Decoded data is capped at 32 MiB. Textual paths (.md/.base/.canvas,
-    etc.) must use the text note tools instead. Existing attachments require
-    overwrite=True. Returns path, decoded size, and SHA-256; binary fetch
-    returns metadata only.
+    Decoded data is capped at 32 MiB. Device path rules select plain or
+    newnote storage. Existing files require overwrite=True. Returns input
+    size and SHA-256; fetch exposes valid UTF-8 bodies as text.
     """
     try:
         data = base64.b64decode(content_b64, validate=True)
@@ -492,12 +531,9 @@ async def obsidian_upload_attachment(
             f"Error: attachment exceeds 32 MiB cap ({MAX_ATTACHMENT_BYTES} bytes); "
             f"actual size {len(data)} bytes."
         )
-    try:
-        meta = await _backend().write_attachment(
-            path, data, create=True, overwrite=overwrite,
-        )
-    except BinaryNoteError:
-        return "Error: textual path; use the text note tools."
+    meta = await _backend().write_attachment(
+        path, data, create=True, overwrite=overwrite,
+    )
     return json.dumps({
         "path": meta["path"], "size": len(data),
         "sha256": hashlib.sha256(data).hexdigest(),
@@ -516,7 +552,7 @@ async def obsidian_download_attachment(path: str, max_bytes: int = 0) -> str:
     matching upload. A positive max_bytes imposes a smaller caller limit;
     zero or negative values leave only the hard cap. Oversized files are
     refused, never truncated, because partial binary files are corrupt.
-    Textual notes must use obsidian_fetch instead.
+    Plain documents use obsidian_fetch. UTF-8 newnotes also remain downloadable.
     """
     note = await _backend().read_note(path)
     if note is None:
@@ -558,6 +594,7 @@ async def obsidian_fetch(path: str, include_properties: bool = True, include_sta
     note = await _backend().read_note(path)
     if note is None:
         return f"Note '{path}' not found."
+    note = _text_representation(note)
     meta = note["meta"]
     result = {
         key: meta.get(key)

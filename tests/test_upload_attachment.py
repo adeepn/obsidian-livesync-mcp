@@ -8,7 +8,7 @@ import pytest
 import server
 from journal_codec import MAX_LINE_BYTES, parse_journal, serialize_journal
 from livesync_format import ForbiddenPathError
-from storage_base import BinaryNoteError, ConcurrentModification, NoteExists, NoteNotFound
+from storage_base import ConcurrentModification, NoteExists, NoteNotFound
 from storage_journal import JournalBackend
 from tests.fake_backend import FakeBackend
 from tests.test_storage_couchdb import fake_backend
@@ -54,12 +54,6 @@ async def test_attachment_roundtrip_and_write_semantics(backend):
         await backend.write_attachment("scan.pdf", DATA)
     await backend.write_attachment("scan.pdf", DATA, create=True)
     assert (await backend.read_note("scan.pdf"))["data"] == DATA
-
-
-@pytest.mark.parametrize("path", ["note.md", "board.canvas", "db.base", "note.MD"])
-async def test_attachment_refuses_text(backend, path):
-    with pytest.raises(BinaryNoteError, match="textual path; use write_note"):
-        await backend.write_attachment(path, DATA, create=True)
 
 
 async def test_attachment_forbidden_before_text_or_size(backend):
@@ -198,7 +192,8 @@ async def test_couchdb_attachment_requires_201(target):
         assert await backend.read_note("scan.pdf") is None
 
 
-async def test_tool_textual_path_error(monkeypatch, backend):
+async def test_tool_upload_uses_plain_disk_path(monkeypatch, backend):
     monkeypatch.setattr(server, "backend", backend)
-    result = await server.obsidian_upload_attachment("note.md", "eA==")
-    assert "textual path" in result and "text note tools" in result
+    result = json.loads(await server.obsidian_upload_attachment("note.md", "eA=="))
+    assert result["size"] == 1
+    assert json.loads(await server.obsidian_fetch("note.md"))["content"] == "x"

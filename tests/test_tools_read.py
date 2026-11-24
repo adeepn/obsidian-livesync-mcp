@@ -13,7 +13,7 @@ import pytest
 import server
 
 from storage_base import (
-    BinaryNoteError, ConcurrentModification, NoteExists, NoteNotFound,
+    ConcurrentModification, NoteExists, NoteNotFound,
     StorageError, StorageUnavailable, UnsupportedVault,
 )
 from tests.fake_backend import FakeBackend
@@ -39,11 +39,11 @@ async def test_fetch_returns_raw_content(tools):
 
 async def test_fetch_binary_meta(tools):
     server, fake = tools
-    fake.add("image.png", data=b"abc")
+    fake.add("image.png", data=b"\xffbc")
     result = json.loads(await server.obsidian_fetch("image.png"))
     assert result["path"] == "image.png"
     assert result["size"] == 3
-    assert result["sha256"] == hashlib.sha256(b"abc").hexdigest()
+    assert result["sha256"] == hashlib.sha256(b"\xffbc").hexdigest()
     assert not {"content", "data", "text"} & result.keys()
 
 
@@ -181,7 +181,7 @@ async def test_malformed_frontmatter_is_clear_and_isolated(tools):
 
 
 @pytest.mark.parametrize("error", [StorageError, NoteNotFound, NoteExists,
-    BinaryNoteError, ConcurrentModification, UnsupportedVault, StorageUnavailable])
+    ConcurrentModification, UnsupportedVault, StorageUnavailable])
 async def test_storage_errors_are_sanitized(tools, error):
     server, fake = tools
     fake.errors["read_note"] = error("https://internal:secret/db _rev=private")

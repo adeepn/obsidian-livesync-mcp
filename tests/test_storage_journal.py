@@ -29,7 +29,6 @@ from journal_codec import (
 from journal_store import pick_winner
 from livesync_format import ForbiddenPathError, chunk_id_for, path2id
 from storage_base import (
-    BinaryNoteError,
     ConcurrentModification,
     NoteExists,
     NoteNotFound,
@@ -1238,12 +1237,6 @@ class TestJournalWrites:
                 method = backend.rename_note if operation.startswith('rename') else backend.copy_note
                 args = ('.obsidian/x.md', 'ok.md') if operation.endswith('source') else ('ok.md', '.obsidian/x.md')
                 await method(*args)
-        assert storage.put_calls == storage.get_calls == storage.list_calls == []
-
-    async def test_binary_write_refused_before_storage(self, tmp_path):
-        backend, storage = await write_backend(tmp_path)
-        with pytest.raises(BinaryNoteError):
-            await backend.write_note('a.png', 'text', create=True)
         assert storage.put_calls == storage.get_calls == storage.list_calls == []
 
     @pytest.mark.parametrize('full_json', [False, True])

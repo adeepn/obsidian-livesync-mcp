@@ -83,14 +83,33 @@ verify-visible); follow the [live acceptance checklist](docs/live-check-s3-check
 
 ### CouchDB vault compatibility
 
-Binary uploads and downloads are symmetrically capped at **32 MiB raw
-(decoded) bytes**. Uploads are stored as LiveSync `newnote` documents with
-per-chunk base64 data. `obsidian_download_attachment(path, max_bytes=0)` returns
-JSON `{path, size, sha256, content_b64}` with base64 transport and SHA-256 over
-the raw bytes. A positive `max_bytes` sets an additional caller limit; exceeding
-either limit returns an error without content or truncation. The hard cap keeps
-JSON-RPC payloads manageable. `obsidian_fetch` returns binary metadata including
-`size` and `sha256`, without the body. Use text note tools for textual paths.
+Storage follows LiveSync device **disk ingestion**, with case-sensitive suffixes:
+`.md .txt .svg .html .csv .css .js .xml .canvas` use host text reading and
+`plain` chunks. Every other path (including `.MD`, `.json`, `.base`, `.yaml`,
+`.png`, and extensionless files) uses `newnote` with independently base64-encoded
+pieces, even when the content is textual. There is no content sniffing. Both
+backends accept strings or bytes: strings for a newnote path become UTF-8 bytes;
+bytes for a plain path undergo UTF-8 decoding with replacement of invalid
+sequences (U+FFFD). Native-host invalid-byte behavior still needs live validation.
+The existing vault splitter determines pieces and their ordered child IDs;
+metadata size is the input Blob byte length after decoding, before splitting.
+
+Tools expose a separate text representation: a newnote whose bytes strictly
+decode as UTF-8 can be fetched and edited as text, regardless of extension.
+Edits go through the same path-based writer, so `.base`/`.json`/`.yaml` stay
+newnote. Frontmatter and canvas tools retain their existing format checks.
+Non-UTF-8 bodies return metadata (`size`, `sha256`) from `obsidian_fetch`;
+use `obsidian_download_attachment` for their bytes. Newnote files that decode
+as UTF-8 can also be downloaded without conversion.
+
+Attachment uploads and downloads remain capped at **32 MiB raw (decoded)
+bytes**. Upload uses the same path-based writer; its response size/SHA-256
+refer to the supplied bytes. For plain paths, host decoding and the vault's
+text splitter can change the stored bytes. `obsidian_download_attachment(path,
+max_bytes=0)` returns JSON `{path, size, sha256, content_b64}` with base64
+transport and SHA-256 over the stored raw bytes. A positive `max_bytes` sets
+an additional caller limit; exceeding either download limit returns an error
+without content or truncation. Plain documents use `obsidian_fetch`.
 
 The server derives document ids from vault paths the same way LiveSync does.
 Both backends support these vault settings:
@@ -256,14 +275,33 @@ are read only for the selected backend. Empty defaults below mean an empty strin
 
 ### S3 journal backend
 
-Binary uploads and downloads are symmetrically capped at **32 MiB raw
-(decoded) bytes**. Uploads are stored as LiveSync `newnote` documents with
-per-chunk base64 data. `obsidian_download_attachment(path, max_bytes=0)` returns
-JSON `{path, size, sha256, content_b64}` with base64 transport and SHA-256 over
-the raw bytes. A positive `max_bytes` sets an additional caller limit; exceeding
-either limit returns an error without content or truncation. The hard cap keeps
-JSON-RPC payloads manageable. `obsidian_fetch` returns binary metadata including
-`size` and `sha256`, without the body. Use text note tools for textual paths.
+Storage follows LiveSync device **disk ingestion**, with case-sensitive suffixes:
+`.md .txt .svg .html .csv .css .js .xml .canvas` use host text reading and
+`plain` chunks. Every other path (including `.MD`, `.json`, `.base`, `.yaml`,
+`.png`, and extensionless files) uses `newnote` with independently base64-encoded
+pieces, even when the content is textual. There is no content sniffing. Both
+backends accept strings or bytes: strings for a newnote path become UTF-8 bytes;
+bytes for a plain path undergo UTF-8 decoding with replacement of invalid
+sequences (U+FFFD). Native-host invalid-byte behavior still needs live validation.
+The existing vault splitter determines pieces and their ordered child IDs;
+metadata size is the input Blob byte length after decoding, before splitting.
+
+Tools expose a separate text representation: a newnote whose bytes strictly
+decode as UTF-8 can be fetched and edited as text, regardless of extension.
+Edits go through the same path-based writer, so `.base`/`.json`/`.yaml` stay
+newnote. Frontmatter and canvas tools retain their existing format checks.
+Non-UTF-8 bodies return metadata (`size`, `sha256`) from `obsidian_fetch`;
+use `obsidian_download_attachment` for their bytes. Newnote files that decode
+as UTF-8 can also be downloaded without conversion.
+
+Attachment uploads and downloads remain capped at **32 MiB raw (decoded)
+bytes**. Upload uses the same path-based writer; its response size/SHA-256
+refer to the supplied bytes. For plain paths, host decoding and the vault's
+text splitter can change the stored bytes. `obsidian_download_attachment(path,
+max_bytes=0)` returns JSON `{path, size, sha256, content_b64}` with base64
+transport and SHA-256 over the stored raw bytes. A positive `max_bytes` sets
+an additional caller limit; exceeding either download limit returns an error
+without content or truncation. Plain documents use `obsidian_fetch`.
 
 Set `LIVESYNC_BACKEND=s3` and choose exactly one connection form.
 Use the URI or individual-variable block in the quick start matrix.

@@ -31,22 +31,6 @@ TEXT_EXTENSIONS = frozenset(
 
 _TEXT_SUFFIXES = tuple(TEXT_EXTENSIONS)
 
-# Write-side binary denylist. The read classification (TEXT_EXTENSIONS)
-# describes how *upstream* stored a document; it must not gate writes,
-# or textual-but-unclassified formats (.base, .json, .yaml) become
-# unwritable. Writes are therefore allowed for every path except an
-# explicit list of binary extensions. SVG is deliberately absent: it
-# is XML text.
-WRITABLE_BINARY_EXTENSIONS = frozenset(
-    {
-        ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".ico",
-        ".pdf", ".zip", ".gz",
-        ".mp3", ".mp4", ".mov", ".avi", ".wav", ".flac", ".ogg",
-        ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
-        ".epub", ".mobi",
-    }
-)
-
 # LiveSync metadata namespaces (upstream fileaccess.const.ts): hidden files,
 # chunk documents, machine info, obfuscated ids. Case is ignored on purpose
 # (audit B7), since ids are lowercased anyway.
@@ -344,32 +328,53 @@ def validate_vault_path(path: str) -> None:
 
 
 def is_text_doc(doc_type: str | None, path: str) -> bool:
-    """Whether a document is textual and safe for text tools.
+    """Classify storage representation: plain text or newnote bytes.
 
-    Upstream ``isPlainText`` semantics: doc type ``plain`` is always text
-    (it was stored as text chunks regardless of extension); otherwise the
-    extension decides. The check is case-sensitive like upstream.
+    The path never overrides an explicit newnote type. UTF-8 presentation
+    belongs to the tool layer, not the chunk decoder.
     """
+    return doc_type == "plain"
+
+
+def resolve_doc_type(path: str, data: str | bytes) -> str:
+    """Resolve device *disk ingestion*, independent of content or Python type.
+
+    Pinned commonlib 484c164: string_and_binary/path.ts:164-174 and
+    serviceModules/FileAccessBase.ts:162-167,201-206 select host text reading
+    only for the exact case-sensitive suffixes. ServiceFileAccessBase.ts:
+    265-276 wraps that result in createBlob; common/utils.ts:97-98 and
+    managers/EntryManager/EntryManagerImpls.ts:252-256 then classify the
+    text/plain Blob as plain, every other Blob as newnote. The programmatic
+    determineType entry point is deliberately not used here.
+    """
+    return "plain" if _normalize_path(path).endswith(_TEXT_SUFFIXES) else "newnote"
+
+
+def prepare_file_content(
+    path: str, content: str | bytes,
+) -> tuple[str | bytes, str, int]:
+    """Model host reading followed by Blob creation; return body, type, size.
+
+    Host decoding is outside commonlib (FileAccessBase.ts:201-206). Choose
+    UTF-8 replacement decoding for invalid input, retaining BOM, pending
+    Task 8 native-host verification. Size is the resulting Blob byte length
+    (EntryManagerImpls.ts:275-281), not base64 length or pre-decoding size.
+    """
+    doc_type = resolve_doc_type(path, content)
+    if isinstance(content, str):
+        try:
+            raw = content.encode("utf-8")
+        except UnicodeEncodeError:
+            # createBlob/toBlob (common/utils.ts:100-115) uses Blob's
+            # USVString conversion: combine pairs and replace lone surrogates.
+            content = content.encode("utf-16-le", errors="surrogatepass").decode(
+                "utf-16-le", errors="replace")
+            raw = content.encode("utf-8")
+        return (content if doc_type == "plain" else raw), doc_type, len(raw)
     if doc_type == "plain":
-        return True
-    return _normalize_path(path).endswith(_TEXT_SUFFIXES)
-
-
-def is_writable_text_path(path: str) -> bool:
-    """Write-side policy: whether a path may receive a textual body.
-
-    Inverse of the read classification: a path is writable unless its
-    extension is in the explicit binary denylist
-    (``WRITABLE_BINARY_EXTENSIONS``). Textual formats upstream never
-    classifies — ``.base`` (YAML), ``.json``, ``.yaml``, ``.svg`` —
-    stay writable, because every write this server performs is plain
-    text regardless of extension (audit B3). Case-insensitive: a
-    binary ``Photo.PNG`` must not slip through spelling.
-    """
-    lowered = _normalize_path(path).lower()
-    return not any(
-        lowered.endswith(extension) for extension in WRITABLE_BINARY_EXTENSIONS
-    )
+        text = content.decode("utf-8", errors="replace")
+        return text, doc_type, len(text.encode("utf-8"))
+    return content, doc_type, len(content)
 
 
 def assemble_text(chunk_datas: list[str]) -> str:
@@ -468,18 +473,6 @@ def soft_delete_revision(doc: dict, mtime_ms: int) -> dict:
     delete can be undone and conflict diffs stay meaningful.
     """
     return clone_metadata(doc, deleted=True, mtime=mtime_ms)
-
-
-def doc_type_for(path: str) -> str:
-    """LiveSync document type for a body written by this server.
-
-    Audit B3: any text is written as type ``plain`` regardless of
-    extension; the extension only matters when *reading* documents written
-    elsewhere, which is ``is_text_doc``'s job. This server only writes
-    textual bodies today, so every path maps to ``plain``; the parameter
-    is kept for future binary (``newnote``) support.
-    """
-    return "plain"
 
 
 class EncryptedInlineChunk(ValueError):

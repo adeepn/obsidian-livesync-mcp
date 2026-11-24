@@ -524,7 +524,7 @@ class TestReadNote:
         assert text is None
         assert is_text is False
 
-    def test_newnote_with_text_extension_decodes_utf8(self, store):
+    def test_newnote_with_text_extension_stays_bytes(self, store):
         payload = "кириллица".encode("utf-8")
         doc = meta_doc("x.md", "1-x", children=["h:bin"], doc_type="newnote")
         store.apply_journal(
@@ -533,7 +533,7 @@ class TestReadNote:
             [doc],
         )
         _, text, data, is_text = store.read_note("x.md")
-        assert (text, data, is_text) == ("кириллица", payload, True)
+        assert (text, data, is_text) == (None, payload, False)
 
     def test_legacy_notes_body(self, store):
         doc = meta_doc("old.md", "1-x", doc_type="notes", data="legacy body")

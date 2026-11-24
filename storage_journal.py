@@ -61,9 +61,8 @@ from livesync_format import (
     canonical_path,
     resolve_content_splitter,
     clone_metadata,
-    doc_type_for,
+    prepare_file_content,
     is_note_document,
-    is_writable_text_path,
     new_metadata_doc,
     identity_path2id,
     validate_document_identity,
@@ -74,7 +73,6 @@ from livesync_format import (
 from object_storage import JournalObjectStorage, ObjectSizeLimit, MAX_OBJECT_BYTES
 from storage_base import (
     MAX_ATTACHMENT_BYTES,
-    BinaryNoteError,
     ConcurrentModification,
     NoteContent,
     NoteExists,
@@ -1011,23 +1009,24 @@ class JournalBackend:
     async def write_note(
         self,
         path: str,
-        content: str,
+        content: str | bytes,
         *,
         create: bool = False,
         overwrite: bool = False,
         mtime: int | None = None,
         expected_rev: str | None = None,
     ) -> NoteMeta:
-        """Replace a text body; only explicit create resurrects a tombstone."""
+        """Ingest file content using device path-based disk-reading rules.
+
+        Only explicit create resurrects a tombstone. expected_rev protects
+        read-modify-write operations before publishing any chunks.
+        """
         self.check_writer_support()
         validate_vault_path(path)
-        if not is_writable_text_path(path):
-            raise BinaryNoteError(
-                f"note {path!r} has a binary extension; "
-                "this server writes textual notes only"
-            )
+        body, doc_type, size = prepare_file_content(path, content)
         return await self._write_content(
-            path, content, len(content.encode("utf-8")), doc_type_for(path),
+            path, body, size, doc_type,
+            attachment_data=body if isinstance(body, bytes) else None,
             create=create, overwrite=overwrite, mtime=mtime,
             expected_rev=expected_rev,
         )
@@ -1036,20 +1035,17 @@ class JournalBackend:
         self, path: str, data: bytes, *, create: bool = False,
         overwrite: bool = False, expected_rev: str | None = None,
     ) -> NoteMeta:
-        """Write a binary LiveSync newnote; cap decoded data at 32 MiB."""
+        """Capped byte-input alias for write_note; type still follows path."""
         self.check_writer_support()
         validate_vault_path(path)
-        if is_writable_text_path(path):
-            raise BinaryNoteError(f"note {path!r}: textual path; use write_note")
         if len(data) > MAX_ATTACHMENT_BYTES:
             raise ValueError(
                 f"attachment exceeds 32 MiB cap ({MAX_ATTACHMENT_BYTES} bytes); "
                 f"actual size {len(data)} bytes"
             )
-        return await self._write_content(
-            path, data, len(data), "newnote",
-            attachment_data=data,
-            create=create, overwrite=overwrite, expected_rev=expected_rev,
+        return await self.write_note(
+            path, data, create=create, overwrite=overwrite,
+            expected_rev=expected_rev,
         )
 
     async def _write_content(
@@ -1068,7 +1064,7 @@ class JournalBackend:
             raise NoteExists(f"note already exists: {path}")
         if not live and not create:
             raise NoteNotFound(f"note not found: {path}")
-        pieces = [piece for piece in self._splitter.split(content, path=path) if piece]
+        pieces = [piece for piece in self._splitter.split(content, path=canonical_path(path)) if piece]
         children = [chunk_id_for_piece(piece, hash_alg=self._splitter.hash_alg) for piece in pieces]
         unique = {}
         for chunk_id, piece in zip(children, pieces):

@@ -27,10 +27,6 @@ class NoteExists(StorageError):
     """A note already exists at the target path of a create/move."""
 
 
-class BinaryNoteError(StorageError):
-    """The operation only applies to textual notes."""
-
-
 class ConcurrentModification(StorageError):
     """The note changed concurrently; the caller must re-read and retry."""
 
@@ -95,9 +91,9 @@ class NoteMeta(TypedDict):
 class NoteContent(TypedDict):
     """Decoded note body together with its metadata.
 
-    Textual notes carry ``text``; binary notes carry ``data``. ``is_text``
-    follows LiveSync ``isPlainText`` semantics (audit B3/B4), so a note
-    can be textual by type (``plain``) or by extension. ``rev`` is the
+    Plain (and legacy notes) bodies carry ``text``; newnote bodies carry
+    bytes in ``data`` and ``is_text=False`` regardless of path. The tool
+    layer projects strictly valid UTF-8 bytes as text separately. ``rev`` is the
     mandatory opaque token of the metadata the body was decoded from
     (the same value as ``meta["rev"]``). Existing notes never carry None.
     Read-modify-write callers pass it back as ``write_note``'s /
@@ -167,14 +163,14 @@ class StorageBackend(Protocol):
     async def write_note(
         self,
         path: str,
-        content: str,
+        content: str | bytes,
         *,
         create: bool = False,
         overwrite: bool = False,
         mtime: int | None = None,
         expected_rev: str | None = None,
     ) -> NoteMeta:
-        """Write a textual body under the central D1/D2 rules.
+        """Ingest file content using the device disk-reading path rule.
 
         ``expected_rev`` is the read-through lost-update precondition:
         when it is not ``None`` and the refreshed local winning token differs
@@ -197,8 +193,8 @@ class StorageBackend(Protocol):
     ) -> NoteMeta:
         """Write binary data with write_note create/overwrite/resurrection rules.
 
-        Validate ForbiddenPath first; writable-text paths raise BinaryNoteError
-        ("textual path; use write_note"). Stale expected_rev refuses all writes.
+        Thin byte-input alias: path selects plain/newnote as in write_note.
+        Validate ForbiddenPath first. Stale expected_rev refuses all writes.
         MAX_ATTACHMENT_BYTES caps decoded data at 32 MiB; larger bodies raise
         ValueError naming the cap and actual size. Journal preflight caps make
         bodies above roughly 40 MiB undeployable anyway; 32 MiB leaves headroom.

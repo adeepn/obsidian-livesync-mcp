@@ -291,11 +291,11 @@ async def test_forbidden_path_is_sanitized(vault, tool, args, method):
     ],
 )
 async def test_text_edit_binary_refused(vault, tool, args):
-    vault.add("photo.png", data=b"photo")
+    vault.add("photo.png", data=b"\x89PNG\r\n\x1a\n")
     result = await getattr(server, tool)(*args)
     assert_error(result)
     assert "text note" in result.lower()
-    assert vault.notes["photo.png"]["data"] == b"photo"
+    assert vault.notes["photo.png"]["data"] == b"\x89PNG\r\n\x1a\n"
     assert "new.md" not in vault.notes
     assert_no_mutations(vault)
 
