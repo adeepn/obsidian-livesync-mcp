@@ -6,7 +6,7 @@ from collections import OrderedDict
 
 from livesync_format import canonical_path, TargetVerdict
 from selection_engine import SelectionWorker, EngineFailure
-from storage_base import StorageError, WriterUnsupported
+from storage_base import SelectionRefused, WriterUnsupported
 
 
 class DeviceSelection:
@@ -188,4 +188,4 @@ class DeviceSelection:
         if not verdict.writer_supported:
             raise WriterUnsupported(verdict.reason)
         if not verdict.allowed:
-            raise StorageError(f"path excluded by the vault's {verdict.rule}; devices would not synchronize it: {path}")
+            raise SelectionRefused(path, verdict.rule)

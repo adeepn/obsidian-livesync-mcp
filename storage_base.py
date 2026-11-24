@@ -16,6 +16,17 @@ class StorageError(Exception):
     """Base class for every storage-level failure."""
 
 
+class SelectionRefused(StorageError):
+    """A device selection rule excludes a vault path."""
+
+    def __init__(self, path: str, rule: str):
+        self.path, self.rule = path, rule
+        super().__init__(
+            f"path '{path}' is excluded by the vault's {rule}; "
+            "devices would not synchronize it."
+        )
+
+
 class WriteSkipped(StorageError):
     """Device policy outcome, not a failed/unsupported write. No revision exists.
 

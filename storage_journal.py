@@ -1024,7 +1024,7 @@ class JournalBackend(DeviceSelection):
             except ReplayBudgetExceeded:
                 raise
             except ValueError as exc:
-                raise StorageError(f"journal publication preflight failed: {exc}") from exc
+                raise StorageError("journal publication preflight failed: invalid journal") from exc
             for doc in journal.docs:
                 validate_document_identity(doc, store.path_identity)
             store.validate_journal(journal.chunks, journal.docs)

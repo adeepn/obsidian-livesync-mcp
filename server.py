@@ -34,7 +34,7 @@ from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
 from mcp.server.transport_security import TransportSecuritySettings
 from config import Config, ConfigError, load_config
 from storage_base import (
-    WriteSkipped,
+    WriteSkipped, MutationNotApplied,
     RenameRefused,
     RenamePartialError, UnresolvedConflicts,
     OutcomeUnknown, RETRY_IDEMPOTENT, retry_guidance, WriterUnsupported,
@@ -204,16 +204,30 @@ def create_app(cfg: Config) -> FastMCP:
 
 # --- Helper functions ---
 
+def _safe_storage_detail(error: Exception) -> str:
+    """Defense in depth for diagnostics; adapters never forward transport text."""
+    detail = re.sub(r"[a-zA-Z][a-zA-Z0-9+.-]*://[^\s]+", "[redacted URL]", str(error))
+    detail = re.sub(
+        r"(?i)\b(?:_?rev(?:ision)?|password|passphrase|secret|token|authorization|api[_-]?key)"
+        r"\s*[:=]\s*(?:\"[^\"]*\"|'[^']*'|[^\s;,]+)",
+        "[redacted]", detail,
+    )
+    detail = re.sub(r"\b[0-9]+-[0-9a-fA-F]{32}\b", "[redacted revision]", detail)
+    return detail or "storage operation failed"
+
+
 def _storage_message(error: StorageError) -> str:
     """Map device outcomes/errors; expose only explicitly safe diagnostics."""
+    if isinstance(error, MutationNotApplied):
+        return f"Error: note is unchanged; {_safe_storage_detail(error)}"
     if isinstance(error, OutcomeUnknown):
-        return str(error)
+        return _safe_storage_detail(error)
     if isinstance(error, ReplayBudgetExceeded):
-        return f"Error: {error}"
+        return f"Error: {_safe_storage_detail(error)}"
     if isinstance(error, WriteSkipped):
         return json.dumps(error.as_dict(), ensure_ascii=False)
     if isinstance(error, (WriterUnsupported, RenameRefused)):
-        return f"Error: {error}"
+        return f"Error: {_safe_storage_detail(error)}"
     if isinstance(error, RenamePartialError):
         if error.source_state != "live":
             return (
@@ -242,10 +256,9 @@ def _storage_message(error: StorageError) -> str:
         UnsupportedVault: "Error: unsupported vault configuration.",
         StorageUnavailable: "Error: storage is unavailable; try again later.",
     }
-    for kind, message in messages.items():
-        if isinstance(error, kind):
-            return message
-    return "Error: unable to access vault storage."
+    if type(error) in messages:
+        return messages[type(error)]
+    return f"Error: {_safe_storage_detail(error)}"
 
 
 def _tool_errors(
@@ -281,7 +294,7 @@ def _tool_errors(
         except regex_runner.RegexTimeoutError:
             return "Error: regex pattern too complex or input too large."
         except StorageError as error:
-            if isinstance(error, (OutcomeUnknown, WriteSkipped, RenameRefused)):
+            if isinstance(error, (OutcomeUnknown, WriteSkipped, RenameRefused, WriterUnsupported, MutationNotApplied)):
                 arguments = signature.bind(*args, **kwargs)
                 arguments.apply_defaults()
                 paths = [arguments.arguments[key] for key in
@@ -297,8 +310,10 @@ def _tool_errors(
                     response = error.as_dict()
                     response['message'] = f"{context}: {response['message']}"
                     return json.dumps(response, ensure_ascii=False)
+                elif isinstance(error, MutationNotApplied):
+                    return f"Error: {context}: note is unchanged; {_safe_storage_detail(error)}"
                 else:
-                    return f"Error: {context}: {error}"
+                    return f"Error: {context}: {_safe_storage_detail(error)}"
             if isinstance(error, OutcomeUnknown) and operation is not None:
                 name = operation
                 if operation_arg is not None:
