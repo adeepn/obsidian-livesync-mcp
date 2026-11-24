@@ -1,5 +1,19 @@
 # Settings parity: upstream behavior extraction
 
+> **Implementation status — 2026-11-24 (Task 7).** The extraction tables below
+> preserve the Task 1 starting-code snapshot and proposed actions; “our current
+> implementation” in those historical rows is not a statement about today's
+> branch. Tasks 2–6 implemented identity, splitter/hash/migration, ingestion,
+> size, selection and compatibility parity. Current supported/unsupported and
+> deliberate-difference statuses are consolidated in the
+> [README settings table](../../../README.md#supported-vault-settings), with
+> local recovery and outcome contracts linked there. E2EE/path obfuscation,
+> CouchDB compression/JWT and filesystem/internal/plugin sync remain outside
+> supported scope. Full-suite selection integration tests do need Node; only
+> committed-oracle tests are Node-free. Plugin encrypted setup exports are not
+> the peer's `sls://` connection format. Live parity acceptance is pending Task 8.
+
+
 > Historical baseline cap references and the original Task 5 size/replay
 > assumptions below are superseded by the Task 5 fix-round-1 contracts in
 > spec §д: vault size policy, separate raw/Blob gates, P-13 rename refusal,
