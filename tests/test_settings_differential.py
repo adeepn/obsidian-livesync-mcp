@@ -43,3 +43,27 @@ def test_v3_minimum_boundary_sweep(case):
     pieces = splitter.split(grid_payload(kind)[1], path=grid_path(kind))
     assert_partition(pieces, [splitter.chunk_id_for_piece(p) for p in pieces], {
         'pieces': vector['split_pieces'], 'children': vector['split_children']})
+
+
+def test_upstream_scalar_minimum_boundaries():
+    """Exact fractional loop equalities cannot be lengths of real Blobs.
+
+    Oracle runs the binary preamble verbatim from pinned chunks.ts. Real
+    integer-length probes remain in the full partition differential above.
+    """
+    from content_splitter import _binary_minimum
+    from tests.settings_oracle import ORACLE
+    for probe in ORACLE['scalar_probes']:
+        assert _binary_minimum(probe['size'], probe['path']) == probe['minimum'], probe
+
+
+def test_equality_catalogue_is_complete():
+    from tests.settings_oracle_inputs import EQUALITY_CASES, EQUALITY_OPERATORS
+    assert len(EQUALITY_OPERATORS) == 16
+    names = {case_id(c) for c in EQUALITY_CASES}
+    assert names <= set(GRID)
+    for label, cases in EQUALITY_OPERATORS.items():
+        assert cases, label
+        assert set(cases) <= names
+        for seed in ((198, 262, 861) if label == 'V3 candidate minimum equality' else (0, 1, 2)):
+            assert any(f':{seed}:' in name for name in cases), label

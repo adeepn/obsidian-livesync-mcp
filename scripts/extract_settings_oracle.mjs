@@ -81,7 +81,7 @@ const input = JSON.parse(execFileSync(process.env.PYTHON || './venv/bin/python',
 // Intern entire pieces, preserving their exact strings (including surrogate cuts),
 // ordered references and repeated children. No payload bytes are stored separately.
 const pieces = [], pieceIndex = new Map(), vectors = [];
-const cache = new Map();
+const cache = new Map(), idCache = new Map();
 async function vector(settings, payload) {
     const cacheKey = JSON.stringify([settings, payload]);
     if (cache.has(cacheKey)) return cache.get(cacheKey);
@@ -90,13 +90,30 @@ async function vector(settings, payload) {
     const effective = ctx.settings;
     ctx.options = {settingService:{currentSettings: () => effective}};
     const splitter = vm.runInContext('new ContentSplitter(options)', ctx);
-    const raw = Buffer.from(payload.base64, 'base64');
+    let raw;
+    if (payload.recipe) {
+        const [, mode, sizeText, seedText, positionText] = payload.recipe.split(':');
+        const size = Number(sizeText), position = Number(positionText);
+        const char = String.fromCharCode(97 + Number(seedText));
+        if (['json', 'png', 'pdf'].includes(mode)) {
+            raw = Buffer.alloc(size, char);
+            if (size >= 3000000) for (let i = 99999; i < size; i += 100000) raw[i] = {json:44, png:0, pdf:47}[mode];
+            if (position >= 0 && position < size) raw[position] = {json:44, png:0, pdf:47}[mode];
+        } else {
+            const text = mode === 'fence' ? '```\n' + char.repeat(size - 4) + '\n```\ntail' :
+                mode === 'line' ? char.repeat(position - 1) + '\n' + char.repeat(size - position) :
+                mode === 'pair' ? char.repeat(position) + '🙂' + char.repeat(size - position) : char.repeat(size);
+            raw = Buffer.from(text);
+        }
+    } else raw = Buffer.from(payload.base64, 'base64');
     const blob = new Blob([raw], {type:payload.text?'text/plain':'application/octet-stream'});
     const result = [], children = [], splitPieces = [], splitChildren = [];
     for await (const p of await splitter.splitContent({path:payload.path, data:blob})) {
         // Empty worker sentinel is not a persisted leaf (EntryManager contract).
         if (!pieceIndex.has(p)) {pieceIndex.set(p, pieces.length); pieces.push(p);}
-        const id = 'h:' + await managers[settings.hashAlg].computeHashWithoutEncryption(p);
+        const hashKey = JSON.stringify([settings.hashAlg, pieceIndex.get(p)]);
+        if (!idCache.has(hashKey)) idCache.set(hashKey, 'h:' + await managers[settings.hashAlg].computeHashWithoutEncryption(p));
+        const id = idCache.get(hashKey);
         splitPieces.push(pieceIndex.get(p));
         splitChildren.push(id);
         if (p !== '') {result.push(pieceIndex.get(p)); children.push(id);}
@@ -113,6 +130,7 @@ for (const row of input.matrix) {
 const grid = [];
 const boundaryGroups = new Map();
 for (const row of input.grid) {
+    if (grid.length % 500 === 0) console.error(`grid ${grid.length}/${input.grid.length}`);
     const v = await vector(row.settings, input.payloads[row.payload]);
     grid.push({...row, ...v});
     if (row.payload.startsWith('boundary:') && row.payload.includes(':png:none:')) {
@@ -135,7 +153,20 @@ for (const [settings, probes] of boundaryGroups) {
         probes.slice(0,2).some(p => p.v.split_pieces.length !== 1)) throw Error(`Boundary probes miss upstream cap: ${settings}`);
     boundaryMeasurements.push({settings:JSON.parse(settings), maximum:measured});
 }
-const fixture = {upstream_commit:pin, node:process.version, decoder_dependency:dependency, source_sha256:sources,
+const chunks = read('string_and_binary/chunks.ts');
+const scalarCode = chunks.slice(chunks.indexOf('    const clampMin ='), chunks.indexOf('    return async function* piecesBlob()'));
+run('function binaryMinimumScalar(size, canBeSmall) { const dataSrc = {size}; let minimumChunkSize; ' + scalarCode + 'return minimumChunkSize; }');
+const scalarProbes = [];
+for (const small of [true, false]) {
+    const sizes = [99, 100, 101, 99999, 100000, 100001, 99999999, 100000000, 100000001];
+    for (let step = 1; step <= 7; step++) {
+        const value = 10 * 12.5 ** step;
+        sizes.push(value - 0.000001, value, value + 0.000001);
+    }
+    for (const size of sizes) scalarProbes.push({size, path:small?'probe.json':'probe.png',
+        minimum:vm.runInContext(`binaryMinimumScalar(${size}, ${small})`, ctx)});
+}
+const fixture = {scalar_probes:scalarProbes, upstream_commit:pin, node:process.version, decoder_dependency:dependency, source_sha256:sources,
     wasm_sha256:sha(fs.readFileSync(wasmFile)), inputs_sha256:sha(fs.readFileSync('tests/settings_oracle_inputs.py')),
     boundary_measurements:boundaryMeasurements, pieces, matrix:vectors, grid};
 fs.writeFileSync(out, gzipSync(JSON.stringify(fixture)+'\n', {level:9}));

@@ -166,8 +166,26 @@ HINT_KINDS = tuple('hint-' + ext for ext in ('MD', 'Canvas', 'TXT', 'json', 'bar
 BASE_GRID_KINDS = GRID_KINDS
 GRID_KINDS += FENCE_KINDS + HINT_KINDS + ('cyrillic-emoji', 'binary-empty', 'binary-nul', 'json-clamp', 'pdf-far-lf')
 
-@lru_cache(maxsize=None)
+@lru_cache(maxsize=8)
 def grid_payload(kind):
+    if kind.startswith('eq:'):
+        _, mode, size, seed, position = kind.split(':')
+        size, seed, position = int(size), int(seed), int(position)
+        char = chr(97 + seed)
+        if mode in ('json', 'png', 'pdf'):
+            data = bytearray(char.encode() * size)
+            if size >= 3000000:
+                data[99999::100000] = bytes([{'json': 44, 'png': 0, 'pdf': 47}[mode]]) * len(data[99999::100000])
+            if 0 <= position < size:
+                data[position] = {'json': 44, 'png': 0, 'pdf': 47}[mode]
+            return '.' + mode, bytes(data)
+        if mode == 'fence':
+            return '.md', '```\n' + char * (size - 4) + '\n```\ntail'
+        if mode == 'line':
+            return '.md', char * (position - 1) + '\n' + char * (size - position)
+        if mode == 'pair':
+            return '.md', char * position + '🙂' + char * (size - position)
+        return ('.MD' if mode == 'upper' else '.md'), char * size
     if kind.startswith("random:"):
         _, alphabet, seed, length = kind.split(":")
         rng = random.Random(int(seed))
@@ -180,6 +198,8 @@ def grid_payload(kind):
                  "punctuation": "ab,;:<.!?=\n"}[alphabet]
         return ".md", "".join(rng.choice(chars) for _ in range(int(length)))
 
+    if kind == 'z1':
+        return '.json', b'x' * 50 + b',' + b'y' * 74
     if kind.startswith('utf8:'):
         _, width, offset = kind.split(':')
         return '.md', 'a' * int(offset) + {2: 'é', 3: '€', 4: '🙂'}[int(width)] + 'z'
@@ -230,7 +250,7 @@ def grid_payload(kind):
 
 
 def grid_cases():
-    for case in TEXT_BOUNDARY_CASES + RANDOM_CASES + SWEEP_CASES:
+    for case in TEXT_BOUNDARY_CASES + RANDOM_CASES + SWEEP_CASES + EQUALITY_CASES:
         yield case_id(case), settings_for(case), case[-1]
     # Keep the original exhaustive settings grid unchanged.
     for version, custom, minimum, kind in product(FACTORS[1][1], ('default', 0, 1, 5, 60, 100), ('default', 5, 20, 100), BASE_GRID_KINDS):
@@ -329,7 +349,91 @@ PARTITION_CASES += [
 ]
 
 
+# Equality catalogue: inputs only. Labels name actual source decisions, not
+# expected results. Three deterministic seeds vary content without randomness
+# at regeneration time. Scalar probes cover fractional/unreachable Blob sizes.
+EQUALITY_CASES = []
+EQUALITY_OPERATORS = {}
+
+def _equality(label, version, custom, minimum, mode, size, seed, position=-1):
+    case = ('legacy', version, 'xxhash64', custom, minimum, 'default',
+            f'eq:{mode}:{size}:{seed}:{position}')
+    if case not in EQUALITY_CASES:
+        EQUALITY_CASES.append(case)
+    EQUALITY_OPERATORS.setdefault(label, []).append(case_id(case))
+
+for seed in (0, 1, 2):
+    for delta in (-1, 0, 1):
+        for version in ('v1', 'v2', 'v2-segmenter'):
+            for mode in ('md', 'upper', 'png'):
+                _equality('legacy maximum / terminal offset', version, 0, 5,
+                          mode, 102400 + delta, seed)
+            _equality('UTF16 surrogate protection', version, 0, 5,
+                      'pair', 102402, seed, 102399 + delta)
+            for ext in ('json', 'pdf', 'png'):
+                for position in (100 + delta, 10000 + delta, 102400 + delta):
+                    _equality('binary delimiter min/max/search', version, 0, 5,
+                              ext, 102410, seed, position)
+            _equality('V2 strict newline flush / V1 minimum grouping', version,
+                      0, 5, 'line', 40, seed, 5 + delta)
+            _equality('V2 100-item adjustment', version, 0, 5,
+                      'line', 500 + delta, seed, 5)
+            _equality('V1 fence 2048', version, 0, 5,
+                      'fence', 2048 + delta - 1, seed)
+        for mode in ('md', 'png'):
+            _equality('V3 text switch / ceiling', 'v3-rabin-karp', 60,
+                      4194304, mode, 4194304 + delta, seed)
+            _equality('V3 floor / minimum override', 'v3-rabin-karp',
+                      (30720 + delta) / 102400 - 1, 30721,
+                      mode, 30722, seed)
+            _equality('V3 maximum / minimum override', 'v3-rabin-karp', 0,
+                      1024 + delta, mode, 2049, seed)
+        _equality('V3 500-item unit adjustment', 'v3-rabin-karp', 0, 20,
+                  'md', 128000 + delta, seed)
+        _equality('UTF8 max+3 / continuation protection', 'v3-rabin-karp',
+                  0, 1024, 'pair', 1028, seed, 1023 + delta)
+        for version in ('v1', 'v2', 'v2-segmenter'):
+            for ext, clamp in (('json', 100), ('png', 100000)):
+                for threshold in (clamp, 125, 1562, 19531, 244140, 3051757,
+                                  38146972, 100000000):
+                    if threshold < clamp:
+                        continue
+                    _equality('binary size clamp / derived minimum steps',
+                              version, 0, 5, ext, threshold + delta, seed, 50)
+
+# Hit the content-defined candidate exactly at its text minimum on three
+# independent ASCII streams (inputs selected by a rolling-fingerprint search,
+# never by the Python splitter). Upstream still supplies partitions and IDs.
+for seed in (198, 262, 861):
+    for minimum in (127, 128, 129):
+        case = ('legacy', 'v3-rabin-karp', 'xxhash64', 0, minimum, 'default',
+                f'random:ascii:{seed}:300')
+        EQUALITY_CASES.append(case)
+        EQUALITY_OPERATORS.setdefault('V3 candidate minimum equality', []).append(case_id(case))
+for seed in (0, 1, 2):
+    for delta in (-1, 0, 1):
+        for threshold in (128, 256, 1024):
+            _equality('V3 text minimum / modulus clamps', 'v3-rabin-karp', 0,
+                      threshold + delta, 'md', 2049, seed)
+        for threshold in (25600, 102400):
+            _equality('V3 binary minimum / modulus clamps', 'v3-rabin-karp', 0,
+                      threshold + delta, 'png', 102402, seed)
+        for mode in ('md', 'png'):
+            for threshold in (0, 48, 128):
+                _equality('empty / rolling window / decoder short path',
+                          'v3-rabin-karp', 0, 20, mode,
+                          max(0, threshold + delta), seed)
+# The reported Z1 witness is byte-for-byte fixed, independently of seeds.
+Z1_CASE = ('legacy', 'v2', 'xxhash64', 0, 5, 'default', 'z1')
+EQUALITY_CASES.append(Z1_CASE)
+PARTITION_CASES.append(Z1_CASE)
+PARTITION_CASES += [c for c in EQUALITY_CASES if c[-1] == 'eq:png:2049:0:-1']
+
+
 def grid_path(kind):
+    if kind.startswith('eq:'):
+        mode = kind.split(':')[1]
+        return 'equality.' + (mode if mode in ('json', 'png', 'pdf') else 'MD' if mode == 'upper' else 'md')
     if kind == 'random:ascii:198:300':
         return 'witness.md'
     if kind.startswith('utf8:'):
@@ -367,5 +471,5 @@ if __name__ == '__main__':
                           'boundary': pack('boundary.png', b'\x00' * 1048576),
                           'boundary-plus': pack('boundary.png', b'\x00' * 1048576 + b'x'),
                           'uncertain': pack('uncertain.md', 'accepted')},
-                      'payloads': {k: pack(grid_path(k), grid_payload(k)[1], grid=True)
+                      'payloads': {k: ({'recipe': k, 'path': grid_path(k), 'text': k.split(':')[1] not in ('json', 'png', 'pdf')} if k.startswith('eq:') else pack(grid_path(k), grid_payload(k)[1], grid=True))
                                    for k in dict.fromkeys(k for _, _, k in grid_cases())}}))
