@@ -165,6 +165,11 @@ BASE_GRID_KINDS = GRID_KINDS
 GRID_KINDS += FENCE_KINDS + HINT_KINDS + ('cyrillic-emoji', 'binary-empty', 'binary-nul', 'json-clamp', 'pdf-far-lf')
 
 def grid_payload(kind):
+    if kind.startswith('utf8:'):
+        _, width, offset = kind.split(':')
+        return '.md', 'a' * int(offset) + {2: 'é', 3: '€', 4: '🙂'}[int(width)] + 'z'
+    if kind.startswith('hint-path:'):
+        return '.md', 'before\n```js\na,b,c;d<e\n```\nafter\n'
     if kind.startswith('surrogate:'):
         return '.md', 'a' * int(kind.split(':')[1]) + '🙂' + 'z'
     if kind.startswith('large-text:'):
@@ -199,6 +204,8 @@ def grid_payload(kind):
     if kind == 'override':
         import random
         return '.png', random.Random(20261124).randbytes(102401)
+    if kind.startswith('floor-binary:'):
+        return '.png', b'x' * int(kind.split(':')[1])
     if kind.startswith('boundary:'):
         _, size, ext, delimiter, offset = kind.split(':')
         data = bytearray(b'x' * int(size))
@@ -255,15 +262,37 @@ TEXT_BOUNDARY_CASES = [
     ('legacy', 'v3-rabin-karp', 'xxhash64', 60, 20, 'default', f'large-text:{size}')
     for size in (4194303, 4194304, 4194305)
 ]
+# Small focused probes keep byte caps independent of UTF-16/code-point caps.
+ROUND4_CASES = [
+    ('legacy', 'v3-rabin-karp', 'xxhash64', 0, 1024, 'default', f'utf8:{width}:{offset}')
+    for width in (2, 3, 4) for offset in (1023, 1024, 1025)
+] + [
+    ('legacy', 'v2', 'xxhash64', 0, 5, 'default', f'hint-path:{index}')
+    for index in range(4)
+] + [
+    ('legacy', 'v3-rabin-karp', 'xxhash64', -0.9, 30721, 'default', f'floor-binary:{size}')
+    for size in (30719, 30720, 30721)
+]
+TEXT_BOUNDARY_CASES += ROUND4_CASES
 PARTITION_CASES = [c for c in TEXT_BOUNDARY_CASES
                    if c[-1] in ('surrogate:102399', 'large-text:4194304')] + [
     ('legacy', version, 'xxhash64', 0, 5, 'default', kind)
     for version, kind in (('v2', 'hint-MD'), ('v2', 'hint-txt'),
                           ('v2', 'hint-canvas'), ('v1', 'fence-long'))
 ]
+PARTITION_CASES += ROUND4_CASES + [
+    ('legacy', 'v1', 'xxhash64', 0, 5, 'default', 'binary-empty'),
+    ('legacy', 'v2', 'xxhash64', 0, 5, 'default', 'empty'),
+]
 
 
 def grid_path(kind):
+    if kind.startswith('utf8:'):
+        return 'utf8.md'
+    if kind.startswith('hint-path:'):
+        return ('trailing.md ', ' leading.md', 'weird.md\t', 'x.MD ')[int(kind.split(':')[1])]
+    if kind.startswith('floor-binary:'):
+        return 'floor.png'
     if kind.startswith('surrogate:'):
         return 'surrogate.md'
     if kind.startswith('large-text:'):

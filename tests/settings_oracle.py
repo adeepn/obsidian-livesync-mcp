@@ -24,8 +24,8 @@ def expected_pieces(vector):
 
 
 def assert_partition(pieces, children, vector):
-    assert pieces == expected_pieces(vector)
-    assert children == vector['children']
+    assert pieces == expected_pieces(vector), 'PARTITION pieces mismatch'
+    assert children == vector['children'], 'PARTITION children mismatch'
 
 
 def check_input_digest():

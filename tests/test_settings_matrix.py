@@ -378,7 +378,7 @@ async def test_settings_v3_ceiling_partition(tmp_path, kind):
 @pytest.mark.parametrize('kind', BACKENDS)
 @pytest.mark.parametrize('case', PARTITION_CASES, ids=case_id)
 async def test_settings_text_partition(tmp_path, kind, case):
-    """One write per row; large text avoids the heavy full-cycle operations.
+    """One write per row; boundary probes avoid heavy full-cycle operations.
 
     The uppercase path intentionally carries a text/plain Blob through the
     programmatic write boundary: disk ingestion would convert it to binary
@@ -390,13 +390,24 @@ async def test_settings_text_partition(tmp_path, kind, case):
     _, text = grid_payload(payload_kind)
     vector = GRID[case_id(case)]  # Strict independent upstream lookup.
     assert vector['settings'] == settings
+    # Compare raw partitions before publication can reject a broken surrogate
+    # cut or discard V1's empty binary sentinel. IDs are checked independently.
+    splitter = ContentSplitter(settings)
+    pieces = splitter.split(text, path=path)
+    assert_partition(pieces, [splitter.chunk_id_for_piece(p) for p in pieces], {
+        'pieces': vector['split_pieces'], 'children': vector['split_children']})
     async with matrix_vault(tmp_path, kind, settings) as (backend, doc, _, _, _):
         await backend.startup_check()
-        if payload_kind == 'hint-MD':
+        if payload_kind == 'hint-MD' or payload_kind.startswith('hint-path:'):
             await backend._write_content(path, text, len(text.encode()), 'plain',
                                          create=True, overwrite=False)
         else:
             await backend.write_note(path, text, create=True)
         children = (await doc(path))['children']
         assert_partition(await pieces_for(backend, children), children, vector)
-        assert (await backend.read_note(path))['text'] == text
+        if payload_kind == 'binary-empty':
+            assert children == []
+            assert (await backend.read_note(path))['data'] == b''
+        else:
+            field = 'data' if isinstance(text, bytes) else 'text'
+            assert (await backend.read_note(path))[field] == text
