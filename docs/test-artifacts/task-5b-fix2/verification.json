@@ -31,5 +31,13 @@
     "exit_code": 0
   },
   "suite_log": "strict-suite.log",
-  "residual_secret_assertions": "All six-character secret windows after canonicalization, plus hex/token/JWT/PEM/base64-shaped residual runs on every remote diagnostic route."
+  "residual_secret_assertions": "All six-character secret windows after canonicalization, plus hex/token/JWT/PEM/base64-shaped residual runs on every remote diagnostic route.",
+  "documentation_suite": {
+    "passed": 8532,
+    "skipped": 7,
+    "subtests": 3,
+    "seconds": 96.55,
+    "exit_code": 0,
+    "log": "docs-suite.log"
+  }
 }

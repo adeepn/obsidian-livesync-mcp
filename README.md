@@ -4,6 +4,31 @@ Remote MCP server for accessing your Obsidian vault via CouchDB / [Self-hosted L
 
 No Obsidian desktop app required on the server — connects to CouchDB or S3-compatible LiveSync journal storage.
 
+## Diagnostics and secrets
+
+Tool diagnostics contain note paths as you supplied them, known setting key
+names, sizes/counts, outcome/retry guidance and cause **class names**. Path
+controls (C0/C1, CR/LF/tab, U+2028/U+2029) become visible escapes; paths are
+never credential-redacted or shortened. Paths read from remote metadata also
+use NFC normalization. Note contents remain note contents.
+
+Diagnostics never include remote exception text, response bodies/headers,
+configured URLs, buckets/regions, passwords, passphrases/salts, setting values,
+selection patterns or ignore-file contents. Unknown keys are `<unexpected key>`;
+unknown journal names expose only their length. Known journal filename shapes
+and closed algorithm/enum names are allowed. `backend_info.epoch` is a short
+SHA-256 fingerprint, never the journal salt. Local cache paths/database names
+are hidden, remote update sequences are fingerprinted, and unfamiliar metadata
+fields are counted rather than printed.
+
+Server logs omit payloads and tracebacks by default. `LIVESYNC_UNSAFE_DEBUG=1`,
+combined with a DEBUG log level, explicitly enables the bounded last-line debug
+sink. **Unsafe for production:** it admits unstructured diagnostic inputs to a
+debug path; never enable it to collect credentials. The current last-line
+redactor inspects at most 2048 characters and withholds the entire nonempty
+free-text value; tool diagnostics do not use this sink. This is deliberate: a detector
+cannot reliably identify every possible secret encoding.
+
 ## Architecture
 
 ```
@@ -458,7 +483,7 @@ self-test. It restarts on the next request after a crash; a failed request is
 never silently retried. Backend close terminates and reaps the process and
 joins its pipe threads. Five-second evaluation deadlines include blocked stdin;
 timeout, nonzero exit, malformed responses and invalid field types deny writes.
-Errors expose sanitized causes; diagnostic details remain in server logs.
+Errors expose structured diagnostics; see [Diagnostics and secrets](#diagnostics-and-secrets).
 `backend_info` exposes `selection_engine_state` (`off`, `ready`, `unsupported`),
 `selection_engine_reason`, `filters_active`, and writer support.
 

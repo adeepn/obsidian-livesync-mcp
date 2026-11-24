@@ -320,7 +320,7 @@ def journal_filename(
 
     Devices upload ``<ms>-docs.jsonl.gz`` (JournalSyncCore.ts:675,
     ``Date.now()``-based). Server publications use
-    ``<ms>-<random 16 hex>-docs.jsonl.gz`` (Plan B ruling B-10), checking
+    ``<ms>-<random 32 hex>-docs.jsonl.gz`` (Plan B ruling B-10), checking
     existence before upload and regenerating an occupied suffix. Replay
     orders by numeric ms prefix, then full name for deterministic ties.
     The zero-padded counter form remains available for legacy callers;

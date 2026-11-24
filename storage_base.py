@@ -3,8 +3,8 @@
 MCP tools interact with vault storage exclusively through the
 ``StorageBackend`` protocol (design doc §4.2); concrete implementations
 (CouchDB today, the S3 journal peer later) translate it into their wire
-format. Exception messages must never leak internal URLs or revisions
-(audit C7) — implementations log the details instead.
+format. Public diagnostics use typed fields; default logs omit remote
+payloads and tracebacks (audit C7, P-19).
 """
 
 from __future__ import annotations

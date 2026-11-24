@@ -1,8 +1,14 @@
 {
   "task": "5b fix round 2",
   "branch": "settings-parity",
-  "phase": "verified; committing",
+  "phase": "complete",
   "part_b": "unchanged",
-  "suite": "final-suite.log",
-  "verification": "verification.json"
+  "implementation_commit": "acf695a",
+  "assertions_commit": "0948222",
+  "suite": "strict-suite.log",
+  "documentation_suite": "docs-suite.log",
+  "verification": "verification.json",
+  "concerns": [
+    "Free-text DEBUG input is deliberately withheld wholesale."
+  ]
 }

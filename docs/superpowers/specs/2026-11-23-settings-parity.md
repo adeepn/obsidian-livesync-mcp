@@ -351,3 +351,34 @@ failure retries at most three times, then logs WARNING and returns success.
 The next replay repairs deferred tracking without requiring another mutation.
 This reporting contract does not introduce an emulated upstream parity oracle;
 checkpoint compatibility checks execute the real pinned commonlib methods.
+
+
+## P-18/P-19: typed diagnostics (Task 5b fix round 2)
+
+P-19 supersedes the P-18 blacklist approach. Every public error is constructed
+from a closed reason code and typed fields: caller note paths (control escaping
+only), remote metadata paths (NFC plus escaping), inventoried setting keys,
+validated numeric fields, closed enum names and exception **classes**. A free
+`detail` string is not a public channel. Unknown failures, including generic
+exceptions at the tool boundary, expose only the outcome/context and cause
+class. Existing mutation classification and the 19 retry guidance variants
+remain unchanged. Part B comparison, election and published fixtures are
+unchanged; only their public field projection is constrained.
+
+Journal filenames are shown only for `<digits>-docs.jsonl.gz` or
+`<digits>-<32 hex>-docs.jsonl.gz`; other names become
+`<unexpected journal name>` plus length. Default logs omit response fields,
+exception text/tracebacks, setting values and selection patterns. The only
+free-text sink is explicit `LIVESYNC_UNSAFE_DEBUG=1` at DEBUG, documented as
+unsafe for production; its last-line redactor caps inspection at 2048 characters
+and withholds nonempty inputs wholesale. There is no regex secret detector on the
+tool path. This gives O(min(n, 2048)) time and space for that sink.
+
+The pinned commonlib `replication/journal/JournalSyncCore.ts:344` forms the
+internal epoch from protocol version and salt; `:467–468,523–524` passes that
+salt with the passphrase to binary HKDF decryption/encryption. The salt is
+stored in remote sync parameters (`replication/SyncParamsHandler.ts:124–149`),
+so it is protocol metadata rather than a demonstrated authentication secret.
+Nevertheless its public diagnostic representation is a 16-hex SHA-256
+fingerprint of the epoch; internal epoch/replay comparisons retain the original.
+No substitute upstream oracle was introduced (P-7).

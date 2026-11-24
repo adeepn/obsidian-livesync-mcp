@@ -481,3 +481,138 @@ redaction; vault_stats matches its documented assessment contract. The requested
 fix-round changes are complete. Assessment semantics and fixtures remain intact.
 Known outstanding concerns for this round: none. Final diff reviewed and
 `git diff --check` clean. Each logical commit has a passing full-suite artifact.
+
+
+## Fix round 2 — P-19 white-list construction
+
+### Premises
+
+The reviewer corpus contains 102 independent synthetic payloads. The reviewed
+matrix contains 22,746 diagnostic evaluations and the echo matrix 1,836
+caller-input evaluations. `/tmp/parity-rereview-report.md`, matrix, echo and
+performance JSON were read before implementation. `red.log` reproduces the
+schemeless leak; `generic-red.log` reproduces the generic-exception boundary;
+`count-red.log` reproduces a remote string in CouchDB `doc_count`.
+
+The previous boundary appended `str(error)` and re-filtered composed output.
+That cannot establish provenance and loses legitimate filenames. The previous
+regex also rescanned unbounded free text. Those paths have been removed.
+
+### Execution trace
+
+1. Producers attach a closed `DiagnosticCode`, `PublicDiagnostic`, typed setting
+   issues, numeric budgets/invalid-byte counts, or explicitly sourced paths.
+2. `DiagnosticPath.remote` is mandatory: caller paths escape controls only;
+   metadata/body paths also normalize NFC. The wrapper obtains original caller
+   arguments from its signature binding, never from backend error text.
+3. Public exception `format()` methods consume these fields. Unknown/free-text
+   reasons cannot add a new public string; legacy internal literals must match
+   the closed inventory. Exact-class dispatch retains safe typed causes.
+4. Tool boundaries retain outcome and retry guidance; ordinary unexpected
+   exceptions become a class-only failure. There is no `detail` interpolation,
+   recursive string-leaf sanitizer, or free-text tool-output sink.
+5. Backend observability constrains enum/key fields, hides database/local config
+   paths, fingerprints epoch/update_seq, validates `doc_count`, and counts
+   unfamiliar journal metadata fields. Real replay restricts journal names.
+6. Default logs retain fixed events/statuses/operations/classes. Response error
+   fields, version values, invalid IDs, regex/stderr payloads and tracebacks are
+   withheld. The explicit DEBUG sink withholds every nonempty free-text value.
+
+### Route → fields used → free text allowed?
+
+| Route | Fields used | Free text allowed? |
+|---|---|---|
+| `_storage_message/StorageError`, unknown subclasses | closed reason code, inventoried keys, cause class | no |
+| `UnsupportedVault`, `StorageUnavailable`, `WriterUnsupported` | outcome prefix, typed reason/key/issue fields, cause class | no |
+| `NoteNotFound`, `NoteExists`, `ConcurrentModification`, `UnresolvedConflicts`, `_TextRequiredError` | fixed class semantics plus typed reason/path fields where supplied | no |
+| `MutationNotApplied` | unchanged guidance, original caller context, closed reason/class | no |
+| `OutcomeUnknown` and all 19 retry variants | original caller context, source-removal flag, cause class, known operation, unchanged retry text | no |
+| `WriteSkipped.as_dict` and wrapper | original caller path, byte size, numeric limit, fixed not-saved guidance | no |
+| `RenameRefused` | caller source/target context, size, limit, fixed refusal guidance | no |
+| `RenamePartialError` | caller source/target or explicitly sourced path fields, source-state enum, fixed recovery text | no |
+| `SelectionRefused` | typed path, inventoried rule key, fixed exclusion guidance | no |
+| `ReplayBudgetExceeded`, `_RefreshBudgetStop` | known budget name, numeric observation/limit/capacity, fixed env-variable guidance | no |
+| Journal replay failure | validated journal name or unexpected-name length, cause class | no |
+| Both writer-support checks | typed setting issues (key + shape) or fixed selection diagnostic | no |
+| Both `backend_info` implementations | closed backend/state/path-identity enums, safe key/issue projections, validated counts, fingerprints | no |
+| `vault_stats` assessment | closed assessment status and inventoried differing keys only | no |
+| `vault_stats` local state | hidden config path, numeric size/threshold, fixed warning | no |
+| Refresh/tool wrapper failures (all tool/action variants) | original caller path fields, fixed outcome, cause class | no |
+| Missing note/template/canvas branches | original caller path with visible control escapes | no |
+| Heading/node/edge and unknown mode/action echoes | caller's own escaped arguments, fixed syntax guidance | no |
+| Create/update/move/copy/template/canvas successes | caller's own escaped paths/IDs, counts, known operation | no |
+| Invalid plain-byte upload | original caller path, invalid-byte count, fixed conversion guidance | no |
+| Default server logs | fixed event/operation, numeric status, cause class | no |
+| Explicit `LIVESYNC_UNSAFE_DEBUG=1` at DEBUG | capped free-text input; output is empty or `[redacted]` | yes, input only; never retained |
+
+### Conclusions and verification
+
+The committed test corpus is `tests/fixtures/diagnostic_attack_corpus.json`.
+Parametrized coverage includes every loaded StorageError subclass through every
+tool/action, all 18 original echo routes, real backend setting/diagnostic
+projections, real hostile journal replay, generic exceptions, logging, explicit
+DEBUG opt-in, caller over-redaction regressions, and event-loop timing budgets.
+The final suite and benchmark results are recorded in
+`docs/test-artifacts/task-5b-fix2/verification.json` and `timings.json`.
+
+`sanitize_diagnostic` slices at most 2048 characters and returns a fixed marker;
+it has no regex, decoding loop or scan of the remaining input. Its time/space
+bound is O(min(n, 2048)); `scripts/benchmark_diagnostics.py` records 30 runs each
+for letters, dots, percent encodings, nested labels and a URL-at-end at 1 KB,
+100 KB and 1 MB. The tests require <50 ms at every size.
+
+The pinned upstream stores salt in sync parameters and passes it with the
+passphrase to HKDF (`JournalSyncCore.ts:344,467–468,523–524`); this is protocol
+metadata, not demonstrated standalone credential material. The conservative
+public representation is a 16-hex SHA-256 epoch fingerprint. Internal epoch
+comparison and replay semantics are unchanged.
+
+Part B assessment/election function bodies are byte-for-byte unchanged, as
+recorded by `parity-guards.json`. Existing differential fixtures are unchanged;
+no synthetic substitute oracle was introduced (P-7). Existing tests changed
+only where they required free-text causes, raw log payload/identifiers/config
+paths, raw metadata names or salts. Outcome/retry, loss-path and Part B fixture
+assertions were retained.
+
+Independent review found extra raw observability/generic-exception/caller-echo
+routes; they were closed, re-reviewed and reported `NO_NEW_FINDINGS`.
+
+### Rejected paths and concerns
+
+- Extending the blacklist cannot prove secrecy and reintroduces path loss.
+- Applying last-line redaction to a composed message destroys note identity and
+  retry context; that design was removed entirely.
+- No raw-detail DEBUG escape hatch is provided: the opt-in sink intentionally
+  withholds all nonempty unstructured input. Diagnostic detail is consequently
+  less conversational; typed fields and class names are the supported interface.
+- Caller paths and actual remote note paths are data and may themselves look
+  like credentials; their preservation is intentional, not a leak-detector
+  exception inferred from free text. Remote paths never become caller arguments.
+
+Final strengthened suite: **8532 passed, 7 skipped, 3 subtests passed** in 117.56 s.
+Baseline 7584 + 948 new tests; no baseline tests removed. Redactor maxima: 1 KB
+0.000625 ms; 100 KB 0.000458 ms; 1 MB 0.000375 ms. Independent targeted review:
+978 passed, final `NO_NEW_FINDINGS`. Build and diff checks passed.
+
+Documentation mismatch found: old journal comments claimed a 16-hex suffix,
+but the publisher calls `secrets.token_hex(16)` (32 hex characters). Comments
+now match the actual publisher and the required diagnostic grammar; no
+filename-generation behavior changed.
+
+
+The follow-up test commit strengthens every remote-origin route to reject all
+six-character secret windows after decoding/Unicode canonicalization, and
+residual hex/token/JWT/PEM/base64-shaped runs. Applied retrospectively to the
+reviewer's saved diagnostic outputs (excluding caller echoes), these assertions
+reject 7905 of 22644 historical evaluations (`strengthened-red.json`); these
+counts are synthetic marker/shape checks, not independent vulnerabilities.
+Repeated percent and nested-label event-loop cases add six tests. This is
+regression-test evidence, not a new upstream parity oracle.
+
+Commits so far: `acf695a` (typed construction, bounded fallback, log hygiene)
+and `0948222` (residual-secret assertions). README, CHANGELOG, P-18/P-19 spec
+and this report document the final interface and its deliberate limitations.
+
+Documentation pre-commit full suite: **8532 passed, 7 skipped, 3 subtests passed**
+in 96.55 s (`docs-suite.log`). Final diff check passed. No unresolved blocker;
+free-text DEBUG output is deliberately withheld wholesale.

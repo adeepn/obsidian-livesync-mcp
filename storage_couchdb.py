@@ -18,7 +18,7 @@ Documents follow Obsidian LiveSync semantics (audit 2026-11-10):
   namespace, metadata is then batch-fetched via ``POST _all_docs {keys}``
   — audit C5;
 - all HTTP errors are mapped to storage exceptions with messages free of
-  internal URLs and revisions (details go to the server log) — audit C7.
+  internal URLs and revisions; default logs omit payloads — audit C7/P-19.
 
 Write path (spec §7): every write validates the vault path before any
 HTTP request; new content chunks are PUT before the metadata document,

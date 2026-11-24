@@ -60,6 +60,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Build tool diagnostics from typed fields and closed reason/key inventories;
+  preserve caller note identities with control escaping, normalize remote note
+  paths to NFC, and omit remote exception/setting text. Retain mutation outcome
+  and retry guidance, restrict journal filename diagnostics, and fingerprint
+  journal epochs instead of exposing salts.
+- Remove unbounded blacklist sanitization. Cap the opt-in last-line DEBUG sink
+  at 2048 characters and withhold free text; omit raw response fields, setting
+  values, regex patterns and tracebacks from default logs.
+
 - Write tools enforce data-safety semantics: no-op writes are skipped, create/overwrite contracts are explicit, and failed writes can no longer point a note at missing chunks
 - Canvas tools refuse empty or malformed structures without mutating the file, and preserve unknown keys of spec-valid documents
 - OAuth mode gates `/authorize` behind the `OAUTH_PASSWORD` form before issuing any code; dynamic client registration stays disabled

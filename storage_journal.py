@@ -107,7 +107,7 @@ MILESTONE_KEY = "_00000000-milestone.json"
 SYNC_PARAMETERS_KEY = "_obsidian_livesync_journal_sync_parameters.json"
 
 # Journal names have an optional suffix after ms (journal_codec.journal_filename).
-# Server publications use a random 16-hex suffix; devices use the base form.
+# Server publications use a random 32-hex suffix; devices use the base form.
 # Replay orders candidates by the integer ms prefix; S3 listing order is
 # lexicographic, where "10-..." sorts *before* "9-..." (Plan B Review
 # Focus 3). Names without a numeric prefix are foreign to the journal
@@ -643,9 +643,8 @@ class JournalBackend(DeviceSelection):
         except (StorageUnavailable, ReplayBudgetExceeded):
             raise
         except (StorageError, ValueError, OSError, sqlite3.Error) as exc:
-            # The public message carries the file name and the error class
-            # only; details (document ids, paths, revisions) stay in the
-            # server log (audit C7).
+            # Public diagnostics admit only a validated journal name and cause
+            # class. Default logs omit remote names, payloads and tracebacks.
             logger.warning('journal file <omitted> could not be replayed: <omitted>: <omitted>; cause: %s', type(exc).__name__)
             raise StorageError(PublicDiagnostic(DiagnosticCode.REPLAY_FAILED, journal=name, cause=type(exc))) from exc
 
@@ -814,7 +813,7 @@ class JournalBackend(DeviceSelection):
 
         Any per-note failure — corrupt bodies, encrypted bodies, or an
         unexpected store error (OSError, sqlite) — yields ``(meta, None)``
-        with the details logged, so one broken note never ends a
+        with a class-only event logged, so one broken note never ends a
         vault-wide scan. Only backend-wide storage unavailability aborts.
         """
         try:
@@ -865,9 +864,8 @@ class JournalBackend(DeviceSelection):
         Classification is structural — the store's
         :class:`~journal_store.EncryptedNoteError` keeps its
         UnsupportedVault semantics — never by message text, which embeds
-        the user-controlled note path. Corrupt-body messages already match
-        the CouchDB peer's phrasing and pass through unchanged (they name
-        the note path only — audit C7).
+        the remote note path. Corrupt-body diagnostics carry a closed reason
+        and an explicitly remote path; exception text never passes through.
         """
         if isinstance(exc, EncryptedNoteError):
             return UnsupportedVault(getattr(exc, "diagnostic", None), cause=exc)
