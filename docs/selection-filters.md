@@ -1,15 +1,20 @@
 # Device file selection
 
-Set these local settings explicitly to match the device whose selection policy
-this peer should use. They are never inferred from milestone/PREFERRED tweaks.
-Defaults select every path permitted by the existing ordinary-file write gate.
+Ignore-file settings derive from vault milestone/PREFERRED tweaks unless each
+variable is independently overridden. PREFERRED wins when present; otherwise
+all readable device maps must agree. Missing useIgnoreFiles defaults to false,
+and missing ignoreFiles defaults to `.gitignore`. Invalid types or disagreeing
+maps refuse startup and name the explicit override to set. Names are split on
+commas and trimmed like the plugin, then checked for safe vault-relative names.
+Regex lists stay env-only because syncOnlyRegEx and syncIgnoreRegEx are not
+TweakValuesTemplate keys and are not advertised in milestone snapshots.
 
 | Variable | Default | Meaning |
 |---|---|---|
 | `LIVESYNC_SYNC_ONLY_REGEX` | empty | Require any allow expression to match when the parsed list is nonempty |
 | `LIVESYNC_SYNC_IGNORE_REGEX` | empty | Reject when any ignore expression matches |
-| `LIVESYNC_USE_IGNORE_FILES` | `false` | Enable vault ignore files (`true` or `false`) |
-| `LIVESYNC_IGNORE_FILES` | empty | Comma-separated vault-relative ignore file names, e.g. `.gitignore,.syncignore` |
+| `LIVESYNC_USE_IGNORE_FILES` | empty | Unset/empty derives from vault; true/false explicitly overrides |
+| `LIVESYNC_IGNORE_FILES` | empty | Unset/empty derives from vault; non-empty explicitly overrides names, e.g. `.gitignore,.syncignore` |
 
 Regex lists use **`|[]|`**, not commas or newlines. ASCII spaces and LF are
 removed; quotes are literal, empty items are discarded, duplicates remain.
@@ -19,9 +24,9 @@ uses case-sensitive filenames. `/foo/g` is literal regex source, not JS literal
 syntax; `g`, `y`, `u`, and `v` flags cannot be configured by these settings.
 For example, `\.md$|[]|\.canvas$` allows either suffix.
 
-Selection filters are **off by default**. Without Node.js the server is fully
+Selection filters are off when the effective vault/operator policy is off. Without Node.js the server is fully
 functional with filters off; it never launches Node in that mode. With any
-selection filter configured, both backends require **Node.js 22+** in the service
+selection filter active, including vault useIgnoreFiles=true, both backends require **Node.js 22+** in the service
 PATH and refuse to start if the executable, version check, or runner self-test
 is unusable. The startup error names the cause and how to resolve it.
 
@@ -36,7 +41,18 @@ joins its pipe threads. Five-second evaluation deadlines include blocked stdin;
 timeout, nonzero exit, malformed responses and invalid field types deny writes.
 Errors expose structured diagnostics; see [Diagnostics and secrets](diagnostics-and-secrets.md).
 `backend_info` exposes `selection_engine_state` (`off`, `ready`, `unsupported`),
-`selection_engine_reason`, `filters_active`, and writer support.
+`selection_engine_reason`, `filters_active`, and writer support. Both backend_info
+and obsidian_vault_stats expose selection_only_source, selection_ignore_source
+(always explicit/env-only), selection_use_ignore_files_source and
+selection_ignore_files_source (`explicit` or `vault`); no settings values are echoed.
+Journal refresh rereads the milestone; a changed policy is capability-checked
+before writes, and old configuration verdicts cannot be reused.
+
+Reads bypass all selection filters, including explicitly configured filters.
+Devices retain local copies of files that later become ignored; the database
+is the source of truth for peer reads. Explicit LIVESYNC_USE_IGNORE_FILES=false
+is allowed even when the vault enables ignore files, but devices then drop
+peer writes to ignored paths instead of reflecting them to disk.
 
 A 4096-entry LRU caches supported allow/deny verdicts by canonical path, rules
 fingerprint, case sensitivity, and ignore-content fingerprint. CouchDB keeps it

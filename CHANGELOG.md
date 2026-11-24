@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Settings parity
 
+- Derive ignore-file selection independently from vault settings unless the
+  operator overrides each variable. Recheck journal milestone changes and
+  engine capability before writes; report typed setting sources. Vault-enabled
+  ignore files require Node.js 22+. Reads bypass all selection filters.
+
 - Guard oracle imports against stale input recipes. Cover splitter equality
   boundaries with upstream Blob/encoder/hash vectors, stored-child witnesses
   on both backends and an AST-complete comparison mutation inventory.

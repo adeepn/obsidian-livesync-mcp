@@ -246,7 +246,7 @@ class TestEpochAndWipe:
         assert await files_processed(backend) == 3
         # Epoch alone cannot confirm a wipe: keep the processed ledger.
         assert storage.list_calls == [""]
-        assert storage.get_calls == [SYNC_PARAMETERS_KEY]
+        assert storage.get_calls == [MILESTONE_KEY, SYNC_PARAMETERS_KEY]
         await backend.close()
 
     async def test_same_epoch_keeps_state(self, tmp_path):
@@ -293,7 +293,7 @@ class TestReplay:
         storage.get_calls.clear()
 
         await backend.refresh()
-        assert storage.get_calls == [SYNC_PARAMETERS_KEY, JOURNAL_1, JOURNAL_2, JOURNAL_3]
+        assert storage.get_calls == [MILESTONE_KEY, SYNC_PARAMETERS_KEY, JOURNAL_1, JOURNAL_2, JOURNAL_3]
         assert await files_processed(backend) == 3
 
     async def test_second_refresh_after_full_replay_is_noop(self, tmp_path):
@@ -305,9 +305,9 @@ class TestReplay:
 
         await backend.refresh(force=True)
         # One complete listing (Ruling B-8: no StartAfter cursor); every
-        # listed journal is already processed; only sync params are fetched.
+        # listed journal is already processed; only milestone and sync params are fetched.
         assert storage.list_calls == [""]
-        assert storage.get_calls == [SYNC_PARAMETERS_KEY]
+        assert storage.get_calls == [MILESTONE_KEY, SYNC_PARAMETERS_KEY]
         assert await files_processed(backend) == 3
 
     async def test_numeric_ordering_beats_lexicographic(self, tmp_path):
@@ -349,7 +349,7 @@ class TestReplay:
         storage._objects[JOURNAL_10] = journal_blob([meta_doc("j.md", "1-j")])
         storage.get_calls.clear()
         await backend.refresh(force=True)
-        assert storage.get_calls == [SYNC_PARAMETERS_KEY, JOURNAL_10]
+        assert storage.get_calls == [MILESTONE_KEY, SYNC_PARAMETERS_KEY, JOURNAL_10]
         assert await files_processed(backend) == 2
 
     async def test_mixed_width_failure_and_repair_converges(self, tmp_path):
@@ -377,7 +377,7 @@ class TestReplay:
         storage._objects[JOURNAL_9] = journal_blob([meta_doc("i.md", "1-i")])
         storage.get_calls.clear()
         await backend.refresh(force=True)
-        assert storage.get_calls == [SYNC_PARAMETERS_KEY, JOURNAL_9, JOURNAL_10, journal_11]
+        assert storage.get_calls == [MILESTONE_KEY, SYNC_PARAMETERS_KEY, JOURNAL_9, JOURNAL_10, journal_11]
         assert await files_processed(backend) == 3
 
     async def test_replay_error_message_sanitized(self, tmp_path, monkeypatch):
@@ -416,7 +416,7 @@ class TestReplay:
         storage.get_calls.clear()
         with pytest.raises(StorageError, match=JOURNAL_2):
             await backend.refresh(force=True)
-        assert storage.get_calls == [SYNC_PARAMETERS_KEY, JOURNAL_2]
+        assert storage.get_calls == [MILESTONE_KEY, SYNC_PARAMETERS_KEY, JOURNAL_2]
 
     async def test_control_objects_are_never_parsed_as_journals(self, tmp_path):
         backend, storage = make_backend(
@@ -427,7 +427,7 @@ class TestReplay:
         storage.get_calls.clear()
 
         await backend.refresh()
-        assert storage.get_calls == [SYNC_PARAMETERS_KEY, JOURNAL_1, JOURNAL_2, JOURNAL_3]
+        assert storage.get_calls == [MILESTONE_KEY, SYNC_PARAMETERS_KEY, JOURNAL_1, JOURNAL_2, JOURNAL_3]
         assert await files_processed(backend) == 3
 
     async def test_unavailable_get_propagates_and_keeps_checkpoint(self, tmp_path):
@@ -438,7 +438,7 @@ class TestReplay:
         with pytest.raises(StorageUnavailable):
             await backend.refresh()
         assert await files_processed(backend) == 0
-        assert storage.get_calls == [SYNC_PARAMETERS_KEY]
+        assert storage.get_calls == [MILESTONE_KEY]
 
         # Once healthy again, replay completes from the checkpoint.
         await backend.refresh(force=True)

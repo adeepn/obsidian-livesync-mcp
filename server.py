@@ -62,8 +62,8 @@ def _configure_device_policy(result, cfg):
     result.auto_accept_compatible_tweak = getattr(cfg, 'auto_accept_compatible_tweak', True)
     result.selection_only = getattr(cfg, 'selection_only', '')
     result.selection_ignore = getattr(cfg, 'selection_ignore', '')
-    result.selection_use_ignore_files = getattr(cfg, 'selection_use_ignore_files', False)
-    result.selection_ignore_files = getattr(cfg, 'selection_ignore_files', ())
+    result.selection_use_ignore_files = getattr(cfg, 'selection_use_ignore_files', None)
+    result.selection_ignore_files = getattr(cfg, 'selection_ignore_files', None)
 
 
 def get_backend(cfg: Config) -> StorageBackend:
@@ -1401,6 +1401,19 @@ async def obsidian_vault_stats() -> str:
                 f"local peer state exceeds {threshold} MB; "
                 "see README 'Local cache' for monitoring and reset"
             )
+    # Public selection observability is a closed projection, never arbitrary
+    # backend settings or exception text (P-19/P-21/P-22).
+    for field in ('selection_only_source', 'selection_ignore_source',
+                  'selection_use_ignore_files_source', 'selection_ignore_files_source'):
+        if field in info:
+            value = info[field]
+            local_state[field] = value if type(value) is str and value in {'explicit', 'vault'} else '<unexpected source>'
+    if 'selection_engine_state' in info:
+        value = info['selection_engine_state']
+        local_state['selection_engine_state'] = value if type(value) is str and value in {'off', 'ready', 'unsupported'} else 'unsupported'
+    for field in ('filters_active', 'selection_writer_supported'):
+        if field in info:
+            local_state[field] = info[field] if type(info[field]) is bool else False
     if "tweak_assessment" in info:
         assessment = info["tweak_assessment"]
         local_state["tweak_assessment"] = assessment_fields(assessment)

@@ -138,6 +138,19 @@ for(const mode of ['assessment','policy']) {
     policy.services={setting:{saveSettingData:async()=>{}}};
     numberVectors.push({inputJson,expected,winner:(await policy._shouldAutoAcceptCompatibleLossy(expected))??null});
 }
+// C:serviceFeatures/targetFilter.ts:93-97, execute the actual refresh closure.
+const filterSource=read(root,pin,'serviceFeatures/targetFilter.ts');
+const refreshBegin=filterSource.indexOf('    const refreshSettings = () => {');
+const refreshEnd=filterSource.indexOf('    const invalidateIgnoreFileCache', refreshBegin);
+if(refreshBegin<0||refreshEnd<0) throw Error('Ignore refresh boundary');
+const splitIgnore=vm.compileFunction('let ignoreFiles=[]; const host={services:{setting:{currentSettings:()=>settings}}};\n'
+    +filterSource.slice(refreshBegin,refreshEnd)+'\nrefreshSettings(); return ignoreFiles;', ['settings']);
+const defaults=modules.get('common/models/setting.const.defaults.ts').namespace.DEFAULT_SETTINGS;
+const selection={templateKeys:Object.keys(definitions.TweakValuesTemplate),
+    defaults:{useIgnoreFiles:defaults.useIgnoreFiles,ignoreFiles:defaults.ignoreFiles},
+    names:['.gitignore',' a, b ','a,,b','\ufeffa\ufeff,\u0085b\u0085',' .gitignore , rules '].map(ignoreFiles=>
+        ({input:ignoreFiles,expected:splitIgnore({ignoreFiles})})),
+    dependencies:[]}; // Only real upstream modules and Node built-ins; no npm imports.
 fs.writeFileSync(out,gzipSync(JSON.stringify({upstream_commit:pin,plugin_commit:pluginPin,node:process.version,
-    seed:'0x5b202611',source_sha256:hashes,rules:definitions.TweakCompatibilityRules,vectors,policies,numberVectors})+'\n'));
+    seed:'0x5b202611',source_sha256:hashes,selection,rules:definitions.TweakCompatibilityRules,vectors,policies,numberVectors})+'\n'));
 console.log(`${vectors.length} assessment pairs (raw + migrated) + ${numberVectors.length} numeric boundary pairs; ${policies.length} plugin policy cases; ${modules.size} real upstream modules`);

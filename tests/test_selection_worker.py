@@ -32,7 +32,8 @@ async def test_cache_hit_rules_invalidate_and_attachment_once(backend, monkeypat
     assert worker.evaluations == count
     b.selection_only = 'txt$'
     assert not (await b.selection_for('a.md')).allowed
-    assert worker.evaluations == count + 1
+    # Changed configuration is capability-checked before evaluating the path.
+    assert worker.evaluations == count + 2
     calls = []
     original = b.selection_for
     async def track(path):

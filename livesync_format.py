@@ -181,6 +181,8 @@ _RECOGNIZED_TWEAK_KEYS = frozenset(
         "minimumChunkSize",
         "customChunkSize",
         "syncMaxSizeInMB",
+        "useIgnoreFiles",
+        "ignoreFiles",
         "idDerivationVersion",
         "idDerivationKey",
     }
@@ -458,6 +460,50 @@ def chunk_id_for(data: str) -> str:
 
 class UnsupportedWriterSettings(UnsupportedVaultSettings):
     """Writer-only incompatibility; existing content remains readable."""
+
+
+# ECMAScript TrimString whitespace (targetFilter.ts:95 uses String.trim).
+_JS_TRIM = ("\u0009\u000a\u000b\u000c\u000d\u0020\u00a0\u1680"
+            "\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff")
+
+
+def resolve_ignore_settings(
+    milestone_settings: dict, *, use_override: bool | None = None,
+    names_override: tuple[str, ...] | None = None,
+) -> tuple[bool, tuple[str, ...]]:
+    """Resolve independent operator overrides, otherwise PREFERRED/all devices.
+
+    C:common/models/tweak.definition.ts:116-149 advertises both settings.
+    C:common/models/setting.const.defaults.ts:140-141 supplies missing defaults.
+    C:serviceFeatures/targetFilter.ts:95 splits commas and trims each name.
+    Regex lists are absent from the template and remain operator-only.
+    """
+    maps = None
+
+    def values(key, default, expected, invalid, conflict):
+        nonlocal maps
+        if maps is None:
+            maps = _milestone_setting_maps(milestone_settings)
+        result = [m.get(key, default) for m in maps]
+        if any(type(v) is not expected for v in result):
+            raise UnsupportedVaultSettings(invalid.value)
+        if any(v != result[0] for v in result[1:]):
+            raise UnsupportedVaultSettings(conflict.value)
+        return result[0]
+    use = use_override if use_override is not None else values(
+        'useIgnoreFiles', False, bool, DiagnosticCode.IGNORE_BOOLEAN, DiagnosticCode.IGNORE_USE_CONFLICT)
+    if names_override is not None:
+        names = names_override
+    else:
+        raw = values('ignoreFiles', '.gitignore', str,
+                     DiagnosticCode.IGNORE_STRING, DiagnosticCode.IGNORE_NAMES_CONFLICT)
+        names = tuple(name.strip(_JS_TRIM) for name in raw.split(','))
+        # Retain the existing vault-relative-name safety rule; empty names are
+        # refused rather than silently changing the upstream split result.
+        if any(name.startswith('/') or '\\' in name or
+               any(part in ('', '.', '..') for part in name.split('/')) for name in names):
+            raise UnsupportedVaultSettings(DiagnosticCode.IGNORE_NAMES.value)
+    return use, names
 
 
 def resolve_sync_max_size(milestone_settings: dict) -> float:

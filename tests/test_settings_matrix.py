@@ -20,7 +20,8 @@ Task 5's boundary tests own the 50 MiB edge.
 Every row asserts exact ordered pieces and chunk IDs from the independent
 pinned Node oracle, on both backends, without a fallback. Inputs are shared
 with the generator; expected partitions never use production splitting/hash.
-No Node or network is needed to run tests.
+Default-policy rows need no Node or network. The G1 active-ignore lifecycle
+witness requires Node 22+ and uses only local storage doubles.
 """
 import base64
 from contextlib import asynccontextmanager
@@ -450,3 +451,54 @@ async def test_settings_persisted_equality_witness(tmp_path, kind, case):
         note = await backend.read_note(path)
         if not is_text_blob(case[-1]) and case[-1] != 'encoder-exact128':
             assert note['data' if isinstance(data, bytes) else 'text'] == data
+
+
+@pytest.mark.parametrize('kind', BACKENDS)
+async def test_vault_ignore_policy_lifecycle_and_wire_identity(tmp_path, kind):
+    # C:targetFilter.ts:95,134-145,205; incoming events.ts:217-219.
+    # Compare exact persisted partitions to the independent upstream matrix
+    # oracle, then to a peer with selection disabled on the same input.
+    from tests.test_selection_settings import seed_hidden_ignore
+    from storage_base import SelectionRefused
+    case = CASES[0]
+    settings = settings_for(case)
+    suffix, content = payload(case[-1])
+    path = 'allowed' + suffix
+    saved = []
+    for enabled in (False, True):
+        async with matrix_vault(tmp_path / str(enabled), kind,
+                {**settings, 'useIgnoreFiles': enabled}) as (b, doc, chunks, writes, storage):
+            await b.startup_check()
+            await seed_hidden_ignore(b, 'private/**')
+            def mutations():
+                return len(writes) if kind == 'journal' else sum(r.method in ('PUT', 'DELETE') for r in writes)
+            before = mutations()
+            if enabled:
+                with pytest.raises(SelectionRefused):
+                    await b.write_note('private/no.md', 'no', create=True)
+                assert mutations() == before
+            await b.write_note(path, content, create=True)
+            metadata = await doc(path)
+            pieces = await pieces_for(b, metadata['children'])
+            assert_partition(pieces, metadata['children'], matrix_vector(case)['payloads']['initial'])
+            saved.append((metadata['_id'], metadata['children'], pieces))
+            splitter = ContentSplitter(settings)
+            await assert_note(b, doc, path, content, splitter.version,
+                              matrix_vector(case)['payloads']['initial'])
+            updated = content + '\nupdated'
+            await b.write_note(path, updated)
+            field = 'text' if suffix == '.md' else 'data'
+            expected = updated if field == 'text' else updated.encode()
+            assert (await b.read_note(path))[field] == expected
+            copy = 'copy' + suffix
+            renamed = 'renamed' + suffix
+            await b.copy_note(path, copy)
+            assert (await b.read_note(copy))[field] == expected
+            await b.rename_note(path, renamed)
+            assert (await b.read_note(renamed))[field] == expected
+            assert await b.read_note(path) is None
+            for deleted in (copy, renamed):
+                assert await b.delete_note(deleted) is True
+                assert await b.read_note(deleted) is None
+                assert (await doc(deleted))['deleted'] is True
+    assert saved[0] == saved[1]

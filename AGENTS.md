@@ -33,6 +33,11 @@ This repository is a small Python MCP server for accessing an Obsidian LiveSync 
 - `.env.example`: required configuration template.
 - `obsidian-mcp.service`: optional systemd deployment unit.
 
+`tests/test_selection_settings.py` covers independent vault-derived ignore settings,
+backend admission, refresh, cache invalidation and typed source diagnostics.
+`scripts/extract_tweak_vectors.mjs` records real upstream template keys, ignore
+defaults and name splitting as well as tweak compatibility vectors.
+
 `scripts/extract_settings_oracle.mjs` also records direct published encoder and
 raw-hash conversion vectors in `tests/fixtures/settings_oracle_upstream.json.gz`.
 The shared loader enforces the input digest before exporting any fixture view.
@@ -82,7 +87,8 @@ allow up to roughly 5 minutes). Run serially to avoid load-dependent timing.
 Oracle-backed tests consume committed fixtures offline and never invoke Node.
 Regenerating fixtures requires Node 26.13.1+; see the commands at the top of
 `scripts/extract_*`. **The full suite also includes active-selection integration
-tests that invoke Node 22+** (`test_target_filter.py`, `test_selection_worker.py`).
+tests that invoke Node 22+** (`test_target_filter.py`, `test_selection_worker.py`, `test_selection_settings.py`,
+and the active-ignore lifecycle in `test_settings_matrix.py`).
 The claim that Node is needed only for regeneration is false for the current
 suite; removing that integration dependency is separate implementation work.
 The server itself runs without Node when selection filters are off.

@@ -98,8 +98,8 @@ are read only for the selected backend. Empty defaults below mean an empty strin
 | `LIVESYNC_TEXT_VERDICT_CACHE_ENTRIES` | `4096` | Positive integer | Negative verdict LRU bound |
 | `LIVESYNC_SYNC_ONLY_REGEX` | `empty` | Optional | Local allow regex list, literal `|[]|` separators |
 | `LIVESYNC_SYNC_IGNORE_REGEX` | `empty` | Optional | Local ignore regex list |
-| `LIVESYNC_USE_IGNORE_FILES` | `false` | Boolean | Enable vault ignore files |
-| `LIVESYNC_IGNORE_FILES` | `empty` | Optional | Comma-separated vault-relative ignore names |
+| `LIVESYNC_USE_IGNORE_FILES` | `empty` | Optional boolean | Empty/unset derives useIgnoreFiles from vault settings; true/false overrides |
+| `LIVESYNC_IGNORE_FILES` | `empty` | Optional | Empty/unset derives ignoreFiles from vault settings; non-empty overrides comma-separated names |
 | `LIVESYNC_SYNC_MAX_SIZE_MB` | `empty` | Finite number or empty | Override vault size policy; <=0 disables |
 | `LIVESYNC_DISABLE_CHECKING_CONFIG_MISMATCH` | `false` | Boolean | Bypass ordinary tweak differences, never identity/E2EE guards |
 | `LIVESYNC_AUTO_ACCEPT_COMPATIBLE_TWEAK` | `true` | Boolean | Align fully advertised compatible-lossy tweaks |
@@ -144,7 +144,8 @@ combination. [Source inventory and caveats](docs/superpowers/specs/2026-11-23-se
 | `minimumChunkSize` | Numeric (default 20) | Identical for valid values; V2 plain 0 not supported | Algorithm-specific minimum; V2 plain requires >0; negative/nonnumeric values refuse |
 | `syncMaxSizeInMB` | UI number >=0, default 50; 0 disables | Deliberate difference | Device ordinary-write predicate; oversized rename refuses to protect source |
 | `syncOnlyRegEx`, `syncIgnoreRegEx` | ECMAScript pattern lists | Identical when configured | Set local env explicitly; never inferred from milestone |
-| `useIgnoreFiles`, `ignoreFiles` | Boolean / filename list | Identical when configured | Local env; upstream glob/rule order, Node.js 22+ required |
+| `useIgnoreFiles` | Boolean | Identical | Derived from vault settings unless overridden; active policy requires Node.js 22+ |
+| `ignoreFiles` | Filename list | Identical | Derived from vault settings unless overridden; upstream glob/rule order |
 | `useEden` and count/length/age controls | Boolean / numbers | Identical | Current upstream writes empty Eden regardless; historical inline chunks readable |
 | `longLineThreshold` | Numeric (default 250) | Identical | Unused by dispatched algorithms at this pin |
 | `encrypt`, `E2EEAlgorithm`, `useDynamicIterationCount`, `encryptInternalMetadata` | E2EE options | Not supported for E2EE | Encrypted vaults fail startup; no encryption/decryption |
@@ -171,8 +172,13 @@ combination. [Source inventory and caveats](docs/superpowers/specs/2026-11-23-se
   attachment upload explicitly opts into `lossy_text=true` replacement.
 - Remote wipe recovery retains local revisions/chunks. Local-only survivors stay
   readable and are not republished automatically; account for them before reset.
-- Selection rules need optional Node.js 22+ and explicit local env settings.
-  With filters off the server runs without Node. [Filter syntax](docs/selection-filters.md).
+- Ignore-file selection derives from vault settings unless independently overridden.
+  Active selection requires Node.js 22+, including vault useIgnoreFiles=true.
+  LIVESYNC_USE_IGNORE_FILES=false is allowed, but devices drop peer writes to
+  ignored paths. Reads bypass all filters, including explicitly configured filters;
+  devices retain local files that later become ignored, and the database remains
+  the read source of truth. With filters off no Node is launched.
+  [Filter syntax](docs/selection-filters.md).
 - There is no local vault folder, Hidden File Sync, customization/plugin sync or
   suspended filesystem reflection. DB reads include received oversized files;
   a device may decline to reflect those files until its settings permit them.

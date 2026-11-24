@@ -482,3 +482,21 @@ Source correction to the task premise: V2 `chunkStringGenerator` does protect
 surrogate pairs (`chunks.ts:307-310`, called at `:362` for non-plain text).
 The committed oracle also executes V2/V2-segmenter on this witness to pin that
 distinction. The demonstrated split-pair transport loss is V1 non-plain.
+
+
+### 2026-11-24 — G1 ignore-file derivation
+
+[DECISION] Resolve useIgnoreFiles and ignoreFiles independently from PREFERRED
+or agreeing device snapshots unless explicitly overridden. Empty environment
+variables mean derive. Regex settings remain env-only (absent from the upstream
+template). Active vault ignore policy requires Node.js 22+; explicit false can
+produce peer-only ghost notes that devices do not reflect. Reads bypass all
+filters. Journal refresh checks milestone content changes and revalidates the
+effective policy before writes; rules fingerprints separate cached verdicts.
+
+Source: commonlib tweak.definition.ts:116-149, setting.const.defaults.ts:140-141,
+serviceFeatures/targetFilter.ts:95,134-145,205 and
+serviceModules/ServiceFileHandlerBase/events.ts:217-219 at the audited pin.
+The two service files are in commonlib, rather than the plugin checkout named
+in the task premise. Existing journal refresh did not reread milestone settings;
+G1 adds that check for ignore-file policy.

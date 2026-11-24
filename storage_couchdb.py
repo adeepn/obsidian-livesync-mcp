@@ -384,7 +384,6 @@ class CouchDBBackend(DeviceSelection):
     # -- StorageBackend: lifecycle -------------------------------------------
 
     async def startup_check(self) -> None:
-        await self.selection_startup()
         self._text_verdicts.clear()
         self._tweak_assessment = {"status": "OK", "differing_keys": []}
         self._writer_unsupported_reason = None
@@ -403,6 +402,8 @@ class CouchDBBackend(DeviceSelection):
         if milestone.status_code != 200:
             if _is_db_missing(milestone):
                 raise StorageUnavailable(PublicDiagnostic(DiagnosticCode.COUCHDB_DATABASE_NOT_FOUND, status=404, operation=milestone.request.method, transport='CouchDB', cause=httpx.HTTPStatusError))
+            self.resolve_selection_settings({'pathNormalizationVersion': 0})
+            await self.selection_startup()
             await self.refresh_selection_files()
             return  # no milestone document: pre-E2EE or fresh vault
         try:
@@ -411,6 +412,7 @@ class CouchDBBackend(DeviceSelection):
             body = None
         body = body if isinstance(body, dict) else {}
         try:
+            self.resolve_selection_settings(body)
             if self.sync_max_size_mb_override is None:
                 resolve_sync_max_size(body)  # retain all-device fallback guards
             resolved = resolve_tweak_startup(body, couchdb_mode=True,
@@ -431,6 +433,7 @@ class CouchDBBackend(DeviceSelection):
             self._tweak_assessment = getattr(exc, "tweak_assessment", self._tweak_assessment)
             raise UnsupportedVault(settings_exception_diagnostic(exc)) from exc
 
+        await self.selection_startup()
         await self.refresh_selection_files()
 
     def _path2id(self, path: str) -> str:

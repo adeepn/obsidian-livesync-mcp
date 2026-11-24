@@ -101,8 +101,8 @@ class Config:
     auto_accept_compatible_tweak: bool = True
     selection_only: str = ''
     selection_ignore: str = ''
-    selection_use_ignore_files: bool = False
-    selection_ignore_files: tuple[str, ...] = ()
+    selection_use_ignore_files: bool | None = None
+    selection_ignore_files: tuple[str, ...] | None = None
     text_verdict_cache_entries: int = 4096
     text_scan_max_bytes: int = 8 * 1024 * 1024
     scan_max_notes: int = 10000
@@ -368,8 +368,8 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
 
     api_key, oauth_password, oauth_client_id, oauth_client_secret = _load_auth(env)
 
-    use_ignore = env.get('LIVESYNC_USE_IGNORE_FILES', 'false').lower()
-    if use_ignore not in ('true', 'false'):
+    use_ignore = env.get('LIVESYNC_USE_IGNORE_FILES', '').lower()
+    if use_ignore not in ('', 'true', 'false'):
         raise ConfigError('LIVESYNC_USE_IGNORE_FILES must be true or false.')
     ignore_files = tuple(
         name.strip() for name in env.get('LIVESYNC_IGNORE_FILES', '').split(',')
@@ -392,8 +392,8 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
         auto_accept_compatible_tweak=tweak_policy['LIVESYNC_AUTO_ACCEPT_COMPATIBLE_TWEAK'],
         selection_only=env.get('LIVESYNC_SYNC_ONLY_REGEX', ''),
         selection_ignore=env.get('LIVESYNC_SYNC_IGNORE_REGEX', ''),
-        selection_use_ignore_files=use_ignore == 'true',
-        selection_ignore_files=ignore_files,
+        selection_use_ignore_files=None if not use_ignore else use_ignore == 'true',
+        selection_ignore_files=ignore_files if env.get('LIVESYNC_IGNORE_FILES', '') else None,
         text_verdict_cache_entries=scan_limits[3],
         text_scan_max_bytes=scan_limits[2],
         scan_max_notes=scan_limits[0],

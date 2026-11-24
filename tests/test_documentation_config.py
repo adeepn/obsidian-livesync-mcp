@@ -140,3 +140,44 @@ def test_part_zero_status_records_executable_inventory():
     assert 'Part 0 round 2 — 2026-11-24 (S1, P-27/P-32)' in status
     assert 'tests/splitter_comparisons.json' in status
     assert 'helper-level oracle vectors' in status
+
+
+@pytest.mark.parametrize('value,expected', [(None, None), ('', None), ('true', True), ('false', False)])
+def test_ignore_selection_tristate_defaults(value, expected):
+    env = dict(LIVESYNC_BACKEND='couchdb', COUCHDB_USER='test-user',
+               COUCHDB_PASSWORD='test-password', COUCHDB_DATABASE='vault', MCP_API_KEY='test-key')
+    if value is not None:
+        env['LIVESYNC_USE_IGNORE_FILES'] = value
+        env['LIVESYNC_IGNORE_FILES'] = ''
+    cfg = load_config(env)
+    assert cfg.selection_use_ignore_files is expected
+    assert cfg.selection_ignore_files is None
+    template = dict(dotenv_values(ROOT / '.env.example'))
+    assert template['LIVESYNC_USE_IGNORE_FILES'] == ''
+    assert template['LIVESYNC_IGNORE_FILES'] == ''
+
+
+@pytest.mark.parametrize('use', [None, '', 'true', 'false'])
+@pytest.mark.parametrize('names', [None, '', '.gitignore, rules.txt'])
+def test_ignore_environment_choices_are_independent(use, names):
+    env = dict(LIVESYNC_BACKEND='couchdb', COUCHDB_USER='test-user',
+               COUCHDB_PASSWORD='test-password', COUCHDB_DATABASE='vault', MCP_API_KEY='test-key')
+    if use is not None:
+        env['LIVESYNC_USE_IGNORE_FILES'] = use
+    if names is not None:
+        env['LIVESYNC_IGNORE_FILES'] = names
+    cfg = load_config(env)
+    assert cfg.selection_use_ignore_files is (None if not use else use == 'true')
+    assert cfg.selection_ignore_files == (None if not names else ('.gitignore', 'rules.txt'))
+
+
+def test_vault_ignore_derivation_documentation_contract():
+    readme = (ROOT / 'README.md').read_text()
+    for setting in ('useIgnoreFiles', 'ignoreFiles'):
+        row = next(line for line in readme.splitlines() if line.startswith('| `' + setting + '` |'))
+        assert '| Identical |' in row
+        assert 'Derived from vault settings unless overridden' in row
+    focused = (ROOT / 'docs/selection-filters.md').read_text()
+    assert 'Reads bypass all selection filters, including explicitly configured filters.' in focused
+    assert 'Regex lists stay env-only' in focused
+    assert 'including vault useIgnoreFiles=true' in focused

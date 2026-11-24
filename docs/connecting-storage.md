@@ -127,3 +127,15 @@ See [S3 operation](s3-journal.md) and [recovery](local-state-and-recovery.md).
 The offline documentation tests substitute marked angle-bracket fields with
 local disposable values, parse every block and call `config.load_config`.
 That proves configuration syntax/validation, not connectivity to a real store.
+
+### Selection policy
+
+Ignore-file settings derive from vault PREFERRED, or agreeing device maps, unless
+LIVESYNC_USE_IGNORE_FILES (true/false) and LIVESYNC_IGNORE_FILES (non-empty names)
+independently override them. Unset/empty means derive. A vault with
+useIgnoreFiles=true requires Node.js 22+ in the service PATH. Explicit false is
+allowed, but devices drop peer writes to ignored paths. Regex lists stay env-only
+because syncOnlyRegEx/syncIgnoreRegEx are absent from TweakValuesTemplate.
+Reads bypass all filters, including explicit filters; the database remains the
+source of truth even when devices keep local files that later become ignored.
+See [selection filters](selection-filters.md) for syntax and diagnostics.

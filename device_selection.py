@@ -1,22 +1,37 @@
 """Local device selection shared by both storage writers."""
-from diagnostic_hygiene import writer_diagnostic
+from diagnostic_hygiene import writer_diagnostic, settings_exception_diagnostic
 
 import asyncio
 import hashlib
 import json
 from collections import OrderedDict
 
-from livesync_format import canonical_path, TargetVerdict
+from livesync_format import (canonical_path, TargetVerdict, resolve_ignore_settings,
+                             UnsupportedVaultSettings)
 from selection_engine import SelectionWorker, EngineFailure
-from storage_base import SelectionRefused, WriterUnsupported
+from storage_base import SelectionRefused, WriterUnsupported, UnsupportedVault
 
 
 class DeviceSelection:
     selection_only = ''
     selection_ignore = ''
-    selection_use_ignore_files = False
-    selection_ignore_files = ()
+    selection_use_ignore_files = None
+    selection_ignore_files = None
     selection_cache_entries = 4096
+
+    def resolve_selection_settings(self, milestone):
+        # Capture the operator's independent tri-state choices before replacing
+        # public attributes with resolved values; repeated refreshes keep sources.
+        if not hasattr(self, '_selection_overrides'):
+            self._selection_overrides = (self.selection_use_ignore_files, self.selection_ignore_files)
+        use, names = self._selection_overrides
+        try:
+            self.selection_use_ignore_files, self.selection_ignore_files = resolve_ignore_settings(
+                milestone, use_override=use, names_override=names)
+        except UnsupportedVaultSettings as exc:
+            self._selection_resolution_diagnostic = settings_exception_diagnostic(exc)
+            raise
+        self._selection_resolution_diagnostic = None
 
     def _selection_active(self):
         return bool(self.selection_only or self.selection_ignore or self.selection_use_ignore_files)
@@ -40,11 +55,11 @@ class DeviceSelection:
         return dict(path=path, only_patterns=self.selection_only,
                     ignore_patterns=self.selection_ignore,
                     case_sensitive=identity in ('case-sensitive', 'nfc-case-sensitive'),
-                    ignore_files=files, ignore_names=self.selection_ignore_files)
+                    ignore_files=files, ignore_names=self.selection_ignore_files or ())
 
     def _selection_configuration(self):
         return (self.selection_only, self.selection_ignore,
-                self.selection_use_ignore_files, tuple(self.selection_ignore_files))
+                self.selection_use_ignore_files, tuple(self.selection_ignore_files or ()))
 
     async def selection_diagnostics(self):
         if (self._selection_active() and getattr(self, '_selection_checked_configuration', None)
@@ -105,12 +120,22 @@ class DeviceSelection:
     def selection_info(self):
         self._selection_init()
         active = self._selection_active()
+        overrides = getattr(self, '_selection_overrides',
+                            (self.selection_use_ignore_files, self.selection_ignore_files))
+        resolution_error = getattr(self, '_selection_resolution_diagnostic', None)
         # Read the last observed capability without launching a process.
         reason = writer_diagnostic(getattr(self, "_selection_diagnostic", None) or self._selection_engine_reason) if active and self._selection_engine_reason else None
+        if resolution_error is not None:
+            reason = resolution_error.format()
+        state = self._selection_engine_state if active else 'off'
         return {
-            'selection_engine_state': self._selection_engine_state if active else 'off',
+            'selection_engine_state': 'unsupported' if resolution_error else state,
             'selection_engine_reason': reason,
             'filters_active': active,
+            'selection_only_source': 'explicit',
+            'selection_ignore_source': 'explicit',
+            'selection_use_ignore_files_source': 'explicit' if overrides[0] is not None else 'vault',
+            'selection_ignore_files_source': 'explicit' if overrides[1] is not None else 'vault',
             'selection_writer_supported': reason is None,
             'selection_unsupported_reason': reason,
         }
@@ -143,6 +168,10 @@ class DeviceSelection:
         return len(getattr(self, '_selection_cache', {}))
 
     async def selection_for(self, path):
+        if getattr(self, '_selection_resolution_diagnostic', None) is not None:
+            raise UnsupportedVault(self._selection_resolution_diagnostic)
+        if getattr(self, '_selection_checked_configuration', None) != self._selection_configuration():
+            await self.selection_startup()
         if not self._selection_active():
             return TargetVerdict(True)
         self._selection_init()

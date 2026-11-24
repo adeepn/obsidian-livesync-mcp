@@ -261,7 +261,6 @@ class JournalBackend(DeviceSelection):
         present. A bucket without milestone and journals is treated as a
         fresh vault with legacy path identity (logged).
         """
-        await self.selection_startup()
         self._tweak_assessment = {"status": "OK", "differing_keys": []}
         self._writer_unsupported_reason = None
         milestone = self._load_milestone()
@@ -272,6 +271,7 @@ class JournalBackend(DeviceSelection):
                     "rebuild from the authoritative vault"
                 )
             logger.warning('journal bucket has no milestone and no journal files; treating it as a fresh vault with legacy path identity')
+            self.resolve_selection_settings({'pathNormalizationVersion': 0})
             identity = PATH_IDENTITY_LEGACY
             self._splitter = ContentSplitter()
             self.sync_max_size_mb = (50 if self.sync_max_size_mb_override is None
@@ -280,6 +280,7 @@ class JournalBackend(DeviceSelection):
             if milestone.get("locked") is True:
                 logger.warning('vault milestone has advisory locked: true flag; remote marked as rebuilt; peer performs full replay')
             try:
+                self.resolve_selection_settings(milestone)
                 if self.sync_max_size_mb_override is None:
                     resolve_sync_max_size(milestone)  # retain all-device fallback guards
                 resolved = resolve_tweak_startup(milestone,
@@ -299,6 +300,8 @@ class JournalBackend(DeviceSelection):
             except UnsupportedVaultSettings as exc:
                 self._tweak_assessment = getattr(exc, "tweak_assessment", self._tweak_assessment)
                 raise UnsupportedVault(settings_exception_diagnostic(exc)) from exc
+
+        await self.selection_startup()
 
         # Identity changes quarantine the old state without mixing IDs.
         # A repeated startup replaces the previous connection cleanly.
@@ -357,6 +360,18 @@ class JournalBackend(DeviceSelection):
                     "refresh failed previously; retry after interval or force"
                 ) from self._last_refresh_failure
             return
+        # C:serviceFeatures/targetFilter.ts:129-131 reloads realised settings.
+        # Journal control objects live outside the replay stream. Resolve on
+        # every unthrottled refresh, including recovery to the previous bytes
+        # after a rejected milestone. Only effective config changes recheck Node.
+        milestone = self._load_milestone()
+        try:
+            self.resolve_selection_settings(milestone if milestone is not None else
+                                            {'pathNormalizationVersion': 0})
+            if self._selection_checked_configuration != self._selection_configuration():
+                await self.selection_startup()
+        except UnsupportedVaultSettings as exc:
+            raise UnsupportedVault(settings_exception_diagnostic(exc)) from exc
         self._refresh_deadline = now + self.max_refresh_seconds
         self._refresh_downloaded = 0
         recent_docs: list[dict] | None = None
