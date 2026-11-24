@@ -11,6 +11,23 @@ class DeviceSelection:
     selection_use_ignore_files = False
     selection_ignore_files = ()
 
+    async def selection_startup(self):
+        from selection_engine import capability_check, EngineFailure
+        self._selection_engine_state = 'off'
+        self._selection_engine_reason = None
+        if not (self.selection_only or self.selection_ignore or self.selection_use_ignore_files):
+            return
+        try:
+            await asyncio.to_thread(capability_check)
+            verdict = await asyncio.to_thread(self.selection_verdict)
+            if not verdict.writer_supported:
+                raise WriterUnsupported(verdict.reason)
+        except (EngineFailure, WriterUnsupported) as exc:
+            self._selection_engine_state = 'unsupported'
+            self._selection_engine_reason = str(exc)
+            raise WriterUnsupported(str(exc)) from None
+        self._selection_engine_state = 'ready'
+
     def selection_verdict(self, path='', **kwargs):
         identity = getattr(self, '_path_identity', None)
         if identity is None:
@@ -29,6 +46,8 @@ class DeviceSelection:
         if verdict.writer_supported and self.selection_ignore:
             verdict = is_target_file('', ignore_patterns=self.selection_ignore)
         return {
+            'selection_engine_state': getattr(self, '_selection_engine_state', 'off'),
+            'selection_engine_reason': getattr(self, '_selection_engine_reason', None),
             'filters_active': bool(self.selection_only or self.selection_ignore or self.selection_use_ignore_files),
             'selection_writer_supported': verdict.writer_supported,
             'selection_unsupported_reason': verdict.reason,

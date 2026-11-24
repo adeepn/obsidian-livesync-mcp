@@ -374,6 +374,7 @@ class CouchDBBackend(DeviceSelection):
     # -- StorageBackend: lifecycle -------------------------------------------
 
     async def startup_check(self) -> None:
+        await self.selection_startup()
         self._text_verdicts.clear()
         self._writer_unsupported_reason = None
         self._splitter = ContentSplitter()
@@ -432,6 +433,9 @@ class CouchDBBackend(DeviceSelection):
     async def backend_info(self) -> dict:
         info = await self._db_info()
         selection = await asyncio.to_thread(self.selection_info)
+        if getattr(self, '_selection_engine_reason', None):
+            selection['selection_writer_supported'] = False
+            selection['selection_unsupported_reason'] = self._selection_engine_reason
         return {
             **selection,
             "writer_supported": self._writer_unsupported_reason is None and selection["selection_writer_supported"],

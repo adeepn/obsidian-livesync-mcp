@@ -593,9 +593,7 @@ def is_target_file(path: str, *, only_patterns: str = '', ignore_patterns: str =
     No storage access or mutation. Node is needed only for active filters;
     Python regex is deliberately never substituted for ECMAScript RegExp.
     """
-    import json
-    import subprocess
-    from pathlib import Path
+    from selection_engine import evaluate, EngineFailure
 
     if not only_patterns and not ignore_patterns and ignore_files is None:
         return TargetVerdict(True)
@@ -603,12 +601,6 @@ def is_target_file(path: str, *, only_patterns: str = '', ignore_patterns: str =
                    case_sensitive=case_sensitive, ignore_files=ignore_files,
                    ignore_names=ignore_names)
     try:
-        result = subprocess.run(
-            ['node', str(Path(__file__).parent / 'vendor/selection/runner.mjs')],
-            input=json.dumps(payload), capture_output=True, text=True, timeout=5,
-            check=True,
-        )
-        return TargetVerdict(**json.loads(result.stdout))
-    except (OSError, subprocess.SubprocessError, ValueError, TypeError):
-        return TargetVerdict(False, writer_supported=False,
-                             reason='Device selection engine unavailable or timed out; Node.js 22+ required')
+        return evaluate(payload)
+    except EngineFailure as exc:
+        return TargetVerdict(False, writer_supported=False, reason=str(exc))
