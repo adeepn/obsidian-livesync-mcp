@@ -188,3 +188,5 @@ shapes and the incomplete-index pagination caveat.
 `tests/test_reserved_compression_prefix.py` reuses the committed native compression oracle for both write settings, repeat/fresh-reader lifecycle, typed notices, invalid-prefix preflight and shared-leaf protection.
 
 `scripts/extract_minimum_concatenation_vectors.mjs` records native V2 array-minimum repeated-concatenation neighbours through the fourth adjustment using the integrity-verified splitter harness; `tests/test_coercion_cells.py` consumes its exact pieces and IDs.
+
+`scripts/extract_scalar_policy_vectors.mjs` executes the pinned VaultService size method and targetFilter truthiness gate with Node builtins only; `tests/fixtures/scalar_policy_upstream.json.gz` records source hashes and native predicate/equivalence vectors consumed by tweak and backend selection tests.

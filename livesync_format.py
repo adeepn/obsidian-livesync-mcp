@@ -29,7 +29,8 @@ import math
 import unicodedata
 from copy import deepcopy
 
-from content_splitter import ContentSplitter, UnsupportedWriterMode, SplitterRefusal, chunk_id_for_piece
+from content_splitter import (ContentSplitter, UnsupportedWriterMode, SplitterRefusal,
+                              chunk_id_for_piece, _js_truthy, _minimum_number)
 
 # Upstream isPlainText (path.ts): extensions stored as plain text chunks.
 TEXT_EXTENSIONS = frozenset(
@@ -508,8 +509,16 @@ def resolve_ignore_settings(
         if any(v != result[0] for v in result[1:]):
             raise UnsupportedVaultSettings(conflict.value)
         return result[0]
-    use = use_override if use_override is not None else values(
-        'useIgnoreFiles', False, bool, DiagnosticCode.IGNORE_BOOLEAN, DiagnosticCode.IGNORE_USE_CONFLICT)
+    if use_override is not None:
+        use = use_override
+    else:
+        # C:serviceFeatures/targetFilter.ts:134 uses plain JS truthiness,
+        # including truthy empty arrays/objects and the string "false".
+        uses = [_js_truthy(m.get('useIgnoreFiles', False))
+                for m in _milestone_setting_maps(milestone_settings)]
+        if any(v != uses[0] for v in uses[1:]):
+            raise UnsupportedVaultSettings(DiagnosticCode.IGNORE_USE_CONFLICT.value)
+        use = uses[0]
     if names_override is not None:
         names = names_override
     else:
@@ -547,14 +556,26 @@ def resolve_sync_max_size(milestone_settings: dict) -> float:
     C:common/models/setting.const.defaults.ts:147 supplies missing value 50.
     C:services/base/VaultService.ts:73-81 defines the predicate, not a cap.
     """
-    import math
-    values = [settings.get('syncMaxSizeInMB', 50)
-              for settings in _milestone_setting_maps(milestone_settings)]
-    if any(isinstance(v, bool) or not isinstance(v, (int, float))
-           or not math.isfinite(v) for v in values):
-        raise UnsupportedVaultSettings('syncMaxSizeInMB must be a finite number')
-    if any(v != values[0] for v in values[1:]):
-        raise UnsupportedVaultSettings('conflicting syncMaxSizeInMB settings')
+    values = []
+    thresholds = []
+    for settings in _milestone_setting_maps(milestone_settings):
+        try:
+            # C:services/base/VaultService.ts:75-77: > and * apply ToNumber
+            # to every JSON type, just as the splitter's numeric operators do.
+            value = _minimum_number(settings.get('syncMaxSizeInMB', 50),
+                                    setting='syncMaxSizeInMB')
+        except SplitterRefusal as exc:
+            error = UnsupportedVaultSettings(DiagnosticCode.SPLITTER_PRIMITIVE.value)
+            error.diagnostic = exc.diagnostic
+            raise error from None
+        value = value if value > 0 else 0
+        product = value * 1024 * 1024
+        # Admission compares integer byte sizes. Disagreement exists only if
+        # some integer size is admitted by one map and refused by another.
+        thresholds.append(math.floor(product) if math.isfinite(product) and value > 0 else None)
+        values.append(value)
+    if any(v != thresholds[0] for v in thresholds[1:]):
+        raise UnsupportedVaultSettings(DiagnosticCode.CONFLICTING_SYNCMAXSIZEINMB_SETTINGS.value)
     return values[0]
 
 

@@ -7,8 +7,8 @@ disables the check. Raising 50 to 100 admits files through 100 MiB. Settings
 resolve from milestone `tweak_values.PREFERRED`, otherwise the device maps
 (conflicting limits refuse startup), with device default 50 when absent.
 A blank/unset `LIVESYNC_SYNC_MAX_SIZE_MB` uses this vault value; an explicit
-finite number overrides it. Settings are resolved at startup: restart this
-peer after changing the vault setting. Other selection policies still apply.
+finite number overrides it. CouchDB resolves at startup; journal peers re-resolve at every unthrottled
+refresh. Other selection policies still apply.
 
 Oversized ordinary input is **skipped**, before chunks or metadata are published;
 any previous revision stays intact. Byte input is measured before optional
@@ -88,3 +88,5 @@ See [replay_limits.py](../replay_limits.py) for pinned source references.
 Journal peers re-resolve the effective size policy at every unthrottled refresh (including refresh(force=True)), and update the derived text budget through the same policy setter as startup. Explicit LIVESYNC_SYNC_MAX_SIZE_MB and LIVESYNC_TEXT_SCAN_MAX_BYTES overrides remain authoritative, including zero/unlimited.
 
 Journal refresh validates the complete selection, size and derived text policy before committing any effective setting. A refused candidate preserves the previous effective tuple, records a typed failure and blocks writes until the milestone is repaired and refreshed.
+
+Vault-derived syncMaxSizeInMB uses the native JavaScript numeric coercion predicate for every JSON type (VaultService.ts:73-81). Numeric strings and single/nested numeric arrays work; true means a 1 MiB limit. Null, false, nonnumeric strings/arrays/ordinary objects, zero and negative values disable the predicate. Infinity or an overflowing product is unlimited. Objects with an own noncallable toString that cannot produce a primitive refuse with instructions to correct that field. Device maps agree when their coerced integer-byte admission policies agree; conflicting policies require alignment or LIVESYNC_SYNC_MAX_SIZE_MB. The operator override remains a strict finite number.

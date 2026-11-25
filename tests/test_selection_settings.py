@@ -6,6 +6,7 @@ import pytest
 import livesync_format as fmt
 from storage_base import SelectionRefused, UnsupportedVault, StorageUnavailable
 from tests.test_tweak_startup import vault
+from tests.test_tweak_differential import SCALAR
 from tests.test_storage_journal import make_backend, healthy_bucket
 from storage_journal import MILESTONE_KEY
 
@@ -35,8 +36,6 @@ def test_absent_defaults_and_preferred():
 
 
 @pytest.mark.parametrize('key,value,message', [
-    ('useIgnoreFiles', 1, 'useIgnoreFiles must be a boolean'),
-    ('useIgnoreFiles', 'secret', 'useIgnoreFiles must be a boolean'),
     ('ignoreFiles', False, 'ignoreFiles must be a string'),
 ])
 def test_invalid_settings(key, value, message):
@@ -214,11 +213,12 @@ async def test_failed_refresh_blocks_writes_until_policy_repaired(tmp_path):
     try:
         await b.startup_check()
         original = storage._objects[MILESTONE_KEY]
-        storage._objects[MILESTONE_KEY] = json.dumps(milestone(useIgnoreFiles='private marker')).encode()
-        with pytest.raises(UnsupportedVault, match='useIgnoreFiles must be a boolean'):
+        storage._objects[MILESTONE_KEY] = json.dumps({'tweak_values': {
+            'a': {'useIgnoreFiles': True}, 'b': {'useIgnoreFiles': False}}}).encode()
+        with pytest.raises(UnsupportedVault, match='conflicting useIgnoreFiles'):
             await b.refresh(force=True)
         before = len(storage.put_calls)
-        with pytest.raises(UnsupportedVault, match='useIgnoreFiles must be a boolean'):
+        with pytest.raises(UnsupportedVault, match='conflicting useIgnoreFiles'):
             await b.write_note('no.md', 'no', create=True)
         assert len(storage.put_calls) == before
         storage._objects[MILESTONE_KEY] = original
@@ -360,8 +360,9 @@ async def test_failed_policy_refresh_preserves_effective_tuple(tmp_path):
         await b.startup_check()
         before = (b.selection_use_ignore_files, b.selection_ignore_files,
                   b.sync_max_size_mb, b.text_scan_max_bytes)
-        storage._objects[MILESTONE_KEY] = json.dumps(milestone(
-            useIgnoreFiles=True, ignoreFiles='changed', syncMaxSizeInMB='INVALID')).encode()
+        storage._objects[MILESTONE_KEY] = json.dumps({'tweak_values': {
+            key: {'useIgnoreFiles': True, 'ignoreFiles': 'changed', 'syncMaxSizeInMB': value}
+            for key, value in (('a', 1), ('b', 2))}}).encode()
         with pytest.raises(UnsupportedVault):
             await b.refresh(force=True)
         assert (b.selection_use_ignore_files, b.selection_ignore_files,
@@ -392,3 +393,38 @@ async def test_inactive_device_names_never_validate_or_read(tmp_path, kind, name
         assert (await b.selection_for('nested/note.md')).allowed
         await b.write_note('nested/note.md', 'allowed', create=True)
         assert reads == []
+
+
+@pytest.mark.parametrize('kind', ['couchdb', 's3'])
+@pytest.mark.parametrize('row', SCALAR['vectors'])
+async def test_backend_native_scalar_startup_and_admission(tmp_path, kind, row, monkeypatch):
+    # C:VaultService.ts:73-81 and targetFilter.ts:132-137: native JSON coercion.
+    from storage_base import WriteSkipped
+    async with vault(tmp_path, kind, milestone(syncMaxSizeInMB=row['input'],
+            useIgnoreFiles=row['input'])) as (b, writes):
+        if row.get('cause'):
+            with pytest.raises(UnsupportedVault, match='primitive') as caught:
+                await b.startup_check()
+            assert 'PRIVATE_VALUE' not in str(caught.value)
+            assert 'syncMaxSizeInMB' in str(caught.value)
+            assert not writes()
+            return
+        await b.startup_check()
+        assert b.selection_use_ignore_files is row['ignoreActive']
+        reads = []
+        original = b._read_selection_file
+        async def counted(path):
+            reads.append(path)
+            return await original(path)
+        monkeypatch.setattr(b, '_read_selection_file', counted)
+        case = next(p for p in row['predicate'] if p['size'] == 2)
+        if case['tooLarge']:
+            before = len(writes())
+            with pytest.raises(WriteSkipped):
+                await b.write_note('probe.md', 'xx', create=True)
+            assert len(writes()) == before
+        else:
+            await b.write_note('probe.md', 'xx', create=True)
+            assert (await b.read_note('probe.md'))['text'] == 'xx'
+        if not row['ignoreActive']:
+            assert reads == []

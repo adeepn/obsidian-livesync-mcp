@@ -382,3 +382,17 @@ def test_shared_leaf_recovery_documented():
         text = ' '.join((ROOT / name).read_text().split())
         assert 'resolve the conflicting leaf in Obsidian' in text
         assert 'alternate hashAlg or a positive customChunkSize' in text
+
+
+def test_vault_scalar_coercion_and_strict_overrides_documented():
+    from tests.test_config import COUCHDB_ENV
+    from config import ConfigError
+    for value in ('true', 'null', '[]', '{}', 'Infinity', 'PRIVATE_INVALID'):
+        with pytest.raises(ConfigError, match='LIVESYNC_SYNC_MAX_SIZE_MB'):
+            load_config({**COUCHDB_ENV, 'LIVESYNC_SYNC_MAX_SIZE_MB': value})
+    for name in ('README.md', '.env.example', 'docs/size-policy.md'):
+        text = ' '.join((ROOT / name).read_text().split())
+        assert '1 MiB' in text and 'coercion' in text
+    for name in ('README.md', '.env.example', 'docs/selection-filters.md'):
+        text = (ROOT / name).read_text()
+        assert 'truthiness' in text

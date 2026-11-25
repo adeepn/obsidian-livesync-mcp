@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Settings parity
 
+- Mirror JavaScript numeric coercion for vault size settings and truthiness for ignore enablement across all JSON types; compare effective device policies and retain strict operator overrides.
+
 - Explain recovery for conflicting or encrypted shared journal leaves while retaining both pre-publication protection checks.
 
 - Guard exact-positive-integer replacement counts against booleans and other JSON types in the compatibility notice wrapper.

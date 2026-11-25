@@ -796,3 +796,7 @@ its own deadline expires first. Neither path echoes the pattern or body.
 ### 2026-11-25 F2-4 — shared-leaf recovery
 
 [DECISION] Keep compact/full-JSON existing-leaf guards and add fixed typed recovery: inspect/resolve the leaf in Obsidian or coordinate another hashAlg or positive customChunkSize. Tool-level tests preserve local and remote data for compact, JSON, encrypted and combined forms. No note bytes or remote values enter diagnostic prose.
+
+### 2026-11-25 F2-8 — vault scalar coercion
+
+[DECISION] Execute pinned VaultService.ts:73-81 and targetFilter.ts:132-137 with native JS builtins to cover every JSON type. Numeric strings/arrays and boolean true (1 MiB) follow numeric coercion; null/false/nonnumeric values disable size admission. Ignore enablement uses truthiness, including empty objects/arrays. Compare effective admission policies, retain strict operator inputs and actionable genuine-ambiguity/primitive-conversion refusals. The former invalid-string refresh reproducer is now admitted by design; atomic refusal is protected with genuinely conflicting size maps.

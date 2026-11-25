@@ -2,9 +2,9 @@
 
 Ignore-file settings derive from vault milestone/PREFERRED tweaks unless each
 variable is independently overridden. PREFERRED wins when present; otherwise
-all readable device maps must agree on active settings. Missing useIgnoreFiles
+all readable device maps must agree on effective active settings after coercion. Missing useIgnoreFiles
 defaults to false, and missing ignoreFiles defaults to `.gitignore`. Invalid
-active types or disagreeing active maps refuse startup and name the override
+active ignoreFiles types or disagreeing effective maps refuse startup and name the override
 to set. Inactive ignore names are never validated. Names are split on commas
 and JavaScript-trimmed with empty entries retained; names have no startup
 admission gate. Unusable names contribute no rules at bounded storage lookup.
@@ -111,3 +111,5 @@ command before making any storage changes, preserving its only copy.
 Both vault-derived and explicit comma-separated names use exact JavaScript trim and retain empty entries (targetFilter.ts:95-145). Empty, repeated-comma, absolute-looking, traversal-looking and backslash-containing names never refuse startup. Inactive useIgnoreFiles=false never validates or reads names. Missing, unreadable or unusable names contribute no rule. Storage lookup normalizes separators inside the vault-note namespace; escaping paths and service IDs are absent, never host-file reads. Backend info and vault_stats expose integer `selection_unresolved_ignore_names`: explicit names unresolved by the latest root/ancestor lookup; 0 while inactive or vault-derived. Correct the explicit name or publish its ignore file if this count is nonzero. Reads bypass filters.
 
 Inactive device maps may contain conflicting or non-string ignoreFiles values. Both backends start and perform zero ignore-name storage reads while useIgnoreFiles is false.
+
+Vault-derived useIgnoreFiles follows plain JavaScript truthiness (targetFilter.ts:132-137): null, false, numeric zero and empty strings are inactive; nonzero numbers, nonempty strings, arrays and objects are active, including empty arrays/objects and the string "false". Only effective boolean disagreement requires LIVESYNC_USE_IGNORE_FILES; equivalent raw types agree. The operator override stays a strict boolean.
