@@ -183,6 +183,7 @@ class DeviceSelection:
         files = None
         if self.selection_use_ignore_files:
             files = {}
+            resolved_names = set()
             # Read through before lookup: a changed ignore file changes the key.
             parts = path.split('/')[:-1]
             for n in range(len(parts), -1, -1):
@@ -190,9 +191,8 @@ class DeviceSelection:
                     candidate = '/'.join(parts[:n] + [name])
                     files[candidate] = await self._selection_lines(candidate)
                     if files[candidate] is not False:
-                        if not hasattr(self, '_selection_resolved_names'):
-                            self._selection_resolved_names = set()
-                        self._selection_resolved_names.add(name)
+                        resolved_names.add(name)
+            self._selection_resolved_names = resolved_names
         payload = self._selection_payload(path, files)
         def fingerprint(value):
             return hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=True).encode()).hexdigest()

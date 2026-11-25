@@ -2,10 +2,12 @@
 
 Ignore-file settings derive from vault milestone/PREFERRED tweaks unless each
 variable is independently overridden. PREFERRED wins when present; otherwise
-all readable device maps must agree. Missing useIgnoreFiles defaults to false,
-and missing ignoreFiles defaults to `.gitignore`. Invalid types or disagreeing
-maps refuse startup and name the explicit override to set. Names are split on
-commas and trimmed like the plugin, then checked for safe vault-relative names.
+all readable device maps must agree on active settings. Missing useIgnoreFiles
+defaults to false, and missing ignoreFiles defaults to `.gitignore`. Invalid
+active types or disagreeing active maps refuse startup and name the override
+to set. Inactive ignore names are never validated. Names are split on commas
+and JavaScript-trimmed with empty entries retained; names have no startup
+admission gate. Unusable names contribute no rules at bounded storage lookup.
 Regex lists stay env-only because syncOnlyRegEx and syncIgnoreRegEx are not
 TweakValuesTemplate keys and are not advertised in milestone snapshots.
 

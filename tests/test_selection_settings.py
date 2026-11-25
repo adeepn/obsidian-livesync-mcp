@@ -309,3 +309,18 @@ async def test_ignore_lookup_never_reads_service_or_escaping_path(tmp_path,kind)
         # The storage-specific readers enforce namespace safety even if called directly.
         for path in ('../escape','h:leaf','_local/secrets','f:folder',''):
             assert await b._read_selection_file(path) is None
+
+@pytest.mark.parametrize('kind',['couchdb','s3'])
+async def test_explicit_warning_tracks_current_lookup_and_recovers(tmp_path,kind,monkeypatch):
+    async with vault(tmp_path,kind,milestone(useIgnoreFiles=True)) as (b,writes):
+        b.selection_ignore_files=('rules',)
+        state=['*.md']
+        async def read(path):
+            if state[0]=='unreadable':raise StorageUnavailable('unreadable')
+            return state[0]
+        monkeypatch.setattr(b,'_read_selection_file',read)
+        await b.startup_check()
+        for text,expected in [('*.md',0),(None,1),('unreadable',1),('*.md',0)]:
+            state[0]=text
+            await b.selection_for('note.md')
+            assert b.selection_info()['selection_unresolved_ignore_names']==expected
