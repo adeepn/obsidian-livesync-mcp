@@ -24,8 +24,10 @@ async def test_upload_lossy_opt_in_reports_stored_bytes(backend, monkeypatch, ra
     refused = await server.obsidian_upload_attachment('loss.md', content_b64)
     assert 'invalid UTF-8' in refused
     assert await backend.read_note('loss.md') is None
-    response = json.loads(await server.obsidian_upload_attachment(
-        'loss.md', content_b64, lossy_text=True))
+    output = await server.obsidian_upload_attachment('loss.md', content_b64, lossy_text=True)
+    response = json.loads(output.splitlines()[0])
+    notices = json.loads(output.splitlines()[1])['notices']
+    assert notices == [{'code': 'invalid_utf8_replaced', 'invalid_bytes': len(raw) - len(raw.decode('utf-8', errors='ignore').encode())}]
     stored = raw.decode('utf-8', errors='replace').encode()
     assert response['size'] == len(stored)
     assert response['sha256'] == hashlib.sha256(stored).hexdigest()
@@ -61,8 +63,12 @@ async def test_plain_metadata_counts_ingested_blob_bytes(backend, monkeypatch, v
     from content_splitter import ContentSplitter
     backend._splitter = ContentSplitter({'chunkSplitterVersion': version})
     monkeypatch.setattr(server, 'backend', backend)
-    response = json.loads(await server.obsidian_upload_attachment(
-        'bom.md', base64.b64encode(b'\xef\xbb\xbfA').decode()))
+    output = await server.obsidian_upload_attachment('bom.md', base64.b64encode(b'\xef\xbb\xbfA').decode())
+    response = json.loads(output.splitlines()[0])
+    if version != 'v3-rabin-karp':
+        assert json.loads(output.splitlines()[1])['notices'] == [{'code': 'legacy_bom_removed', 'removed_bytes': 3, 'metadata_size_preserved': True}]
+    else:
+        assert len(output.splitlines()) == 1
     note = await backend.read_note('bom.md')
     stored = note['text'].encode()
     assert note['meta']['size'] == len(b'\xef\xbb\xbfA')

@@ -150,7 +150,12 @@ async def test_lossy_ingress_checks_raw_and_converted_blob_size(backend, monkeyp
         def forbidden(*args, **kwargs):
             pytest.fail('oversized converted Blob reached publication')
         monkeypatch.setattr(backend, '_publish' if isinstance(backend, JournalBackend) else '_put_doc', forbidden)
-    response = json.loads(await server.obsidian_upload_attachment('malformed.md', '/w==', lossy_text=True, overwrite=True))
+    output = await server.obsidian_upload_attachment('malformed.md', '/w==', lossy_text=True, overwrite=True)
+    response = json.loads(output.splitlines()[0])
+    if not skipped:
+        assert json.loads(output.splitlines()[1])['notices'] == [{'code': 'invalid_utf8_replaced', 'invalid_bytes': 1}]
+    else:
+        assert len(output.splitlines()) == 1
     assert response['size'] == 3
     if skipped:
         assert response['status'] == 'skipped'
