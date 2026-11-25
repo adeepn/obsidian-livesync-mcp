@@ -192,6 +192,7 @@ async def test_sixty_mib_plain_note_journal(backend, monkeypatch):
     monkeypatch.setattr(server, 'backend', backend)
     # Device admission must allow this file; the default text access budget
     # stays 256 MiB. C:services/base/VaultService.ts:73-81 rejects >50 MiB.
+    backend.sync_max_size_mb_override = 64
     backend.sync_max_size_mb = 64
     text = 'a' * (60 * 1024 * 1024 - 6) + 'needle'
     await backend.write_note('large.md', text, create=True)
