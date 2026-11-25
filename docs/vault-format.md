@@ -207,3 +207,5 @@ compress.ts:49-71 passes already-marked pieces through on writes and decodes the
 JWT expiry input is numeric: an explicit empty `COUCHDB_JWT_EXPIRY_MINUTES` is refused; omit it or use `0` for the five-minute fallback. The upstream literal JSON string `"0"` is truthy and gives a zero-second token; this numeric environment variable cannot represent that string. For numeric 0 and 5, all four algorithms retain the cached token through +290.99 seconds and refresh at +291 seconds (httplib.ts:166-167,181-196).
 
 The V2 minimum-concatenation oracle includes the 401-line `abcd\n` witness with minimumChunkSize=[1], plus boundary neighbours through the fourth adjustment. Exact native pieces and IDs protect repeated string addition, not only the initial [1] to "11" conversion.
+
+Existing shared journal content is checked in both compact chunk files and full-JSON leaves before publication. Conflicting or encrypted leaves refuse without replacing data: inspect and resolve the conflicting leaf in Obsidian, or coordinate an alternate hashAlg or a positive customChunkSize before retrying. Diagnostics contain fixed recovery text and no note bytes or remote values.

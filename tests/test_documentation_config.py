@@ -375,3 +375,10 @@ def test_atomic_journal_policy_documented():
         text = (ROOT / name).read_text()
         assert 'before committing any effective setting' in text
         assert 'previous' in text and 'tuple' in text
+
+
+def test_shared_leaf_recovery_documented():
+    for name in ('README.md', 'docs/vault-format.md'):
+        text = ' '.join((ROOT / name).read_text().split())
+        assert 'resolve the conflicting leaf in Obsidian' in text
+        assert 'alternate hashAlg or a positive customChunkSize' in text

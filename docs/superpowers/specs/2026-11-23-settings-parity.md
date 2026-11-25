@@ -792,3 +792,7 @@ its own deadline expires first. Neither path echoes the pattern or body.
 ### 2026-11-25 F2-3 — exact count typing
 
 [DECISION] Exercise boolean, float, string, null, nested and nonpositive compatibility-wrapper counts; retain only exact positive integers. The boolean-as-int process-local mutant is detected.
+
+### 2026-11-25 F2-4 — shared-leaf recovery
+
+[DECISION] Keep compact/full-JSON existing-leaf guards and add fixed typed recovery: inspect/resolve the leaf in Obsidian or coordinate another hashAlg or positive customChunkSize. Tool-level tests preserve local and remote data for compact, JSON, encrypted and combined forms. No note bytes or remote values enter diagnostic prose.

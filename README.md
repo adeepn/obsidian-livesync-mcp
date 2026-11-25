@@ -200,6 +200,9 @@ combination. [Source inventory and caveats](docs/superpowers/specs/2026-11-23-se
 - JWT expiry is numeric: omit it or set `0` for five minutes; an explicit empty value
   is refused. Upstream literal JSON string `"0"` means zero seconds and cannot be
   represented by this numeric environment setting.
+- Existing conflicting shared journal leaves refuse before publication. Inspect and
+  resolve the conflicting leaf in Obsidian, or coordinate an alternate hashAlg
+  or a positive customChunkSize before retrying.
 - E2EE and obfuscated paths are unsupported; use an unencrypted, unobfuscated
   vault until [#3](https://github.com/adeepn/obsidian-livesync-mcp/issues/3) /
   [#4](https://github.com/adeepn/obsidian-livesync-mcp/issues/4) are implemented.

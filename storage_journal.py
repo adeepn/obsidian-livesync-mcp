@@ -1021,6 +1021,9 @@ class JournalBackend(TextAccessPolicy, DeviceSelection):
 
         Compact chunks live in files; full-JSON leaf records live in SQLite.
         Check both representations, including when both are present.
+        EntryManager/EntryManagerImpls.ts:133-159 shares content-addressed
+        leaves; LayeredChunkManager/DatabaseWriteLayer.ts:24-49 tolerates
+        duplicate IDs. Keep existing shared data intact and provide recovery.
         """
         store = self._require_store("write_note")
         try:
@@ -1030,7 +1033,7 @@ class JournalBackend(TextAccessPolicy, DeviceSelection):
                 and chunk_file.read_bytes() != text_encoder_string(content).encode("utf-8")
             ):
                 raise StorageError(
-                    "existing shared content chunk holds different data"
+                    DiagnosticCode.EXISTING_SHARED_CONTENT_CHUNK_HOLDS_DIFFERENT_DATA
                 )
             doc = store.winner(chunk_id)
             if doc is not None and (
@@ -1038,7 +1041,7 @@ class JournalBackend(TextAccessPolicy, DeviceSelection):
                 or doc.get("type") != "leaf" or doc.get("data") != text_encoder_string(content)
             ):
                 raise StorageError(
-                    "existing shared content chunk is encrypted or holds different data"
+                    DiagnosticCode.EXISTING_SHARED_CONTENT_CHUNK_IS_ENCRYPTED_OR_HOLDS_DIFFERENT_DATA
                 )
         except (OSError, ValueError, sqlite3.Error) as exc:
             raise StorageError(
