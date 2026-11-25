@@ -449,11 +449,6 @@ def assemble_binary(chunk_datas: list[str]) -> bytes:
     return b"".join(parts)
 
 
-def encode_newnote(data: bytes) -> list[str]:
-    """Split raw binary bytes and base64-encode each upstream v3 piece."""
-    return ContentSplitter().split(data)
-
-
 def chunk_id_for(data: str) -> str:
     """Compatibility name for the upstream xxhash64 piece ID derivation."""
     return chunk_id_for_piece(data)

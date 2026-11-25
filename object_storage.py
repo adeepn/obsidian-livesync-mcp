@@ -111,8 +111,8 @@ class Boto3ObjectStorage:
     Keys are prefix-relative: the adapter prepends ``cfg.prefix`` on the
     wire and strips it from listing results. Failures other than a
     missing key raise :class:`~storage_base.StorageUnavailable` whose
-    message names only the bucket and key (never credentials or
-    endpoints); logs include only the operation, bucket, key and error class.
+    public diagnostics contain closed operation/status and cause-class fields.
+    Logs omit bucket, key, endpoint, credential values and remote error text.
     """
 
     def __init__(self, cfg: S3Config, *, max_object_bytes: int = MAX_OBJECT_BYTES):

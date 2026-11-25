@@ -1099,3 +1099,9 @@ integrity remains independent. Scratch tamper and missing-file tests fail closed
 use requirements.lock directly to recreate the complete test environment. Pin
 upstream-watch to ubuntu-24.04; its source acquisition already uses GITHUB_SHA.
 Isolated-install full-suite evidence belongs in ignored F9 working evidence.
+
+### 2026-11-26 — F9-9 adapter cleanup
+
+[GOTCHA] Correct stale object-storage diagnostic documentation to typed fields.
+Remove the unused encode_newnote default-splitter wrapper after repository-wide
+search confirmed only wrapper tests called it; configurable writers are unchanged.

@@ -14,7 +14,6 @@ from livesync_format import (
     assemble_binary,
     assemble_text,
     chunk_id_for,
-    encode_newnote,
     is_text_doc,
     new_metadata_doc,
     path2id,
@@ -136,16 +135,6 @@ def test_assemble_binary_concat():
 def test_assemble_binary_invalid():
     with pytest.raises(ValueError):
         assemble_binary(["SGVsbG8=", "!!!not-base64!!!"])
-
-
-def test_encode_newnote_roundtrip():
-    data = "héllo wörld \N{SNOWMAN}".encode("utf-8") + bytes(range(256))
-    assert assemble_binary(encode_newnote(data)) == data
-
-
-def test_encode_newnote_single_chunk():
-    # v1 encoding: the whole body is one base64 chunk.
-    assert encode_newnote(b"12345") == [base64.b64encode(b"12345").decode("ascii")]
 
 
 def test_chunk_id_deterministic():
