@@ -302,11 +302,19 @@ async def test_device_ignore_names_lookup(tmp_path,kind,explicit,row,monkeypatch
         assert info['selection_unresolved_ignore_names']==expected
 
 @pytest.mark.parametrize('kind',['couchdb','s3'])
-async def test_ignore_lookup_never_reads_service_or_escaping_path(tmp_path,kind):
+async def test_ignore_lookup_never_reads_service_or_escaping_path(tmp_path,kind,monkeypatch):
     async with vault(tmp_path,kind,milestone(useIgnoreFiles=True,ignoreFiles='../escape,h:leaf,_local/secrets')) as (b,writes):
         await b.startup_check()
         assert (await b.selection_for('note.md')).allowed
         # The storage-specific readers enforce namespace safety even if called directly.
+        if kind=='couchdb':
+            async def forbidden_read(*args,**kwargs):
+                pytest.fail('unusable ignore name reached the document transport')
+            monkeypatch.setattr(b,'_get_doc',forbidden_read)
+        else:
+            def forbidden_read(*args,**kwargs):
+                pytest.fail('unusable ignore name reached note-state lookup')
+            monkeypatch.setattr(b._store,'winner',forbidden_read)
         for path in ('../escape','h:leaf','_local/secrets','f:folder',''):
             assert await b._read_selection_file(path) is None
 
@@ -324,3 +332,21 @@ async def test_explicit_warning_tracks_current_lookup_and_recovers(tmp_path,kind
             state[0]=text
             await b.selection_for('note.md')
             assert b.selection_info()['selection_unresolved_ignore_names']==expected
+            import server
+            monkeypatch.setattr(server,'backend',b)
+            stats=json.loads(await server.obsidian_vault_stats())
+            assert type(stats['selection_unresolved_ignore_names']) is int
+            assert stats['selection_unresolved_ignore_names']==expected
+
+@pytest.mark.parametrize('value,expected',[(7,7),(True,0),(-1,0),('PRIVATE_WARNING',0),({'raw':'PRIVATE_WARNING'},0),(1.5,0)])
+async def test_stats_ignore_warning_count_is_typed(monkeypatch,value,expected):
+    import server
+    from tests.fake_backend import FakeBackend
+    b=FakeBackend()
+    async def info():return {'backend':'fake','selection_unresolved_ignore_names':value}
+    monkeypatch.setattr(b,'backend_info',info)
+    monkeypatch.setattr(server,'backend',b)
+    result=json.loads(await server.obsidian_vault_stats())
+    assert result['selection_unresolved_ignore_names']==expected
+    assert type(result['selection_unresolved_ignore_names']) is int
+    assert 'PRIVATE_WARNING' not in str(result)

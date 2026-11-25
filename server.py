@@ -1586,9 +1586,10 @@ async def obsidian_vault_stats(cursor: str = "", limit: int = 0) -> str:
         local_state["auth_mode"] = mode if type(mode) is str and mode in {'basic', 'jwt'} else None
         algorithm = info.get("jwt_algorithm")
         local_state["jwt_algorithm"] = algorithm if type(algorithm) is str and algorithm in {'HS256', 'HS512', 'ES256', 'ES512'} else None
-    if "custom_headers_count" in info:
-        count = info["custom_headers_count"]
-        local_state["custom_headers_count"] = count if type(count) is int and 0 <= count < 2**63 else 0
+    for field in ('custom_headers_count', 'selection_unresolved_ignore_names'):
+        if field in info:
+            count = info[field]
+            local_state[field] = count if type(count) is int and 0 <= count < 2**63 else 0
     if "tweak_assessment" in info:
         assessment = info["tweak_assessment"]
         local_state["tweak_assessment"] = assessment_fields(assessment)
