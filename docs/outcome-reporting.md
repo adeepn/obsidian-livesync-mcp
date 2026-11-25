@@ -80,3 +80,5 @@ replacement text) are not ingestion transformations. Surrogate escapes in YAML
 or JSON preserve values and do not themselves cause a notice.
 
 The compatibility publication wrapper uses the same notice suffix. Non-string `message` values and fields named `notices` or `transport_replacements` remain unchanged; no reporting key is inserted into the original result.
+
+Projected-equivalent journal pieces retain a representative with replacement evidence even when a literal U+FFFD is the first colliding piece; replacement notices do not depend on piece order.

@@ -38,3 +38,13 @@ async def test_different_projected_collision_refuses(tmp_path, monkeypatch):
         with pytest.raises(StorageError, match='different data'):
             await backend.write_note('gate.md', 'AB', create=True)
         assert await chunks() == before
+
+async def test_literal_replacement_before_surrogates_still_reports(tmp_path):
+    # Same upstream partition/ID multiset, reversed input order; TextEncoder
+    # changes the surrogate pieces regardless of which raw piece dedupes first.
+    async with matrix_vault(tmp_path,'journal',V['settings']) as (backend,*_):
+        await backend.startup_check()
+        result=await backend.write_note('permuted.md','\ufffd🙂',create=True)
+        assert result['transport_replacements']==1
+        assert {'code':'journal_surrogates_replaced','count':1} in result['notices']
+        assert (await backend.read_note('permuted.md'))['text']==''.join(d['data'] for d in V['decoded'])
