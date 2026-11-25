@@ -113,3 +113,9 @@ These probe the scalar-byte and node boundaries separately, not every possible
 joint worst case. JSON escaping, YAML source size and concurrent requests add
 memory beyond the payload budget. The historical F6 4 GiB provisioning advice
 above describes the superseded million-node envelope, not the new default.
+
+A combined boundary probe admits exactly 20,000 expanded nodes and 4,194,304
+UTF-8 string/key bytes. Editing an existing scalar, reading it and serializing
+the properties took 7.102 s with 41353216 bytes peak process RSS; compact source
+75981 bytes, JSON 4274298 bytes. This exercises both configured boundaries; it
+is not proof of a global worst case over all YAML spellings and comments.

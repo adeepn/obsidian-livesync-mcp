@@ -198,7 +198,7 @@ combination. [Source inventory and caveats](docs/superpowers/specs/2026-11-23-se
 | Hidden File Sync / customization sync | `i:`, `ix:` namespaces | Not supported | No local vault folder; hidden ignore files can be read internally |
 | Plugin sync / `usePluginSyncV2` | `ps:` namespace / Boolean | Not supported | Service documents excluded from ordinary tools |
 | Tweak mismatch/auto-accept flags | Boolean | Deliberate difference | Local env policy; no device registration or PREFERRED publication |
-| YAML anchors / aliases | Note bytes, parsed by host tools | Properties supported | Memoised projection; [expanded-node/depth budgets](docs/frontmatter-properties.md) affect only properties/tags |
+| YAML anchors / aliases | Note bytes, parsed by host tools | Properties supported | Memoised projection; [expanded-node/byte/depth budgets](docs/frontmatter-properties.md) affect only properties/tags |
 | Transport deadlines / SDK attempts | Device-local configuration | Local overrides | See environment table; unconditional S3 publication always single attempt |
 | Reflection/request/cache/concurrency tuning | Various local device options | Not supported as device settings | No host reflection or plugin request engine; [full inventory](docs/superpowers/specs/2026-11-23-settings-parity.md#ж-other-tweak_values-and-production-evidence-boundary) |
 

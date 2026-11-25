@@ -1006,3 +1006,5 @@ Fixture SHA256: `eb72adde821251b3b4be28ef8a427570a04165fdd70e96dcac65807b154fd70
 [DECISION] Count expanded UTF-8 strings and keys, including every alias occurrence, before serialization. Default 4 MiB; override LIVESYNC_FRONTMATTER_MAX_BYTES. This guards the measured 67 MB scalar expansion independently of nodes. Raw-note synchronization remains unrestricted by property budgets.
 
 F7 measured boundary cases: 4 MiB scalar expansion 2.614 s / 45629440 RSS bytes; 20,000-node edit 6.815 s / 54280192; reviewer scalar amplification refused pre-construction in 0.031 s / 20774912. These are observed probes, not a portable total-memory guarantee.
+
+F7 joint node/byte boundary probe: exactly 20,000 nodes / 4,194,304 string bytes, edit plus property read and JSON output 7.102 s / 41353216 RSS bytes. Numeric YAML keys also count their projected string bytes.

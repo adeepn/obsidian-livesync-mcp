@@ -357,3 +357,17 @@ def test_yaml_alias_bytes_at_and_over_boundary(raw):
                     get_properties(note(raw))
         finally:
             frontmatter_limits.reset(token)
+
+
+def test_numeric_mapping_keys_count_projected_string_bytes():
+    from frontmatter import _to_plain, FrontmatterLimits
+    with pytest.raises(FrontmatterError, match='frontmatter bytes'):
+        _to_plain({12345: None}, limits=FrontmatterLimits(max_bytes=4))
+    assert _to_plain({12345: None}, limits=FrontmatterLimits(max_bytes=5)) == {'12345': None}
+
+
+def test_default_frontmatter_limits():
+    from frontmatter import FrontmatterLimits
+    assert FrontmatterLimits().max_nodes == 20_000
+    assert FrontmatterLimits().max_depth == 200
+    assert FrontmatterLimits().max_bytes == 4 * 1024**2

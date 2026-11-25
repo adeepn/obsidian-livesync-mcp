@@ -336,7 +336,14 @@ def _to_plain(value, *, limits=None):
 
         if isinstance(node, dict):
             for key, item in node.items():
-                result[str(child(key))] = child(item)
+                plain_key = child(key)
+                string_key = str(plain_key)
+                if not isinstance(plain_key, str):
+                    # JSON object keys are strings even for YAML numeric keys.
+                    byte_count += _string_bytes(string_key)
+                    if byte_count > limits.max_bytes:
+                        raise FrontmatterError("bytes")
+                result[string_key] = child(item)
         else:
             for item in node:
                 result.append(child(item))
