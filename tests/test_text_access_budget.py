@@ -271,3 +271,27 @@ async def test_regex_tool_refusals_are_distinct_and_preserve_revision(backend, m
     assert 'LIVESYNC_REGEX_MAX_OUTPUT_BYTES' not in timeout
     assert 'PRIVATE_OUTPUT' not in timeout
     assert (await backend.read_note('regex.md'))['rev'] == rev
+
+
+@pytest.mark.parametrize('size_override',[None,0,400.5])
+@pytest.mark.parametrize('text_override',[None,0,1234])
+async def test_journal_refresh_resolves_size_and_text_policy(tmp_path,size_override,text_override):
+    # VaultService.ts:73-81; journal settings-realisation boundary must update
+    # the same TextAccessPolicy setter used at startup, without losing overrides.
+    import json
+    from tests.test_storage_journal import make_backend, healthy_bucket
+    from tests.test_selection_settings import milestone
+    from storage_journal import MILESTONE_KEY
+    b,s=make_backend(tmp_path,healthy_bucket())
+    b.sync_max_size_mb_override=size_override
+    if text_override is not None:b.text_scan_max_bytes=text_override
+    s._objects[MILESTONE_KEY]=json.dumps(milestone(syncMaxSizeInMB=300.25)).encode()
+    try:
+        await b.startup_check()
+        assert b.sync_max_size_mb==(300.25 if size_override is None else size_override)
+        s._objects[MILESTONE_KEY]=json.dumps(milestone(syncMaxSizeInMB=350.5)).encode()
+        await b.refresh(force=True)
+        effective=350.5 if size_override is None else size_override
+        assert b.sync_max_size_mb==effective
+        assert b.text_scan_max_bytes==(text_override if text_override is not None else max(256*1024*1024,int(effective*1024*1024)))
+    finally:await b.close()

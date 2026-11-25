@@ -371,6 +371,19 @@ class JournalBackend(TextAccessPolicy, DeviceSelection):
         try:
             self.resolve_selection_settings(milestone if milestone is not None else
                                             {'pathNormalizationVersion': 0})
+            # VaultService.ts:73-81 resolves against current realised settings.
+            # Assign through TextAccessPolicy so derived text limits track raises.
+            if self.sync_max_size_mb_override is None:
+                if milestone is None:
+                    self.sync_max_size_mb = 50
+                else:
+                    resolve_sync_max_size(milestone)  # retain all-device guards
+                    resolved = resolve_tweak_startup(milestone,
+                        disable_checking_config_mismatch=getattr(self, 'disable_checking_config_mismatch', False),
+                        auto_accept_compatible_tweak=getattr(self, 'auto_accept_compatible_tweak', True))
+                    self.sync_max_size_mb = resolve_sync_max_size(dict(resolved.settings))
+            else:
+                self.sync_max_size_mb = self.sync_max_size_mb_override
             if self._selection_checked_configuration != self._selection_configuration():
                 await self.selection_startup()
         except UnsupportedVaultSettings as exc:

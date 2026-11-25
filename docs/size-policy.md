@@ -84,3 +84,5 @@ protocol bounds. Legacy splitters, foreign peers and journals/history have no
 universal maximum: unusually large inputs may require tuning even with these
 defaults. No finite budget can promise admission of all unbounded histories.
 See [replay_limits.py](../replay_limits.py) for pinned source references.
+
+Journal peers re-resolve the effective size policy at every unthrottled refresh (including refresh(force=True)), and update the derived text budget through the same policy setter as startup. Explicit LIVESYNC_SYNC_MAX_SIZE_MB and LIVESYNC_TEXT_SCAN_MAX_BYTES overrides remain authoritative, including zero/unlimited.

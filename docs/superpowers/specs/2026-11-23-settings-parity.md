@@ -744,3 +744,7 @@ its own deadline expires first. Neither path echoes the pattern or body.
 ### 2026-11-25 F1-6
 
 [DECISION] Remove operator-style ignore-name validation for both sources; match split/JS-trim/lookup semantics from targetFilter.ts:95-145 and path.ts:241-265. Inactive names never gate startup. Restrict actual storage lookup to note identifiers; report unresolved explicit names as a typed warning count.
+
+### 2026-11-25 F1-7
+
+[DECISION] Re-resolve the effective milestone size policy at the journal refresh boundary through TextAccessPolicy. Retain explicit size/text overrides. A 300.25 to 350.5 MiB change now raises the automatic text budget from 314834944 to 367525888 bytes without restart; VaultService.ts:73-81 defines the device predicate.

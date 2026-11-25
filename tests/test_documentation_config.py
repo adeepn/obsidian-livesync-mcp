@@ -337,3 +337,8 @@ def test_typed_publication_notices_documented():
 def test_ignore_name_warning_documented():
     for name in ('README.md','docs/selection-filters.md','docs/tools.md','.env.example'):
         assert 'selection_unresolved_ignore_names' in (ROOT / name).read_text()
+
+
+def test_runtime_journal_size_policy_documented():
+    assert 'Journal refresh re-resolves' in (ROOT / 'README.md').read_text()
+    assert 'every unthrottled refresh' in (ROOT / 'docs/size-policy.md').read_text()
