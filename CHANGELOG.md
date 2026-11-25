@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+- Confirm ambiguous conditional journal retries at the original key before reporting success; retain recovery state when read-back cannot prove publication.
+
 ### Settings parity
 
 - Resolve YAML anchors and aliases in properties/tags, preserve untouched key bytes during edits, and expose configurable expanded-node/depth budgets with typed recovery guidance.

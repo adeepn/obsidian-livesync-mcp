@@ -247,6 +247,19 @@ class Boto3ObjectStorage:
             code = str(exc.response.get("Error", {}).get("Code", ""))
             status = exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
             if code in {"412", "PreconditionFailed"} or status == 412:
+                retries = exc.response.get("ResponseMetadata", {}).get("RetryAttempts", 0)
+                if type(retries) is int and retries > 0:
+                    # Upstream MinioStorageAdapter.ts:70-80,132-145 retries
+                    # uploads. A lost acknowledgement followed by 412 must not
+                    # become a second journal publication under another key.
+                    diagnostic = self._unavailable("PUT", key, exc).diagnostic
+                    try:
+                        identical = self.get(key) == data
+                    except (StorageError, OSError):
+                        raise OutcomeUnknown(diagnostic) from None
+                    if not identical:
+                        raise OutcomeUnknown(diagnostic) from None
+                    return "created"
                 return "exists"
             if code in {"NotImplemented", "NotSupported", "UnsupportedOperation",
                         "UnsupportedHeader", "NotImplementedException",

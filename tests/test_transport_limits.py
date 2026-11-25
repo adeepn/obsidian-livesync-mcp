@@ -102,7 +102,11 @@ def test_dropped_response_retry_policy(operation, monkeypatch):
     monkeypatch.setattr('botocore.endpoint.time.sleep', lambda seconds: None)
     for client in (storage._client, storage._write_client):
         monkeypatch.setattr(client._endpoint.http_session, 'send', send)
-    if operation == 'put':
+    if operation == 'put_if_absent':
+        with pytest.raises(OutcomeUnknown):
+            storage.put_if_absent('journal', b'data')
+        assert len(calls) == 3  # PUT retry plus exact read-back
+    elif operation == 'put':
         with pytest.raises(OutcomeUnknown) as error:
             storage.put('journal', b'data')
         assert 'private-marker' not in str(error.value)

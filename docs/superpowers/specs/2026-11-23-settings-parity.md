@@ -991,3 +991,8 @@ and targetFilter.ts:132-149. The plugin does not parse YAML during sync; propert
 projection assertions define the peer tool contract rather than invent a host
 parser oracle. Node v26.13.1 uses builtins only, no published packages needed.
 Fixture SHA256: `eb72adde821251b3b4be28ef8a427570a04165fdd70e96dcac65807b154fd709`.
+
+
+### 2026-11-25 — F7 conditional retry confirmation
+
+[DECISION] Supersede the F6 duplicate-candidate behavior: a retried 412 requires exact read-back at that key. Identical confirms; absent, different or unreadable retains outcome-unknown recovery intent. Unconditional PUT remains one attempt.
