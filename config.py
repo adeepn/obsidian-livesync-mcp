@@ -203,6 +203,20 @@ _JS_SPACE = " \t\n\r\v\f\u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u
 _FIELD_NAME = re.compile(r"[!#$%&'*+.^_`|~0-9A-Za-z-]+", re.ASCII)
 
 
+_TRANSPORT_HEADERS = frozenset(('content-length', 'transfer-encoding', 'host',
+    'connection', 'keep-alive', 'te', 'trailer', 'upgrade'))
+
+
+def validate_transport_headers(headers, variable):
+    # MinioStorageAdapter.ts:86-100 accepts arbitrary finalizeRequest headers.
+    # Deliberate safety boundary: routing/framing/hop-by-hop fields belong to
+    # the HTTP transport, including future Proxy-* extension fields.
+    for ordinal, (key, _) in enumerate(headers, 1):
+        if key.lower() in _TRANSPORT_HEADERS or key.lower().startswith('proxy-'):
+            raise ConfigError(f'{variable} entry {ordinal}: transport-owned header; '
+                              'remove the entry and configure routing/proxy transport separately.') from None
+
+
 def _load_custom_headers(env: Mapping[str, str], name: str) -> tuple[tuple[str, str], ...]:
     raw = env.get(name, "")
 
@@ -272,6 +286,7 @@ def _load_custom_headers(env: Mapping[str, str], name: str) -> tuple[tuple[str, 
         if key == "__proto__" and not raw.lstrip(_JS_SPACE).startswith("{"):
             continue
         headers[key] = value
+    validate_transport_headers(headers.items(), name)
     return tuple(headers.items())
 
 

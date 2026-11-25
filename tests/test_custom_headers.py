@@ -423,3 +423,79 @@ asyncio.run(backend.close())
     result = subprocess.run([sys.executable, '-c', code], capture_output=True, text=True)
     assert result.returncode == 0
     assert 'G5PrivateProxyCredential' not in result.stdout + result.stderr
+
+
+FRAMING_NAMES = ['Content-Length', 'Transfer-Encoding', 'Host', 'Connection',
+                 'Keep-Alive', 'TE', 'Trailer', 'Upgrade', 'Proxy-Authorization',
+                 'Proxy-Connection', 'Proxy-Arbitrary']
+
+
+@pytest.mark.parametrize('backend', ['couchdb', 's3'])
+@pytest.mark.parametrize('name', FRAMING_NAMES)
+@pytest.mark.parametrize('lower', [False, True])
+def test_framing_headers_refused_without_values(backend, name, lower):
+    # Deliberate safety difference: native MinioStorageAdapter.ts:86-100
+    # copies arbitrary fields at finalizeRequest, after framing/signing.
+    name = name.lower() if lower else name
+    variable = backend.upper() + '_CUSTOM_HEADERS'
+    with pytest.raises(ConfigError) as caught:
+        load_config({**env_for(backend), variable: json.dumps({name: 'PRIVATE'})})
+    message = str(caught.value)
+    assert variable in message and 'entry 1' in message
+    assert 'transport-owned' in message and 'remove' in message
+    assert 'PRIVATE' not in message and name not in message
+
+
+@pytest.mark.parametrize('name', FRAMING_NAMES)
+@pytest.mark.parametrize('backend', ['couchdb', 's3-path', 's3-host'])
+def test_injected_framing_headers_never_reach_prepared_request(name, backend, monkeypatch):
+    # Embedders may inject Config dataclasses without load_config. Reject at
+    # adapter construction as well, before any HTTP request can be prepared.
+    sent = []
+    with pytest.raises(ConfigError):
+        if backend == 'couchdb':
+            CouchDBBackend('https://db.example', 'u', 'p', 'vault',
+                transport=httpx.MockTransport(lambda r: sent.append(r)),
+                custom_headers=((name, 'PRIVATE'),))
+        else:
+            cfg = replace(make_cfg(), force_path_style=backend == 's3-path',
+                          custom_headers=((name, 'PRIVATE'),))
+            Boto3ObjectStorage(cfg)
+    assert not sent
+
+
+async def test_final_couchdb_framing_with_safe_custom_headers():
+    sent = []
+    def send(request):
+        sent.append(request)
+        return httpx.Response(201, json={'ok': True})
+    backend = CouchDBBackend('https://db.example', 'u', 'p', 'vault',
+        transport=httpx.MockTransport(send), custom_headers=(('X-Proxy', 'safe'),))
+    try:
+        await backend._request('PUT', 'vault/a', json_body={'data': '123456789'})
+        request = sent[0]
+        assert request.headers['host'] == 'db.example'
+        assert int(request.headers['content-length']) == len(request.content)
+        assert 'transfer-encoding' not in request.headers
+    finally:
+        await backend.close()
+
+
+@pytest.mark.parametrize('style', [True, False])
+def test_final_s3_framing_with_safe_custom_headers(style, monkeypatch):
+    from urllib.parse import urlsplit
+    storage = Boto3ObjectStorage(replace(make_cfg(endpoint='https://objects.example'),
+        force_path_style=style, custom_headers=(('X-Proxy', 'safe'),)))
+    sent = []
+    def send(request):
+        body = request.body.read() if hasattr(request.body, 'read') else request.body
+        sent.append((request, body))
+        return AWSResponse(request.url, 200, {}, Raw(b''))
+    monkeypatch.setattr(storage._client._endpoint.http_session, 'send', send)
+    storage.put('probe', b'123456789')
+    request, body = sent[0]
+    assert urlsplit(request.url).hostname == ('objects.example' if style else 'test-bucket.objects.example')
+    assert not ('Content-Length' in request.headers and 'Transfer-Encoding' in request.headers)
+    if 'Content-Length' in request.headers:
+        assert int(request.headers['Content-Length']) == len(body)
+    assert request.headers['X-Proxy'] == b'safe'

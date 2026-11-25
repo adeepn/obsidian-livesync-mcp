@@ -50,7 +50,7 @@ import logging
 import time
 import urllib.parse
 from typing import AsyncIterator, Callable
-from config import CouchDBConfig
+from config import validate_transport_headers, CouchDBConfig
 from couchdb_jwt import JWTTokenGenerator
 
 from scan_budget import ScanBudget, active_scan_budget
@@ -177,6 +177,7 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
         scan_max_seconds: float = 20,
         scan_clock: Callable[[], float] = time.monotonic,
     ) -> None:
+        validate_transport_headers(custom_headers, "COUCHDB_CUSTOM_HEADERS")
         if text_verdict_cache_entries <= 0:
             raise ValueError("text verdict cache entries must be positive")
         self.couchdb_max_inflated_bytes = None

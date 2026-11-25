@@ -1027,3 +1027,10 @@ def test_couchdb_inflate_policy_documented():
         assert "LIVESYNC_COUCHDB_MAX_INFLATED_BYTES" in (ROOT / name).read_text()
     text = (ROOT / "docs/vault-format.md").read_text()
     assert "32 MiB" in text and "safety factor" in text and "P-4" in text
+
+
+def test_transport_owned_headers_documented():
+    for name in ("README.md", "docs/connecting-storage.md", "docs/peer-limitations.md", ".env.example"):
+        text = (ROOT / name).read_text()
+        for field in ("Content-Length", "Transfer-Encoding", "Host", "Proxy-*"):
+            assert field in text

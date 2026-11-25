@@ -200,3 +200,9 @@ This includes Content-Type, Host and Origin validation and resource/prompt error
 CouchDB decompression has a per-document operational budget, derived from the
 resolved splitter with a 32 MiB floor; override LIVESYNC_COUCHDB_MAX_INFLATED_BYTES
 and restart for larger valid pieces. This is separate from device file admission.
+
+Custom headers deliberately differ from the plugin for transport safety:
+Content-Length, Transfer-Encoding, Host, Connection, Keep-Alive, TE, Trailer,
+Upgrade and all Proxy-* fields are transport-owned and refused case-insensitively
+for both storages. Remove these entries and configure routing/proxy transport
+separately. Other headers still apply after S3 signing.

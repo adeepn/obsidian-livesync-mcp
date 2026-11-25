@@ -37,7 +37,7 @@ from botocore.exceptions import (
     NoCredentialsError, PartialCredentialsError, ParamValidationError,
 )
 
-from config import S3Config
+from config import S3Config, validate_transport_headers
 from storage_base import StorageError, StorageUnavailable, MutationNotApplied, OutcomeUnknown
 from replay_limits import ReplayLimits, ReplayBudgetExceeded
 
@@ -116,6 +116,7 @@ class Boto3ObjectStorage:
     """
 
     def __init__(self, cfg: S3Config, *, max_object_bytes: int = MAX_OBJECT_BYTES):
+        validate_transport_headers(cfg.custom_headers, "S3_CUSTOM_HEADERS")
         if max_object_bytes < 1:
             raise ValueError("max_object_bytes must be positive")
         self.max_object_bytes = max_object_bytes

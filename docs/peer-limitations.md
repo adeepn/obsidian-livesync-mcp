@@ -367,3 +367,9 @@ CouchDB inflate protection (P-4): per-document resolved splitter budget, 32 MiB
 floor, positive LIVESYNC_COUCHDB_MAX_INFLATED_BYTES override. Raise and restart
 for larger valid pieces; this operational protection is separate from device
 file-size admission. [Derivation](vault-format.md#couchdb-inflate-budget).
+
+Custom headers deliberately differ from the plugin for transport safety:
+Content-Length, Transfer-Encoding, Host, Connection, Keep-Alive, TE, Trailer,
+Upgrade and all Proxy-* fields are transport-owned and refused case-insensitively
+for both storages. Remove these entries and configure routing/proxy transport
+separately. Other headers still apply after S3 signing.

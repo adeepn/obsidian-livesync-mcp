@@ -1073,3 +1073,9 @@ No new live procedure was performed by this implementation session.
 shared-leaf equality and reserved-prefix preflight. Default derives from resolved
 splitter cap with base64/safety headroom and 32 MiB floor; named positive override.
 Native compression generator adds compact budget-witness wire and result hashes.
+
+### 2026-11-25 — F9-5 transport-owned headers
+
+[DECISION] Reject framing/routing/hop-by-hop headers case-insensitively for both
+storages, including injected dataclasses. This deliberate safety difference
+from native finalizeRequest is documented; final prepared requests are checked.

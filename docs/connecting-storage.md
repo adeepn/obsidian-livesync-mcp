@@ -289,3 +289,9 @@ All accept positive finite seconds. Raise them and restart for a healthy slow
 server. S3_MAX_ATTEMPTS is a positive integer (default 1); see the
 [S3 retry policy](s3-journal.md#transport-policy) before raising it. A timeout
 after mutation dispatch can mean outcome unknown: re-read before retrying.
+
+Custom headers deliberately differ from the plugin for transport safety:
+Content-Length, Transfer-Encoding, Host, Connection, Keep-Alive, TE, Trailer,
+Upgrade and all Proxy-* fields are transport-owned and refused case-insensitively
+for both storages. Remove these entries and configure routing/proxy transport
+separately. Other headers still apply after S3 signing.

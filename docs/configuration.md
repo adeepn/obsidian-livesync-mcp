@@ -45,7 +45,7 @@ are read only for the selected backend. Empty defaults below mean an empty strin
 | `S3_SECRET_ACCESS_KEY` | none | Required for S3 fields | Object-storage secret key |
 | `S3_BUCKET` | none | Required for S3 fields | Existing LiveSync journal bucket |
 | `S3_REGION` | `auto` (fields); empty if omitted in URI | Optional | Object-storage region |
-| `S3_CUSTOM_HEADERS` | empty | Optional | Plugin Custom Headers lines or JSON object, applied after signing on every S3 request |
+| `S3_CUSTOM_HEADERS` | empty | Optional | Plugin Custom Headers lines or JSON object, safe fields applied after signing on every S3 request; transport-owned fields refused |
 | `S3_FORCE_PATH_STYLE` | `true` | Optional | `true` path style, `false` virtual-host style for configured endpoints |
 | `S3_PREFIX` | empty | Optional | Literal key prefix, including trailing slash if needed |
 | `S3_STATE_DIR` | `./data` | Optional | Dedicated persistent local replica directory |
