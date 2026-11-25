@@ -368,3 +368,10 @@ def test_jwt_empty_and_string_zero_documented():
         assert 'empty' in text and 'refused' in text
         assert 'zero-second' in text or 'zero seconds' in text
         assert 'cannot' in text and 'numeric' in text
+
+
+def test_atomic_journal_policy_documented():
+    for name in ('README.md', 'docs/size-policy.md'):
+        text = (ROOT / name).read_text()
+        assert 'before committing any effective setting' in text
+        assert 'previous' in text and 'tuple' in text

@@ -772,3 +772,7 @@ its own deadline expires first. Neither path echoes the pattern or body.
 ### 2026-11-25 F2-7 — JWT cache boundary
 
 [GOTCHA] Numeric zero uses five minutes for both signing and cache expiry; explicit empty expiry is refused. Upstream literal string "0" produces a zero-second token and is outside the numeric environment representation. Regression covers all four algorithms through +290.99 / +291 seconds and detects the raw-zero cache mutant.
+
+### 2026-11-25 F2-5 — atomic policy refresh
+
+[DECISION] Resolve selection, size and derived text budgets before installing effective fields. A refused candidate preserves the previous tuple and retains a typed policy failure until repaired. The independent refresh reproducer failed before and passes after the fix.

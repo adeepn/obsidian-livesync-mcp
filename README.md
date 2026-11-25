@@ -291,7 +291,7 @@ Ordinary writes skip only if `max > 0 && size > 0 && size > max*1024*1024`.
 Equality is admitted; fractions work; <=0 disables. Default is 50 MiB from
 vault settings, unless explicitly overridden. Raw and converted Blob bytes are
 checked before publication. Downloads have no device-size gate; `max_bytes`
-is an optional caller limit. Journal refresh re-resolves the effective vault size policy and derived text budget; explicit overrides remain authoritative. CouchDB re-resolves at startup.
+is an optional caller limit. Journal refresh validates the complete selection/size/text candidate before committing any effective setting; refused candidates preserve the previous tuple and block writes until repaired. Journal refresh re-resolves the effective vault size policy and derived text budget; explicit overrides remain authoritative. CouchDB re-resolves at startup.
 [Full size policy, skips, protected renames and independent replay budgets](docs/size-policy.md).
 
 ## Local state and recovery (S3)

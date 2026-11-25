@@ -75,7 +75,7 @@ from livesync_format import (
     assemble_binary,
     canonical_path,
     resolve_content_splitter, resolve_tweak_startup,
-    resolve_sync_max_size,
+    resolve_sync_max_size, resolve_ignore_settings,
     clone_metadata,
     prepare_file_content,
     is_note_document,
@@ -370,25 +370,37 @@ class JournalBackend(TextAccessPolicy, DeviceSelection):
         # after a rejected milestone. Only effective config changes recheck Node.
         milestone = self._load_milestone()
         try:
-            self.resolve_selection_settings(milestone if milestone is not None else
-                                            {'pathNormalizationVersion': 0})
-            # VaultService.ts:73-81 resolves against current realised settings.
-            # Assign through TextAccessPolicy so derived text limits track raises.
-            if self.sync_max_size_mb_override is None:
+            candidate_milestone = milestone if milestone is not None else {'pathNormalizationVersion': 0}
+            overrides = getattr(self, '_selection_overrides',
+                                (self.selection_use_ignore_files, self.selection_ignore_files))
+            candidate_selection = resolve_ignore_settings(candidate_milestone,
+                use_override=overrides[0], names_override=overrides[1])
+            # VaultService.ts:73-81 and targetFilter.ts:132-137 consume the
+            # same realised snapshot. Validate the complete tuple before any
+            # effective field is installed, including the derived text budget.
+            candidate_size = self.sync_max_size_mb_override
+            if candidate_size is None:
                 if milestone is None:
-                    self.sync_max_size_mb = 50
+                    candidate_size = 50
                 else:
                     resolve_sync_max_size(milestone)  # retain all-device guards
                     resolved = resolve_tweak_startup(milestone,
                         disable_checking_config_mismatch=getattr(self, 'disable_checking_config_mismatch', False),
                         auto_accept_compatible_tweak=getattr(self, 'auto_accept_compatible_tweak', True))
-                    self.sync_max_size_mb = resolve_sync_max_size(dict(resolved.settings))
-            else:
-                self.sync_max_size_mb = self.sync_max_size_mb_override
-            if self._selection_checked_configuration != self._selection_configuration():
-                await self.selection_startup()
+                    candidate_size = resolve_sync_max_size(dict(resolved.settings))
+            candidate_text = TextAccessPolicy()
+            candidate_text._text_budget_override = self._text_budget_override
+            candidate_text.sync_max_size_mb = candidate_size
         except UnsupportedVaultSettings as exc:
-            raise UnsupportedVault(settings_exception_diagnostic(exc)) from exc
+            self._selection_resolution_diagnostic = settings_exception_diagnostic(exc)
+            raise UnsupportedVault(self._selection_resolution_diagnostic) from exc
+        self._selection_overrides = overrides
+        self.selection_use_ignore_files, self.selection_ignore_files = candidate_selection
+        self._sync_max_size_mb = candidate_size
+        self._effective_text_budget = candidate_text.text_scan_max_bytes
+        self._selection_resolution_diagnostic = None
+        if self._selection_checked_configuration != self._selection_configuration():
+            await self.selection_startup()
         self._refresh_deadline = now + self.max_refresh_seconds
         self._refresh_downloaded = 0
         recent_docs: list[dict] | None = None

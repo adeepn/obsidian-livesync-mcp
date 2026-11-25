@@ -86,3 +86,5 @@ defaults. No finite budget can promise admission of all unbounded histories.
 See [replay_limits.py](../replay_limits.py) for pinned source references.
 
 Journal peers re-resolve the effective size policy at every unthrottled refresh (including refresh(force=True)), and update the derived text budget through the same policy setter as startup. Explicit LIVESYNC_SYNC_MAX_SIZE_MB and LIVESYNC_TEXT_SCAN_MAX_BYTES overrides remain authoritative, including zero/unlimited.
+
+Journal refresh validates the complete selection, size and derived text policy before committing any effective setting. A refused candidate preserves the previous effective tuple, records a typed failure and blocks writes until the milestone is repaired and refreshed.

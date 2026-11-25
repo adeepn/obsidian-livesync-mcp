@@ -350,3 +350,22 @@ async def test_stats_ignore_warning_count_is_typed(monkeypatch,value,expected):
     assert result['selection_unresolved_ignore_names']==expected
     assert type(result['selection_unresolved_ignore_names']) is int
     assert 'PRIVATE_WARNING' not in str(result)
+
+
+async def test_failed_policy_refresh_preserves_effective_tuple(tmp_path):
+    # VaultService.ts:73-81 and targetFilter.ts:132-137 consume one realised
+    # settings snapshot. Installing selection before validating size is unsafe.
+    b, storage = make_backend(tmp_path, healthy_bucket())
+    try:
+        await b.startup_check()
+        before = (b.selection_use_ignore_files, b.selection_ignore_files,
+                  b.sync_max_size_mb, b.text_scan_max_bytes)
+        storage._objects[MILESTONE_KEY] = json.dumps(milestone(
+            useIgnoreFiles=True, ignoreFiles='changed', syncMaxSizeInMB='INVALID')).encode()
+        with pytest.raises(UnsupportedVault):
+            await b.refresh(force=True)
+        assert (b.selection_use_ignore_files, b.selection_ignore_files,
+                b.sync_max_size_mb, b.text_scan_max_bytes) == before
+        assert b._selection_resolution_diagnostic is not None
+    finally:
+        await b.close()
