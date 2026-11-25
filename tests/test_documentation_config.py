@@ -1050,3 +1050,14 @@ def test_reproducible_install_and_fixed_runner_are_documented():
     assert 'runs-on: ubuntu-24.04' in workflow
     assert 'ubuntu-latest' not in workflow
     assert not re.search(r'uses:.*@(main|master|latest|v\d+)\s*$', workflow, re.M)
+
+
+def test_settings_changelog_is_operator_facing():
+    text = (ROOT / 'CHANGELOG.md').read_text().split('## [1.0.1]', 1)[0]
+    assert text.count('### Settings parity') == 1
+    assert 'scheduler' not in text.lower()
+    assert not re.search(r'\bgates?\b', text.lower())
+    assert 'test margins' not in text.lower()
+    for term in ('LIVESYNC_MAX_REQUEST_BYTES', 'LIVESYNC_COUCHDB_MAX_INFLATED_BYTES',
+                 'custom headers', 'transport_replacements', 'Node', 'E2EE'):
+        assert term in text

@@ -1105,3 +1105,9 @@ Isolated-install full-suite evidence belongs in ignored F9 working evidence.
 [GOTCHA] Correct stale object-storage diagnostic documentation to typed fields.
 Remove the unused encode_newnote default-splitter wrapper after repository-wide
 search confirmed only wrapper tests called it; configurable writers are unchanged.
+
+### 2026-11-26 — F9-10 operator changelog
+
+[DECISION] Consolidate unreleased settings parity around final operator-visible
+features, differences, overrides and recovery. Remove successive test/gate and
+acceptance narration; preserve all released history verbatim.
