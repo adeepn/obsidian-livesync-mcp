@@ -109,6 +109,7 @@ def get_backend(cfg: Config) -> StorageBackend:
         scan_max_bytes=cfg.scan_max_bytes,
         scan_max_seconds=getattr(cfg, "scan_max_seconds", 20),
     )
+    result.couchdb_max_inflated_bytes = cfg.couchdb_max_inflated_bytes
     result.sync_max_size_mb_override = cfg.sync_max_size_mb
     if cfg.sync_max_size_mb is not None:
         result.sync_max_size_mb = cfg.sync_max_size_mb

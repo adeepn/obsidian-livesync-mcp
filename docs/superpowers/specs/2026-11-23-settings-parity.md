@@ -1066,3 +1066,10 @@ ordinary-sync claim: service records are created but files are not resent.
 Checklist now requires the explicitly authorized device-to-server rebuild
 after ordinary sync, with pinned Russian labels and English completion log.
 No new live procedure was performed by this implementation session.
+
+### 2026-11-25 — F9-4 CouchDB inflation
+
+[DECISION] P-4 bounded incremental per-document inflate covers single/batch reads,
+shared-leaf equality and reserved-prefix preflight. Default derives from resolved
+splitter cap with base64/safety headroom and 32 MiB floor; named positive override.
+Native compression generator adds compact budget-witness wire and result hashes.

@@ -362,3 +362,8 @@ HTTP ingress: `LIVESYNC_MAX_REQUEST_BYTES` defaults to 1 GiB; 0 is unlimited.
 HTTP 413 means raise the request-body policy (and any proxy limit) and restart.
 The body is held in memory; this is separate from device file-size admission
 and the OAuth form cap. See [configuration](configuration.md#http-request-bodies).
+
+CouchDB inflate protection (P-4): per-document resolved splitter budget, 32 MiB
+floor, positive LIVESYNC_COUCHDB_MAX_INFLATED_BYTES override. Raise and restart
+for larger valid pieces; this operational protection is separate from device
+file-size admission. [Derivation](vault-format.md#couchdb-inflate-budget).

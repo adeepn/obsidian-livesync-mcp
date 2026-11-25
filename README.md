@@ -97,7 +97,7 @@ and [source and live evidence](docs/upstream-pin.md).
 | Chunk hashes, Eden, long-line threshold | Identical at pin | [Full settings table](docs/peer-limitations.md#supported-vault-settings) |
 | File size and ignore-file selection | Identical admission; local overrides | [Size](docs/size-policy.md), [selection](docs/selection-filters.md) |
 | Headers, JWT and addressing | Explicit local connection settings | [Connection setup](docs/connecting-storage.md) |
-| CouchDB compression | Device-compatible; transformations disclosed | [Compression](docs/vault-format.md#couchdb-compression) |
+| CouchDB compression | Device-compatible; transformations disclosed; bounded reads | [Compression](docs/vault-format.md#couchdb-compression) |
 | E2EE and path obfuscation | Unsupported | [Recovery choices](docs/peer-limitations.md#supported-vault-settings) |
 | Deletion retention and conflict automation | Deliberate differences | [Policies](docs/peer-limitations.md#deletion-and-conflict-policies) |
 | Reflection, hidden/customization/plugin sync | Outside ordinary-tool scope | [Full scope](docs/peer-limitations.md#supported-vault-settings) |
@@ -196,3 +196,7 @@ At the hosting boundary, SDK transport/validation logs contain only logger name,
 closed level and exception class. Request header values, paths, body fragments,
 third-party messages and exception text/tracebacks are withheld before handlers.
 This includes Content-Type, Host and Origin validation and resource/prompt errors.
+
+CouchDB decompression has a per-document operational budget, derived from the
+resolved splitter with a 32 MiB floor; override LIVESYNC_COUCHDB_MAX_INFLATED_BYTES
+and restart for larger valid pieces. This is separate from device file admission.

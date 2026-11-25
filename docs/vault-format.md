@@ -219,3 +219,21 @@ The V2 minimum-concatenation oracle includes the 401-line `abcd\n` witness with 
 Existing shared journal content is checked in both compact chunk files and full-JSON leaves before publication. Conflicting or encrypted leaves refuse without replacing data: inspect and resolve the conflicting leaf in Obsidian, or coordinate an alternate hashAlg or a positive customChunkSize before retrying. Diagnostics contain fixed recovery text and no note bytes or remote values.
 
 Splitter parameter arrays use the shared iterative scalar conversion, including native null/undefined empty fields and active-path cycle handling; JSON admission and decoder capacity remain separate ingress constraints. See [size policy](size-policy.md).
+
+## CouchDB inflate budget
+
+P-4 operational protection applies to every marked document, single or batch,
+and reserved-prefix write preflight, independently of the compression setting.
+The default is max(32 MiB, base64 size of max(4 MiB, resolved splitter cap) +
+UTF-8 boundary headroom, times safety factor 4). This also covers legacy text
+UTF-16 units expanding to three UTF-8 bytes each. V3 uses at most 4 MiB plus
+three bytes; legacy caps can be larger. Nonfinite caps can emit whole notes
+without a finite native maximum: the generous floor remains operational policy,
+not a claim of a protocol maximum. Older foreign pieces may also need tuning.
+
+LIVESYNC_COUCHDB_MAX_INFLATED_BYTES accepts a positive integer byte override;
+empty derives the default. Raise it and restart for a legitimate larger piece,
+or restore a corrupt document from a healthy device. Incremental inflation
+bounds each output block and retained output before UTF-8 projection or base64
+expansion; projected output also must fit. This is per-document, not an aggregate
+batch memory envelope, and is distinct from device file-size admission.

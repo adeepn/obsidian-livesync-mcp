@@ -129,6 +129,7 @@ class Config:
     frontmatter_max_nodes: int = 20_000
     frontmatter_max_depth: int = 200
     frontmatter_max_bytes: int = 4 * 1024**2
+    couchdb_max_inflated_bytes: int | None = None
     max_request_bytes: int = 1024**3
     scan_max_notes: int = 0
     scan_max_bytes: int = 0
@@ -591,6 +592,8 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
         frontmatter_max_nodes=_positive_transport(env, "LIVESYNC_FRONTMATTER_MAX_NODES", 20_000, integer=True),
         frontmatter_max_bytes=_positive_transport(env, "LIVESYNC_FRONTMATTER_MAX_BYTES", 4 * 1024**2, integer=True),
         frontmatter_max_depth=_positive_transport(env, "LIVESYNC_FRONTMATTER_MAX_DEPTH", 200, integer=True),
+        couchdb_max_inflated_bytes=(None if env.get("LIVESYNC_COUCHDB_MAX_INFLATED_BYTES", "") == ""
+            else _positive_transport(env, "LIVESYNC_COUCHDB_MAX_INFLATED_BYTES", None, integer=True)),
         max_request_bytes=max_request_bytes,
         scan_max_notes=scan_limits[0],
         scan_max_bytes=scan_limits[1],

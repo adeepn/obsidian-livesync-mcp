@@ -70,7 +70,17 @@ for(const bytes of [[0xed,0xa0,0x80],[0xff,0x61],[0xef,0xbb,0xbf,0x61],[0xf0,0x9
  const wire=marker+deflateRawSync(Buffer.from(bytes),{level:8}).toString('base64');
  invalid_utf8.push({wire,result:(await ctx.decompressDoc({data:wire})).data});
 }
+// Operational-budget witnesses; all projected bytes come from native decode.
+const budget_vectors=[];
+for (const size of [4096,4097,4*1024*1024+3,16*1024*1024]) {
+ for (const binary of [false,true]) {
+  const raw=Buffer.alloc(size,65);
+  const wire=marker+(binary?'~':'')+deflateRawSync(raw,{level:8}).toString('base64');
+  const result=(await ctx.decompressDoc({data:wire})).data;
+  budget_vectors.push({size,binary,wire,result_bytes:Buffer.byteLength(result),result_sha256:sha(result)});
+ }
+}
 fs.writeFileSync(out,JSON.stringify({upstream_commit:pin,node:process.version,
  source_sha256:sources,zlib:process.versions.zlib,dependency,
  fflate_dependency:{package:'fflate',version:fpin.version,integrity:fpin.integrity,url:fpin.resolved,
- source_sha256:{'package/esm/index.mjs':sha(fsource)}},marker,vectors,invalid_utf8},null,2)+'\n');
+ source_sha256:{'package/esm/index.mjs':sha(fsource)}},marker,vectors,invalid_utf8,budget_vectors},null,2)+'\n');

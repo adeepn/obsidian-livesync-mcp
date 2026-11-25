@@ -60,7 +60,7 @@ from text_eligibility import (TextProjection, DEFAULT_TEXT_SCAN_MAX_BYTES,
                               DEFAULT_TEXT_VERDICT_CACHE_ENTRIES)
 
 from couchdb_compression import (compress_doc, decompress_doc, decompress_data,
-                                 CompressedDataError, MARK_SHIFT_COMPRESSED)
+                                 CompressedDataError, MARK_SHIFT_COMPRESSED, resolved_inflate_budget)
 from wire_encoding import json_stringify
 
 import base64
@@ -179,6 +179,7 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
     ) -> None:
         if text_verdict_cache_entries <= 0:
             raise ValueError("text verdict cache entries must be positive")
+        self.couchdb_max_inflated_bytes = None
         self.text_verdict_cache_entries = text_verdict_cache_entries
         self._scan_limits = (scan_max_notes, scan_max_bytes)
         self.scan_max_seconds = scan_max_seconds
@@ -347,6 +348,11 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
         body = response.json()
         return body if isinstance(body, dict) else {}
 
+    @property
+    def inflated_budget_bytes(self):
+        return (self.couchdb_max_inflated_bytes if self.couchdb_max_inflated_bytes is not None
+                else resolved_inflate_budget(self._splitter))
+
     async def _get_doc(
         self, doc_id: str, *, conflicts: bool = False
     ) -> dict | None:
@@ -361,7 +367,7 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
             return None
         body = response.json()
         if isinstance(body, dict):
-            body = decompress_doc(body)
+            body = decompress_doc(body, max_inflated_bytes=self.inflated_budget_bytes)
             self._validate_identity(body)
             cached = self._text_verdicts.get(doc_id)
             if cached is not None and cached[0] != body.get("_rev"):
@@ -392,7 +398,7 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
             return []
         # RemoteService.ts:457 / compress.ts:94-96 applies to all entry docs,
         # including leaf batches. Decode before any data use or equality check.
-        return [{**row, 'doc': decompress_doc(row['doc'])}
+        return [{**row, 'doc': decompress_doc(row['doc'], max_inflated_bytes=self.inflated_budget_bytes)}
                 if isinstance(row, dict) and isinstance(row.get('doc'), dict)
                 else row for row in rows]
 
@@ -1042,7 +1048,7 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
         chunk_id = chunk_id_for_piece(data, hash_alg=self._splitter.hash_alg)
         # C:pouchdb/compress.ts:49-71: stored leaves are always read through
         # one decompression pass, including already-marked caller pieces.
-        expected_data = decompress_data(data)
+        expected_data = decompress_data(data, max_inflated_bytes=self.inflated_budget_bytes)
         existing = await self._get_doc(chunk_id)
         if existing is not None:
             if (
@@ -1211,7 +1217,7 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
             # with writes uncompressed. Validate ALL pieces before any PUT.
             if piece.startswith(MARK_SHIFT_COMPRESSED):
                 try:
-                    decoded = decompress_data(piece)
+                    decoded = decompress_data(piece, max_inflated_bytes=self.inflated_budget_bytes)
                 except CompressedDataError:
                     raise StorageError(PublicDiagnostic(
                         DiagnosticCode.COMPRESSION_PREFIX_INPUT,

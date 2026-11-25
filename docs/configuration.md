@@ -17,6 +17,7 @@ are read only for the selected backend. Empty defaults below mean an empty strin
 
 | Variable | Default | Requirement | Purpose |
 | --- | --- | --- | --- |
+| `LIVESYNC_COUCHDB_MAX_INFLATED_BYTES` | `empty` | Positive integer or empty | Empty derives per-document inflate budget from splitter; [operational policy](vault-format.md#couchdb-inflate-budget) |
 | `LIVESYNC_MAX_REQUEST_BYTES` | `1073741824` | Nonnegative integer | HTTP request body bytes; 0 unlimited; HTTP 413 before tools when exceeded; held in memory |
 | `LIVESYNC_BACKEND` | none | Required | Select `couchdb` or `s3` |
 | `COUCHDB_CUSTOM_HEADERS` | empty | Optional | Plugin Custom Headers lines or JSON object; credential values; see [connection examples](connecting-storage.md#reverse-proxies-and-auth-proxies) |

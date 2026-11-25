@@ -489,6 +489,7 @@ def test_startup_configuration_error_policy_is_documented():
 # The paths below map consumers to their returned fields; defaults and validation
 # expectations come from the published configuration table, not a second value table.
 CONFIG_PATHS = {
+    'LIVESYNC_COUCHDB_MAX_INFLATED_BYTES': 'couchdb_max_inflated_bytes',
     'LIVESYNC_MAX_REQUEST_BYTES': 'max_request_bytes',
     'LIVESYNC_FRONTMATTER_MAX_BYTES': 'frontmatter_max_bytes',
     'LIVESYNC_FRONTMATTER_MAX_NODES': 'frontmatter_max_nodes',
@@ -1019,3 +1020,10 @@ def test_hosting_log_policy_documented():
         text = (ROOT / name).read_text()
         assert "hosting boundary" in text and "Content-Type, Host and Origin" in text
     assert "hosting_logging.py" in (ROOT / "AGENTS.md").read_text()
+
+
+def test_couchdb_inflate_policy_documented():
+    for name in ("README.md", "docs/configuration.md", "docs/peer-limitations.md", "docs/vault-format.md", ".env.example"):
+        assert "LIVESYNC_COUCHDB_MAX_INFLATED_BYTES" in (ROOT / name).read_text()
+    text = (ROOT / "docs/vault-format.md").read_text()
+    assert "32 MiB" in text and "safety factor" in text and "P-4" in text
