@@ -103,9 +103,10 @@ class Boto3ObjectStorage:
 
     With a configured endpoint, ``cfg.force_path_style`` selects path or
     virtual-host addressing (path by default). AWS proper with an empty
-    endpoint keeps boto3's default addressing and needs ``region`` in the URI. Connect/read timeouts are 5/30 seconds and
-    retries are disabled (one attempt) — the journal write path performs
-    its own read-back verification and prefers loud, immediate failure.
+    endpoint keeps boto3's default addressing and needs ``region`` in the URI.
+    Connect/read defaults are 5/30 seconds, configurable via S3Config. Reads
+    and conditional creates use the configured attempt count (default one);
+    unconditional writes always use one attempt to expose ambiguous outcomes.
 
     Keys are prefix-relative: the adapter prepends ``cfg.prefix`` on the
     wire and strips it from listing results. Failures other than a
@@ -125,9 +126,9 @@ class Boto3ObjectStorage:
         self._prefix = cfg.prefix or ""
 
         client_config = Config(
-            connect_timeout=5,
-            read_timeout=30,
-            retries={"total_max_attempts": 1},
+            connect_timeout=cfg.connect_timeout_seconds,
+            read_timeout=cfg.read_timeout_seconds,
+            retries={"total_max_attempts": cfg.max_attempts},
         )
         client_kwargs: dict = {
             "aws_access_key_id": cfg.access_key,
@@ -143,6 +144,14 @@ class Boto3ObjectStorage:
             client_config.s3 = {"addressing_style": "path" if cfg.force_path_style else "virtual"}
 
         self._client = boto3.client("s3", **client_kwargs)
+        # Upstream MinioStorageAdapter.ts:70-80 requests four attempts. Reads
+        # and conditional writes may retry; unconditional publication must not:
+        # a lost response is OutcomeUnknown, even if a retry would succeed.
+        self._write_client = self._client
+        if cfg.max_attempts != 1:
+            write_kwargs = {**client_kwargs, "config": client_config.merge(
+                Config(retries={"total_max_attempts": 1}))}
+            self._write_client = boto3.client("s3", **write_kwargs)
         self.custom_headers_count = len(cfg.custom_headers)
         if cfg.custom_headers:
             from diagnostic_hygiene import silence_transport_logging
@@ -157,6 +166,8 @@ class Boto3ObjectStorage:
                     request.headers[key] = value.encode("latin-1")
 
             self._client.meta.events.register_last("before-send.s3", add_custom_headers)
+            if self._write_client is not self._client:
+                self._write_client.meta.events.register_last("before-send.s3", add_custom_headers)
 
     # -- Key translation -----------------------------------------------------
 
@@ -212,7 +223,7 @@ class Boto3ObjectStorage:
 
     def put(self, key: str, data: bytes) -> None:
         try:
-            self._client.put_object(
+            self._write_client.put_object(
                 Bucket=self._bucket, Key=self._wire_key(key), Body=data
             )
         except (ClientError, BotoCoreError) as exc:

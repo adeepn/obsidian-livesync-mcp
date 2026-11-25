@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Settings parity
 
+- Make CouchDB, S3 and selection deadlines configurable; allow configured read/conditional S3 retries while retaining single-attempt unconditional publication.
+
 - Consolidate connection instructions, settings differences, refusal remedies and oracle regeneration provenance.
 - Require explicit write/delete authorization and exact target confirmation in the live acceptance helper; withhold unknown remote setting names and classify reconnect files using resolved vault policy.
 - Bind documented environment defaults and validation rules to actual configuration consumers; restore current-source splitter mutation witnesses.

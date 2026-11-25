@@ -480,6 +480,12 @@ def test_startup_configuration_error_policy_is_documented():
 # The paths below map consumers to their returned fields; defaults and validation
 # expectations come from the published README cells, not a second value table.
 CONFIG_PATHS = {
+    'COUCHDB_CONNECT_TIMEOUT_SECONDS': 'couchdb.connect_timeout_seconds',
+    'COUCHDB_IO_TIMEOUT_SECONDS': 'couchdb.io_timeout_seconds',
+    'S3_CONNECT_TIMEOUT_SECONDS': 's3.connect_timeout_seconds',
+    'S3_READ_TIMEOUT_SECONDS': 's3.read_timeout_seconds',
+    'S3_MAX_ATTEMPTS': 's3.max_attempts',
+    'LIVESYNC_SELECTION_TIMEOUT_SECONDS': 'selection_timeout_seconds',
     'LIVESYNC_BACKEND': 'backend', 'COUCHDB_URL': 'couchdb.url',
     'COUCHDB_USER': 'couchdb.user', 'COUCHDB_PASSWORD': 'couchdb.password',
     'COUCHDB_DATABASE': 'couchdb.database', 'COUCHDB_CUSTOM_HEADERS': 'couchdb.custom_headers',
@@ -927,3 +933,15 @@ def test_readme_names_terminating_binary_data_loss_refusal():
     assert 'data loss' in row
     assert 'NaN-cap V2 binary' in text
     assert 'Refuse only inputs on which the plugin itself does not terminate' not in text
+
+
+def test_f6_transport_policy_documentation():
+    names = ('COUCHDB_CONNECT_TIMEOUT_SECONDS', 'COUCHDB_IO_TIMEOUT_SECONDS',
+             'S3_CONNECT_TIMEOUT_SECONDS', 'S3_READ_TIMEOUT_SECONDS',
+             'S3_MAX_ATTEMPTS', 'LIVESYNC_SELECTION_TIMEOUT_SECONDS')
+    for name in names:
+        assert name in environment_names()
+    s3 = (ROOT / 'docs/s3-journal.md').read_text()
+    assert 'Always one' in s3 and '412' in s3 and 'Outcome unknown' in s3
+    assert 'LIVESYNC_SELECTION_TIMEOUT_SECONDS' in (ROOT / 'docs/selection-filters.md').read_text()
+    assert 'COUCHDB_IO_TIMEOUT_SECONDS' in (ROOT / 'docs/connecting-storage.md').read_text()

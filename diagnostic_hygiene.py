@@ -196,7 +196,10 @@ class PublicDiagnostic:
             result += ': ' + cause
             if self.status is not None:
                 result += f" (status {numeric_text(self.status, kind='exit')})"
-            result += '; install Node.js 22+ in the service PATH or disable selection filters'
+            if cause == 'timeout':
+                result += '; raise LIVESYNC_SELECTION_TIMEOUT_SECONDS and restart, or simplify selection rules'
+            else:
+                result += '; install Node.js 22+ in the service PATH or disable selection filters'
         if self.paths:
             result += "; note: " + " -> ".join(path_field(p) for p in self.paths)
         if self.keys:

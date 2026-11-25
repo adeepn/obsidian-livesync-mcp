@@ -24,6 +24,11 @@ JWT_ENV.update(COUCHDB_JWT_ALGORITHM='HS256', COUCHDB_JWT_KEY='dGVzdC1rZXk=',
 
 # Explicit inventory: adding a consumer requires classifying its validation.
 INVALID_CASES = [
+    *[(name, S3_ENV if name.startswith('S3_') else COUCHDB_ENV, MARKER,
+       'positive integer' if name == 'S3_MAX_ATTEMPTS' else 'positive and finite')
+      for name in ('COUCHDB_CONNECT_TIMEOUT_SECONDS', 'COUCHDB_IO_TIMEOUT_SECONDS',
+                   'S3_CONNECT_TIMEOUT_SECONDS', 'S3_READ_TIMEOUT_SECONDS',
+                   'S3_MAX_ATTEMPTS', 'LIVESYNC_SELECTION_TIMEOUT_SECONDS')],
     ('LIVESYNC_BACKEND', COUCHDB_ENV, MARKER, "'couchdb' or 's3'"),
     ('MCP_PORT', COUCHDB_ENV, MARKER, 'integer'),
     *[(name, COUCHDB_ENV, MARKER, 'true or false') for name in (

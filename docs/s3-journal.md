@@ -111,3 +111,24 @@ may differ in endpoint resolution edge cases.
 See [proxy examples and credential handling](connecting-storage.md#reverse-proxies-and-auth-proxies).
 Only typed `custom_headers_configured` and `custom_headers_count` diagnostics
 are exposed, never header names or values.
+
+## Transport policy
+
+S3_CONNECT_TIMEOUT_SECONDS=5 and S3_READ_TIMEOUT_SECONDS=30 accept positive
+finite seconds; raise and restart for slow healthy storage. S3_MAX_ATTEMPTS=1
+accepts a positive integer and includes the initial attempt. Upstream
+`MinioStorageAdapter.ts:70-80` configures four attempts. Set S3_MAX_ATTEMPTS=4
+to allow that count on list/get/exists and conditional put_if_absent.
+
+| Call | SDK attempt policy | Lost-response consequence |
+| --- | --- | --- |
+| list / get / exists | Configured count | Safe read repetition; final failure remains unavailable |
+| put_if_absent | Configured count | If the first creation succeeded, repetition returns already exists (412); publication allocates another candidate, then verifies read-back |
+| unconditional put (exists+put fallback) | Always one | Outcome unknown; publication stops without retry; re-read before deciding to retry |
+
+The default stays one because an accepted upload with a lost response is
+ambiguous. Hidden unconditional retries could conceal that outcome. Conditional
+retries cannot overwrite an existing key, but can leave an extra immutable
+journal candidate after a lost response. This does not remove the fallback's
+exists+put race on providers without conditional-write support. Custom headers
+and timeouts apply to both SDK clients.

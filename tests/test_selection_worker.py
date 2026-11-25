@@ -190,9 +190,8 @@ def test_stalled_stdin_write_obeys_timeout(monkeypatch, tmp_path):
             args = [sys.executable, '-u', str(script)]
         return original(args, *a, **k)
     monkeypatch.setattr(subprocess, 'Popen', popen)
-    worker = selection_engine.SelectionWorker()
+    worker = selection_engine.SelectionWorker(timeout=1)
     worker._start()
-    monkeypatch.setattr(selection_engine, 'TIMEOUT', 1)
     errors = []
     def evaluate():
         try:

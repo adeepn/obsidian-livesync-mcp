@@ -170,6 +170,8 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
         jwt_config: CouchDBConfig | None = None,
         jwt_clock: Callable[[], float] = time.time,
         text_verdict_cache_entries: int = DEFAULT_TEXT_VERDICT_CACHE_ENTRIES,
+        connect_timeout_seconds: float = 5.0,
+        io_timeout_seconds: float = 30.0,
         scan_max_notes: int = 0,
         scan_max_bytes: int = 0,
         scan_max_seconds: float = 20,
@@ -198,7 +200,8 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
             base_url=url if url.endswith("/") else url + "/",
             auth=None if self._jwt else (username, password),
             transport=transport,
-            timeout=httpx.Timeout(5.0, read=30.0, write=30.0, pool=5.0),
+            timeout=httpx.Timeout(connect_timeout_seconds, read=io_timeout_seconds,
+                                  write=io_timeout_seconds, pool=io_timeout_seconds),
         )
         if custom_headers or self._jwt:
             # AsyncClient imports httpcore lazily: install filters only after

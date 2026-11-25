@@ -113,3 +113,9 @@ Both vault-derived and explicit comma-separated names use exact JavaScript trim 
 Inactive device maps may contain conflicting or non-string ignoreFiles values. Both backends start and perform zero ignore-name storage reads while useIgnoreFiles is false.
 
 Vault-derived useIgnoreFiles follows plain JavaScript truthiness (targetFilter.ts:132-137): null, false, numeric zero and empty strings are inactive; nonzero numbers, nonempty strings, arrays and objects are active, including empty arrays/objects and the string "false". Only effective boolean disagreement requires LIVESYNC_USE_IGNORE_FILES; equivalent raw types agree. The operator override stays a strict boolean.
+
+LIVESYNC_SELECTION_TIMEOUT_SECONDS defaults to 5 positive finite seconds and
+controls capability/version checks and each persistent worker request. Raise it
+and restart when valid selection rules need longer. A deadline stops the worker
+and declines that request; simplify pathological regexes or increase the value.
+Upstream `serviceFeatures/targetFilter.ts:132-149` has no corresponding deadline.

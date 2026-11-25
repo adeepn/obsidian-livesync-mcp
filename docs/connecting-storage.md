@@ -405,3 +405,13 @@ origin/base path to avoid forwarding credentials. Custom header HTTP validity,
 Latin-1 transport requirements, JWT key formats and addressing-style DNS/TLS
 constraints above are real protocol/SDK requirements. Fixed transport deadlines
 and retries are listed in [the limit inventory](peer-limitations.md#operational-and-tool-bounds).
+
+## Transport policy
+
+COUCHDB_CONNECT_TIMEOUT_SECONDS (5) controls connection establishment;
+COUCHDB_IO_TIMEOUT_SECONDS (30) controls read, write and pool waits.
+S3_CONNECT_TIMEOUT_SECONDS (5) and S3_READ_TIMEOUT_SECONDS (30) control the SDK.
+All accept positive finite seconds. Raise them and restart for a healthy slow
+server. S3_MAX_ATTEMPTS is a positive integer (default 1); see the
+[S3 retry policy](s3-journal.md#transport-policy) before raising it. A timeout
+after mutation dispatch can mean outcome unknown: re-read before retrying.

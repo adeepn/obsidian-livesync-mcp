@@ -944,3 +944,14 @@ Source/oracle and real-server automated acceptance are complete at the pinned
 baseline; real Obsidian client acceptance remains pending. The Russian owner
 checklist requires controller proofreading before delivery and independent
 approval for mutation/deletion/cleanup steps.
+
+
+### 2026-11-25 — F6-2 transport limits
+
+[DECISION] Add positive finite transport and selection deadlines and positive
+S3_MAX_ATTEMPTS. Defaults remain 5/30 seconds and one attempt, except CouchDB
+pool waits now follow the 30-second I/O setting. Reads and conditional creates
+use configured attempts; unconditional fallback upload stays single-attempt
+to preserve outcome-unknown semantics after a lost response. Native source:
+commonlib MinioStorageAdapter.ts:70-80,132-145 and targetFilter.ts:132-149.
+Tests exercise actual botocore transport response loss, including 412 repetition.

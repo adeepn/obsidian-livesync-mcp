@@ -66,6 +66,8 @@ class CouchDBConfig:
     jwt_subject: str = field(default="", repr=False)
     jwt_key_id: str = field(default="", repr=False)
     jwt_expiry_minutes: float = 5.0
+    connect_timeout_seconds: float = 5.0
+    io_timeout_seconds: float = 30.0
 
 
 @dataclass(frozen=True)
@@ -92,6 +94,9 @@ class S3Config:
     custom_headers: tuple[tuple[str, str], ...] = field(default=(), repr=False)
     # common/models/setting.const.defaults.ts:210.
     force_path_style: bool = True
+    connect_timeout_seconds: float = 5.0
+    read_timeout_seconds: float = 30.0
+    max_attempts: int = 1
 
 
 @dataclass(frozen=True)
@@ -120,9 +125,25 @@ class Config:
     text_scan_max_bytes: int | None = None
     regex_max_output_bytes: int = 0
     regex_timeout_seconds: float = 10.0
+    selection_timeout_seconds: float = 5.0
     scan_max_notes: int = 0
     scan_max_bytes: int = 0
     scan_max_seconds: float = 20.0
+
+
+def _positive_transport(env, name, default, *, integer=False):
+    """Validate operational overrides without reflecting supplied values."""
+    raw = env.get(name, default)
+    try:
+        if type(raw) not in (str, int, float) or (integer and type(raw) is float):
+            raise ValueError
+        value = int(raw) if integer else float(raw)
+        if value <= 0 or not math.isfinite(value):
+            raise ValueError
+    except (ValueError, TypeError, OverflowError):
+        rule = "a positive integer" if integer else "positive and finite seconds"
+        raise ConfigError(f"{name} must be {rule}") from None
+    return value
 
 
 def parse_s3_uri(uri: str) -> S3Config:
@@ -522,6 +543,16 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
     else:
         s3 = _load_s3(env)
 
+    if couchdb is not None:
+        couchdb = replace(couchdb,
+            connect_timeout_seconds=_positive_transport(env, "COUCHDB_CONNECT_TIMEOUT_SECONDS", 5),
+            io_timeout_seconds=_positive_transport(env, "COUCHDB_IO_TIMEOUT_SECONDS", 30))
+    if s3 is not None:
+        s3 = replace(s3,
+            connect_timeout_seconds=_positive_transport(env, "S3_CONNECT_TIMEOUT_SECONDS", 5),
+            read_timeout_seconds=_positive_transport(env, "S3_READ_TIMEOUT_SECONDS", 30),
+            max_attempts=_positive_transport(env, "S3_MAX_ATTEMPTS", 1, integer=True))
+    selection_timeout_seconds = _positive_transport(env, "LIVESYNC_SELECTION_TIMEOUT_SECONDS", 5)
     api_key, oauth_password, oauth_client_id, oauth_client_secret = _load_auth(env)
 
     use_ignore = env.get('LIVESYNC_USE_IGNORE_FILES', '').lower()
@@ -543,6 +574,7 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
         text_scan_max_bytes=scan_limits[2],
         regex_max_output_bytes=regex_max_output_bytes,
         regex_timeout_seconds=regex_timeout_seconds,
+        selection_timeout_seconds=selection_timeout_seconds,
         scan_max_notes=scan_limits[0],
         scan_max_bytes=scan_limits[1],
         scan_max_seconds=scan_max_seconds,

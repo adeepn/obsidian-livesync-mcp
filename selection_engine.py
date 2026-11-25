@@ -41,9 +41,9 @@ def validate_response(value):
     return TargetVerdict(**value)
 
 
-def run(args, **kwargs):
+def run(args, *, timeout=None, **kwargs):
     try:
-        result = subprocess.run(args, capture_output=True, text=True, timeout=TIMEOUT, **kwargs)
+        result = subprocess.run(args, capture_output=True, text=True, timeout=TIMEOUT if timeout is None else timeout, **kwargs)
     except FileNotFoundError as exc:
         raise EngineFailure('node-missing') from exc
     except subprocess.TimeoutExpired as exc:
@@ -72,8 +72,9 @@ class SelectionWorker:
     A killed or broken process is discarded; the next request starts afresh.
     No failed request is retried (write callers receive the original cause).
     """
-    def __init__(self):
+    def __init__(self, *, timeout=None):
         import threading
+        self.timeout = timeout
         self.process = None
         self._lock = threading.Lock()
         self._sequence = 0
@@ -82,7 +83,7 @@ class SelectionWorker:
     def _start(self):
         import threading
         from collections import deque
-        capability_version_check()
+        capability_version_check(timeout=self.timeout)
         try:
             self.process = subprocess.Popen(
                 ['node', str(Path(__file__).parent / 'selection_worker.mjs')],
@@ -156,7 +157,7 @@ class SelectionWorker:
         request_id = self._sequence
         try:
             self._requests.put_nowait((json.dumps(dict(id=request_id, op=op, payload=payload)) + '\n').encode())
-            line = self._responses.get(timeout=TIMEOUT)
+            line = self._responses.get(timeout=TIMEOUT if self.timeout is None else self.timeout)
         except queue.Empty as exc:
             raise EngineFailure('timeout') from exc
         except (BrokenPipeError, OSError) as exc:
@@ -226,8 +227,8 @@ class SelectionWorker:
             self._stop()
 
 
-def capability_version_check():
-    version = run(['node', '--version']).strip()
+def capability_version_check(*, timeout=None):
+    version = run(['node', '--version'], timeout=timeout).strip()
     match = re.fullmatch(r'v(\d+)\.\d+\.\d+(?:[-+][\w.-]+)?', version)
     if match is None:
         raise EngineFailure('malformed-output')

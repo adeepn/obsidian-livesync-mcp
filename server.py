@@ -61,6 +61,7 @@ from oauth_provider import SimpleOAuthProvider
 def _configure_device_policy(result, cfg):
     result.disable_checking_config_mismatch = getattr(cfg, 'disable_checking_config_mismatch', False)
     result.auto_accept_compatible_tweak = getattr(cfg, 'auto_accept_compatible_tweak', True)
+    result.selection_timeout_seconds = getattr(cfg, 'selection_timeout_seconds', 5.0)
     result.selection_only = getattr(cfg, 'selection_only', '')
     result.selection_ignore = getattr(cfg, 'selection_ignore', '')
     result.selection_use_ignore_files = getattr(cfg, 'selection_use_ignore_files', None)
@@ -97,6 +98,8 @@ def get_backend(cfg: Config) -> StorageBackend:
         password=cfg.couchdb.password,
         database=cfg.couchdb.database,
         custom_headers=cfg.couchdb.custom_headers,
+        connect_timeout_seconds=cfg.couchdb.connect_timeout_seconds,
+        io_timeout_seconds=cfg.couchdb.io_timeout_seconds,
         jwt_config=cfg.couchdb if cfg.couchdb.jwt_algorithm else None,
         text_verdict_cache_entries=cfg.text_verdict_cache_entries,
         scan_max_notes=cfg.scan_max_notes,

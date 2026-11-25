@@ -38,7 +38,7 @@ class DeviceSelection:
 
     def _selection_init(self):
         if not hasattr(self, '_selection_worker'):
-            self._selection_worker = SelectionWorker()
+            self._selection_worker = SelectionWorker(timeout=getattr(self, "selection_timeout_seconds", None))
             # Admit before to_thread: parallel tools cannot grow a pool of
             # blocked threads or Node processes. One in-flight request per backend.
             self._selection_limit = asyncio.Semaphore(1)

@@ -80,6 +80,12 @@ are read only for the selected backend. Empty defaults below mean an empty strin
 | --- | --- | --- | --- |
 | `LIVESYNC_BACKEND` | none | Required | Select `couchdb` or `s3` |
 | `COUCHDB_CUSTOM_HEADERS` | empty | Optional | Plugin Custom Headers lines or JSON object; credential values; see [connection examples](docs/connecting-storage.md#reverse-proxies-and-auth-proxies) |
+| `COUCHDB_CONNECT_TIMEOUT_SECONDS` | `5` | Optional | Positive finite seconds for CouchDB connection |
+| `COUCHDB_IO_TIMEOUT_SECONDS` | `30` | Optional | Positive finite seconds for CouchDB read, write and pool |
+| `S3_CONNECT_TIMEOUT_SECONDS` | `5` | Optional | Positive finite seconds for S3 connection |
+| `S3_READ_TIMEOUT_SECONDS` | `30` | Optional | Positive finite seconds for S3 response reads |
+| `S3_MAX_ATTEMPTS` | `1` | Optional | Positive integer SDK attempts for reads and conditional writes; unconditional PUT always one |
+| `LIVESYNC_SELECTION_TIMEOUT_SECONDS` | `5` | Optional | Positive finite seconds for Node capability checks and selection requests |
 | `COUCHDB_URL` | `http://localhost:5984` | Optional | CouchDB server base URL |
 | `COUCHDB_USER` | none | Required for CouchDB Basic auth; absent for JWT | Database username |
 | `COUCHDB_PASSWORD` | none | Required for CouchDB Basic auth; absent for JWT | Database password |
@@ -189,12 +195,20 @@ combination. [Source inventory and caveats](docs/superpowers/specs/2026-11-23-se
 | Hidden File Sync / customization sync | `i:`, `ix:` namespaces | Not supported | No local vault folder; hidden ignore files can be read internally |
 | Plugin sync / `usePluginSyncV2` | `ps:` namespace / Boolean | Not supported | Service documents excluded from ordinary tools |
 | Tweak mismatch/auto-accept flags | Boolean | Deliberate difference | Local env policy; no device registration or PREFERRED publication |
+| Transport deadlines / SDK attempts | Device-local configuration | Local overrides | See environment table; unconditional S3 publication always single attempt |
 | Reflection/request/cache/concurrency tuning | Various local device options | Not supported as device settings | No host reflection or plugin request engine; [full inventory](docs/superpowers/specs/2026-11-23-settings-parity.md#ж-other-tweak_values-and-production-evidence-boundary) |
 
 Real-server coverage includes the 60-row pairwise matrix on both backends.
 It does not establish every setting combination on every server.
 
 ## How the peer differs from a device
+
+Transport defaults remain 5 s connect / 30 s I/O and 5 s selection requests;
+all are configurable in the environment table. CouchDB pool waits now use the
+I/O value. S3 defaults to one SDK attempt to preserve ambiguous-write reporting;
+set S3_MAX_ATTEMPTS=4 for upstream's attempt count on reads and conditional
+writes. Unconditional fallback PUT always uses one attempt, even then. See
+[retry and lost-response semantics](docs/s3-journal.md#transport-policy).
 
 The 2026-11-25 acceptance run found JWT wrong-key HTTP 400 classified as a
 generic storage error and CouchDB rejecting a lone-surrogate leaf with HTTP 400.
