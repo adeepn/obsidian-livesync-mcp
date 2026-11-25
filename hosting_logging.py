@@ -37,7 +37,7 @@ class HostingLogFilter(logging.Filter):
                 return True
             record._closed_hosting_record = True
             exception = record.exc_info[1] if record.exc_info else None
-            cause = cause_name(exception) if exception is not None else 'none'
+            cause = cause_name(type(exception)) if exception is not None else 'none'
             level = logging.getLevelName(record.levelno)
             if level not in ('DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'):
                 level = 'OTHER'

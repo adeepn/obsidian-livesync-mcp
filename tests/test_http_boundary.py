@@ -157,3 +157,15 @@ def test_sanitized_access_logs_support_installed_uvicorn_formatter(late_handler)
     finally:
         logger.removeHandler(handler)
         logger.setLevel(old_level)
+
+
+def test_sdk_exception_class_is_retained_without_exception_text(caplog):
+    import logging
+    try:
+        raise ValueError('PRIVATE_EXCEPTION_TEXT')
+    except ValueError:
+        logging.getLogger('mcp.server.transport_security').exception('PRIVATE_MESSAGE %s', 'PRIVATE_ARG')
+    record = caplog.records[-1]
+    assert record.getMessage() == 'sdk_event logger=mcp.server.transport_security level=ERROR cause=ValueError'
+    assert 'PRIVATE' not in repr(record.__dict__)
+    assert record.exc_info is None
