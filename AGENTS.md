@@ -208,3 +208,33 @@ splitter harness for 40/100 MiB binary inputs; its compact committed
 digests, source hashes and published dependency provenance. Real-server F4
 coverage extends both parity integration modules with per-row document
 classes, large uploads/MCP text access, recovery, compression and request hooks.
+
+
+## Script catalogue and application construction
+
+[Oracle regeneration and verified acquisition](docs/regenerating-oracle-fixtures.md)
+catalogues every `scripts/extract_*.mjs`, `scripts/probe_*.mjs`, and
+`scripts/vendor_selection.py`, with exact commands, input provenance, output
+fixtures and validating tests. Generate expectations only by executing the pinned
+upstream with the verified published dependencies.
+
+| Group | Scripts | Storage / side effects |
+|---|---|---|
+| Offline oracle generators | `scripts/extract_*.mjs`, `scripts/probe_*.mjs` | Scratch fixture/probe outputs; `extract_selection_runtime.mjs` instead rewrites tracked vendor runtime and provenance |
+| Provenance helpers | `scripts/splitter_oracle_dependencies.mjs`, `scripts/vendor_selection.py` | Dependency helper verifies archives/imported members; vendor helper downloads exact lockfile versions and writes tracked vendor files; no vault access |
+| Offline mutation campaign | `scripts/check_splitter_mutations.py` | In-memory source mutations and isolated test runs; ignored evidence output; never rewrites production source |
+| Offline benchmarks | `scripts/benchmark_splitters.py`, `scripts/benchmark_selection.py`, `scripts/benchmark_diagnostics.py` | Synthetic local inputs; JSON on stdout; redirect evidence to ignored scratch space |
+| Upstream watcher | `scripts/check_upstream.sh` | Network GitHub reads; its CI workflow maintains drift issues; not an offline command; needs authenticated `gh` |
+| Owner acceptance | `scripts/live_check_parity.py`, `scripts/live_check_s3.py` | Real storage access; parity defaults read-only and requires explicit write/delete gates; legacy S3 helper's write-phase mutates storage without those new gates; use only the documented dedicated test vault |
+
+Run the complete offline splitter campaign from the repository root:
+
+```bash
+./venv/bin/python scripts/check_splitter_mutations.py .superpowers/sdd/2026-11-23-settings-parity/d/campaign
+```
+
+For application tests and embedding, `server.create_app(cfg)` accepts a validated
+injected `config.Config`. That same object controls client authentication, public
+URL, host, port and backend startup. `run.py` loads dotenv before application
+construction; alternative launchers must supply their environment themselves.
+Restart an application after changing its configuration.

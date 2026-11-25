@@ -71,7 +71,7 @@ never note bytes or remote values. Backend write outcomes also include a
 | `legacy_bom_removed` | `removed_bytes`, `metadata_size_preserved` | V1/V2/V2-segmenter Blob.text removes the leading UTF-8 BOM; original metadata size remains. Receiving devices refuse filesystem reflection unless processSizeMismatchedFiles is enabled (reflection.ts:272-283); V3 retains the BOM. |
 | `invalid_utf8_replaced` | `invalid_bytes` | Explicit lossy plain-text upload, or legacy text-Blob decoding, replaces malformed UTF-8 with U+FFFD. Ordinary malformed plain byte input still refuses with lossy_text guidance. |
 | `input_surrogates_replaced` | `count` | Blob USVString ingestion replaces unpaired surrogate units before splitting on either backend. Valid surrogate pairs combine without loss. |
-| `journal_surrogates_replaced` | `count` | Compact journal TextEncoder replaces unpaired units in emitted leaves, including cuts made by legacy splitters. Original chunk IDs remain; lossless CouchDB retains those units. |
+| `journal_surrogates_replaced` | `count` | Compact journal TextEncoder replaces unpaired units in emitted leaves, including cuts made by legacy splitters. Original chunk IDs remain. CouchDB 3.5.3 rejects such lone-surrogate leaves; the peer refuses before publication rather than reporting a successful replacement. |
 | `couchdb_marker_interpreted` | `chunks`, `metadata_size_preserved` | A literal reserved prefix in a CouchDB text leaf is read as encoded content, even when compression writes are off; original metadata size remains. Use a binary attachment path to preserve literal bytes. |
 
 Notices apply to create, all update modes, upload, canvas, template, properties

@@ -909,3 +909,38 @@ continued acceptance of unrestricted strings. Both run.py and server.py startup
 paths are tested with dotenv disabled and controlled subprocess environments.
 This is peer diagnostic policy, not a change to vault semantics or an upstream
 oracle; no fixture regeneration is required.
+
+
+## 2026-11-25 — D consolidated documentation and live package
+
+[DECISION] This amendment supersedes obsolete connection, default-limit and
+surrogate claims in earlier historical sections; historical text remains.
+The current user-facing contract is README plus the focused docs pages.
+`docs/regenerating-oracle-fixtures.md` catalogues every generator/probe, exact
+pinned artefacts, lockfile integrity verification and consuming tests.
+`docs/peer-limitations.md` records deletion/conflict policies, default impact,
+remaining resource/tool bounds and caller remedies; no production behaviour
+changes belong to D.
+
+[GOTCHA] The live helper is read-only remotely by default. Synthetic remote
+writes require `--allow-remote-write`; rename/soft delete additionally require
+`--allow-remote-delete`; both require an exact `--confirm-target`. Local
+preparation remains exclusive. Unknown remote setting names are withheld with
+count/digest and still fail reconciliation. Reconnect uses production selection
+and size resolvers, including vault-derived ignore files.
+
+[REUSE] Documentation contract tests compare parsed environment rows with actual
+controlled configuration loads, including empty/required/exclusive/range cases,
+ReplayLimits and the separate unsafe-debug consumer. Mutation definitions track
+current splitter source; N7 now selects existing native repeated-array-addition
+witnesses instead of numeric rows that did not expose its change.
+
+[DEFER] Fixed frontmatter conversion limits can reject valid small synced YAML;
+the property API currently calls that invalid YAML rather than naming the bound.
+Raw text fetch/edit remains available. Selection and network fixed deadlines
+also remain peer resource policies, not protocol maxima. These are documented
+D11 findings for separate production work; D does not weaken the guards.
+Source/oracle and real-server automated acceptance are complete at the pinned
+baseline; real Obsidian client acceptance remains pending. The Russian owner
+checklist requires controller proofreading before delivery and independent
+approval for mutation/deletion/cleanup steps.

@@ -17,6 +17,16 @@ The committed fixtures execute the pinned upstream sources with the real
 Fixture regeneration needs Node 26.13.1+ (TypeScript stripping); active selection
 filters separately require Node 22+ at server runtime.
 
+The current baseline is **source-audited + oracle-differential + real-server
+automated acceptance done**. The [2026-11-25 Docker acceptance summary](test-artifacts/2026-11-25-parity-docker/summary.txt)
+records 261 passing real-server checks. This includes typed CouchDB lone-surrogate
+refusals and JWT wrong-key/expired-token authorization errors; it does not certify
+a real Obsidian client's filesystem reflection under every setting.
+
+Every generator, exact dependency acquisition/integrity procedure and validating
+test is catalogued in [Regenerating oracle fixtures](regenerating-oracle-fixtures.md).
+Ordinary oracle tests are offline; active-selection integration tests invoke Node.
+
 ## Real-client evidence
 
 The live-validated client remains **1.0.50**, validated **2026-11-20**:
@@ -27,7 +37,9 @@ reflected by a real client under its settings; it did not validate every
 settings combination or plugin 1.0.52. The sanitized real milestone was not
 captured then. Native-host invalid-byte decoding remains an open experiment.
 
-Task 8 must update this section only after the
+Live acceptance with a real Obsidian client at the current pin is **pending**.
+Its final evidence will be added under `docs/test-artifacts/<date>-parity-live/`.
+Update this section only after the
 [parity live acceptance](live-check-parity-checklist.md), including the actual
 client version, sanitized settings, large attachments, mutations and decoding
 experiments. Preparing a checklist/script is not live validation.

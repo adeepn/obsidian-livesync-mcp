@@ -29,10 +29,17 @@ group instead of `MCP_API_KEY`.
 
 ## CouchDB
 
-Open **Settings → Self-hosted LiveSync → Setup / remote configuration →
-CouchDB Configuration** (wording varies by installed version). Read **URL**,
-**Username**, **Password**, **Database Name**. Existing settings may appear in
-the remote-configuration page instead of the wizard; do not create a new DB.
+For a vault that already syncs, open **Settings → Self-hosted LiveSync → Remote
+Configuration → Connection settings → Saved connections**. Find the row marked
+**(Active)** and click its wrench (**Configure**). In **CouchDB Configuration**,
+read **URL**, **Username**, **Password**, and **Database Name**. Expand
+**Advanced Settings** for **Custom Headers**, or **Experimental Settings** for
+JWT fields, if used.
+After reading, click **Cancel**. Do not save changes, switch connections or create
+a database merely to connect the peer.
+
+<!-- Pinned plugin 5070b67: src/modules/features/SettingDialogue/SettingsPageCatalogue.ts:137-143;
+PaneRemoteConfig.ts:187-188,389-417; SetupWizard/dialogs/SetupRemoteCouchDB.svelte:170-236,333. -->
 Choose the Basic block below or the [JWT route](#couchdb-jwt-authentication).
 These authenticate the peer to CouchDB; MCP client authentication is separate.
 
@@ -134,10 +141,17 @@ clock and required claims against the device settings before retrying.
 
 ## S3 journal
 
-Open **Settings → Self-hosted LiveSync → Setup / remote configuration →
-S3/MinIO/R2 Configuration**. Copy **Endpoint URL**, **Access Key ID**,
-**Secret Access Key**, **Bucket Name**, **Region**, **Folder Prefix**. Check
-**Use Path-Style Access**: copy this choice with `S3_FORCE_PATH_STYLE=true`
+Open **Settings → Self-hosted LiveSync → Remote Configuration → Connection
+settings → Saved connections → (Active) row → Configure** (wrench).
+In **S3/MinIO/R2 Configuration**, copy **Endpoint URL**, **Access Key ID**,
+**Secret Access Key**, **Bucket Name**, **Region**, and **Folder Prefix**.
+Expand **Advanced Settings** for **Custom Headers**, if used. Click **Cancel**
+after reading the fields.
+
+<!-- Pinned plugin 5070b67: SettingDialogue/PaneRemoteConfig.ts:187-188,389-417;
+SetupWizard/dialogs/SetupRemoteBucket.svelte:143-235,257. -->
+
+Check **Use Path-Style Access**: copy this choice with `S3_FORCE_PATH_STYLE=true`
 (the default) or `S3_FORCE_PATH_STYLE=false` for virtual-host addressing.
 Virtual-host-only providers require false. DNS and the TLS certificate must
 cover `bucket.endpoint-host`; an IP endpoint or a bucket name unsuitable for
@@ -173,6 +187,11 @@ S3_REGION=auto
 S3_PREFIX=
 ```
 
+Copy the prefix **exactly**, including any trailing slash: `folder/` stores
+objects below that prefix, while `folder` is a different literal prefix. Do not
+add or remove `/` from an existing connection. Empty prefix means the bucket
+root. Source: commonlib `replication/journal/objectstore/MinioStorageAdapter.ts:137,163,181,226-233`;
+peer `object_storage.py:124-125,171`.
 Use the plugin's region and prefix if nonempty. Optional local state settings
 are described in [local state and recovery](local-state-and-recovery.md). Do not leave both S3 connection forms enabled,
 even with empty individual values. If starting from `.env.example`, remove its
@@ -235,7 +254,7 @@ Keep them in a protected environment file or launcher secret store.
 
 For an HTTPS reverse proxy, use the server base URL including its optional
 path prefix; the database remains a separate field. Example (replace marked
-fields and the illustrative proxy credential):
+fields, including the proxy credential copied locally from **Custom Headers**):
 
 ```dotenv
 LIVESYNC_BACKEND=couchdb
@@ -243,9 +262,21 @@ COUCHDB_URL=https://vault.example.org/livesync/
 COUCHDB_USER=<plugin-username>
 COUCHDB_PASSWORD=<plugin-password>
 COUCHDB_DATABASE=<plugin-database-name>
-COUCHDB_CUSTOM_HEADERS="X-Proxy-Token: example-only\nX-Client: obsidian-peer"
+COUCHDB_CUSTOM_HEADERS="X-Proxy-Token: <plugin-custom-header-value>\nX-Client: obsidian-peer"
 ```
 
+For a direct IP connection, this alternative block keeps the database separate
+from the endpoint (replace the credentials and database locally):
+
+```dotenv
+LIVESYNC_BACKEND=couchdb
+COUCHDB_URL=http://127.0.0.1:5984
+COUCHDB_USER=<plugin-username>
+COUCHDB_PASSWORD=<plugin-password>
+COUCHDB_DATABASE=<plugin-database-name>
+```
+
+Use the actual server IP instead of loopback when the peer runs elsewhere.
 For a direct IP endpoint use, for example, `COUCHDB_URL=http://127.0.0.1:5984`
 or `S3_ENDPOINT_URL=http://127.0.0.1:9000`; retain the port and optional proxy
 path prefix. For HTTPS use a certificate valid for that IP, or use its valid
@@ -264,7 +295,7 @@ S3_ACCESS_KEY_ID=<plugin-access-key>
 S3_SECRET_ACCESS_KEY=<plugin-secret-key>
 S3_BUCKET=<plugin-bucket>
 S3_REGION=auto
-S3_CUSTOM_HEADERS='{"X-Proxy-Token":"example-only","X-Client":"obsidian-peer"}'
+S3_CUSTOM_HEADERS='{"X-Proxy-Token":"<plugin-custom-header-value>","X-Client":"obsidian-peer"}'
 S3_FORCE_PATH_STYLE=false
 ```
 
@@ -359,3 +390,18 @@ See [the final acceptance artifact](test-artifacts/2026-11-25-parity-docker/summ
 for counts, durations, input digests, image digests and reproduction commands.
 This establishes the enumerated scenarios on these servers; it does not prove
 all possible settings or server combinations.
+
+
+## Connection constraints
+
+Encrypted `obsidian://setuplivesync?settings=…` exports and native `sls+s3` saved
+connection strings are not accepted as `LIVESYNC_S3_URI`. This parser accepts its
+literal documented `sls://` form only and does not percent-decode credentials;
+individual fields avoid delimiter ambiguity. Keep all fields, headers and keys
+local. E2EE/path-obfuscated vaults are unsupported (#3/#4); use an unencrypted,
+unobfuscated test vault rather than disabling encryption on a working vault.
+HTTP redirects are deliberately not followed for CouchDB; configure the final
+origin/base path to avoid forwarding credentials. Custom header HTTP validity,
+Latin-1 transport requirements, JWT key formats and addressing-style DNS/TLS
+constraints above are real protocol/SDK requirements. Fixed transport deadlines
+and retries are listed in [the limit inventory](peer-limitations.md#operational-and-tool-bounds).

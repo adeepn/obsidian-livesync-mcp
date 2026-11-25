@@ -31,6 +31,11 @@ the application; other launchers must supply the environment themselves.
 | CouchDB | URL, username, password, database | Direct database access | `obsidian_vault_stats`, then `obsidian_list_notes` |
 | S3 journal | Endpoint/access key/secret/bucket/region/prefix; compatible `sls://` URI | Full journal replay into local state | Same calls; allow replay to finish |
 
+For an already syncing vault, open **Settings → Self-hosted LiveSync → Remote
+Configuration → Connection settings → Saved connections**, find the row marked
+**(Active)**, then click its wrench (**Configure**). Copy the connection fields
+locally and click **Cancel**; do not save or change the working connection.
+
 Follow the [exact connection steps and .env blocks](docs/connecting-storage.md)
 for either backend. Startup validates settings; S3 replay starts on the first
 tool access. There is no dedicated health endpoint.
@@ -55,8 +60,6 @@ Missing credentials/auth, template secrets or incompatible vault settings fail
 at application construction/startup. Configuration errors name variables and validation
 rules without echoing supplied values, including invalid ports and backend names.
 Restart after changing configuration.
-`create_app(cfg)` also accepts a validated injected `Config`; that same object
-controls auth, URL, host, port and backend startup.
 
 ### Environment reference
 
@@ -66,9 +69,9 @@ Acceptance connection variables are test-only and belong in the invoking shell; 
 
 This table covers configuration consumed by `config.py` and `replay_limits.py`.
 The final debug switch is consumed separately by `diagnostic_hygiene.py`.
-Wire encoding follows devices without an environment switch: CouchDB JSON escapes
-unpaired UTF-16 units losslessly; compact S3 journal leaves replace them with
-U+FFFD and writes report `transport_replacements`. [Wire details](docs/s3-journal.md#surrogate-wire-encoding).
+Wire encoding follows devices without an environment switch: CouchDB refuses
+unpaired UTF-16 units before publication because the server rejects them; compact
+S3 journal leaves replace them with U+FFFD and writes report `transport_replacements`. [Wire details](docs/s3-journal.md#surrogate-wire-encoding).
 “Required for S3 fields” means only the individual-variable connection form;
 URI and individual fields are mutually exclusive. Backend-specific settings
 are read only for the selected backend. Empty defaults below mean an empty string.
@@ -174,6 +177,14 @@ combination. [Source inventory and caveats](docs/superpowers/specs/2026-11-23-se
 | `idDerivationVersion`, `idDerivationKey` | 0 legacy / 1 keyed | Identical for unencrypted vaults | Validate version/key configuration; unencrypted IDs follow upstream |
 | `useJWT`, `jwtAlgorithm`, `jwtKey`, `jwtKid`, `jwtSub`, `jwtExpDuration` | HS256 / HS512 / ES256 / ES512 | Identical JWT wire format | Explicit connection env; zero duration uses five minutes; per-backend cached Bearer tokens, raw EC signatures; [setup](docs/connecting-storage.md#couchdb-jwt-authentication) |
 | `enableCompression` | false / true | Identical | CouchDB always reads compressed data; writes follow the vault (absent: false), verified on real CouchDB. Non-lossy CR/LF, surrogate and BOM exceptions below; reserved literal prefixes disclose decoded reads or refuse invalid input; journal forces off |
+| `deleteMetadataOfDeletedFiles` | Boolean, default false | Deliberate difference | Always publish `deleted: true` soft deletion, never `_deleted`; devices honour either deletion marker; retain body/chunk references |
+| `automaticallyDeleteMetadataOfDeletedFiles` | Days, default 0 (disabled) | Deliberate difference | Never expire or purge deletion history; device-side maintenance remains separate |
+| `disableMarkdownAutoMerge` | Boolean | Deliberate difference | No automatic Markdown merge; CouchDB mutations refuse unresolved siblings; journal keeps its deterministic winner |
+| `resolveConflictsByNewerFile` | Boolean | Deliberate difference | No mtime-based conflict resolver; resolve in Obsidian before editing a conflicted CouchDB note |
+| `writeDocumentsIfConflicted` | Boolean, default false | Deliberate difference | Device reflection policy is not applied; journal reads its deterministic winner, CouchDB writes still refuse unresolved siblings |
+| `processSizeMismatchedFiles` | Boolean, default false | Device filesystem only | Controls device reflection when metadata and reconstructed Blob size differ; the peer reads storage directly and discloses its own lossy writes |
+| `doNotDeleteFolder`, `trashInsteadDelete` | Boolean | Device filesystem only | No filesystem folders or trash on the peer; soft deletion is independent of the device's trash choice |
+| `doNotUseFixedRevisionForChunks` | Retained Boolean | No active consumer at this pin | No active chunk-manager/database implementation reads this setting; not an additional peer tuning switch |
 | `suspendParseReplicationResult` | false / true | Deliberate difference | Reads remain available from DB; no filesystem reflection stage |
 | Hidden File Sync / customization sync | `i:`, `ix:` namespaces | Not supported | No local vault folder; hidden ignore files can be read internally |
 | Plugin sync / `usePluginSyncV2` | `ps:` namespace / Boolean | Not supported | Service documents excluded from ordinary tools |
@@ -231,6 +242,19 @@ TextEncoder replacement and device chunk IDs remain unchanged.
 - E2EE and obfuscated paths are unsupported; use an unencrypted, unobfuscated
   vault until [#3](https://github.com/adeepn/obsidian-livesync-mcp/issues/3) /
   [#4](https://github.com/adeepn/obsidian-livesync-mcp/issues/4) are implemented.
+- Deletion always publishes a soft `deleted: true` revision, retaining body and
+  chunk references; the peer never purges deletion history. Devices honour this
+  marker even when configured to publish `_deleted` themselves. The peer does
+  not implement `deleteMetadataOfDeletedFiles` or timed
+  `automaticallyDeleteMetadataOfDeletedFiles` cleanup. Run any intentional
+  history cleanup separately through LiveSync after agreeing retention.
+- No automatic conflict resolution runs: `disableMarkdownAutoMerge`,
+  `resolveConflictsByNewerFile` and `writeDocumentsIfConflicted` do not change
+  peer conflict handling. CouchDB refuses mutations of notes with unresolved
+  sibling revisions; journal reads/writes use the deterministic generation/hash
+  winner while retaining siblings. Resolve conflicts in Obsidian before retrying
+  a refused edit; a successful journal write is not proof that another branch
+  was merged. [Source references](docs/peer-limitations.md#deletion-and-conflict-policies).
 - Replay has operational byte/count/depth/time budgets. Named
   `ReplayBudgetExceeded` errors identify the env override to raise; Python JSON
   decoder capacity is a separate ceiling. [Budget defaults and recovery](docs/size-policy.md).
@@ -258,9 +282,13 @@ TextEncoder replacement and device chunk IDs remain unchanged.
   `selection_unresolved_ignore_names` counts explicitly configured names not resolved
   by the latest root/ancestor lookup. Inactive ignore settings are not validated.
   [Filter syntax](docs/selection-filters.md).
-- There is no local vault folder, Hidden File Sync, customization/plugin sync or
-  suspended filesystem reflection. DB reads include received oversized files;
+- Hidden File Sync, customization/plugin sync and suspended filesystem reflection
+  are outside the ordinary-tool scope. The peer has no local vault folder; this
+  is a scope choice, not a claim that service namespaces cannot have APIs.
+  DB reads include received oversized files;
   a device may decline to reflect those files until its settings permit them.
+  `processSizeMismatchedFiles` controls device size-mismatch reflection;
+  `doNotDeleteFolder` and `trashInsteadDelete` affect only its filesystem.
   Plugin encrypted setup exports are not supported; copy
   connection fields and choose CouchDB Basic or JWT authentication.
   Ordinary tools reserve service prefixes/names and dot-prefixed paths;
@@ -311,6 +339,10 @@ TextEncoder replacement and device chunk IDs remain unchanged.
 - S3 custom endpoints default to path-style addressing; virtual-host-only providers
   must set S3_FORCE_PATH_STYLE=false. Publication has an exists+put race fallback on stores
   without conditional writes. [S3 operation](docs/s3-journal.md).
+
+The [complete limit and refusal inventory](docs/peer-limitations.md) also covers
+fixed transport/selection deadlines, YAML property-conversion bounds and SQLite
+capacity. These are resource/tool constraints, not LiveSync vault settings.
 
 ## Outcome reporting
 

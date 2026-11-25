@@ -61,6 +61,7 @@ def test_documented_connection_block_loads(name, block):
         '<plugin-access-key>': 'testkey',
         '<plugin-secret-key>': 'testsecret',
         '<plugin-bucket>': 'plan-b-it',
+        '<plugin-custom-header-value>': 'synthetic-docs-header',
     }
     for marker, value in values.items():
         block = block.replace(marker, value)
@@ -427,11 +428,13 @@ def test_real_server_acceptance_scope_documented():
 
 def test_couchdb_surrogate_constraint_documented():
     # chunks.ts:243-252; live CouchDB 3.5.3, 2026-11-25 invalid UTF-8 JSON.
-    for name in ('README.md', 'docs/vault-format.md'):
+    for name in ('README.md', 'docs/vault-format.md', 'docs/outcome-reporting.md'):
         text = (ROOT / name).read_text()
         assert 'CouchDB 3.5.3' in text
-        assert 'v3' in text
+        if name != 'docs/outcome-reporting.md':
+            assert 'v3' in text
         assert 'surrogate' in text
+        assert 'lossless CouchDB retains those units' not in text
 
 
 def test_jwt_session_auth_documented():
@@ -472,3 +475,446 @@ def test_startup_configuration_error_policy_is_documented():
     assert 'without echoing supplied values' in template
     assert 'never the supplied value' in policy
     assert '`MCP_PORT`' in policy and '`LIVESYNC_BACKEND`' in policy
+
+
+# The paths below map consumers to their returned fields; defaults and validation
+# expectations come from the published README cells, not a second value table.
+CONFIG_PATHS = {
+    'LIVESYNC_BACKEND': 'backend', 'COUCHDB_URL': 'couchdb.url',
+    'COUCHDB_USER': 'couchdb.user', 'COUCHDB_PASSWORD': 'couchdb.password',
+    'COUCHDB_DATABASE': 'couchdb.database', 'COUCHDB_CUSTOM_HEADERS': 'couchdb.custom_headers',
+    'LIVESYNC_S3_URI': 's3.uri', 'S3_ENDPOINT_URL': 's3.endpoint',
+    'S3_ACCESS_KEY_ID': 's3.access_key', 'S3_SECRET_ACCESS_KEY': 's3.secret_key',
+    'S3_BUCKET': 's3.bucket', 'S3_REGION': 's3.region', 'S3_PREFIX': 's3.prefix',
+    'S3_STATE_DIR': 's3.state_dir', 'S3_REFRESH_MIN_INTERVAL_SEC': 's3.refresh_min_interval_sec',
+    'S3_STATE_SIZE_WARN_MB': 's3.state_size_warn_mb', 'S3_CUSTOM_HEADERS': 's3.custom_headers',
+    'S3_FORCE_PATH_STYLE': 's3.force_path_style',
+    'MCP_API_KEY': 'api_key', 'MCP_SERVER_URL': 'server_url', 'MCP_HOST': 'host',
+    'MCP_PORT': 'port', 'OAUTH_PASSWORD': 'oauth_password',
+    'OAUTH_CLIENT_ID': 'oauth_client_id', 'OAUTH_CLIENT_SECRET': 'oauth_client_secret',
+    'LIVESYNC_SYNC_ONLY_REGEX': 'selection_only', 'LIVESYNC_SYNC_IGNORE_REGEX': 'selection_ignore',
+    'LIVESYNC_USE_IGNORE_FILES': 'selection_use_ignore_files',
+    'LIVESYNC_IGNORE_FILES': 'selection_ignore_files',
+}
+CONFIG_PATHS.update({'COUCHDB_JWT_' + suffix: 'couchdb.jwt_' + attr for suffix, attr in (
+    ('ALGORITHM', 'algorithm'), ('KEY', 'key'), ('SUBJECT', 'subject'),
+    ('KEY_ID', 'key_id'), ('EXPIRY_MINUTES', 'expiry_minutes'))})
+CONFIG_PATHS.update({'LIVESYNC_' + suffix: suffix.lower() for suffix in (
+    'SYNC_MAX_SIZE_MB', 'DISABLE_CHECKING_CONFIG_MISMATCH', 'AUTO_ACCEPT_COMPATIBLE_TWEAK',
+    'TEXT_VERDICT_CACHE_ENTRIES', 'TEXT_SCAN_MAX_BYTES', 'REGEX_MAX_OUTPUT_BYTES',
+    'REGEX_TIMEOUT_SECONDS', 'SCAN_MAX_NOTES', 'SCAN_MAX_BYTES', 'SCAN_MAX_SECONDS')})
+CONFIG_PATHS.update({'LIVESYNC_JOURNAL_' + item.name.upper(): 'replay_limits.' + item.name
+                     for item in fields(ReplayLimits)})
+
+
+def environment_rows(text=None):
+    """Parse the actual four-column table, retaining requirement and purpose."""
+    text = (ROOT / 'README.md').read_text() if text is None else text
+    pattern = r'^\| `(' + ENV_NAME + r')` \| (.*?) \| (.*?) \| (.*) \|$'
+    rows = {name: (default, requirement, purpose)
+            for name, default, requirement, purpose in re.findall(pattern, text, re.M)}
+    assert set(rows) == environment_names()
+    assert set(CONFIG_PATHS) | {'LIVESYNC_UNSAFE_DEBUG'} == set(rows)
+    return rows
+
+
+def controlled_environment(name):
+    """Select a valid context which actually consumes this variable."""
+    env = dict(LIVESYNC_BACKEND='couchdb', COUCHDB_USER='docs-user',
+               COUCHDB_PASSWORD='docs-password', COUCHDB_DATABASE='docs-vault',
+               MCP_API_KEY='docs-api-token')
+    if name.startswith('S3_') or name == 'LIVESYNC_S3_URI':
+        env = dict(LIVESYNC_BACKEND='s3', S3_ENDPOINT_URL='https://storage.example.com',
+                   S3_ACCESS_KEY_ID='docs-access', S3_SECRET_ACCESS_KEY='docs-secret',
+                   S3_BUCKET='docs-vault', MCP_API_KEY='docs-api-token')
+    if name.startswith('COUCHDB_JWT_') and name != 'COUCHDB_JWT_ALGORITHM':
+        env.pop('COUCHDB_USER')
+        env.pop('COUCHDB_PASSWORD')
+        env.update(COUCHDB_JWT_ALGORITHM='HS256',
+                   COUCHDB_JWT_KEY='ZG9jcy10ZXN0LWtleQ==', COUCHDB_JWT_SUBJECT='docs-user')
+    if name == 'MCP_API_KEY':
+        env.update(OAUTH_PASSWORD='docs-password', OAUTH_CLIENT_ID='docs-client',
+                   OAUTH_CLIENT_SECRET='docs-client-secret')
+    return env
+
+
+def configured_value(cfg, name):
+    value = cfg
+    for attr in CONFIG_PATHS[name].split('.'):
+        value = getattr(value, attr)
+    return value
+
+
+def assert_documented_default(name, rows=None, loader=load_config):
+    from config import ConfigError
+    rows = environment_rows() if rows is None else rows
+    default, requirement, _ = rows[name]
+    env = controlled_environment(name)
+    env.pop(name, None)
+    if default == 'none':
+        assert 'Required' in requirement, (name, requirement)
+        with pytest.raises(ConfigError):
+            loader(env)
+        return
+    actual = configured_value(loader(env), name)
+    token = default.replace('`', '').split(' (', 1)[0]
+    if token == 'empty':
+        assert actual in ('', None, ()), name
+    elif token in ('true', 'false'):
+        assert actual is (token == 'true'), name
+    elif re.fullmatch(r'\d+(?:\.\d+)?', token):
+        assert type(actual) in (int, float) and actual == float(token), (name, default, actual)
+    else:
+        assert actual == token, (name, default, actual)
+
+
+@pytest.mark.parametrize('name', sorted(CONFIG_PATHS))
+def test_readme_default_matches_actual_consumer(name):
+    assert_documented_default(name)
+
+
+def test_documentation_contract_rejects_changed_default_and_table_mutations():
+    """Exercise the checker in memory; never edit an imported production file."""
+    import config
+    text = (ROOT / 'README.md').read_text()
+    rows = environment_rows(text)
+    namespace = dict(config.__dict__)
+    source = (ROOT / 'config.py').read_text()
+    assert source.count("env.get('LIVESYNC_SCAN_MAX_SECONDS', 20)") == 1
+    exec(compile(source.replace("env.get('LIVESYNC_SCAN_MAX_SECONDS', 20)",
+                                "env.get('LIVESYNC_SCAN_MAX_SECONDS', 21)"),
+                 '<in-memory config default mutation>', 'exec'), namespace)
+    with pytest.raises(AssertionError):
+        assert_documented_default('LIVESYNC_SCAN_MAX_SECONDS', rows, namespace['load_config'])
+    broken = dict(rows)
+    broken['MCP_PORT'] = ('`8485`', *rows['MCP_PORT'][1:])
+    with pytest.raises(AssertionError):
+        assert_documented_default('MCP_PORT', broken)
+    broken = dict(rows)
+    broken['COUCHDB_DATABASE'] = ('none', 'Optional', rows['COUCHDB_DATABASE'][2])
+    with pytest.raises(AssertionError):
+        assert_documented_default('COUCHDB_DATABASE', broken)
+    removed = re.sub(r'^\| `MCP_PORT` .*\n', '', text, flags=re.M)
+    with pytest.raises(AssertionError):
+        environment_rows(removed)
+
+
+def connection_contexts():
+    basic = controlled_environment('MCP_PORT')
+    jwt = controlled_environment('COUCHDB_JWT_KEY')
+    s3 = controlled_environment('S3_BUCKET')
+    uri = {key: value for key, value in s3.items() if not key.startswith('S3_')}
+    uri['LIVESYNC_S3_URI'] = 'sls://docs-access:docs-secret@https://storage.example.com?bucket=docs-vault'
+    oauth = {key: value for key, value in basic.items() if key != 'MCP_API_KEY'}
+    oauth.update(OAUTH_PASSWORD='docs-password', OAUTH_CLIENT_ID='docs-client',
+                 OAUTH_CLIENT_SECRET='docs-client-secret')
+    return {'CouchDB Basic auth': basic, 'JWT': jwt, 'S3 fields': s3, 'S3 URI': uri,
+            'OAuth': oauth}
+
+
+def assert_documented_requirement(name, rows=None, loader=load_config):
+    from config import ConfigError
+    rows = environment_rows() if rows is None else rows
+    _, requirement, _ = rows[name]
+    failed_contexts = set()
+    for context, original in connection_contexts().items():
+        env = dict(original)
+        env.pop(name, None)
+        try:
+            loader(env)
+        except ConfigError:
+            failed_contexts.add(context)
+    if failed_contexts:
+        assert requirement.startswith('Required') or requirement == 'Select JWT mode', (name, requirement)
+    elif requirement.startswith('Required'):
+        pytest.fail(f'{name}: README claims a requirement not enforced in any documented connection context')
+    if requirement == 'Required':
+        assert failed_contexts == set(connection_contexts()), name
+    elif requirement.startswith('Required for CouchDB Basic auth'):
+        assert failed_contexts == {'CouchDB Basic auth', 'OAuth'}, name
+        assert 'absent for JWT' in requirement
+    elif requirement == 'Required for CouchDB':
+        assert failed_contexts == {'CouchDB Basic auth', 'JWT', 'OAuth'}, name
+    elif requirement == 'Required for JWT' or requirement == 'Select JWT mode':
+        assert failed_contexts == {'JWT'}, name
+    elif requirement == 'Required for S3 fields':
+        assert failed_contexts == {'S3 fields'}, name
+    elif requirement == 'Required for OAuth':
+        assert failed_contexts == {'OAuth'}, name
+    elif requirement == 'Required unless full OAuth group set':
+        assert failed_contexts == {'CouchDB Basic auth', 'JWT', 'S3 fields', 'S3 URI'}, name
+    elif requirement == 'Required unless S3 fields set':
+        assert failed_contexts == {'S3 URI'}, name
+    else:
+        assert not failed_contexts, (name, requirement, failed_contexts)
+
+
+@pytest.mark.parametrize('name', sorted(CONFIG_PATHS))
+def test_readme_requirement_matches_actual_connection_contexts(name):
+    assert_documented_requirement(name)
+
+
+@pytest.mark.parametrize('name', sorted(CONFIG_PATHS))
+def test_readme_empty_value_contract(name):
+    from config import ConfigError
+    default, requirement, purpose = environment_rows()[name]
+    env = controlled_environment(name)
+    env[name] = ''
+    description = (requirement + ' ' + purpose.split(';', 1)[0]).lower().replace('non-negative', 'nonnegative')
+    numeric = 'integer' in description or 'finite' in description
+    empty_allowed = ('or empty' in description or 'empty/unset' in description or
+                     name in ('S3_REFRESH_MIN_INTERVAL_SEC', 'S3_STATE_SIZE_WARN_MB'))
+    rejected = default == 'none' or ('boolean' in description and 'optional' not in description)
+    rejected |= numeric and not empty_allowed
+    rejected |= name == 'S3_FORCE_PATH_STYLE'
+    if rejected:
+        with pytest.raises(ConfigError):
+            load_config(env)
+    else:
+        cfg = load_config(env)
+        assert cfg is not None
+
+
+def numeric_rows():
+    for name, row in environment_rows().items():
+        description = ' '.join(row[1:]).lower().replace('non-negative', 'nonnegative')
+        if ('integer' in description or 'finite' in description) and name != 'MCP_PORT':
+            yield name
+
+
+@pytest.mark.parametrize('name', list(numeric_rows()))
+@pytest.mark.parametrize('raw', ['-1', '0', '1', '0.5', 'NaN', 'Infinity', str(2**63 - 1), str(2**63)])
+def test_readme_numeric_rule_matches_runtime_boundaries(name, raw):
+    from config import ConfigError
+    _, requirement, purpose = environment_rows()[name]
+    description = (requirement + ' ' + purpose.split(';', 1)[0]).lower().replace('non-negative', 'nonnegative')
+    import math
+    number = float(raw)
+    accepted = math.isfinite(number)
+    if 'integer' in description:
+        accepted &= bool(re.fullmatch(r'-?\d+', raw))
+    if 'nonnegative' in description:
+        accepted &= number >= 0
+    elif 'positive' in description:
+        accepted &= number > 0
+    if '2**63' in description:
+        # Integer parsing must retain exact boundaries, unlike binary floats.
+        exact = int(raw) if re.fullmatch(r'-?\d+', raw) else number
+        accepted &= exact < 2**63
+    env = {**controlled_environment(name), name: raw}
+    if accepted:
+        load_config(env)
+    else:
+        with pytest.raises(ConfigError):
+            load_config(env)
+
+
+@pytest.mark.parametrize('raw', ['0', '1', '65535', '65536', '-1', '0.5', 'NaN'])
+def test_readme_port_range_matches_runtime(raw):
+    from config import ConfigError
+    text = ' '.join(environment_rows()['MCP_PORT'][1:])
+    match = re.search(r'integer (\d+)[–-](\d+)', text)
+    assert match, 'README must state both inclusive integer port boundaries'
+    low, high = map(int, match.groups())
+    accepted = raw.isdigit() and low <= int(raw) <= high
+    if accepted:
+        load_config({**controlled_environment('MCP_PORT'), 'MCP_PORT': raw})
+    else:
+        with pytest.raises(ConfigError):
+            load_config({**controlled_environment('MCP_PORT'), 'MCP_PORT': raw})
+
+
+def test_readme_connection_exclusivity_is_executable():
+    from config import ConfigError
+    text = (ROOT / 'README.md').read_text()
+    assert 'URI and individual fields are mutually exclusive' in text
+    contexts = connection_contexts()
+    for name in ('S3_ENDPOINT_URL', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY',
+                 'S3_BUCKET', 'S3_REGION', 'S3_PREFIX'):
+        for value in ('', contexts['S3 fields'].get(name, 'test')):
+            with pytest.raises(ConfigError, match='conflicts'):
+                load_config({**contexts['S3 URI'], name: value})
+    for name in ('COUCHDB_USER', 'COUCHDB_PASSWORD'):
+        with pytest.raises(ConfigError, match='conflicts'):
+            load_config({**contexts['JWT'], name: ''})
+    oauth = contexts['OAuth']
+    cfg = load_config({**oauth, 'MCP_API_KEY': 'docs-api-token'})
+    assert cfg.api_key == 'docs-api-token'
+    assert 'takes precedence over OAuth' in environment_rows()['MCP_API_KEY'][2]
+
+
+@pytest.mark.parametrize('value', [None, '', '0', 'false', 'true', '1'])
+@pytest.mark.parametrize('enabled', [False, True])
+def test_readme_separate_debug_switch_matches_actual_sink(monkeypatch, value, enabled):
+    import diagnostic_hygiene
+    import logging
+    row = environment_rows()['LIVESYNC_UNSAFE_DEBUG']
+    assert row[0] == '`unset`'
+    assert row[1] == 'Set to 1 plus DEBUG logging'
+    if value is None:
+        monkeypatch.delenv('LIVESYNC_UNSAFE_DEBUG', raising=False)
+    else:
+        monkeypatch.setenv('LIVESYNC_UNSAFE_DEBUG', value)
+    class Sink:
+        def __init__(self):
+            self.records = []
+        def isEnabledFor(self, level):
+            assert level == logging.DEBUG
+            return enabled
+        def debug(self, *args):
+            self.records.append(args)
+    sink = Sink()
+    diagnostic_hygiene.unsafe_debug(sink, 'synthetic private text')
+    assert bool(sink.records) == (value == '1' and enabled)
+    assert 'synthetic private text' not in str(sink.records)
+
+
+@pytest.mark.parametrize('name', sorted(CONFIG_PATHS))
+def test_readme_variable_is_actually_consumed(name):
+    """A documented variable must change the returned config, not just parse."""
+    env = controlled_environment(name)
+    if name == 'LIVESYNC_BACKEND':
+        env = connection_contexts()['S3 fields']
+        raw, expected = 's3', 's3'
+    elif name == 'LIVESYNC_S3_URI':
+        env = connection_contexts()['S3 URI']
+        raw = 'sls://docs-access:docs-secret@https://storage.example.com?bucket=another-vault&prefix=exact/'
+        expected = raw
+    elif name == 'COUCHDB_JWT_ALGORITHM':
+        env = connection_contexts()['JWT']
+        raw, expected = 'HS512', 'HS512'
+    elif name.endswith('CUSTOM_HEADERS'):
+        raw, expected = '{"X-Doc-Probe":"synthetic-value"}', (('X-Doc-Probe', 'synthetic-value'),)
+    elif name == 'COUCHDB_JWT_KEY':
+        raw = expected = 'YW5vdGhlci1zeW50aGV0aWMta2V5'
+    elif name == 'LIVESYNC_IGNORE_FILES':
+        raw, expected = ' .gitignore , rules.txt ', ('.gitignore', 'rules.txt')
+    else:
+        description = ' '.join(environment_rows()[name][1:]).lower()
+        current = configured_value(load_config(env), name)
+        if type(current) is bool or name == 'LIVESYNC_USE_IGNORE_FILES':
+            expected = current is not True
+            raw = str(expected).lower()
+        elif 'integer' in description or 'finite' in description:
+            raw, expected = '13', 13
+        else:
+            raw = expected = 'docs-probe-value'
+    cfg = load_config({**env, name: raw})
+    assert configured_value(cfg, name) == expected, name
+
+
+def test_documentation_contract_rejects_removed_variable_consumer(monkeypatch):
+    import config
+    source = (ROOT / 'config.py').read_text()
+    old = 'raw = env.get(key, default)'
+    assert source.count(old) == 1
+    namespace = dict(config.__dict__)
+    exec(compile(source.replace(old,
+        'raw = default if key == "LIVESYNC_SCAN_MAX_NOTES" else env.get(key, default)'),
+        '<in-memory removed environment consumer>', 'exec'), namespace)
+    monkeypatch.setitem(globals(), 'load_config', namespace['load_config'])
+    with pytest.raises(AssertionError):
+        test_readme_variable_is_actually_consumed('LIVESYNC_SCAN_MAX_NOTES')
+
+
+def test_readme_region_default_distinguishes_connection_forms():
+    cell = environment_rows()['S3_REGION'][0]
+    assert '(fields)' in cell and '; empty if omitted in URI' in cell
+    env = connection_contexts()['S3 URI']
+    assert load_config(env).s3.region == ''
+
+
+@pytest.mark.parametrize('name', [name for name in CONFIG_PATHS
+    if type(configured_value(load_config(controlled_environment(name)), name)) is bool
+    or name == 'LIVESYNC_USE_IGNORE_FILES'])
+def test_readme_boolean_variables_refuse_other_strings(name):
+    from config import ConfigError
+    # A boolean control must not accidentally accept arbitrary truthy strings.
+    with pytest.raises(ConfigError, match=name):
+        load_config({**controlled_environment(name), name: 'synthetic-invalid-boolean'})
+
+
+def test_complete_generator_catalogue_and_acceptance_package():
+    guide = (ROOT / 'docs/regenerating-oracle-fixtures.md').read_text()
+    scripts = sorted((ROOT / 'scripts').glob('extract_*.mjs'))
+    scripts += sorted((ROOT / 'scripts').glob('probe_*.mjs'))
+    scripts += [ROOT / 'scripts/vendor_selection.py']
+    for script in scripts:
+        assert script.name in guide, script.name
+    for path in ('AGENTS.md', 'docs/upstream-pin.md'):
+        assert 'regenerating-oracle-fixtures.md' in (ROOT / path).read_text()
+    pin = (ROOT / 'docs/upstream-pin.md').read_text()
+    assert 'real-server\nautomated acceptance done' in pin
+    assert 'real Obsidian client at the current pin is **pending**' in pin
+    assert '2026-11-25-parity-docker/summary.txt' in pin
+    readme = (ROOT / 'README.md').read_text()
+    assert 'create_app(cfg)' not in readme
+    for setting in ('deleteMetadataOfDeletedFiles', 'automaticallyDeleteMetadataOfDeletedFiles',
+                    'disableMarkdownAutoMerge', 'resolveConflictsByNewerFile',
+                    'writeDocumentsIfConflicted', 'processSizeMismatchedFiles',
+                    'doNotDeleteFolder', 'trashInsteadDelete', 'doNotUseFixedRevisionForChunks'):
+        assert setting in readme
+        assert setting in (ROOT / 'docs/peer-limitations.md').read_text()
+    changelog = (ROOT / 'CHANGELOG.md').read_text().split('## [1.0.1]', 1)[0]
+    assert 'JWT auth/compression adapters are absent' not in changelog
+    assert 'not inferred from milestone recommendations' not in changelog
+    assert 'Reassemble CouchDB split pairs losslessly' not in changelog
+    checklist = (ROOT / 'docs/live-check-parity-checklist.md').read_text()
+    assert 'Sync with a saved connection' in checklist  # C:remoteConfig.ts:458-470.
+    assert 'Select a remote to replicate with' in checklist  # C:remoteConfig.ts:397.
+    assert 'Maximum file size' in checklist  # C:common/settingConstants.ts:207-211.
+    for line in checklist.splitlines():
+        if 'scripts/live_check_parity.py' not in line:
+            continue
+        if any(f' {command} ' in line for command in ('write-large', 'write-phase', 'oversize')):
+            assert '--allow-remote-write' in line and '--confirm-target' in line
+        if any(f' {command} ' in line for command in ('write-phase', 'oversize')):
+            assert '--allow-remote-delete' in line
+
+
+def test_documentation_enum_checker_catches_wrong_jwt_algorithm():
+    rows = environment_rows()
+    broken = dict(rows)
+    default, requirement, purpose = broken['COUCHDB_JWT_ALGORITHM']
+    assert 'HS512' in purpose
+    broken['COUCHDB_JWT_ALGORITHM'] = (default, requirement, purpose.replace('HS512', 'RS256'))
+    with pytest.raises(AssertionError):
+        assert_documented_enum('COUCHDB_JWT_ALGORITHM', broken)
+
+
+def assert_documented_enum(name, rows=None):
+    from config import BACKENDS, ConfigError
+    from couchdb_jwt import ALGORITHMS
+    rows = environment_rows() if rows is None else rows
+    purpose = rows[name][2]
+    if name == 'LIVESYNC_BACKEND':
+        documented = set(re.findall(r'`([a-z0-9_-]+)`', purpose))
+        inventory = set(BACKENDS)
+    else:
+        documented = set(re.findall(r'\b[A-Z]{2}\d{3}\b', purpose))
+        inventory = set(ALGORITHMS)
+    assert documented == inventory, (name, documented, inventory)
+    for value in documented | {'synthetic-invalid-choice'}:
+        env = controlled_environment('S3_BUCKET' if value == 's3' else 'MCP_PORT')
+        if name == 'COUCHDB_JWT_ALGORITHM':
+            env.pop('COUCHDB_USER'); env.pop('COUCHDB_PASSWORD')
+            key = 'ZG9jcy10ZXN0LWtleQ=='
+            if value.startswith('ES'):
+                from cryptography.hazmat.primitives.asymmetric import ec
+                from cryptography.hazmat.primitives import serialization
+                curve = ec.SECP256R1() if value == 'ES256' else ec.SECP521R1()
+                key = ec.generate_private_key(curve).private_bytes(
+                    serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+                    serialization.NoEncryption()).decode()
+            env.update(COUCHDB_JWT_KEY=key, COUCHDB_JWT_SUBJECT='docs-user')
+        env[name] = value
+        if value in documented:
+            assert configured_value(load_config(env), name) == value
+        else:
+            with pytest.raises(ConfigError):
+                load_config(env)
+
+
+@pytest.mark.parametrize('name', ['LIVESYNC_BACKEND', 'COUCHDB_JWT_ALGORITHM'])
+def test_readme_enum_choices_match_actual_configuration(name):
+    assert_documented_enum(name)

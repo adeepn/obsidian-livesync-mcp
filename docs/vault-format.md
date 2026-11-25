@@ -118,13 +118,16 @@ validation errors occur in these tables.
 ## CouchDB JSON string encoding
 
 Uncompressed CouchDB requests use compact JSON with raw UTF-8 for non-ASCII
-characters and lowercase `\udXXX` escapes for surrogate code points. This
-matches PouchDB HTTP adapter 9.0.0 `lib/index.es.js:765-773`, which sends
-`JSON.stringify(doc)`. JSON parsing restores those units without loss; joining
-plain leaf data restores pairs separated by legacy splitter boundaries
-(commonlib `src/common/utils.ts:83-84`). Chunk cuts and IDs are unchanged.
-CouchDB writes have no `transport_replacements` field. The journal's compact
-leaf encoding differs; see [surrogate wire encoding](s3-journal.md#surrogate-wire-encoding).
+characters, matching PouchDB HTTP adapter 9.0.0 `lib/index.es.js:765-773`
+(`JSON.stringify(doc)`). Well-formed JSON can escape an unpaired UTF-16 unit,
+but CouchDB 3.5.3 rejects that document with HTTP 400, “invalid UTF-8 JSON”.
+The peer therefore refuses a complete publication containing such a unit
+before sending any leaf; a device-shaped request is rejected by that server too.
+Legacy V1 can split an emoji pair (`chunks.ts:243-252`); choose a surrogate-safe
+splitter such as v3 rather than expecting later leaf joining to repair the
+server rejection. Chunk IDs are unchanged. No replacement publication occurs
+and CouchDB has no `transport_replacements` count. The journal instead mirrors
+TextEncoder replacement; see [surrogate wire encoding](s3-journal.md#surrogate-wire-encoding).
 
 
 ## CouchDB compression

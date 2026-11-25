@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Settings parity
 
+- Consolidate connection instructions, settings differences, refusal remedies and oracle regeneration provenance.
+- Require explicit write/delete authorization and exact target confirmation in the live acceptance helper; withhold unknown remote setting names and classify reconnect files using resolved vault policy.
+- Bind documented environment defaults and validation rules to actual configuration consumers; restore current-source splitter mutation witnesses.
+
 - Omit supplied values from startup configuration errors while retaining variable names and validation rules.
 
 - Complete real-server acceptance for per-row text/binary classes, large files, recovery, wire headers, compression, surrogate refusals and all JWT algorithms; retain native large-file oracle provenance.
@@ -92,9 +96,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Read compressed CouchDB documents regardless of the vault setting and compress
   writes when `enableCompression` is true. Accept mixed device settings; report
-  the effective boolean in `vault_stats`. Preserve CR/LF base64-looking text,
-  surrogate pieces and leading BOMs through non-lossy write exceptions; refuse
-  corrupt marked bodies with sanitized recovery guidance. Keep journal unchanged.
+  the effective boolean in `vault_stats`. Preserve CR/LF base64-looking text
+  and leading BOMs with uncompressed writes; refuse surrogate-containing
+  publications that CouchDB cannot store and corrupt marked bodies with
+  sanitized recovery guidance. Keep journal unchanged.
 
 - Handle unreadable ignore files as absent, matching devices, instead of raising
   a NameError from the selection exception handler.
@@ -108,10 +113,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   boundaries with upstream Blob/encoder/hash vectors, stored-child witnesses
   on both backends and an AST-complete comparison mutation inventory.
 
-- Publish legacy pieces with unpaired UTF-16 units using device wire encodings:
-  lossless surrogate escapes in CouchDB/metadata JSON, U+FFFD in compact journal
-  leaves. Preserve piece IDs; report journal `transport_replacements` and explain
-  the upstream loss in tool results. Reassemble CouchDB split pairs losslessly.
+- Use device JSON/TextEncoder wire encodings, preserving original piece IDs
+  and reporting journal `transport_replacements` for compact-leaf U+FFFD loss.
+  Refuse CouchDB publications with lone-surrogate units before sending any leaf,
+  because the server rejects those JSON escapes, including device-shaped writes.
 
 - Match the audited device's ordinary-file identities and writes across all
   supported vault settings: legacy/NFC × insensitive/sensitive paths, V1/V2/
@@ -179,12 +184,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `S3_REFRESH_MIN_INTERVAL_SEC` and `LIVESYNC_JOURNAL_MAX_REFRESH_SECONDS` accept
   positive finite fractions below `2**63` (including `0.25`); byte/count/depth
   budgets require positive integers below that bound. No env variable was renamed
-  in this settings-parity change. Local selection/tweak-policy overrides are
-  explicit, not inferred from milestone recommendations.
+  in this settings-parity change. Explicit local overrides take precedence;
+  ignore enablement/names otherwise derive independently from vault settings.
+  Regex lists and tweak-mismatch/auto-accept controls remain local configuration.
 - Install Node 22+ in the service PATH only when enabling selection filters.
   Encrypted plugin setup exports are not accepted as `LIVESYNC_S3_URI`; copy
   storage fields or provide a compatible `sls://` connection URI. Configured S3
-  endpoints use path-style; CouchDB JWT auth/compression adapters are absent.
+  endpoints support path or virtual-host addressing through S3_FORCE_PATH_STYLE.
+  CouchDB supports explicit Basic/JWT auth and vault-controlled compression.
 - Audit baseline is plugin 1.0.52/commonlib 484c164; the last real-client
   acceptance remains 1.0.50 (2026-11-20). Run the new parity live checklist
   before claiming live validation of the expanded settings/large-file scope.
