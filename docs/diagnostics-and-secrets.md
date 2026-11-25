@@ -43,7 +43,8 @@ fields are counted rather than printed.
 
 Storage, selection, reporting and application lifespan logs carry classes and
 typed fields only, without exception text, tracebacks or exception chains.
-Application construction, startup, hosting and shutdown failures are replaced
+Dotenv loading is inside the entry-point guard. Application construction, startup,
+hosting and shutdown failures are replaced
 with fixed recovery messages before reaching the hosting framework. `LIVESYNC_UNSAFE_DEBUG=1`,
 combined with a DEBUG log level, explicitly enables the bounded last-line debug
 sink. **Unsafe for production:** it admits unstructured diagnostic inputs to a

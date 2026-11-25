@@ -288,3 +288,22 @@ def test_import_construction_boundary_hides_causes(monkeypatch, caplog, entry):
     assert caught.value.__cause__ is None and caught.value.__suppress_context__
     assert 'RuntimeError' in caplog.text and 'SECRET' not in caplog.text
     assert all(record.exc_info is None for record in caplog.records)
+
+
+def test_dotenv_startup_boundary_hides_causes(monkeypatch, caplog):
+    import dotenv
+    import runpy
+    def fail():
+        try:
+            raise ValueError('REMOTE_SECRET')
+        except ValueError as cause:
+            raise RuntimeError('CONFIG_SECRET') from cause
+    monkeypatch.setattr(dotenv, 'load_dotenv', fail)
+    with pytest.raises(SystemExit) as caught:
+        runpy.run_path('run.py', run_name='__main__')
+    import traceback
+    assert caught.value.code == 1
+    assert caught.value.__cause__ is None and caught.value.__suppress_context__
+    assert 'SECRET' not in ''.join(traceback.format_exception(caught.value))
+    assert 'RuntimeError' in caplog.text and 'SECRET' not in caplog.text
+    assert all(record.exc_info is None for record in caplog.records)
