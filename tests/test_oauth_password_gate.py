@@ -15,6 +15,7 @@ import sys
 import types
 import unittest
 import urllib.parse
+from tests.test_auth import isolated_mcp_modules
 from pathlib import Path
 
 from starlette.requests import Request
