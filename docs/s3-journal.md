@@ -132,3 +132,7 @@ retries cannot overwrite an existing key, but can leave an extra immutable
 journal candidate after a lost response. This does not remove the fallback's
 exists+put race on providers without conditional-write support. Custom headers
 and timeouts apply to both SDK clients.
+
+An unsupported-conditional response after a lost-response retry is also outcome
+unknown; it cannot safely select the exists+put fallback. A first-attempt
+unsupported response still selects that compatibility fallback.

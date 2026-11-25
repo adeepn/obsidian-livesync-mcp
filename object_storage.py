@@ -251,6 +251,12 @@ class Boto3ObjectStorage:
             if code in {"NotImplemented", "NotSupported", "UnsupportedOperation",
                         "UnsupportedHeader", "NotImplementedException",
                         "XNotImplemented", "501"} or status == 501:
+                # A later unsupported response cannot undo an earlier accepted
+                # creation whose response was lost. Never enter the fallback
+                # (and discard recovery intent) in that case.
+                retries = exc.response.get("ResponseMetadata", {}).get("RetryAttempts", 0)
+                if type(retries) is int and retries > 0:
+                    raise OutcomeUnknown(self._unavailable("PUT", key, exc).diagnostic) from None
                 if not self._conditional_warning_logged:
                     logger.warning('conditional journal publication unsupported; using B-10 fallback; cause: %s', cause_name(type(exc)))
                     self._conditional_warning_logged = True

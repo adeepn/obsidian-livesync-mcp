@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Settings parity
 
-- Retain outcome uncertainty when a conditional S3 retry ends in a pre-dispatch failure after an earlier response may have been lost.
+- Retain outcome uncertainty when a conditional S3 retry ends in a pre-dispatch failure or unsupported response after an earlier response may have been lost.
 
 - Make CouchDB, S3 and selection deadlines configurable; allow configured read/conditional S3 retries while retaining single-attempt unconditional publication.
 

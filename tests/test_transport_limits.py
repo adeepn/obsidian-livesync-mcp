@@ -145,3 +145,26 @@ def test_conditional_retry_keeps_prior_uncertainty(monkeypatch):
     with pytest.raises(OutcomeUnknown):
         storage.put_if_absent('journal', b'data')
     assert len(calls) == 3
+
+
+def test_retried_unsupported_conditional_keeps_uncertainty(monkeypatch):
+    from io import BytesIO
+    from botocore.awsrequest import AWSResponse
+    from botocore.exceptions import ReadTimeoutError
+    from object_storage import Boto3ObjectStorage
+    from storage_base import OutcomeUnknown
+    storage = Boto3ObjectStorage(make_cfg(max_attempts=3))
+    calls = []
+    class Raw(BytesIO):
+        def stream(self, amt=None, decode_content=False):
+            yield self.read()
+    def send(request):
+        calls.append(request)
+        if len(calls) == 1:
+            raise ReadTimeoutError(endpoint_url='http://synthetic.invalid')
+        return AWSResponse(request.url, 501, {}, Raw(b'<Error><Code>NotImplemented</Code></Error>'))
+    monkeypatch.setattr('botocore.endpoint.time.sleep', lambda seconds: None)
+    monkeypatch.setattr(storage._client._endpoint.http_session, 'send', send)
+    with pytest.raises(OutcomeUnknown):
+        storage.put_if_absent('journal', b'data')
+    assert len(calls) == 2
