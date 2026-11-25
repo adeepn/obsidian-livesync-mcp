@@ -54,3 +54,27 @@ After confirmed remote publication/read-back and local metadata commit, journal
 processed/last-sent tracking retries at most three times. Exhaustion logs a
 warning and still returns success. Replay idempotently repairs an unmarked
 journal and repairs last-sent tracking on the next refresh, without another write.
+
+## Typed publication notices
+
+Successful writes that alter caller bytes append a separate JSON record
+`{"notices": [{"code": "legacy_bom_removed", "removed_bytes": 3, "metadata_size_preserved": true}]}`
+and one fixed sentence per code **after** the original tool result. The original
+result (including every JSON field and non-string message) stays verbatim;
+parse the original result separately from the notice record. Unchanged writes
+have no suffix. Notices contain only closed codes and typed counts/booleans,
+never note bytes or remote values. Backend write outcomes also include a
+`notices` list; ordinary metadata reads do not.
+
+| Code | Typed fields | Meaning |
+|---|---|---|
+| `legacy_bom_removed` | `removed_bytes`, `metadata_size_preserved` | V1/V2/V2-segmenter Blob.text removes the leading UTF-8 BOM; original metadata size remains. Receiving devices refuse filesystem reflection unless processSizeMismatchedFiles is enabled (reflection.ts:272-283); V3 retains the BOM. |
+| `invalid_utf8_replaced` | `invalid_bytes` | Explicit lossy plain-text upload, or legacy text-Blob decoding, replaces malformed UTF-8 with U+FFFD. Ordinary malformed plain byte input still refuses with lossy_text guidance. |
+| `input_surrogates_replaced` | `count` | Blob USVString ingestion replaces unpaired surrogate units before splitting on either backend. Valid surrogate pairs combine without loss. |
+| `journal_surrogates_replaced` | `count` | Compact journal TextEncoder replaces unpaired units in emitted leaves, including cuts made by legacy splitters. Original chunk IDs remain; lossless CouchDB retains those units. |
+
+Notices apply to create, all update modes, upload, canvas, template, properties
+and tags whenever their resulting publication performs a listed transformation.
+Requested semantic edits (YAML or canvas formatting, property/tag changes,
+replacement text) are not ingestion transformations. Surrogate escapes in YAML
+or JSON preserve values and do not themselves cause a notice.

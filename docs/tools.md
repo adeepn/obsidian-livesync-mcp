@@ -92,3 +92,5 @@ coverage. See [scan policy](scan-policy.md) for index state and consistency.
 return `total_lines`, `returned_lines`, and `truncated`; out-of-range end lines
 are clamped. Omit both parameters for the existing whole-note response shape.
 Properties and optional statistics still describe the full original note.
+
+Write tools append a separate typed `notices` record and fixed sentences after their original result whenever ingestion changes bytes. This applies to create, all update modes, upload, canvas, templates, properties and tags. See [notice codes and parsing](outcome-reporting.md#typed-publication-notices).

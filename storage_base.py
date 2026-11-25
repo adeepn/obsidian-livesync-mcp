@@ -259,6 +259,7 @@ class NoteMeta(TypedDict):
     type: str
     rev: str
     transport_replacements: NotRequired[int]
+    notices: NotRequired[list[dict]]
 
 
 class NoteContent(TypedDict):

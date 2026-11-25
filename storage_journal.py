@@ -31,6 +31,8 @@ before applying it locally; rename publishes both revisions in one file.
 
 from __future__ import annotations
 
+from publication_notices import complete_publication, ingress_notices, split_notices
+
 from wire_encoding import text_encoder_string, surrogate_count
 
 from diagnostic_hygiene import (writer_diagnostic, diagnostic, settings_exception_diagnostic, PublicDiagnostic, setting_key,
@@ -1177,12 +1179,14 @@ class JournalBackend(TextAccessPolicy, DeviceSelection):
         # (C:EntryManagerImpls.ts:253-274). Lossy decoding can expand bytes.
         # P-13: also gate the converted Blob before any chunks/publication.
         check_file_size(path, size, self.sync_max_size_mb)
-        return await self._write_content(
+        result = await self._write_content(
             path, body, size, doc_type,
             attachment_data=body if isinstance(body, bytes) else None,
             create=create, overwrite=overwrite, mtime=mtime,
             expected_rev=expected_rev,
         )
+        return complete_publication(result, ingress_notices(content)
+                                    if isinstance(content, str) or doc_type == 'plain' else [])
 
     async def write_attachment(
         self, path: str, data: bytes, *, create: bool = False,
@@ -1249,7 +1253,10 @@ class JournalBackend(TextAccessPolicy, DeviceSelection):
             collector = publication_replacements.get()
             if collector is not None:
                 collector.append(replacements)
-        return result
+        notices = split_notices(content, self._splitter.version)
+        if replacements:
+            notices.append({'code': 'journal_surrogates_replaced', 'count': replacements})
+        return complete_publication(result, notices)
 
     async def delete_note(
         self, path: str, expected_rev: str | None = None

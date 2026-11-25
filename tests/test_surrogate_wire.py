@@ -114,14 +114,10 @@ async def test_tool_reports_only_typed_transport_count(tmp_path, structured):
         assert sentence in output
         assert W['input'] not in output
         assert all(piece not in output for piece in W['pieces'])
-        if structured:
-            parsed = json.loads(output)
-            assert type(parsed['transport_replacements']) is int
-            assert parsed['transport_replacements'] == REPLACEMENTS
-            assert parsed == {'status': 'ok', 'transport_replacements': REPLACEMENTS,
-                              'message': sentence}
-        else:
-            assert output == 'Created.\n' + sentence
+        lines = output.splitlines()
+        assert lines[0] == ('{"status":"ok"}' if structured else 'Created.')
+        assert json.loads(lines[1]) == {'notices': [{'code': 'journal_surrogates_replaced', 'count': REPLACEMENTS}]}
+        assert lines[2] == sentence
         # A subsequent unrelated tool invocation must not inherit the count.
         @server._tool_errors(writer=True)
         async def ordinary():

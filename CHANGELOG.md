@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Settings parity
 
+- Preflight lossless CouchDB chunk collisions and admit journal collisions whose projected bytes agree, retaining IDs and replacement reporting.
+- Apply device JavaScript coercion to customChunkSize, admitting terminating JSON-typed settings and naming recovery for binary data-loss or loop refusals.
+- Preserve JavaScript ToPrimitive and addition in V2 minimum adjustment; remove the integer shortcut and its invalid array-equivalence proof.
+- Disclose BOM stripping, invalid UTF-8 and surrogate replacements through typed write notices and fixed prose outside the original tool result; retain device partitions, IDs and metadata sizes.
+
 - Complete aggregate scans and the CouchDB metadata index by default, with
   unlimited note/byte defaults, resumable indexing, configurable time budgets,
   opaque continuation cursors and response page limits. Add fetch line windows,
@@ -167,9 +172,3 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Docs
 
 - Clarified that the built-in OAuth client is pre-configured for Claude only; added instructions for registering additional clients
-
-- Preflight lossless CouchDB chunk collisions and admit journal collisions whose projected bytes agree, retaining IDs and replacement reporting.
-
-- Apply device JavaScript coercion to customChunkSize, admitting terminating JSON-typed settings and naming recovery for binary data-loss or loop refusals.
-
-- Preserve JavaScript ToPrimitive and addition in V2 minimum adjustment; remove the integer shortcut and its invalid array-equivalence proof.

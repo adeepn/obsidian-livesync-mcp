@@ -732,3 +732,7 @@ its own deadline expires first. Neither path echoes the pattern or body.
 ### 2026-11-25 F1-3
 
 [DECISION] Use original-type += at chunks.ts:368-370 for V2 and V2-segmenter. Remove the integer shortcut altogether: after correct fallback semantics its numeric-only modulo mutation would be equivalent. Replace the false proof with executed [1]/[2] coercion cells; the historical modulo probe is obsolete, not a claimed kill.
+
+### 2026-11-25 F1-4
+
+[DECISION] Add typed successful-publication notices for legacy BOM stripping, opt-in malformed UTF-8 decoding, Blob USVString and compact-journal surrogate replacements. Original result text remains verbatim. P-11 verified at EntryManagerImpls.ts:280 and reflection.ts:272-283: default receiving devices refuse the resulting nonzero size mismatch; processSizeMismatchedFiles bypasses it.

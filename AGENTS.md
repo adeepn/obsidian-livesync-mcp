@@ -174,3 +174,5 @@ shapes and the incomplete-index pagination caveat.
 `scripts/extract_collision_vector.mjs` executes pinned splitting, hashing and journal transport with integrity-verified dependencies; `tests/test_publication_collision.py` checks projected equality and lossless preflight.
 
 `scripts/extract_coercion_cells.mjs` executes isolated pinned dispatcher cells for JSON-typed writer parameters; `tests/test_coercion_cells.py` crosses exact upstream partitions and IDs with both backend doubles.
+
+`publication_notices.py` owns closed, typed successful-write transformations, context-local collection and external result suffixes. `tests/test_publication_notices.py` exercises both backends and all writing tool families.

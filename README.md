@@ -220,6 +220,7 @@ combination. [Source inventory and caveats](docs/superpowers/specs/2026-11-23-se
   connection fields and choose CouchDB Basic or JWT authentication.
   Ordinary tools reserve service prefixes/names and dot-prefixed paths;
   [path admission](docs/vault-format.md#path-admission) lists the exact exclusions.
+- Successful writes disclose lossy ingestion through typed publication notices: legacy BOM removal, invalid UTF-8 replacement, Blob input surrogates and journal wire surrogates. The original tool result remains verbatim, followed by a separate notice record and fixed prose. BOM size mismatches prevent default device reflection; see [typed notices](docs/outcome-reporting.md#typed-publication-notices).
 - Distinct colliding CouchDB pieces refuse before publication: configure a positive
   `customChunkSize` or a collision-free `hashAlg` such as `sha1`. Journal pieces
   with identical TextEncoder bytes share the original ID and report replacements.

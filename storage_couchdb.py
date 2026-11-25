@@ -35,6 +35,8 @@ without reassembling content, so binary notes travel chunk-wise
 
 from __future__ import annotations
 
+from publication_notices import complete_publication, ingress_notices, split_notices
+
 from diagnostic_hygiene import (writer_diagnostic, diagnostic, settings_exception_diagnostic, PublicDiagnostic, DiagnosticPath, setting_key,
     DiagnosticCode, assessment_fields, setting_value, fingerprint, unsafe_debug,
     cause_name, operation_field, numeric_field)
@@ -1089,11 +1091,13 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
         # (C:EntryManagerImpls.ts:253-274). Lossy decoding can expand bytes.
         # P-13: also gate the converted Blob before any chunks/publication.
         check_file_size(path, size, self.sync_max_size_mb)
-        return await self._write_content(
+        result = await self._write_content(
             path, body, size, doc_type,
             create=create, overwrite=overwrite, mtime=mtime,
             expected_rev=expected_rev,
         )
+        return complete_publication(result, ingress_notices(content)
+                                    if isinstance(content, str) or doc_type == 'plain' else [])
 
     async def write_attachment(
         self, path: str, data: bytes, *, create: bool = False,
@@ -1161,7 +1165,7 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
         body["_id"] = doc_id
         body["path"] = canonical_path(path)
         body["_rev"] = await self._put_doc(doc_id, body)
-        return self._meta_from_doc(body)
+        return complete_publication(self._meta_from_doc(body), split_notices(content, self._splitter.version))
 
     async def delete_note(
         self, path: str, expected_rev: str | None = None

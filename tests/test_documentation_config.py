@@ -324,3 +324,11 @@ def test_custom_coercion_documented():
 def test_minimum_addition_documented():
     assert 'JavaScript ToPrimitive/addition' in (ROOT / 'README.md').read_text()
     assert 'integer shortcut and its invalid array-equivalence proof have been removed' in (ROOT / 'docs/vault-format.md').read_text()
+
+
+def test_typed_publication_notices_documented():
+    text = (ROOT / 'docs/outcome-reporting.md').read_text()
+    for code in ('legacy_bom_removed','invalid_utf8_replaced','input_surrogates_replaced','journal_surrogates_replaced'):
+        assert code in text
+    assert 'original tool result remains verbatim' in (ROOT / 'README.md').read_text()
+    assert 'typed notices' in (ROOT / '.env.example').read_text()

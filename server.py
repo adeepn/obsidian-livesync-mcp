@@ -342,14 +342,14 @@ def _tool_errors(
                 await _backend().refresh(force=True)
             else:
                 await _backend().refresh()
-            from storage_base import publication_replacements
-            counts = []
-            token = publication_replacements.set(counts)
+            from publication_notices import publication_notices, notice_text
+            notices = []
+            token = publication_notices.set(notices)
             try:
                 result = await handler(*args, **kwargs)
-                return _publication_text(result, counts)
+                return notice_text(result, notices)
             finally:
-                publication_replacements.reset(token)
+                publication_notices.reset(token)
         except (regex_runner.RegexTimeoutError, regex_runner.RegexOutputExceeded) as error:
             return error.format()
         except StorageError as error:
