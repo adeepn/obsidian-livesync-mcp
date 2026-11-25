@@ -818,3 +818,15 @@ its own deadline expires first. Neither path echoes the pattern or body.
 [DECISION] Pin exact regenerated iat/exp and HS256/HS512 token bytes at +291 seconds, retained cache through +581.99 and second refresh at +582 for numeric durations 0/5 and all four algorithms. Execute the pinned JWT generator with integrity-verified octagonal-wheels 0.1.57 and the original synthetic keys. The stale-expiry reviewer mutant now fails the committed boundary test; production JWT behavior is unchanged.
 
 The first F3 full run exposed line-addressed comparison inventory drift after the iterative helper grew. Preserve existing witnesses at relocated AST sites and replace the removed recursive null check with three native deep-scalar witnesses; no splitter behavior or oracle expectations change.
+
+### 2026-11-25 T8a — real-server acceptance follow-up
+
+[GOTCHA] Repair stale public epoch and whole-body chunk expectations without
+weakening B1/B2. Existing six tests pass. Both 60-row pairwise matrix lifecycles
+pass on real SeaweedFS/CouchDB with committed upstream oracle partitions; S3
+surrogate replacement passes. Acceptance is NOT DONE: wrong-key JWT HTTP 400
+maps to a generic diagnostic, requiring the owner stop rule. Concurrently
+running CouchDB surrogate publication receives HTTP 400. HS256 passes; the
+supplied ES key fails PKCS8 configuration validation. No production code changed.
+Large-file/tool, expanded recovery, compression and custom-header scenarios
+remain NOT DONE. See `docs/test-artifacts/2026-11-25-parity-docker/summary.txt`.

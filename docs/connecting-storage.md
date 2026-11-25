@@ -286,3 +286,34 @@ base64 token format). These offline tests establish configuration and wire behav
 not connectivity to a particular reverse proxy.
 
 JWT expiry input is numeric: an explicit empty `COUCHDB_JWT_EXPIRY_MINUTES` is refused; omit it or use `0` for the five-minute fallback. The upstream literal JSON string `"0"` is truthy and gives a zero-second token; this numeric environment variable cannot represent that string. For numeric 0 and 5, all four algorithms retain the cached token through +290.99 seconds and refresh at +291 seconds (httplib.ts:166-167,181-196).
+
+## Automated real-server acceptance
+
+The env-gated tests use disposable S3 prefixes and `mcp_test_<random>` CouchDB
+databases. Supply `MINIO_TEST_ENDPOINT`, `MINIO_TEST_KEY`, `MINIO_TEST_SECRET`,
+`MINIO_TEST_BUCKET`, `COUCHDB_TEST_URL`, `COUCHDB_TEST_USER` and
+`COUCHDB_TEST_PASSWORD` only in the invoking shell. No variables means skips
+and no server access. Never point these tests at an owner's vault.
+
+`tests/test_integration_parity_s3.py` and
+`tests/test_integration_parity_couchdb.py` reuse the 60-row pairwise settings
+selection and committed published-dependency oracle. `MINIO_TEST_MATRIX=full`
+also includes the existing supplemental branch rows on both backends. The
+current matrix lifecycle uses each row's document kind, rather than testing
+both text and binary in every row.
+
+JWT tests additionally require `COUCHDB_TEST_JWT_URL`,
+`COUCHDB_TEST_JWT_SUBJECT`, and `COUCHDB_TEST_JWT_HS_KEY` or
+`COUCHDB_TEST_JWT_ES_KEY`; the EC key must be PKCS8 PEM. Backend construction
+uses JWT configuration without Basic credentials. Test environment values are
+never copied into `.env` or committed artifacts.
+
+```bash
+./venv/bin/python -m pytest tests/test_integration_minio.py tests/test_integration_couchdb.py tests/test_integration_parity_s3.py tests/test_integration_parity_couchdb.py -q --tb=short
+```
+
+The 2026-11-25 run stopped on the production finding JWT wrong-key HTTP 400
+being reported with a generic storage diagnostic. The already-running matrix
+also recorded CouchDB rejecting a lone-surrogate leaf. The supplied ES key was
+rejected by PKCS8 validation. The remaining acceptance scenarios are NOT DONE;
+see [the acceptance artifact](test-artifacts/2026-11-25-parity-docker/summary.txt).

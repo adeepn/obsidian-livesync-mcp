@@ -59,6 +59,9 @@ controls auth, URL, host, port and backend startup.
 ### Environment reference
 
 
+Acceptance connection variables are test-only and belong in the invoking shell; see
+[real-server acceptance](docs/connecting-storage.md#automated-real-server-acceptance).
+
 This table covers configuration consumed by `config.py` and `replay_limits.py`.
 The final debug switch is consumed separately by `diagnostic_hygiene.py`.
 Wire encoding follows devices without an environment switch: CouchDB JSON escapes
@@ -175,7 +178,14 @@ combination. [Source inventory and caveats](docs/superpowers/specs/2026-11-23-se
 | Tweak mismatch/auto-accept flags | Boolean | Deliberate difference | Local env policy; no device registration or PREFERRED publication |
 | Reflection/request/cache/concurrency tuning | Various local device options | Not supported as device settings | No host reflection or plugin request engine; [full inventory](docs/superpowers/specs/2026-11-23-settings-parity.md#ж-other-tweak_values-and-production-evidence-boundary) |
 
+Real-server coverage includes the 60-row pairwise matrix on both backends.
+It does not establish every setting combination on every server.
+
 ## How the peer differs from a device
+
+The 2026-11-25 acceptance run found JWT wrong-key HTTP 400 classified as a
+generic storage error and CouchDB rejecting a lone-surrogate leaf with HTTP 400.
+Acceptance remains incomplete; see the [recorded results](docs/test-artifacts/2026-11-25-parity-docker/summary.txt).
 
 - CouchDB auth is explicit local configuration: choose Basic credentials or the
   JWT environment group, independently of MCP client auth. JWT matches the pinned

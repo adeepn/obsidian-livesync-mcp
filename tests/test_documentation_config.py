@@ -414,3 +414,12 @@ def test_iterative_scalar_depth_documented():
     text = (ROOT / 'docs/size-policy.md').read_text()
     assert 'cycles' in text and '1000/5000' in text
     assert 'Node --stack-size=16384' in text
+
+
+def test_real_server_acceptance_scope_documented():
+    for name in ('README.md', 'docs/connecting-storage.md'):
+        text = (ROOT / name).read_text()
+        assert '60-row pairwise' in text
+        assert 'JWT wrong-key HTTP 400' in text
+        assert '2026-11-25-parity-docker/summary.txt' in text
+    assert 'Acceptance credentials belong only in the invoking shell' in (ROOT / '.env.example').read_text()

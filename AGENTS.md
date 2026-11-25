@@ -194,3 +194,7 @@ shapes and the incomplete-index pagination caveat.
 `scripts/extract_deep_scalar_vectors.mjs` executes pinned size/cap/adjustment expressions with native JS builtins and records source hashes and Node stack flags. `tests/test_deep_scalar.py` covers deep scalar coercion, cyclic/shared arrays, both backend startups and journal refresh.
 
 `scripts/extract_jwt_vectors.mjs` accepts an optional fifth argument naming the original JWT fixture to emit cache-lifecycle expectations with the same synthetic keys. `tests/fixtures/jwt_refresh_upstream.json` covers two successive native cache boundaries, exact refreshed timestamps and HS token bytes.
+
+`tests/test_integration_parity_s3.py` and `tests/test_integration_parity_couchdb.py`
+add env-gated real-server pairwise/oracle, surrogate and JWT acceptance.
+See `docs/connecting-storage.md` for environment and incomplete acceptance scope.
