@@ -1,6 +1,7 @@
 """Controller-run MinIO integration; no credentials means no network I/O."""
 
 import asyncio
+import hashlib
 import unicodedata
 from types import SimpleNamespace
 from uuid import uuid4
@@ -193,7 +194,7 @@ async def test_wipe_epoch(minio):
     await reader.startup_check()
     info = await reader.backend_info()
     assert info["epoch"] != old_epoch
-    assert info["epoch"] == "3:salt-a"
+    assert info["epoch"] == "sha256:" + hashlib.sha256(b"3:salt-a").hexdigest()[:16]
     assert info["files_processed"] == processed  # no send history: upstream keeps caches
     assert (await reader.read_note("old.md"))["text"] == "Old epoch"
     fresh, _ = await peer("fresh-writer")
