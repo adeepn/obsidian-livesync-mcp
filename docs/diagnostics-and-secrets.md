@@ -81,3 +81,7 @@ uses the root logger for validation messages and exceptions;
 `fastmcp/server.py:410,1112` logs resource/prompt errors. Resource manager
 `resources/resource_manager.py:91` also supplies URI through LoggerAdapter extras.
 The filter removes these extras as well as message arguments and tracebacks.
+
+Uvicorn access handlers use a plain typed formatter because its installed
+AccessFormatter requires the withheld raw request arguments. The adaptation
+also covers access handlers attached after application construction.

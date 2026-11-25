@@ -21,6 +21,18 @@ class HostingLogFilter(logging.Filter):
             for key in tuple(record.__dict__):
                 if key not in _STANDARD_KEYS:
                     del record.__dict__[key]
+            if record.name == 'uvicorn.access':
+                # Installed uvicorn/logging.py:99-117 unpacks raw request
+                # args even with a plain format string. Replace that formatter
+                # before handlers run, including handlers attached after app
+                # construction by uvicorn.run(). No request fields survive.
+                from uvicorn.logging import AccessFormatter
+                logger = logging.getLogger(record.name)
+                while logger is not None:
+                    for handler in logger.handlers:
+                        if isinstance(handler.formatter, AccessFormatter):
+                            handler.setFormatter(logging.Formatter('%(levelname)s %(message)s'))
+                    logger = logger.parent if logger.propagate else None
             if getattr(record, '_closed_hosting_record', False):
                 return True
             record._closed_hosting_record = True

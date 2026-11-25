@@ -1118,3 +1118,9 @@ acceptance narration; preserve all released history verbatim.
 owner live acceptance IN PROGRESS on client 1.0.50 since 2026-11-25. First wiped-
 bucket observation is service records without file resend. Final live acceptance
 is pending; audited plugin 1.0.52 has not been exercised live.
+
+### 2026-11-26 — F9 hosting formatter correction
+
+[GOTCHA] Independent architect review found installed Uvicorn AccessFormatter
+unpacks five raw access arguments. Typed logs now adapt those handlers before
+emission, including handlers installed after application construction.

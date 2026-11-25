@@ -126,3 +126,34 @@ async def test_http_logs_withhold_request_values(monkeypatch, route):
     finally:
         root.removeHandler(capture)
         root.setLevel(old)
+
+
+@pytest.mark.parametrize('late_handler', [False, True])
+def test_sanitized_access_logs_support_installed_uvicorn_formatter(late_handler):
+    # Installed uvicorn/logging.py:99-117 destructures access args. Typed
+    # filtering must also adapt that formatter instead of breaking hosting.
+    import logging
+    from uvicorn.logging import AccessFormatter
+    from hosting_logging import install_hosting_log_filters
+    rendered = []
+    class Capture(logging.Handler):
+        def emit(self, record):
+            rendered.append(self.format(record))
+    handler = Capture()
+    handler.setFormatter(AccessFormatter('%(levelprefix)s %(client_addr)s - "%(request_line)s" %(status_code)s'))
+    logger = logging.getLogger('uvicorn.access')
+    old_level = logger.level
+    logger.setLevel(logging.INFO)
+    try:
+        if not late_handler:
+            logger.addHandler(handler)
+        install_hosting_log_filters()
+        if late_handler:
+            logger.addHandler(handler)
+        logger.info('%s - "%s %s HTTP/%s" %d', 'PRIVATE_CLIENT', 'GET', '/PRIVATE_PATH', '1.1', 200)
+        assert len(rendered) == 1
+        assert 'sdk_event' in rendered[0]
+        assert 'PRIVATE' not in rendered[0]
+    finally:
+        logger.removeHandler(handler)
+        logger.setLevel(old_level)
