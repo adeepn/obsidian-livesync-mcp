@@ -261,3 +261,30 @@ def test_boundary_log_retains_typed_transport_fields(caplog):
     server._log_boundary_failure('application startup failed', error)
     assert 'StorageError' in caplog.text and 'S3 returned HTTP 503 for GET' in caplog.text
     assert all(record.exc_info is None for record in caplog.records)
+
+
+@pytest.mark.parametrize('entry', ['run.py', 'server.py'])
+def test_import_construction_boundary_hides_causes(monkeypatch, caplog, entry):
+    import builtins
+    import config
+    import runpy
+    def fail():
+        try:
+            raise ValueError('REMOTE_SECRET')
+        except ValueError as cause:
+            raise RuntimeError('CONFIG_SECRET') from cause
+    if entry == 'server.py':
+        monkeypatch.setattr(config, 'load_config', fail)
+    else:
+        original_import = builtins.__import__
+        def import_module(name, *args, **kwargs):
+            if name == 'server': fail()
+            return original_import(name, *args, **kwargs)
+        monkeypatch.setattr(builtins, '__import__', import_module)
+    with pytest.raises((RuntimeError, SystemExit)) as caught:
+        runpy.run_path(entry, run_name='__main__')
+    import traceback
+    assert 'SECRET' not in ''.join(traceback.format_exception(caught.value))
+    assert caught.value.__cause__ is None and caught.value.__suppress_context__
+    assert 'RuntimeError' in caplog.text and 'SECRET' not in caplog.text
+    assert all(record.exc_info is None for record in caplog.records)
