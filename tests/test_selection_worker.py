@@ -214,30 +214,72 @@ def test_stalled_stdin_write_obeys_timeout(monkeypatch, tmp_path):
 
 async def test_repeated_cancellation_keeps_admission_until_thread_exits(backend, monkeypatch):
     import threading
-    import time
     from selection_engine import SelectionWorker
     from livesync_format import TargetVerdict
     b, _ = backend
     b.selection_only = 'md$'
-    active = maximum = 0
-    started = threading.Event()
-    release = threading.Event()
+    await b.selection_startup()
+    started, release = threading.Event(), threading.Event()
+    acknowledged = [asyncio.Event(), asyncio.Event()]
+    second_attempt = asyncio.Event()
+    second_saw_held = []
+    first = second = None
+    active = maximum = shield_calls = 0
+    real_shield = asyncio.shield
+    semaphore = b._selection_limit
+
+    class ObservedPermit:
+        async def __aenter__(self):
+            if asyncio.current_task() is second:
+                # Observe admission before releasing the worker, independently
+                # of when the executor dispatches the second thread.
+                second_saw_held.append(semaphore.locked())
+                second_attempt.set()
+            await semaphore.acquire()
+            return self
+
+        async def __aexit__(self, *args):
+            semaphore.release()
+
+        def release(self):
+            semaphore.release()
+
+    def shield(task):
+        nonlocal shield_calls
+        if asyncio.current_task() is first:
+            shield_calls += 1
+            if 2 <= shield_calls <= 3:
+                # Re-entry acknowledges that each cancellation was handled.
+                acknowledged[shield_calls - 2].set()
+        return real_shield(task)
+
     def slow(self, payload):
         nonlocal active, maximum
         active += 1
         maximum = max(maximum, active)
         started.set()
-        assert release.wait(30), 'test failed to release evaluator'
-        active -= 1
-        return TargetVerdict(True)
+        try:
+            assert release.wait(30), 'test failed to release evaluator'
+            return TargetVerdict(True)
+        finally:
+            active -= 1
+
+    monkeypatch.setattr(b, '_selection_limit', ObservedPermit())
     monkeypatch.setattr(SelectionWorker, 'evaluate', slow)
-    first = asyncio.create_task(b.selection_for('first.md'))
-    assert await asyncio.to_thread(started.wait, 30)
-    first.cancel()
-    await asyncio.sleep(0)
-    first.cancel()
-    second = asyncio.create_task(b.selection_for('second.md'))
-    await asyncio.sleep(0)
-    release.set()
-    await asyncio.wait_for(asyncio.gather(first, second, return_exceptions=True), 30)
+    monkeypatch.setattr(asyncio, 'shield', shield)
+    try:
+        first = asyncio.create_task(b.selection_for('first.md'))
+        assert await asyncio.to_thread(started.wait, 30)
+        for ack in acknowledged:
+            first.cancel()
+            await asyncio.wait_for(ack.wait(), 30)
+        second = asyncio.create_task(b.selection_for('second.md'))
+        await asyncio.wait_for(second_attempt.wait(), 30)
+        assert second_saw_held == [True], 'admission released while first worker still runs'
+    finally:
+        release.set()
+        tasks = [task for task in (first, second) if task is not None]
+        results = await asyncio.wait_for(asyncio.gather(*tasks, return_exceptions=True), 30)
+    assert isinstance(results[0], asyncio.CancelledError)
+    assert results[1].allowed
     assert maximum == 1
