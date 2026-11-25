@@ -754,6 +754,12 @@ async def obsidian_search(query: str, regex: bool = False, cursor: str = "", lim
     if regex:
         try:
             await _regex_apply(query, "", "findall")
+        except regex_runner.RegexTimeoutError:
+            budget = _scan_budget.get()
+            if budget is not None and budget.expired():
+                budget.stop('time')
+                return json.dumps({'results': [], 'skipped': []})
+            raise
         except re.error:
             return "Invalid regular expression."
     results, skipped, errors = [], [], {}

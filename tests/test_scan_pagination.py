@@ -198,3 +198,22 @@ async def test_stats_partial_snapshot_cannot_advertise_complete(monkeypatch):
 def test_cursor_roundtrip_has_no_arbitrary_path_length_cap():
     path = 'x' * 30000
     assert server._decode_cursor(server._encode_cursor(path)) == path
+
+
+async def test_aggregate_expiry_during_regex_validation_is_a_time_page(monkeypatch):
+    from tests.fake_backend import FakeBackend
+    import regex_runner
+    now = [0.0]
+    monkeypatch.setattr(server, 'backend', FakeBackend())
+    monkeypatch.setattr(server, '_scan_clock', lambda: now[0])
+    monkeypatch.setattr(server, '_active_scan_limits', ContextVar('validation_time', default=(0, 0, 1)))
+    async def expired_validation(*args):
+        now[0] = 1.0
+        raise regex_runner.RegexTimeoutError('Increase LIVESYNC_REGEX_TIMEOUT_SECONDS')
+    monkeypatch.setattr(server, '_regex_apply', expired_validation)
+    response = json.loads(await server.obsidian_search('PRIVATE_PATTERN', regex=True))
+    assert response['truncated'] is True
+    assert response['scan']['stopped_because'] == 'time'
+    assert response['scan']['notes'] == 0
+    assert response['next_cursor']
+    assert 'PRIVATE_PATTERN' not in str(response)

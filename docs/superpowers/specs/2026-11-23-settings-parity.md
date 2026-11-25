@@ -712,3 +712,11 @@ isolated persistent regex worker with hard request deadlines, kill/restart on
 failure, and synchronous lifecycle cleanup. Per-note search timeouts continue
 scanning; replacement timeouts refuse before publication. Negative text-verdict
 cache capacity defaults to 65536. No upstream wire-format fixture changes.
+
+
+### 2026-11-25 — G4b regex validation deadline
+
+[GOTCHA] A scan can spend its remaining aggregate time while validating a
+regex before any note is admitted. Return a resumable empty time page when
+the aggregate clock expired; retain the regex-specific timeout refusal when
+its own deadline expires first. Neither path echoes the pattern or body.
