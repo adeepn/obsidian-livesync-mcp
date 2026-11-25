@@ -855,8 +855,11 @@ def assess_tweak_compatibility(preferred: Mapping, candidate: Mapping) -> TweakA
     the Task 3c helper. Template values are NOT implied compatibility defaults.
     """
     from content_splitter import normalize_splitter_settings
-    return _assess_normalized_tweaks(normalize_splitter_settings(preferred),
-                                     normalize_splitter_settings(candidate))
+    try:
+        return _assess_normalized_tweaks(normalize_splitter_settings(preferred),
+                                         normalize_splitter_settings(candidate))
+    except SplitterRefusal as error:
+        raise UnsupportedVaultSettings(error.diagnostic) from None
 
 
 def _assess_normalized_tweaks(preferred: Mapping, candidate: Mapping) -> TweakAssessment:

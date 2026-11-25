@@ -197,3 +197,36 @@ async def test_newest_matching_device_can_win_lossy_alignment(tmp_path, kind):
         await backend.startup_check()
         assert backend._splitter.normalized_settings['customChunkSize'] == 0
         assert not writes()
+
+
+async def test_primitive_migration_refusal_crosses_startup_boundary(tmp_path,kind):
+    # SettingService.ts:141-158 uses JS coercion before splitter resolution.
+    bad={'chunkSplitterVersion':{'toString':'PRIVATE_SETTING'}}
+    async with vault(tmp_path,kind,{'tweak_values':{'PREFERRED':{**FULL,**bad}}}) as (backend,writes):
+        with pytest.raises(UnsupportedVault,match='chunkSplitterVersion') as caught:
+            await backend.startup_check()
+        assert 'remove its toString field' in str(caught.value)
+        assert 'PRIVATE_SETTING' not in str(caught.value)
+        assert not writes()
+
+
+async def test_primitive_migration_refusal_reaches_refresh_caller(tmp_path,monkeypatch):
+    import server
+    backend,storage=make_backend(tmp_path,{
+        MILESTONE_KEY:json.dumps({'tweak_values':{'PREFERRED':FULL}}).encode(),
+        SYNC_PARAMETERS_KEY:params_blob(),
+    })
+    try:
+        await backend.startup_check()
+        bad={**FULL,'chunkSplitterVersion':{'toString':'PRIVATE_SETTING'}}
+        storage._objects[MILESTONE_KEY]=json.dumps({'tweak_values':{'PREFERRED':bad}}).encode()
+        before=dict(storage._objects)
+        with pytest.raises(UnsupportedVault,match='chunkSplitterVersion'):
+            await backend.refresh(force=True)
+        monkeypatch.setattr(server,'backend',backend)
+        result=await server.obsidian_create_note('boundary.md','PRIVATE_NOTE')
+        assert 'chunkSplitterVersion' in result and 'remove its toString field' in result
+        assert 'PRIVATE_' not in result
+        assert storage._objects==before
+        assert not storage.put_calls
+    finally:await backend.close()

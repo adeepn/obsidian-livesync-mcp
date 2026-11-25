@@ -475,6 +475,14 @@ def test_unsupported_vault_settings_contract():
     import livesync_format as module
 
     assert "storage_base" not in inspect.getsource(module)
+    # Cold imports must preserve the boundary transitively through the splitter.
+    import subprocess
+    import sys
+    result = subprocess.run(
+        [sys.executable, '-c', "import sys; import livesync_format; assert 'storage_base' not in sys.modules"],
+        capture_output=True, text=True, timeout=30,
+    )
+    assert result.returncode == 0, result.stderr
     assert issubclass(UnsupportedVaultSettings, ValueError)
     with pytest.raises(UnsupportedVaultSettings) as excinfo:
         resolve_path_identity({})
