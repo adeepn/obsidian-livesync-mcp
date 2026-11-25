@@ -393,7 +393,10 @@ class JournalBackend(TextAccessPolicy, DeviceSelection):
             candidate_text.sync_max_size_mb = candidate_size
             candidate_configuration = (self.selection_only, self.selection_ignore,
                                        candidate_selection[0], candidate_selection[1])
-            if self._selection_checked_configuration != candidate_configuration:
+            # A failed candidate may close the worker; restoring the old
+            # checked tuple must still retry capability before clearing failure.
+            if (self._selection_checked_configuration != candidate_configuration
+                    or self._selection_resolution_diagnostic is not None):
                 await self.validate_selection_configuration(candidate_configuration)
         except WriterUnsupported as exc:
             self._selection_resolution_diagnostic = exc.diagnostic

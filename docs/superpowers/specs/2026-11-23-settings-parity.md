@@ -804,3 +804,7 @@ its own deadline expires first. Neither path echoes the pattern or body.
 ### 2026-11-25 F2-5 follow-up — capability transaction
 
 [DECISION] Both independent reviews identified candidate assignment before Node validation. Validate the candidate configuration without installing it, including across await, then atomically expose selection/size/text fields and checked configuration. Missing-Node and concurrent-observation regressions failed before the fix and pass after it; typed failure retains recovery guidance.
+
+### 2026-11-25 F2-5 recovery — restored active policy
+
+[GOTCHA] A rejected candidate retains the old checked tuple, so returning to that tuple must still retry capability validation after failure. Otherwise successful force refresh leaves stale unsupported stats until a write restarts the worker. An independent probe and failing-first regression establish recovery before another write.

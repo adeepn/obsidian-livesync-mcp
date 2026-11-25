@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Settings parity
 
+- Revalidate a restored active policy after candidate failure so force-refresh clears stale Node capability diagnostics before another write.
+
 - Validate candidate selection capability before exposing journal policy changes, including missing-Node refusal and awaiting checks.
 
 - Mirror JavaScript numeric coercion for vault size settings and truthiness for ignore enablement across all JSON types; compare effective device policies and retain strict operator overrides.

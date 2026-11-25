@@ -487,3 +487,35 @@ async def test_candidate_policy_is_invisible_during_capability_check(tmp_path, m
         if task is not None:
             await task
         await b.close()
+
+
+async def test_restored_active_policy_rechecks_failed_capability(tmp_path, monkeypatch):
+    # targetFilter.ts:129-137 realises settings changes; recovery to a previously
+    # checked policy must recheck the peer constraint after a failed candidate.
+    import selection_engine
+    from storage_base import WriterUnsupported
+    b, storage = make_backend(tmp_path, healthy_bucket())
+    original = json.dumps(milestone(useIgnoreFiles=True, ignoreFiles='original')).encode()
+    storage._objects[MILESTONE_KEY] = original
+    try:
+        await b.startup_check()
+        await b.selection_close()
+        storage._objects[MILESTONE_KEY] = json.dumps(milestone(
+            useIgnoreFiles=True, ignoreFiles='changed')).encode()
+        def unavailable(*args, **kwargs):
+            raise FileNotFoundError('PRIVATE_NODE_CAUSE')
+        with monkeypatch.context() as patch:
+            patch.setattr(selection_engine.subprocess, 'Popen', unavailable)
+            with pytest.raises(WriterUnsupported):
+                await b.refresh(force=True)
+        storage._objects[MILESTONE_KEY] = original
+        await b.refresh(force=True)
+        # Observe stats before a real write can restart the worker and hide it.
+        info = await b.backend_info()
+        assert info['selection_engine_state'] == 'ready'
+        assert info['selection_writer_supported'] is True
+        assert info['writer_supported'] is True
+        assert info['selection_engine_reason'] is None
+        assert b._selection_resolution_diagnostic is None
+    finally:
+        await b.close()

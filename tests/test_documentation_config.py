@@ -403,3 +403,4 @@ def test_candidate_selection_capability_documented():
         text = (ROOT / name).read_text()
         assert 'While that check awaits' in text
         assert 'without committing the candidate' in text
+        assert 'revalidates a restored previously active policy' in text
