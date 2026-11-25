@@ -974,12 +974,14 @@ def test_f6_frontmatter_contract_documented():
 
 def test_empty_bucket_initialisation_precedes_owner_acceptance():
     # C:remoteConfig.ts:388-423, JournalSyncCore.ts:347-352;
-    # P:redFlag.ts:249-265, translation.ts:70-91.
+    # P:PaneMaintenance.ts:110-139; combinedMessages.prod.ts:7538-7541,
+    # 7912-7917,9394-9399,9773-9778; redFlag.ts:518.
     text = (ROOT / 'docs/live-check-parity-checklist.md').read_text()
     assert text.index('**0. Однократная инициализация') < text.index('## 2. Повторное подключение (A)')
     for phrase in ('No Synchronisation Settings Found', "Use this device's settings",
-                   'Не запускать Fetch, Rebuild', 'остаются английскими',
-                   'пустой bucket инициализируется автоматически'):
+                   'Overwrite Server Data with This Device\'s Files', 'остаются английскими',
+                   'Rebuild everything operation completed.', 'не отправляет файлы повторно',
+                   'Запланировать и перезапустить'):
         assert phrase in text
 
 

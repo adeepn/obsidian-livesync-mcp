@@ -58,17 +58,22 @@ and selection title, applies selected configuration and calls replicate(true). -
 `--allow-remote-delete`. В обоих случаях `--confirm-target` обязан точно
 совпасть с `bucket/prefix` (для примера `plan-b-it/livetest/`) или именем базы
 CouchDB. Неверное подтверждение останавливает команду до подключения.
-Не выполнять wipe, reset, Rebuild или удаление объектов S3.
+Не выполнять wipe или удаление объектов S3. Reset/Rebuild разрешён только для явно подтверждённого тестового bucket в шаге 0 ниже.
 
 **0. Однократная инициализация пустого тестового S3.** Контроллер подтверждает, что запущен отдельный пустой тестовый bucket с теми же endpoint, bucket и Folder Prefix, что в сохранённом тестовом подключении. Владелец отвечает: «разрешаю первую синхронизацию и создание служебных записей и тестовых файлов в этом bucket». Не использовать рабочее хранилище.
 
-В Obsidian открыть Ctrl+P (macOS Cmd+P), выбрать `Self-hosted LiveSync: Sync with a saved connection` («синхронизировать с сохранённым подключением»), затем в `Select a remote to replicate with` («выберите подключение для синхронизации») выбрать проверенное тестовое подключение. Дождаться окончания синхронизации без ошибки. При обычной синхронизации пустой bucket инициализируется автоматически: устройство создаёт служебные параметры, milestone с настройками и отправляет допустимые файлы. Отдельное окно `No Synchronisation Settings Found` в этом пути не требуется. Не запускать Fetch, Rebuild, wipe или reset ради инициализации.
+В Obsidian открыть Ctrl+P (macOS Cmd+P), выбрать `Self-hosted LiveSync: Sync with a saved connection` («синхронизировать с сохранённым подключением»), затем в `Select a remote to replicate with` («выберите подключение для синхронизации») выбрать проверенное тестовое подключение. Дождаться окончания синхронизации без ошибки. Наблюдение владельца 2026-11-25 (клиент 1.0.50): после `Journal epoch changed and remote wipe confirmed` обычная синхронизация создаёт milestone и параметры, но не отправляет файлы повторно (`Packing Journal: No journals to be packed!`). Наличие только служебных записей не доказывает восстановление файлов.
+
+После этой однократной обычной синхронизации, только для явно подтверждённого отдельного тестового bucket после wipe, открыть Settings → Self-hosted LiveSync → `Maintenance and recovery` («Обслуживание и восстановление») → `Reset Synchronisation information` («Сбросить информацию о синхронизации») → `Overwrite Server Data with This Device's Files` («Перезаписать данные сервера файлами с этого устройства») → `Schedule and Restart` («Запланировать и перезапустить»). Подтвердить диалог, если показан; дождаться `Rebuild everything operation completed.`. Это сообщение остаётся английским; название вкладки в pinned source использует строчное `recovery` (Maintenance and Recovery в описании пути). Эта процедура перезаписывает сервер локальными файлами и не разрешена для рабочего bucket или неизвестного удалённого состояния. Проверить наличие журналов и файлов, а не только milestone/параметров, перед переходом к A.
 
 Если уже открыто окно `No Synchronisation Settings Found` («настройки синхронизации не найдены»), это другой путь первоначальной настройки. Только для подтверждённого пустого тестового bucket выбрать `Use this device's settings` («использовать настройки этого устройства»). Если ожидались существующие данные или настройки — `Cancel` («Отмена»), остановиться и сообщить контроллеру. Первые две подписи на этом pin остаются английскими и при русском интерфейсе.
 
-Сообщить «0 готово, первое подключение выполнено» либо безопасное описание ошибки без секретов. Контроллер выполняет команду reconnect из A и сохраняет A-reconnect.json. После успешной инициализации не повторять её отдельно: перейти к A.
+Сообщить «0 готово, rebuild завершён, журналы и файлы проверены» либо безопасное описание ошибки без секретов. Контроллер выполняет команду reconnect из A и сохраняет A-reconnect.json. После успешной инициализации не повторять её отдельно: перейти к A.
 
-<!-- C:remoteConfig.ts:388-423,458-470; SyncParamsHandler.ts:95-136;
+<!-- P:modules/features/SettingDialogue/PaneMaintenance.ts:110-139;
+common/messages/combinedMessages.prod.ts:7538-7541,7912-7917,9394-9399,9773-9778;
+serviceFeatures/redFlag.ts:518 (untranslated completion log).
+C:remoteConfig.ts:388-423,458-470; SyncParamsHandler.ts:95-136;
 JournalSyncCore.ts:347-352; LiveSyncJournalReplicator.ts:209-249;
 LiveSyncDBFunctions.ts:60-79,124-174; P:redFlag.ts:249-265;
 LiveSyncProvisionalMessages.ts:273-291; translation.ts:70-91. -->

@@ -14,7 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Keep setup recipes ahead of alternatives and move detailed configuration, differences, JWT provisioning and developer acceptance to focused references.
 
-- Start the owner checklist with explicitly authorized empty-bucket initialization through ordinary saved-connection sync.
+- Correct confirmed remote-wipe recovery: create service records once, then explicitly rebuild the disposable server from device files.
 
 - Prevent reporting, startup, hosting and shutdown exceptions from exposing remote/configuration text through log tracebacks.
 

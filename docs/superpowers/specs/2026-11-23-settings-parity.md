@@ -1058,3 +1058,11 @@ OAuth form cap remains separate. Installed SDK argument verified from source.
 [DECISION] Filter installed and future SDK/HTTP logger records before handlers;
 only logger, closed level and exception class survive. Root capture covers
 header, path, body, tool, resource and prompt routes.
+
+### 2026-11-25 — F9-3 confirmed-wipe recovery
+
+[GOTCHA] Owner observation on client 1.0.50 supersedes the earlier step-0
+ordinary-sync claim: service records are created but files are not resent.
+Checklist now requires the explicitly authorized device-to-server rebuild
+after ordinary sync, with pinned Russian labels and English completion log.
+No new live procedure was performed by this implementation session.
