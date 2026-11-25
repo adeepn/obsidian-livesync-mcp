@@ -960,3 +960,14 @@ def test_f6_frontmatter_contract_documented():
     assert '2026-11-25 — F6 operational limits' in (ROOT / 'docs/superpowers/specs/2026-11-23-settings-parity.md').read_text()
     assert 'frontmatter_admission_upstream.json' in (ROOT / 'AGENTS.md').read_text()
     assert 'extract_frontmatter_admission_vectors.mjs' in (ROOT / 'docs/regenerating-oracle-fixtures.md').read_text()
+
+
+def test_empty_bucket_initialisation_precedes_owner_acceptance():
+    # C:remoteConfig.ts:388-423, JournalSyncCore.ts:347-352;
+    # P:redFlag.ts:249-265, translation.ts:70-91.
+    text = (ROOT / 'docs/live-check-parity-checklist.md').read_text()
+    assert text.index('**0. Однократная инициализация') < text.index('## 2. Повторное подключение (A)')
+    for phrase in ('No Synchronisation Settings Found', "Use this device's settings",
+                   'Не запускать Fetch, Rebuild', 'остаются английскими',
+                   'пустой bucket инициализируется автоматически'):
+        assert phrase in text

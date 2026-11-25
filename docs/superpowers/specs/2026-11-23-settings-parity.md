@@ -1020,3 +1020,11 @@ Reporting, backend construction/startup, application hosting and shutdown retain
 cause classes and typed diagnostic fields only. Fixed replacement exceptions
 suppress external chains before host formatting; reporting keeps outcome unknown.
 No vault wire behavior or configuration default changes.
+
+
+### 2026-11-25 — F8-2 empty test bucket
+
+Owner action 0 now precedes A: authorize initialization of the dedicated empty
+S3 test target, run the saved-connection sync, then reconnect. Fetch/Rebuild are
+not prescribed; the missing-settings dialog belongs to their preflight, with
+English provisional labels at this pin. Native sources are cited in the checklist.
