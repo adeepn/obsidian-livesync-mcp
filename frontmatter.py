@@ -43,6 +43,7 @@ class FrontmatterLimits:
 
     max_nodes: int = 20_000
     max_depth: int = 200
+    max_bytes: int = 4 * 1024**2
 
 
 frontmatter_limits: ContextVar[FrontmatterLimits] = ContextVar(
@@ -54,8 +55,9 @@ class FrontmatterError(ValueError):
 
     def __init__(self, reason="invalid YAML", *, runtime_depth=False):
         self.reason = reason if reason in {
-            "nodes", "depth", "alias expansion", "invalid YAML", "mapping required"} else "invalid YAML"
-        variable = {"nodes": "LIVESYNC_FRONTMATTER_MAX_NODES",
+            "nodes", "depth", "bytes", "alias expansion", "invalid YAML", "mapping required"} else "invalid YAML"
+        variable = {"bytes": "LIVESYNC_FRONTMATTER_MAX_BYTES",
+                    "nodes": "LIVESYNC_FRONTMATTER_MAX_NODES",
                     "depth": "LIVESYNC_FRONTMATTER_MAX_DEPTH",
                     "alias expansion": "LIVESYNC_FRONTMATTER_MAX_NODES"}.get(self.reason)
         if runtime_depth:
@@ -78,6 +80,16 @@ class FrontmatterError(ValueError):
             "note creation declined before publication; no note was created.")
 
 
+def _string_bytes(value: str) -> int:
+    """Expanded UTF-8 string payload, including every mapping-key occurrence.
+
+    C:EntryManagerImpls.ts:253-280 stores Blob bytes, not YAML properties.
+    This peer-only projection guard bounds scalar alias amplification before
+    JSON serialization. Node limits separately bound punctuation/containers.
+    """
+    return len(value.encode("utf-8", errors="surrogatepass"))
+
+
 def _preflight(fm_raw: str) -> None:
     """Count expanded event nodes before constructing round-trip containers.
 
@@ -91,7 +103,9 @@ def _preflight(fm_raw: str) -> None:
     limits = frontmatter_limits.get()
     stack, anchors = [], {}
 
-    def append(count, height, aliased):
+    def append(count, height, byte_count, aliased):
+        if byte_count > limits.max_bytes:
+            raise FrontmatterError("bytes")
         if count > limits.max_nodes:
             raise FrontmatterError("alias expansion" if aliased else "nodes")
         if len(stack) + height > limits.max_depth:
@@ -101,6 +115,9 @@ def _preflight(fm_raw: str) -> None:
             frame[0] += count
             frame[1] = max(frame[1], height + 1)
             frame[2] |= aliased
+            frame[4] += byte_count
+            if frame[4] > limits.max_bytes:
+                raise FrontmatterError("bytes")
             if frame[0] > limits.max_nodes:
                 raise FrontmatterError("alias expansion" if frame[2] else "nodes")
 
@@ -114,18 +131,18 @@ def _preflight(fm_raw: str) -> None:
                     # Each declaration has its own completion record. A nested
                     # rebind shadows the outer name immediately and stays the
                     # latest binding when that outer container finishes.
-                    binding = [None, None]
+                    binding = [None, None, None]
                     anchors[event.anchor] = binding
-                stack.append([1, 0, False, binding])
+                stack.append([1, 0, False, binding, 0])
             elif isinstance(event, (MappingEndEvent, SequenceEndEvent)):
-                count, height, aliased, anchor = stack.pop()
+                count, height, aliased, anchor, byte_count = stack.pop()
                 if anchor is not None:
-                    anchor[:] = count, height
-                append(count, height, aliased)
+                    anchor[:] = count, height, byte_count
+                append(count, height, byte_count, aliased)
             elif isinstance(event, ScalarEvent):
                 if event.anchor:
-                    anchors[event.anchor] = [1, 0]
-                append(1, 0, False)
+                    anchors[event.anchor] = [1, 0, _string_bytes(event.value)]
+                append(1, 0, _string_bytes(event.value), False)
             elif isinstance(event, AliasEvent):
                 if event.anchor not in anchors:
                     raise FrontmatterError("invalid YAML")
@@ -283,10 +300,10 @@ def _to_plain(value, *, limits=None):
         if container and identity in active:
             raise FrontmatterError("alias expansion")
         if container and identity in memo:
-            result, count, height = memo[identity]
+            result, count, height, byte_count = memo[identity]
             if depth + height > limits.max_depth:
                 raise FrontmatterError("depth")
-            return result, count, height, True
+            return result, count, height, byte_count, True
         if not container:
             if isinstance(node, bool) or node is None:
                 result = node
@@ -296,14 +313,20 @@ def _to_plain(value, *, limits=None):
                 result = float(node)
             else:
                 result = str(node)
-            return result, 1, 0, False
+            byte_count = _string_bytes(result) if isinstance(result, str) else 0
+            if byte_count > limits.max_bytes:
+                raise FrontmatterError("bytes")
+            return result, 1, 0, byte_count, False
         active.add(identity)
-        count, height, aliased = 1, 0, False
+        count, height, byte_count, aliased = 1, 0, 0, False
         result = {} if isinstance(node, dict) else []
 
         def child(item):
-            nonlocal count, height, aliased
-            plain, size, levels, reused = convert(item, depth + 1)
+            nonlocal count, height, byte_count, aliased
+            plain, size, levels, expanded_bytes, reused = convert(item, depth + 1)
+            byte_count += expanded_bytes
+            if byte_count > limits.max_bytes:
+                raise FrontmatterError("bytes")
             count += size
             height = max(height, levels + 1)
             aliased |= reused
@@ -318,8 +341,8 @@ def _to_plain(value, *, limits=None):
             for item in node:
                 result.append(child(item))
         active.remove(identity)
-        memo[identity] = result, count, height
-        return result, count, height, aliased
+        memo[identity] = result, count, height, byte_count
+        return result, count, height, byte_count, aliased
 
     try:
         return convert(value, 0)[0]

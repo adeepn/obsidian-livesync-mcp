@@ -480,6 +480,7 @@ def test_startup_configuration_error_policy_is_documented():
 # The paths below map consumers to their returned fields; defaults and validation
 # expectations come from the published README cells, not a second value table.
 CONFIG_PATHS = {
+    'LIVESYNC_FRONTMATTER_MAX_BYTES': 'frontmatter_max_bytes',
     'LIVESYNC_FRONTMATTER_MAX_NODES': 'frontmatter_max_nodes',
     'LIVESYNC_FRONTMATTER_MAX_DEPTH': 'frontmatter_max_depth',
     'COUCHDB_CONNECT_TIMEOUT_SECONDS': 'couchdb.connect_timeout_seconds',
@@ -952,7 +953,7 @@ def test_f6_transport_policy_documentation():
 def test_f6_frontmatter_contract_documented():
     assert 'ruamel.yaml==0.18.17' in (ROOT / 'requirements.txt').read_text().splitlines()
     guide = (ROOT / 'docs/frontmatter-properties.md').read_text()
-    for name in ('LIVESYNC_FRONTMATTER_MAX_NODES', 'LIVESYNC_FRONTMATTER_MAX_DEPTH'):
+    for name in ('LIVESYNC_FRONTMATTER_MAX_NODES', 'LIVESYNC_FRONTMATTER_MAX_DEPTH', 'LIVESYNC_FRONTMATTER_MAX_BYTES'):
         assert name in guide and name in environment_names()
     assert 'alias expansion' in guide and 'raw note text' in guide
     assert '4 GiB' in guide and '1723285504' in guide

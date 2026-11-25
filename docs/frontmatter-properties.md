@@ -18,9 +18,10 @@ invalid YAML. Edit the raw note text to change those linked keys together.
 | Environment variable | Default | Scope |
 | --- | --- | --- |
 | `LIVESYNC_FRONTMATTER_MAX_NODES` | 20000 | Expanded property-tree nodes, including mapping keys and repeated alias subtrees |
+| `LIVESYNC_FRONTMATTER_MAX_BYTES` | 4194304 | Expanded UTF-8 string/key bytes at every occurrence, before serialization |
 | `LIVESYNC_FRONTMATTER_MAX_DEPTH` | 200 | Property nesting depth, with the root at zero |
 
-Both overrides are positive integers. Restart after changing them. The YAML
+All overrides are positive integers. Restart after changing them. The YAML
 parser also has a real Python interpreter recursion ceiling; raising the
 configured depth cannot eliminate that separate runtime constraint. Such a
 refusal identifies depth and directs the caller to the raw note text.
@@ -31,7 +32,7 @@ subtrees; an active anchor reference identifies a cycle. It declines expansion
 bombs before constructing the round-trip YAML tree. Conversion applies the
 same limits to programmatically supplied containers and detects cycles.
 
-Refusals name `nodes`, `depth`, `alias expansion`, `invalid YAML`, or
+Refusals name `nodes`, `bytes`, `depth`, `alias expansion`, `invalid YAML`, or
 `mapping required` for valid YAML whose root is not a property mapping. They state
 that the note itself is intact and synced, that only properties/tags tools
 declined, and how to fetch/edit raw note text. Finite budget refusals name the
@@ -85,3 +86,30 @@ F7 lowers the default to 20,000 expanded nodes: the confirmation measured a
 20,000-node edit at 4.67 s / 55 MB versus 176 s / 1.72 GB at one million.
 The 10,001-item regression remains admitted; the explicit override is retained.
 Depth 200 remains unchanged; the measured depth-199 case above is small.
+
+
+F7 also counts string/key UTF-8 bytes at every alias occurrence, including
+memoised sequences and mappings, before JSON serialization. Event preflight
+conservatively counts scalar spellings too; resolved conversion counts actual
+strings and keys (including inherited merge keys). Node limits separately bound
+container and punctuation overhead. This is a payload budget, not an exact JSON
+wire-length limit or total process memory guarantee; escaping can enlarge JSON.
+The 4 MiB default is sixteen times smaller than the confirmation's 67,173,302-byte
+JSON amplification (62,403-byte source, 4,099 nodes, 266 MB peak RSS). It retains
+large property values while refusing that expansion before round-trip construction.
+Raise `LIVESYNC_FRONTMATTER_MAX_BYTES` and restart with sufficient memory, or
+fetch/edit raw note text. The raw-note sync path does not apply these budgets.
+
+
+F7 fresh-process measurements on 2026-11-25 (shared development host):
+
+| Case | Outcome | Seconds | Peak process RSS bytes |
+| --- | --- | --- | --- |
+| Exactly 4 MiB expanded UTF-8 strings/keys; 2,097,151-byte anchored scalar reused twice | Accepted | 2.614 | 45629440 |
+| 20,000 expanded-node existing-key edit | Accepted | 6.815 | 54280192 |
+| Reviewer's 62,403-byte scalar-alias document | `bytes`, before construction | 0.031 | 20774912 |
+
+These probe the scalar-byte and node boundaries separately, not every possible
+joint worst case. JSON escaping, YAML source size and concurrent requests add
+memory beyond the payload budget. The historical F6 4 GiB provisioning advice
+above describes the superseded million-node envelope, not the new default.

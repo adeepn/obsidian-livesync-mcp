@@ -304,3 +304,56 @@ def test_delete_preserves_indented_yaml_comment_tokens(value):
     prefix = 'anchor: &a [one,two]\n'
     suffix = '  # copy annotation\n\n  # another annotation\ncopy: *a\n'
     assert delete_properties(note(prefix + 'edit: ' + value + suffix), ['edit']) == note(prefix + suffix)
+
+
+@pytest.mark.parametrize('raw', [
+    'base: &big ' + 'x' * 32768 + '\n' + ''.join(f'copy{i}: *big\n' for i in range(2048)),
+    'base: &big [' + ','.join(['x' * 1024] * 32) + ']\n' + ''.join(f'copy{i}: *big\n' for i in range(128)),
+    'base: &big {key: ' + 'x' * 32768 + '}\n' + ''.join(f'copy{i}: *big\n' for i in range(128)),
+])
+def test_expanded_scalar_bytes_refuse_before_construction(raw, monkeypatch):
+    import frontmatter
+    def construct(*args, **kwargs):
+        pytest.fail('expanded byte refusal must precede YAML construction')
+    monkeypatch.setattr(frontmatter.RoundTripConstructor, 'construct_document', construct)
+    with pytest.raises(FrontmatterError) as error:
+        get_properties(note(raw))
+    assert error.value.reason == 'bytes'
+    assert 'LIVESYNC_FRONTMATTER_MAX_BYTES' in str(error.value)
+    assert 'raw note text' in str(error.value)
+
+
+@pytest.mark.parametrize('shape', ['scalar', 'sequence', 'mapping'])
+def test_expanded_utf8_bytes_exact_boundary(shape):
+    from frontmatter import FrontmatterLimits, frontmatter_limits, _to_plain
+    value = 'é' * 10
+    node = value if shape == 'scalar' else [value] if shape == 'sequence' else {'k': value}
+    tree = {'a': node, 'b': node}
+    size = 42 if shape != 'mapping' else 44  # UTF-8 strings and keys at every occurrence
+    token = frontmatter_limits.set(FrontmatterLimits(max_bytes=size))
+    try:
+        assert _to_plain(tree) == tree
+    finally:
+        frontmatter_limits.reset(token)
+    token = frontmatter_limits.set(FrontmatterLimits(max_bytes=size - 1))
+    try:
+        with pytest.raises(FrontmatterError, match='frontmatter bytes'):
+            _to_plain(tree)
+    finally:
+        frontmatter_limits.reset(token)
+
+
+@pytest.mark.parametrize('raw', ['a: &x ééé\nb: *x\n', 'a: &x [ééé]\nb: *x\n', 'a: &x {k: ééé}\nb: *x\n'])
+def test_yaml_alias_bytes_at_and_over_boundary(raw):
+    from frontmatter import FrontmatterLimits, frontmatter_limits
+    size = 16 if '{k:' in raw else 14
+    for budget in (size, size - 1):
+        token = frontmatter_limits.set(FrontmatterLimits(max_bytes=budget))
+        try:
+            if budget == size:
+                assert get_properties(note(raw))['a'] == get_properties(note(raw))['b']
+            else:
+                with pytest.raises(FrontmatterError, match='frontmatter bytes'):
+                    get_properties(note(raw))
+        finally:
+            frontmatter_limits.reset(token)

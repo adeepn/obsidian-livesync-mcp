@@ -62,6 +62,7 @@ def _configure_device_policy(result, cfg):
     result.disable_checking_config_mismatch = getattr(cfg, 'disable_checking_config_mismatch', False)
     result.auto_accept_compatible_tweak = getattr(cfg, 'auto_accept_compatible_tweak', True)
     result.frontmatter_max_nodes = getattr(cfg, 'frontmatter_max_nodes', 20_000)
+    result.frontmatter_max_bytes = getattr(cfg, 'frontmatter_max_bytes', 4 * 1024**2)
     result.frontmatter_max_depth = getattr(cfg, 'frontmatter_max_depth', 200)
     result.selection_timeout_seconds = getattr(cfg, 'selection_timeout_seconds', 5.0)
     result.selection_only = getattr(cfg, 'selection_only', '')
@@ -338,6 +339,7 @@ def _tool_errors(
             token = publication_notices.set(notices)
             fm_token = frontmatter_limits.set(FrontmatterLimits(
                 max_nodes=getattr(_backend(), 'frontmatter_max_nodes', 20_000),
+                max_bytes=getattr(_backend(), 'frontmatter_max_bytes', 4 * 1024**2),
                 max_depth=getattr(_backend(), 'frontmatter_max_depth', 200)))
             try:
                 result = await handler(*args, **kwargs)

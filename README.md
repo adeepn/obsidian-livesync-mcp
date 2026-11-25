@@ -86,6 +86,7 @@ are read only for the selected backend. Empty defaults below mean an empty strin
 | `S3_READ_TIMEOUT_SECONDS` | `30` | Optional | Positive finite seconds for S3 response reads |
 | `S3_MAX_ATTEMPTS` | `1` | Optional | Positive integer SDK attempts for reads and conditional writes; unconditional PUT always one |
 | `LIVESYNC_FRONTMATTER_MAX_NODES` | `20000` | Optional | Positive integer expanded YAML nodes for properties/tags only |
+| `LIVESYNC_FRONTMATTER_MAX_BYTES` | `4194304` | Optional | Positive integer expanded UTF-8 string/key bytes for properties/tags only |
 | `LIVESYNC_FRONTMATTER_MAX_DEPTH` | `200` | Optional | Positive integer property nesting depth; parser runtime ceiling also applies |
 | `LIVESYNC_SELECTION_TIMEOUT_SECONDS` | `5` | Optional | Positive finite seconds for Node capability checks and selection requests |
 | `COUCHDB_URL` | `http://localhost:5984` | Optional | CouchDB server base URL |
@@ -208,7 +209,7 @@ It does not establish every setting combination on every server.
 
 Properties/tags resolve YAML anchors and aliases, including reused containers.
 Untouched top-level key text survives edits byte-for-byte. A streaming preflight
-bounds expanded nodes (default 20000) and nesting depth (200), both adjustable
+bounds expanded nodes (default 20000) and expanded UTF-8 string/key bytes (4 MiB) and nesting depth (200), all adjustable
 with the environment table. Cycles have no finite JSON representation. Typed
 refusals leave the note intact and synced and direct callers to fetch/edit raw
 note text. These are property-tool budgets, not file sync limits;

@@ -11,7 +11,7 @@ from tests.test_config import COUCHDB_ENV
 from tests.test_reserved_compression_prefix import marker_vault
 
 
-@pytest.mark.parametrize('name', ('LIVESYNC_FRONTMATTER_MAX_NODES', 'LIVESYNC_FRONTMATTER_MAX_DEPTH'))
+@pytest.mark.parametrize('name', ('LIVESYNC_FRONTMATTER_MAX_NODES', 'LIVESYNC_FRONTMATTER_MAX_DEPTH', 'LIVESYNC_FRONTMATTER_MAX_BYTES'))
 @pytest.mark.parametrize('value', ('0', '-1', '1.5', 'nan', 'inf', 'private-marker', True, None))
 def test_frontmatter_budget_validation(name, value):
     with pytest.raises(ConfigError) as error:
@@ -95,3 +95,29 @@ async def test_create_budget_refusal_does_not_claim_note_synced(tmp_path, kind):
             assert await backend.read_note('new.md') is None
         finally:
             server._active_backend.reset(token)
+
+
+@pytest.mark.parametrize('kind', ('couchdb', 'journal'))
+async def test_scalar_alias_bytes_refused_by_tools(tmp_path, kind):
+    # C:EntryManagerImpls.ts:253-280 syncs bytes; this is only a JSON tool guard.
+    async with marker_vault(tmp_path, kind, False) as (backend, _, mutations):
+        text = '---\nbase: &big ' + 'x' * 32768 + '\n' + ''.join(f'copy{i}: *big\n' for i in range(2048)) + '---\nbody\n'
+        await backend.write_note('aliases.md', text, create=True)
+        revision = (await backend.read_note('aliases.md'))['rev']
+        token = server._active_backend.set(backend)
+        try:
+            for action in ('get', 'set'):
+                result = await server.obsidian_manage_properties('aliases.md', action, '{"new":1}')
+                assert 'frontmatter bytes' in result
+                assert 'LIVESYNC_FRONTMATTER_MAX_BYTES' in result
+                assert 'raw note text' in result
+            assert (await backend.read_note('aliases.md'))['rev'] == revision
+        finally:
+            server._active_backend.reset(token)
+
+
+def test_frontmatter_byte_configuration_wiring():
+    cfg = load_config(COUCHDB_ENV)
+    assert cfg.frontmatter_max_bytes == 4 * 1024**2
+    cfg = load_config({**COUCHDB_ENV, 'LIVESYNC_FRONTMATTER_MAX_BYTES': '12345'})
+    assert server.get_backend(cfg).frontmatter_max_bytes == 12345

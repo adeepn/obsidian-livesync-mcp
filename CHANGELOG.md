@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+- Bound expanded frontmatter string and key bytes before property serialization; expose LIVESYNC_FRONTMATTER_MAX_BYTES with a 4 MiB default and raw-note recovery.
+
 - Lower the default frontmatter projection budget to 20,000 expanded nodes.
 
 - Confirm ambiguous conditional journal retries at the original key before reporting success; retain recovery state when read-back cannot prove publication.
