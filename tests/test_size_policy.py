@@ -13,6 +13,7 @@ from storage_journal import JournalBackend
     (.000001, 2, True)])
 async def test_device_size_boundaries(backend, method, path, maximum, size, skipped):
     from storage_base import WriteSkipped
+    backend.sync_max_size_mb_override = maximum
     backend.sync_max_size_mb = maximum
     operation = getattr(backend, method)
     if skipped:
@@ -29,6 +30,7 @@ async def test_device_size_boundaries(backend, method, path, maximum, size, skip
 async def test_skip_keeps_revision_and_publishes_nothing(backend, method, monkeypatch):
     from storage_base import WriteSkipped
     meta = await backend.write_note('a.pdf', b'old', create=True)
+    backend.sync_max_size_mb_override = 4 / 1048576
     backend.sync_max_size_mb = 4 / 1048576
     def forbidden(*args, **kwargs):
         pytest.fail('oversized input reached publication')
@@ -46,6 +48,7 @@ async def test_oversized_rename_refuses_without_publication(backend, monkeypatch
     if existing_target:
         await backend.write_note('moved.pdf', b'target', create=True)
     target = await backend.read_note('moved.pdf')
+    backend.sync_max_size_mb_override = 1 / 1048576
     backend.sync_max_size_mb = 1 / 1048576
     def forbidden(*args, **kwargs):
         pytest.fail('refused rename reached publication')
@@ -59,6 +62,7 @@ async def test_oversized_rename_refuses_without_publication(backend, monkeypatch
 
 
 async def test_mcp_skip_is_structured_and_not_success(backend, monkeypatch):
+    backend.sync_max_size_mb_override = 1 / 1048576
     backend.sync_max_size_mb = 1 / 1048576
     monkeypatch.setattr(server, 'backend', backend)
     response = json.loads(await server.obsidian_upload_attachment('scan.pdf', 'YWJj'))
@@ -82,6 +86,7 @@ async def test_large_mult_piece_replay_under_different_receiver_limit(tmp_path):
         await writer.write_attachment('large.pdf', data, create=True)
         assert len(writer._store.winner('large.pdf')['children']) > 1
         await reader.startup_check()
+        reader.sync_max_size_mb_override = .5
         reader.sync_max_size_mb = .5
         await reader.refresh(force=True)
         assert (await reader.read_note('large.pdf'))['data'] == data
@@ -91,6 +96,7 @@ async def test_large_mult_piece_replay_under_different_receiver_limit(tmp_path):
 
 
 async def test_40_mib_complete_on_both_backends(backend):
+    backend.sync_max_size_mb_override = 50
     backend.sync_max_size_mb = 50
     data = b'\x00\xff\x80\x7f' * (10 * 1024 * 1024)
     meta = await backend.write_attachment('big.pdf', data, create=True)
@@ -124,6 +130,7 @@ async def test_explicit_size_override_survives_startup(backend):
 
 async def test_oversized_malformed_upload_skips_before_decoding(backend, monkeypatch):
     import base64
+    backend.sync_max_size_mb_override = 1 / 1048576
     backend.sync_max_size_mb = 1 / 1048576
     monkeypatch.setattr(server, 'backend', backend)
     response = json.loads(await server.obsidian_upload_attachment('malformed.md', base64.b64encode(b'\xff\xff').decode()))
@@ -136,6 +143,7 @@ async def test_oversized_malformed_upload_skips_before_decoding(backend, monkeyp
 async def test_lossy_ingress_checks_raw_and_converted_blob_size(backend, monkeypatch, limit, skipped):
     await backend.write_note('malformed.md', 'x', create=True)
     before = await backend.read_note('malformed.md')
+    backend.sync_max_size_mb_override = limit / 1048576
     backend.sync_max_size_mb = limit / 1048576
     monkeypatch.setattr(server, 'backend', backend)
     if skipped:
@@ -155,6 +163,7 @@ async def test_lossy_ingress_checks_raw_and_converted_blob_size(backend, monkeyp
 
 async def test_mcp_oversized_rename_reports_refusal(backend, monkeypatch):
     await backend.write_note('rename-source.pdf', b'existing', create=True)
+    backend.sync_max_size_mb_override = 1 / 1048576
     backend.sync_max_size_mb = 1 / 1048576
     monkeypatch.setattr(server, 'backend', backend)
     response = await server.obsidian_move_note('rename-source.pdf', 'rename-target.pdf')
@@ -169,6 +178,7 @@ async def test_oversized_rename_unselected_source_is_preserved(backend):
     from storage_base import RenameRefused
     meta = await backend.write_note('excluded-source.pdf', b'existing', create=True)
     backend.selection_ignore = 'excluded-source'
+    backend.sync_max_size_mb_override = 1 / 1048576
     backend.sync_max_size_mb = 1 / 1048576
     with pytest.raises(RenameRefused):
         await backend.rename_note('excluded-source.pdf', 'outside-target.pdf')
@@ -188,6 +198,7 @@ def test_raising_positive_limit_does_not_disable_selection():
 
 async def test_note_create_and_update_tools_report_skip(backend, monkeypatch):
     meta = await backend.write_note('tool-existing.md', 'old', create=True)
+    backend.sync_max_size_mb_override = 4 / 1048576
     backend.sync_max_size_mb = 4 / 1048576
     monkeypatch.setattr(server, 'backend', backend)
     for result in [await server.obsidian_create_note('tool-new.md', 'larger'),
@@ -211,6 +222,7 @@ async def test_refused_peer_mutation_preserves_every_readable_note(backend, monk
         'edges': [{'id': 'edge', 'fromNode': 'a', 'toNode': 'b'}],
     }), create=True)
     before = {note['path']: await backend.read_note(note['path']) for note in await backend.list_notes()}
+    backend.sync_max_size_mb_override = 1 / 1048576
     backend.sync_max_size_mb = 1 / 1048576
     monkeypatch.setattr(server, 'backend', backend)
     if operation == 'filtered_move':
@@ -253,6 +265,7 @@ async def test_refused_oversized_move_remains_readable_on_fresh_journal_peer(tmp
         await writer.startup_check()
         original = b'\x00\xffonly synced copy\x80'
         meta = await writer.write_attachment('only-copy.pdf', original, create=True)
+        writer.sync_max_size_mb_override = 1 / 1048576
         writer.sync_max_size_mb = 1 / 1048576
         monkeypatch.setattr(server, 'backend', writer)
         result = await server.obsidian_move_note('only-copy.pdf', 'moved-copy.pdf')
@@ -271,6 +284,7 @@ async def test_refused_oversized_move_remains_readable_on_fresh_journal_peer(tmp
 
 async def test_explicit_delete_of_oversized_note_remains_allowed(backend):
     await backend.write_attachment('delete-oversized.pdf', b'existing', create=True)
+    backend.sync_max_size_mb_override = 1 / 1048576
     backend.sync_max_size_mb = 1 / 1048576
     assert await backend.delete_note('delete-oversized.pdf')
     assert await backend.read_note('delete-oversized.pdf') is None

@@ -58,6 +58,7 @@ async def test_attachment_roundtrip_and_write_semantics(backend):
 
 
 async def test_attachment_forbidden_before_text_or_size(backend):
+    backend.sync_max_size_mb_override = 1
     backend.sync_max_size_mb = 1
     with pytest.raises(ForbiddenPathError):
         await backend.write_attachment(".hidden.md", b"x" * (DEVICE_LIMIT_BYTES + 1), create=True)
@@ -65,6 +66,7 @@ async def test_attachment_forbidden_before_text_or_size(backend):
 
 async def test_attachment_obeys_device_limit(backend):
     from storage_base import WriteSkipped
+    backend.sync_max_size_mb_override = 1
     backend.sync_max_size_mb = 1
     with pytest.raises(WriteSkipped, match=r"syncMaxSizeInMB.*1"):
         await backend.write_attachment("scan.pdf", b"x" * (DEVICE_LIMIT_BYTES + 1), create=True)

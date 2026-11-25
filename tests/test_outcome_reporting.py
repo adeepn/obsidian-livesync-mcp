@@ -584,6 +584,7 @@ async def test_structured_outcomes_name_affected_paths(backend, monkeypatch, out
                 return response
             monkeypatch.setattr(backend._client, 'request', lost)
     else:
+        backend.sync_max_size_mb_override = 1 / 1048576
         backend.sync_max_size_mb = 1 / 1048576
     calls = {
         'create': lambda: server.obsidian_create_note('target.md', 'larger'),

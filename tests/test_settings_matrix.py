@@ -186,6 +186,8 @@ async def size_and_outcomes(backend, doc, reader, storage, monkeypatch, writes, 
         assert (await reader.read_note('boundary.png'))['data'] == data
 
     before = await readable_snapshot(backend)
+    previous_override = backend.sync_max_size_mb_override
+    backend.sync_max_size_mb_override = 1 / 1048576
     backend.sync_max_size_mb = 1 / 1048576
     writes_before = mutations()
     try:
@@ -203,6 +205,7 @@ async def size_and_outcomes(backend, doc, reader, storage, monkeypatch, writes, 
         assert await backend.read_note('refused.md') is None
         assert mutations() == writes_before
     finally:
+        backend.sync_max_size_mb_override = previous_override
         backend.sync_max_size_mb = limit
 
     # Lose acknowledgement AFTER acceptance of a new peer write. Existing notes

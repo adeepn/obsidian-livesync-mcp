@@ -19,6 +19,7 @@ async def test_write_phase_and_oversize_preserve_real_backend(tmp_path, kind):
         assert good and result['moved'].endswith('moved.md')
         source = 'parity-live/exact.bin'
         await backend.write_attachment(source, b'x' * 500, create=True)
+        backend.sync_max_size_mb_override = 0.0001
         backend.sync_max_size_mb = 0.0001
         good, result = await live.oversize(backend, source, expected_limit=0.0001)
         assert good and result == {'limit_mib': 0.0001, 'skipped': True, 'rename_refused': True}
