@@ -996,3 +996,7 @@ Fixture SHA256: `eb72adde821251b3b4be28ef8a427570a04165fdd70e96dcac65807b154fd70
 ### 2026-11-25 — F7 conditional retry confirmation
 
 [DECISION] Supersede the F6 duplicate-candidate behavior: a retried 412 requires exact read-back at that key. Identical confirms; absent, different or unreadable retains outcome-unknown recovery intent. Unconditional PUT remains one attempt.
+
+### 2026-11-25 — F7 node budget
+
+[DECISION] Default to 20,000 expanded nodes while retaining overrides and depth 200. Confirmation measurements: 4.67 s / 55 MB at 20,000 versus 176 s / 1.72 GB at one million. Historical F6 measurements remain above.

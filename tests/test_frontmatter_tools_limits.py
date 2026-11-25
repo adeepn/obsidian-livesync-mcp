@@ -22,7 +22,7 @@ def test_frontmatter_budget_validation(name, value):
 
 def test_frontmatter_budget_config_defaults_and_overrides():
     cfg = load_config(COUCHDB_ENV)
-    assert (cfg.frontmatter_max_nodes, cfg.frontmatter_max_depth) == (1_000_000, 200)
+    assert (cfg.frontmatter_max_nodes, cfg.frontmatter_max_depth) == (20_000, 200)
     cfg = load_config({**COUCHDB_ENV, 'LIVESYNC_FRONTMATTER_MAX_NODES': '2000000',
                        'LIVESYNC_FRONTMATTER_MAX_DEPTH': '300'})
     assert (cfg.frontmatter_max_nodes, cfg.frontmatter_max_depth) == (2_000_000, 300)

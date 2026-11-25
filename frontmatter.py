@@ -41,7 +41,7 @@ _SENTINEL_KEY = "__frontmatter_placeholder__"
 class FrontmatterLimits:
     """Property projection budgets; the stored note is never limited here."""
 
-    max_nodes: int = 1_000_000
+    max_nodes: int = 20_000
     max_depth: int = 200
 
 

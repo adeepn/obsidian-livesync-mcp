@@ -17,7 +17,7 @@ invalid YAML. Edit the raw note text to change those linked keys together.
 
 | Environment variable | Default | Scope |
 | --- | --- | --- |
-| `LIVESYNC_FRONTMATTER_MAX_NODES` | 1000000 | Expanded property-tree nodes, including mapping keys and repeated alias subtrees |
+| `LIVESYNC_FRONTMATTER_MAX_NODES` | 20000 | Expanded property-tree nodes, including mapping keys and repeated alias subtrees |
 | `LIVESYNC_FRONTMATTER_MAX_DEPTH` | 200 | Property nesting depth, with the root at zero |
 
 Both overrides are positive integers. Restart after changing them. The YAML
@@ -57,7 +57,7 @@ location metadata that property tools never read.
 
 ## Measured resource envelope (2026-11-25)
 
-Fresh Python 3.13 subprocesses on the development Mac, default budgets:
+Fresh Python 3.13 subprocesses on the development Mac, historical F6 budgets (superseded below):
 
 | Operation/input | Outcome | Wall time | Peak process RSS |
 | --- | --- | --- | --- |
@@ -69,7 +69,7 @@ Fresh Python 3.13 subprocesses on the development Mac, default budgets:
 | Add tags to billion-laughs alias graph | `alias expansion`, before round-trip construction | 0.0017 s | 18595840 bytes |
 
 These are process peaks and measured cases, not portable memory guarantees.
-The million-node default bounds materialisation but can require approximately
+The former million-node default bounds materialisation but can require approximately
 1 GiB for one projection. The measured near-limit edit peaked at 1.61 GiB;
 provision at least 4 GiB headroom per concurrent near-limit edit, plus the
 server baseline, or lower the node budget on a smaller host. Fetch/edit raw text when
@@ -80,3 +80,8 @@ source-sized memory for the preflight and never allocates the exponential tree.
 The compact round-trip hooks are verified against ruamel.yaml 0.18.17. Both
 requirements.txt and requirements.lock pin that release; validate those hooks
 and resource measurements before upgrading it.
+
+F7 lowers the default to 20,000 expanded nodes: the confirmation measured a
+20,000-node edit at 4.67 s / 55 MB versus 176 s / 1.72 GB at one million.
+The 10,001-item regression remains admitted; the explicit override is retained.
+Depth 200 remains unchanged; the measured depth-199 case above is small.
