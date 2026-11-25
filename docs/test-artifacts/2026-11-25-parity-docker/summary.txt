@@ -1,0 +1,76 @@
+T8a automated acceptance — 2026-11-25
+Status: INCOMPLETE; existing real-server acceptance gate failed.
+Code under test: 8277293
+Credentials: <redacted>; no credential values recorded.
+
+Server health (one call per server):
+SeaweedFS S3: GET / -> HTTP 403 (controller-defined healthy response).
+CouchDB: GET / -> HTTP 200; reported version 3.5.3.
+SeaweedFS version: NOT DONE; not exposed by the health response.
+Image digests: see below (controller-provided PARITY_IMAGE_DIGESTS).
+No containers were started, stopped or reconfigured.
+Only existing integration-test scratch prefixes/databases were used.
+
+Existing gated acceptance: 4 passed, 2 failed; pytest duration 1.41 s.
+PASS S3 roundtrip (1)
+FAIL S3 wipe/epoch (1)
+PASS S3 interrupted replay (1)
+PASS S3 sibling writers (1)
+PASS storage spy offline contract (1)
+FAIL CouchDB lifecycle final leaf audit (1)
+
+FINDING 1: tests/test_integration_minio.py:196
+Assertion: info["epoch"] == "3:salt-a"
+Actual: "sha256:5f75eb2417b770ae"
+Source: storage_journal.py:510 fingerprints the public epoch.
+Existing offline expectation: tests/test_storage_journal.py:241,273,533.
+The integration assertion predates the typed diagnostic representation.
+No assertion was relaxed; no production change was made.
+
+FINDING 2: tests/test_integration_couchdb.py:264
+Assertion: datas == {body_v1, body_v2}
+Actual leaf set:
+  "integration smoke line one\n"
+  "updated second revision\n"
+Expected leaf set:
+  "integration smoke line one\n"
+  "integration smoke line one\nupdated second revision\n"
+All earlier lifecycle assertions, including updated note read-back, passed.
+Source: storage_couchdb.py:1138,1172 publishes the splitter's pieces.
+Pinned commonlib src/string_and_binary/chunks.ts:218-231 splits plain text
+by newline in V1. This inspection is not a new executed oracle or proof
+that the entire stored partition matches upstream.
+The failure alone does not establish a production data-loss defect.
+No assertion was relaxed; no production change was made.
+
+Requested new T8a scenarios: NOT DONE after failed existing acceptance gate.
+1 S3 pairwise/full settings matrix: NOT DONE; subset size 0 executed.
+2 Large binary/text MCP lifecycle and size policy: NOT DONE.
+3 Expanded recovery/identity scenarios: NOT DONE (existing replay test passed).
+4 New concurrency coverage: NOT DONE (existing sibling test passed).
+5 S3 surrogate witness and notice: NOT DONE.
+6 S3 signed-request custom headers: NOT DONE.
+7 CouchDB settings matrix and expanded B1/B2: NOT DONE.
+8 Compression: NOT DONE.
+9 CouchDB surrogate witness: NOT DONE.
+10 JWT algorithms and wrong-key refusal: NOT DONE.
+11 CouchDB request-class custom headers: NOT DONE.
+Large files generated: none; large-file SHA256: NOT DONE.
+New fixtures/generators/tests: none; oracle changes: none.
+Mutation check: NOT DONE; no new tests were written.
+Documentation expansion: NOT DONE; no implementation was added.
+Baseline offline (controller supplied): 25051 passed, 8 skipped, 3 subtests.
+Final offline run: retained separately in ignored t8a working evidence.
+
+Reproduction (from worktree root; credentials supplied only by shell):
+export MINIO_TEST_ENDPOINT=<endpoint> MINIO_TEST_KEY=<redacted>
+export MINIO_TEST_SECRET=<redacted> MINIO_TEST_BUCKET=<scratch-bucket>
+export COUCHDB_TEST_URL=<endpoint> COUCHDB_TEST_USER=<redacted>
+export COUCHDB_TEST_PASSWORD=<redacted>
+./venv/bin/python -m pytest tests/test_integration_minio.py tests/test_integration_couchdb.py -q --tb=short
+# Offline: unset all MINIO_TEST_* and COUCHDB_TEST_* variables first.
+./venv/bin/python -m pytest tests/ -q
+
+Controller-provided image digests:
+chrislusf/seaweedfs@sha256:4b42c212543a0acd4c0e675215ecdcaf62a186ef98def76c7e12701871222d15
+couchdb@sha256:907eab5b7e55ab7cfd241d39b90b2a335ea40bef82acee5a37388c08bf201dda
