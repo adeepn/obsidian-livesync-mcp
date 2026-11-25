@@ -100,3 +100,16 @@ def test_inflater_never_uses_unbounded_output(monkeypatch):
     with pytest.raises(StorageError):
         codec.decompress_data(vector['wire'], max_inflated_bytes=4096)
     assert sum(lengths) <= 4097  # only a discarded one-byte exhaustion probe
+
+
+@pytest.mark.parametrize('limit', [None, True, 'PRIVATE_LIMIT', [], 1.5])
+def test_inflate_refusal_formats_missing_or_mistyped_fields(limit):
+    from couchdb_compression import CouchDBInflateBudgetExceeded
+    error = CouchDBInflateBudgetExceeded.__new__(CouchDBInflateBudgetExceeded)
+    Exception.__init__(error, 'PRIVATE_CAUSE')
+    if limit is not None:
+        error.limit = limit
+    text = error.format()
+    assert '<invalid>' in text
+    assert 'PRIVATE' not in text
+    assert 'LIVESYNC_COUCHDB_MAX_INFLATED_BYTES' in text

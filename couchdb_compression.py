@@ -46,7 +46,7 @@ class CouchDBInflateBudgetExceeded(StorageError):
 
     def format(self):
         from diagnostic_hygiene import numeric_field
-        return (f'CouchDB inflated data exceeds budget {numeric_field(self.limit)} bytes; '
+        return (f'CouchDB inflated data exceeds budget {numeric_field(getattr(self, "limit", None))} bytes; '
                 'raise LIVESYNC_COUCHDB_MAX_INFLATED_BYTES and restart, or restore '
                 'the document from a healthy device if corrupt')
 
