@@ -764,3 +764,7 @@ its own deadline expires first. Neither path echoes the pattern or body.
 ### 2026-11-25 F1-4 reserved-prefix audit
 
 [DECISION] Extend the same typed notice mechanism to the documented CouchDB reserved-prefix interpretation (compress.ts:49-71; RemoteService.ts:457). A valid 40-byte oracle piece reads as 1300 decoded bytes under either write setting; disclose this without changing IDs, wire data or metadata size. Refuse undecodable new prefixes before any mutation, with binary-attachment recovery; compare logical reader values for valid repeat publication. The unchanged compression fixture supplies all decoded expectations.
+
+### 2026-11-25 F1 final gate verification
+
+[DECISION] Both independent code/architect reviews converged without new findings across F1-1 through F1-9 and the reserved-prefix ingestion follow-up. Two concurrent exact full suites on dc7e21b each passed 22,899 tests, with 8 skipped and 3 subtests (348.53 s / 349.41 s). The owner-supplied F1 baseline was 20,611 passed, 8 skipped, 3 subtests. All 27 final process-local own mutation variants were caught; effective reviewer mutations were caught with adapted targets where necessary. The historical integer-modulo target was removed, so its original probe is inapplicable rather than claimed killed. Working logs and the detailed report remain ignored in the F1 task directory; no live production/device verification was performed. A final full suite follows this status commit.
