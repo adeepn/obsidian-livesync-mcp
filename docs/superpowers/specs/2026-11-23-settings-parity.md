@@ -788,3 +788,7 @@ its own deadline expires first. Neither path echoes the pattern or body.
 ### 2026-11-25 F2-2 — verbatim publication result
 
 [DECISION] Assert complete original string prefixes before notice suffixes, including whitespace, blank lines, multiline JSON and non-JSON text. The process-local strip-result mutant is detected; non-string identity is retained.
+
+### 2026-11-25 F2-3 — exact count typing
+
+[DECISION] Exercise boolean, float, string, null, nested and nonpositive compatibility-wrapper counts; retain only exact positive integers. The boolean-as-int process-local mutant is detected.

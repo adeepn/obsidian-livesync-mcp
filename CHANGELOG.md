@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Settings parity
 
+- Guard exact-positive-integer replacement counts against booleans and other JSON types in the compatibility notice wrapper.
+
 - Guard verbatim publication-result preservation for whitespace, blank lines, multiline JSON and non-JSON text.
 
 - Cover repeated V2 array-minimum concatenation with native splitter pieces and IDs through the fourth adjustment.

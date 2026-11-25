@@ -125,3 +125,15 @@ def test_notice_suffix_preserves_non_string_results(original):
     assert notice_text(original, [{'code': 'journal_surrogates_replaced',
                                    'count': 1}]) is original
     assert server._publication_text(original, [1]) is original
+
+
+@pytest.mark.parametrize('invalid', [True, False, 1.0, 2.5, '1', None,
+                                      [1], {'count': 1}, [[True]], 0, -1])
+def test_compatibility_publication_count_requires_exact_positive_int(invalid):
+    # Counts are peer-owned typed diagnostic fields, never JSON coercions.
+    original = ' \noriginal result\n '
+    assert server._publication_text(original, [invalid]) == original
+    result = server._publication_text(original, [invalid, 2, 3])
+    suffix = result[len(original):]
+    assert json.loads(suffix.splitlines()[1]) == {
+        'notices': [{'code': 'journal_surrogates_replaced', 'count': 5}]}

@@ -89,3 +89,5 @@ Splitter loop, JSON primitive-conversion, binary data-loss and within-publicatio
 New undecodable reserved-prefix pieces refuse before any chunk or metadata write, with binary-attachment recovery guidance. Valid marked pieces retain their original IDs/wire values and disclose interpretation on each successful publication; repeated publication compares the stored logical reader value without overwriting shared leaves. Journal pieces do not use CouchDB decoding.
 
 Notice suffixes preserve the complete original result verbatim, including leading/trailing whitespace, blank lines, multi-line JSON and non-JSON text. Notices are appended outside that result; non-string results retain their identity.
+
+The compatibility notice wrapper accepts replacement counts only as exact positive integers. Booleans, floats, strings, null, nested values and nonpositive integers contribute no count; valid counts are summed independently.
