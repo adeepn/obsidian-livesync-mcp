@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Owner-assisted parity acceptance. Defaults target disposable localhost only.
 
-No dotenv/environment credential loading. Only write-large, oversize and
+No dotenv/environment credential loading. Remote mutations require explicit
+write/delete flags and exact target confirmation. Only write-large, oversize and
 write-phase publish; prepare-* create exclusive files in the chosen vault.
 Never rerun a partially applied write phase without inspecting its results.
 Raw milestone/connection values and exception text are never printed/saved.
@@ -28,9 +29,9 @@ from config import S3Config
 from diagnostic_hygiene import escape_path
 from livesync_format import (TWEAK_COMPATIBILITY_RULES, _TWEAK_TEMPLATE_KEYS,
                              _RECOGNIZED_TWEAK_KEYS, ForbiddenPathError, extract_inline_chunks, prepare_file_content,
-                             validate_vault_path)
+                             validate_vault_path, split_ignore_names)
 from object_storage import Boto3ObjectStorage
-from storage_base import RenameRefused, WriteSkipped
+from storage_base import RenameRefused, WriteSkipped, WriterUnsupported, check_file_size
 from storage_couchdb import CouchDBBackend
 from storage_journal import JournalBackend, MILESTONE_KEY
 
@@ -75,9 +76,10 @@ def sanitized_milestone(milestone):
         label = 'PREFERRED' if device == 'PREFERRED' else f'device-{index + 1}'
         public = {}
         for key, value in settings.items():
-            safe_key = key if isinstance(key, str) and re.fullmatch(r'[A-Za-z][A-Za-z0-9_]{0,63}', key) else '<unexpected key>'
             if key not in KNOWN_KEYS:
-                unknown.add(safe_key)
+                unknown.add(key)
+                continue
+            safe_key = key
             visible = '<withheld>'
             if isinstance(key, str) and not SECRET_KEY.search(key):
                 if key in SAFE_ENUMS and type(value) is str and value in SAFE_ENUMS[key]:
@@ -89,7 +91,10 @@ def sanitized_milestone(milestone):
         result[label] = {'keys': sorted(public), 'values': public}
     if not result:
         raise ValueError('no readable tweak snapshots')
-    return {'tweak_values': result, 'unknown_keys': sorted(unknown)}
+    names = json.dumps(sorted(unknown), ensure_ascii=True, separators=(',', ':')).encode()
+    return {'tweak_values': result, 'unknown_keys': {
+        'marker': '<unknown keys withheld>', 'count': len(unknown),
+        'sha256': hashlib.sha256(names).hexdigest()}}
 
 
 async def raw_doc(backend, path):
@@ -137,6 +142,9 @@ async def verify(backend, vault, paths, *, partitions=True):
             piece_match = expected == children
         matches = byte_match and metadata_match and type_match and (piece_match is not False)
         records.append({'path': path, 'byte_exact': bool(byte_match),
+                        'remote_present': note is not None,
+                        'remote_size': len(note_bytes(note)) if note is not None else None,
+                        'remote_sha256': hashlib.sha256(note_bytes(note)).hexdigest() if note is not None else None,
                         'size': len(raw) if raw is not None else None,
                         'ingested_blob_size': blob_size, 'metadata_size': metadata_size,
                         'metadata_size_matches': metadata_match, 'type': kind, 'type_matches': type_match,
@@ -144,6 +152,66 @@ async def verify(backend, vault, paths, *, partitions=True):
                         'sha256': hashlib.sha256(raw).hexdigest() if raw is not None else None})
         good = check(matches, f'bytes + Blob metadata + piece IDs {escape_path(path)} pieces={len(children)}') and good
     return good, records
+
+
+async def reconnect_files(backend, vault):
+    """Use writer admission, not read visibility, for expected device files.
+
+    C:serviceFeatures/targetFilter.ts:132-146 and
+    C:services/base/VaultService.ts:73-81: selection and strict size predicate.
+    Production startup resolves vault settings and ignore-file lookup.
+    """
+    if not vault.is_dir():
+        return check(False, 'vault directory missing'), {'cause': 'vault_directory_missing'}
+    expected, excluded = [], {}
+    for local in sorted(vault.rglob('*')):
+        path = local.relative_to(vault).as_posix()
+        if not local.is_file() or any(p.startswith('.') for p in Path(path).parts):
+            continue
+        verdict = await backend.selection_for(path)
+        if not verdict.writer_supported:
+            raise WriterUnsupported(backend._selection_diagnostic or verdict.reason)
+        rule = verdict.rule
+        if verdict.allowed:
+            try:
+                check_file_size(path, local.stat().st_size, backend.sync_max_size_mb)
+            except WriteSkipped:
+                rule = 'syncMaxSizeInMB'
+        if rule:
+            excluded[rule] = excluded.get(rule, 0) + 1
+        else:
+            expected.append(path)
+    good, records = await verify(backend, vault, expected) if expected else (True, [])
+    missing, mismatch = 0, 0
+    for row in records:
+        if not row['remote_present']:
+            missing += 1
+        elif not row['byte_exact'] or not row['metadata_size_matches'] or not row['type_matches']:
+            mismatch += 1
+    check(True, f'policy: expected={len(expected)} excluded={sum(excluded.values())} '
+                f'missing={missing} size_or_hash_mismatch={mismatch}')
+    return good, {'files': records, 'expected': len(expected),
+                  'excluded_by_policy': excluded, 'missing': missing,
+                  'size_or_hash_mismatch': mismatch}
+
+
+def ignore_names(raw):
+    # C:serviceFeatures/targetFilter.ts:95-98; share production JS trim/split.
+    return split_ignore_names(raw) if raw else None
+
+
+def mutation_authorized(args):
+    """Validate both gates before constructing clients or opening local state."""
+    write = args.command in ('write-large', 'write-phase', 'oversize')
+    delete = args.command in ('write-phase', 'oversize')
+    target = args.bucket + '/' + args.prefix if args.backend == 's3' else args.database
+    if write and not args.allow_remote_write:
+        return check(False, 'requires --allow-remote-write on a dedicated test vault')
+    if delete and not args.allow_remote_delete:
+        return check(False, 'requires --allow-remote-delete for rename and soft delete')
+    if write and args.confirm_target != target:
+        return check(False, '--confirm-target must equal bucket/prefix or database name')
+    return True
 
 
 async def verify_size(backend, vault, limit_mib):
@@ -318,6 +386,8 @@ async def inspect_decoding(backend, vault=None):
 
 
 async def run(args):
+    if not mutation_authorized(args):
+        return False, {'authorization': 'remote mutation refused'}
     if args.command.startswith('prepare-'):
         payloads = DECODING if args.command == 'prepare-decoding' else {
             'device-40m.bin': 40 * MIB, 'exact.bin': args.limit_mib * MIB,
@@ -331,26 +401,26 @@ async def run(args):
     else:
         backend = CouchDBBackend(url=args.url, username=args.user,
                                  password=args.password, database=args.database)
-    # Local-only filters must be explicitly supplied, just like the server.
+    # Regex lists are local; absent ignore-file choices derive from the vault.
     backend.selection_only = args.only_regex
     backend.selection_ignore = args.ignore_regex
     backend.selection_use_ignore_files = args.use_ignore_files
-    backend.selection_ignore_files = tuple(x for x in args.ignore_files.split(',') if x)
+    backend.selection_ignore_files = ignore_names(args.ignore_files)
     try:
         await refresh(backend)
         check(True, 'startup + forced refresh')
         if args.command == 'reconnect':
-            paths = sorted(p.relative_to(args.vault).as_posix() for p in args.vault.rglob('*')
-                           if p.is_file() and not any(part.startswith('.') for part in p.relative_to(args.vault).parts))
-            good, records = await verify(backend, args.vault, paths)
+            good, file_report = await reconnect_files(backend, args.vault)
             milestone = (backend._load_milestone() if isinstance(backend, JournalBackend)
                          else await backend._get_doc('_local/obsydian_livesync_milestone'))
             settings = sanitized_milestone(milestone or {})
-            good = check(not settings['unknown_keys'], 'settings table reconciliation; unknown keys=' + ','.join(settings['unknown_keys'])) and good
+            good = check(not settings['unknown_keys']['count'],
+                         'settings table reconciliation; unknown key count=' +
+                         str(settings['unknown_keys']['count'])) and good
             hidden = sum(p.is_file() and any(part.startswith('.') for part in p.relative_to(args.vault).parts)
                          for p in args.vault.rglob('*'))
-            check(True, f'scope: {len(paths)} ordinary files; {hidden} hidden files outside peer scope')
-            return good, {'files': records, 'milestone': settings, 'hidden_files_outside_scope': hidden}
+            check(True, f'scope: {hidden} hidden files outside peer scope')
+            return good, {**file_report, 'milestone': settings, 'hidden_files_outside_scope': hidden}
         if args.command == 'verify-size':
             return await verify_size(backend, args.vault, args.limit_mib)
         if args.command == 'write-large':
@@ -398,8 +468,11 @@ def parser():
         child.add_argument('--database', default='parity-live')
         child.add_argument('--only-regex', default='')
         child.add_argument('--ignore-regex', default='')
-        child.add_argument('--use-ignore-files', action='store_true')
-        child.add_argument('--ignore-files', default='')
+        child.add_argument('--use-ignore-files', action=argparse.BooleanOptionalAction, default=None)
+        child.add_argument('--ignore-files', default=None)
+        child.add_argument('--allow-remote-write', action='store_true')
+        child.add_argument('--allow-remote-delete', action='store_true')
+        child.add_argument('--confirm-target')
         child.add_argument('--limit-mib', type=int, default=50 if command == 'oversize' else 100)
         if command == 'oversize':
             child.add_argument('--source', default=f'{PREFIX}/exact.bin')

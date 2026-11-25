@@ -72,7 +72,8 @@ def test_milestone_allowlist_never_leaks_secret_or_unknown_values():
     encoded = json.dumps(result)
     assert secret not in encoded and 'private-device-name' not in encoded
     assert result['tweak_values']['device-1']['values']['hashAlg'] == 'sha1'
-    assert 'newUnknownSetting' in result['unknown_keys']
+    assert 'newUnknownSetting' not in encoded
+    assert result['unknown_keys']['count'] > 0
     assert result['tweak_values']['device-1']['values']['tweakModified'] == '<withheld>'
 
 
@@ -225,3 +226,186 @@ async def test_native_capture_metadata_and_aggregate_bounds(tmp_path, monkeypatc
         assert not calls
     else:
         assert all('aggregate bound' in row['capture'] for row in rows.values())
+
+
+def test_unknown_milestone_key_names_are_digest_only():
+    # P-19: remote strings are not public fields, including property names.
+    import hashlib
+    private = 'FAKE_PRIVATE_TOKEN_0123456789'
+    result = live.sanitized_milestone({'tweak_values': {'PREFERRED': {private: 7}}})
+    assert private not in json.dumps(result)
+    assert result['unknown_keys'] == {
+        'marker': '<unknown keys withheld>', 'count': 1,
+        'sha256': hashlib.sha256(json.dumps([private], ensure_ascii=True,
+                                           separators=(',', ':')).encode()).hexdigest()}
+
+
+@pytest.mark.parametrize('command', ['write-large', 'write-phase', 'oversize'])
+async def test_mutations_require_flags_and_exact_target_before_backend(tmp_path, monkeypatch, command):
+    def no_backend(**kwargs):
+        pytest.fail('must validate authorization before constructing backend')
+    monkeypatch.setattr(live, 'CouchDBBackend', no_backend)
+    args = live.parser().parse_args([command, '--backend', 'couchdb',
+        '--state-dir', str(tmp_path / 'state'), '--vault', str(tmp_path),
+        '--output', str(tmp_path / 'result.json')])
+    assert not (await live.run(args))[0]
+    args.allow_remote_write = True
+    args.confirm_target = 'wrong-database'
+    assert not (await live.run(args))[0]
+    args.confirm_target = args.database
+    if command != 'write-large':
+        assert not (await live.run(args))[0]
+
+
+def test_selection_arguments_default_to_vault_policy(tmp_path):
+    args = live.parser().parse_args(['reconnect', '--state-dir', str(tmp_path),
+        '--vault', str(tmp_path), '--output', str(tmp_path / 'report.json')])
+    assert args.use_ignore_files is None and args.ignore_files is None
+
+
+@pytest.mark.parametrize('kind', ['couchdb', 'journal'])
+async def test_reconnect_classifies_ignored_and_oversized_with_production_policy(tmp_path, kind):
+    # C:targetFilter.ts:132-146 and services/base/VaultService.ts:73-81.
+    settings = {'chunkSplitterVersion': 'v3-rabin-karp', 'hashAlg': 'xxhash64',
+                'pathNormalizationVersion': 0, 'syncMaxSizeInMB': 0.0001,
+                'useIgnoreFiles': True, 'ignoreFiles': '.gitignore'}
+    async with matrix_vault(tmp_path, kind, settings) as (backend, _, _, _, _):
+        await backend.startup_check()
+        from tests.test_selection_settings import seed_hidden_ignore
+        await seed_hidden_ignore(backend, 'ignored.md\n')
+        await backend.write_note('expected.md', 'expected', create=True)
+        vault = tmp_path / 'disk'
+        vault.mkdir()
+        for name, raw in [('ignored.md', b'x'), ('large.bin', b'x' * 200),
+                          ('expected.md', b'expected'), ('missing.md', b'missing')]:
+            (vault / name).write_bytes(raw)
+        good, result = await live.reconnect_files(backend, vault)
+        assert not good
+        assert result['expected'] == 2
+        assert result['excluded_by_policy'] == {'ignoreFiles': 1, 'syncMaxSizeInMB': 1}
+        assert result['missing'] == 1
+        assert result['size_or_hash_mismatch'] == 0
+        assert len(result['files']) == 2
+
+
+def test_ignore_cli_uses_production_js_trim(tmp_path):
+    # C:serviceFeatures/targetFilter.ts:95-98 uses JS trim, not str.strip.
+    from livesync_format import split_ignore_names
+    assert live.ignore_names('\ufeffrules.txt\ufeff,') == split_ignore_names('\ufeffrules.txt\ufeff,')
+    assert live.ignore_names('') is None
+
+
+@pytest.mark.parametrize('backend', ['s3', 'couchdb'])
+@pytest.mark.parametrize('command', ['write-large', 'write-phase', 'oversize'])
+def test_exact_mutation_gates_accept_only_complete_authorization(tmp_path, backend, command):
+    args = live.parser().parse_args([command, '--backend', backend,
+        '--state-dir', str(tmp_path), '--vault', str(tmp_path),
+        '--output', str(tmp_path / 'report.json'), '--allow-remote-write',
+        '--allow-remote-delete'])
+    args.confirm_target = args.bucket + '/' + args.prefix if backend == 's3' else args.database
+    assert live.mutation_authorized(args)
+    args.confirm_target += 'wrong'
+    assert not live.mutation_authorized(args)
+    args.confirm_target = args.bucket + '/' + args.prefix if backend == 's3' else args.database
+    args.allow_remote_write = False
+    assert not live.mutation_authorized(args)
+    args.allow_remote_write = True
+    args.allow_remote_delete = False
+    assert live.mutation_authorized(args) == (command == 'write-large')
+
+
+async def test_default_reconnect_never_publishes_or_leaks_unknown_key(tmp_path, monkeypatch, capsys):
+    private = 'FAKE_PRIVATE_TOKEN_0123456789'
+    settings = {'chunkSplitterVersion': 'v3-rabin-karp', 'hashAlg': 'xxhash64',
+                'pathNormalizationVersion': 0, private: True}
+    async with matrix_vault(tmp_path, 'journal', settings) as (backend, _, _, calls, storage):
+        await backend.startup_check()
+        async def forbidden(*args, **kwargs):
+            pytest.fail('read-only reconnect must not publish, rename or delete')
+        for name in ('write_note', 'write_attachment', 'rename_note', 'delete_note'):
+            monkeypatch.setattr(backend, name, forbidden)
+        monkeypatch.setattr(live, 'Boto3ObjectStorage', lambda cfg: storage)
+        vault = tmp_path / 'disk'; vault.mkdir()
+        (vault / 'missing.md').write_text('missing')
+        args = live.parser().parse_args(['reconnect', '--vault', str(vault),
+            '--state-dir', str(tmp_path / 'state'), '--output', str(tmp_path / 'report.json')])
+        good, result = await live.run(args)
+        assert not good and result['milestone']['unknown_keys']['count'] == 1
+        assert private not in json.dumps(result) + capsys.readouterr().out
+        assert not calls
+
+
+def test_helper_has_no_wipe_reset_or_physical_deletion_calls():
+    import ast
+    tree = ast.parse(Path(live.__file__).read_text())
+    calls = {node.func.attr for node in ast.walk(tree)
+             if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)}
+    assert not calls & {'delete', 'delete_object', 'delete_objects', 'remove', 'unlink',
+                        'rmtree', 'reset', 'wipe', 'purge', 'destroy'}
+
+
+@pytest.mark.parametrize('kind', ['missing', 'file'])
+async def test_reconnect_refuses_invalid_vault_directory(tmp_path, kind):
+    vault = tmp_path / 'not-a-vault'
+    if kind == 'file':
+        vault.write_text('ordinary file')
+    good, result = await live.reconnect_files(object(), vault)
+    assert not good
+    assert result == {'cause': 'vault_directory_missing'}
+
+
+@pytest.mark.parametrize('kind', ['couchdb', 'journal'])
+async def test_reconnect_reports_existing_mismatch_separately_from_missing(tmp_path, kind):
+    settings = {'chunkSplitterVersion': 'v3-rabin-karp', 'hashAlg': 'xxhash64',
+                'pathNormalizationVersion': 0}
+    async with matrix_vault(tmp_path, kind, settings) as (backend, _, _, _, _):
+        await backend.startup_check()
+        await backend.write_note('changed.md', 'remote', create=True)
+        vault = tmp_path / 'disk'; vault.mkdir()
+        (vault / 'changed.md').write_text('local')
+        (vault / 'missing.md').write_text('missing')
+        good, result = await live.reconnect_files(backend, vault)
+        assert not good and result['missing'] == 1
+        assert result['size_or_hash_mismatch'] == 1
+
+
+@pytest.mark.parametrize('kind', ['journal', 'couchdb'])
+async def test_present_note_is_not_missing_when_type_metadata_corrupt(tmp_path, monkeypatch, kind):
+    async with matrix_vault(tmp_path, kind, {'chunkSplitterVersion': 'v3-rabin-karp', 'hashAlg': 'xxhash64', 'pathNormalizationVersion': 0}) as (backend, *_):
+        await backend.startup_check()
+        await backend.write_note('exists.md', 'public', create=True)
+        vault = tmp_path / 'disk'
+        vault.mkdir()
+        (vault / 'exists.md').write_text('public')
+        original = live.raw_doc
+        async def corrupt(b, path):
+            return {**await original(b, path), 'type': 'untrusted-invalid-type'}
+        monkeypatch.setattr(live, 'raw_doc', corrupt)
+        good, report = await live.reconnect_files(backend, vault)
+        assert not good
+        assert report['files'][0]['byte_exact']
+        assert report['missing'] == 0
+
+
+def test_owner_python_commands_compile_and_growth_is_valid_text(tmp_path):
+    """The size-policy recipe must not depend on the native invalid-byte experiment."""
+    import re
+    import shlex
+    import subprocess
+    commands = re.findall(r'`(\./venv/bin/python -c [^`]+)`',
+                          (Path(live.__file__).parents[1] / 'docs/live-check-parity-checklist.md').read_text())
+    assert commands
+    growth = []
+    for command in commands:
+        args = shlex.split(command)
+        compile(args[2], '<documented owner command>', 'exec')
+        if 'local_prepare' in args[2] and 'growth.md' in args[2]:
+            growth.append(args[2])
+    assert len(growth) == 1
+    vault = tmp_path / 'vault'; vault.mkdir()
+    result = subprocess.run([sys.executable, '-c', growth[0], str(vault)],
+                            capture_output=True, text=True, cwd=Path(live.__file__).parents[1])
+    assert result.returncode == 0, result.stderr
+    raw = (vault / 'parity-live/growth.md').read_bytes()
+    assert len(raw) == 1048576
+    assert raw.decode('utf-8') == 'x' * 1048576
