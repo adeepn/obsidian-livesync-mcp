@@ -82,7 +82,7 @@ async def test_path_display_and_structured_identity(monkeypatch, char):
 
 
 @pytest.mark.parametrize('kind', [E.StorageError,E.WriteSkipped,E.RenameRefused,E.OutcomeUnknown,E.MutationNotApplied,E.WriterUnsupported])
-async def test_renderer_failure_is_outcome_unknown(monkeypatch, kind):
+async def test_renderer_failure_is_outcome_unknown(monkeypatch, kind, caplog):
     b = FakeBackend()
     monkeypatch.setattr(server, 'backend', b)
     e = kind.__new__(kind)
@@ -91,11 +91,15 @@ async def test_renderer_failure_is_outcome_unknown(monkeypatch, kind):
     def broken(*args, **kwargs): raise ValueError('SECRET')
     monkeypatch.setattr(kind, 'format', broken)
     if kind is E.OutcomeUnknown: monkeypatch.setattr(kind, 'message', broken)
+    e.__cause__ = RuntimeError('REMOTE_SECRET')
     b.errors['refresh'] = e
     result = await server.obsidian_create_note('a.md', 'body')
     assert 'internal error while reporting a storage outcome (ValueError)' in result
     assert "operation's result is unknown" in result and 're-read before retrying' in result
     assert 'SECRET' not in result
+    assert 'SECRET' not in caplog.text
+    assert 'ValueError' in caplog.text
+    assert all(record.exc_info is None for record in caplog.records)
 
 
 @pytest.mark.parametrize('value', [None, 1, True, 1.2, {}])
@@ -197,3 +201,63 @@ async def test_journal_preserves_transport_fields_through_uncertainty(tmp_path, 
         text = caught.value.message('note create')
         assert '503' in text and public.operation in text and 'ClientError' in text
     finally: await b.close()
+
+
+@pytest.mark.parametrize('phase', ['construct', 'startup', 'hosting', 'close'])
+async def test_hosting_boundary_hides_external_causes(monkeypatch, caplog, phase):
+    from config import load_config
+    cfg = load_config(dict(LIVESYNC_BACKEND='couchdb', COUCHDB_USER='test-user',
+                           COUCHDB_PASSWORD='test-password', COUCHDB_DATABASE='test-vault',
+                           MCP_API_KEY='test-token'))
+    def fail():
+        try:
+            raise ValueError('REMOTE_SECRET')
+        except ValueError as cause:
+            raise RuntimeError('CONFIG_SECRET') from cause
+    b = FakeBackend()
+    async def async_fail():
+        fail()
+    def construct(_):
+        if phase == 'construct':
+            fail()
+        return b
+    monkeypatch.setattr(server, 'get_backend', construct)
+    if phase == 'startup': monkeypatch.setattr(b, 'startup_check', async_fail)
+    if phase == 'close': monkeypatch.setattr(b, 'close', async_fail)
+    app = server.create_app(cfg)
+    with pytest.raises(RuntimeError) as caught:
+        async with app.settings.lifespan(app):
+            if phase == 'hosting': fail()
+    # Even a host formatter explicitly requesting chains cannot reveal input.
+    import traceback
+    assert 'SECRET' not in ''.join(traceback.format_exception(caught.value))
+    assert caught.value.__cause__ is None
+    assert caught.value.__suppress_context__
+    assert 'RuntimeError' in caplog.text
+    assert 'SECRET' not in caplog.text
+    assert all(record.exc_info is None for record in caplog.records)
+
+
+def test_entrypoint_hides_external_causes(caplog):
+    def fail(**kwargs):
+        try:
+            raise ValueError('REMOTE_SECRET')
+        except ValueError as cause:
+            raise RuntimeError('CONFIG_SECRET') from cause
+    with pytest.raises(SystemExit) as caught:
+        server.run_host(fail)
+    assert caught.value.code == 1
+    assert caught.value.__cause__ is None
+    import traceback
+    assert 'SECRET' not in ''.join(traceback.format_exception(caught.value))
+    assert caught.value.__suppress_context__
+    assert 'SECRET' not in caplog.text
+    assert 'RuntimeError' in caplog.text
+    assert all(record.exc_info is None for record in caplog.records)
+
+
+def test_boundary_log_retains_typed_transport_fields(caplog):
+    error = E.StorageError(PublicDiagnostic(status=503, operation='GET', transport='S3'))
+    server._log_boundary_failure('application startup failed', error)
+    assert 'StorageError' in caplog.text and 'S3 returned HTTP 503 for GET' in caplog.text
+    assert all(record.exc_info is None for record in caplog.records)

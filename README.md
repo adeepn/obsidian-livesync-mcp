@@ -417,7 +417,8 @@ and update the pin by PR. Monthly scratch-bucket smoke:
 
 Keep credentials and `.env` out of version control. Default logs/diagnostics
 omit remote bodies, headers, secrets and settings values; note paths remain
-visible with control characters escaped. Keep unsafe debug disabled.
+visible with control characters escaped. Reporting and hosting boundaries log only
+cause classes and typed fields, without exception chains. Keep unsafe debug disabled.
 [Diagnostic policy](docs/diagnostics-and-secrets.md).
 
 Use one auth mode: bearer `MCP_API_KEY`, or the complete OAuth group.

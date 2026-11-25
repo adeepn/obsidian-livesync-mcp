@@ -30,7 +30,7 @@ classes use `[A-Za-z_][A-Za-z0-9_]{0,63}`; other names become
 `<unexpected cause>`. Setting keys, budget names, reasons and algorithms use
 closed inventories; operation names use the closed inventory above. If outcome
 reporting itself fails, the tool reports that the operation's result is unknown
-and asks the caller to re-read before retrying. Exception details stay in logs.
+and asks the caller to re-read before retrying. Logs carry cause classes and typed diagnostic fields only.
 
 Diagnostics never include remote exception text, response bodies/headers,
 configured URLs, buckets/regions, passwords, passphrases/salts, setting values,
@@ -41,9 +41,10 @@ SHA-256 fingerprint, never the journal salt. Local cache paths/database names
 are hidden, remote update sequences are fingerprinted, and unfamiliar metadata
 fields are counted rather than printed.
 
-Storage and selection logs omit payloads and tracebacks by default. Reporting
-failures log full exception details. Lifespan exceptions propagate to the hosting
-framework, which controls startup traceback logging. `LIVESYNC_UNSAFE_DEBUG=1`,
+Storage, selection, reporting and application lifespan logs carry classes and
+typed fields only, without exception text, tracebacks or exception chains.
+Application construction, startup, hosting and shutdown failures are replaced
+with fixed recovery messages before reaching the hosting framework. `LIVESYNC_UNSAFE_DEBUG=1`,
 combined with a DEBUG log level, explicitly enables the bounded last-line debug
 sink. **Unsafe for production:** it admits unstructured diagnostic inputs to a
 debug path; never enable it to collect credentials. The current last-line

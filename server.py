@@ -147,18 +147,26 @@ def create_app(cfg: Config) -> FastMCP:
     @asynccontextmanager
     async def lifespan(app):
         global backend
-        startup_backend = get_backend(cfg)
-        state["backend"] = startup_backend
+        startup_backend = None
         is_default = app is globals().get("mcp")
-        if is_default:
-            backend = startup_backend
         try:
+            startup_backend = get_backend(cfg)
+            state["backend"] = startup_backend
+            if is_default:
+                backend = startup_backend
             await startup_backend.startup_check()
             yield
+        except Exception as error:
+            _log_boundary_failure('application lifespan failed', error)
+            raise RuntimeError('Application failed; inspect typed logs and configuration, then restart') from None
         finally:
             try:
                 regex_runner.close()
-                await startup_backend.close()
+                if startup_backend is not None:
+                    await startup_backend.close()
+            except Exception as error:
+                _log_boundary_failure('application shutdown failed', error)
+                raise RuntimeError('Application shutdown failed; inspect typed logs before restarting') from None
             finally:
                 state["backend"] = None
                 if is_default:
@@ -289,9 +297,17 @@ def _storage_message_body(error: StorageError, *, caller_paths=()) -> str:
     return f"Error: {_safe_storage_detail(error)}"
 
 
+def _log_boundary_failure(message, error):
+    # P-19: hosting frameworks otherwise render remote/configuration exception
+    # chains. Only the typed diagnostic projection may cross this boundary.
+    public = getattr(error, 'diagnostic', None)
+    detail = PublicDiagnostic.format(public) if type(public) is PublicDiagnostic else 'no typed diagnostic'
+    logging.getLogger(__name__).error('%s; cause: %s; %s', message, cause_name(type(error)), detail)
+
+
 def _reporting_failure(error):
     # Reporting follows a possibly completed mutation; never claim non-application.
-    logging.getLogger(__name__).exception('internal error while reporting a storage outcome')
+    _log_boundary_failure('internal error while reporting a storage outcome', error)
     return (f"Error: internal error while reporting a storage outcome ({cause_name(type(error))}); "
             "the operation's result is unknown — re-read before retrying")
 
@@ -1681,6 +1697,15 @@ async def obsidian_refresh() -> str:
     return "Vault refreshed."
 
 
+def run_host(action):
+    """Prevent entry-point failures from handing external text to a host logger."""
+    try:
+        return action(transport="streamable-http")
+    except Exception as error:
+        _log_boundary_failure('application host failed', error)
+        raise SystemExit(1) from None
+
+
 # run.py loads dotenv before this single environment-consumption point.
 try:
     mcp = create_app(load_config())
@@ -1690,7 +1715,11 @@ except ConfigError as error:
     print(f"Configuration error: {error}", file=sys.stderr)
     raise SystemExit(2) from None
 
+except Exception as error:
+    _log_boundary_failure('application construction failed', error)
+    raise RuntimeError('Application construction failed; inspect typed logs and configuration') from None
+
 
 # --- Main ---
 if __name__ == "__main__":
-    mcp.run(transport="streamable-http")
+    run_host(mcp.run)

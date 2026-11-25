@@ -1012,3 +1012,11 @@ F7 joint node/byte boundary probe: exactly 20,000 nodes / 4,194,304 string bytes
 ### 2026-11-25 — F7 deterministic test startup
 
 [DECISION] Give capability probes a test-only 60-second scheduler margin; production five-second selection policy remains unchanged. Start the short stalled-request clock after readiness. Audit subprocess and rendezvous waits; raise short non-behavioral scheduler margins. Four SeaweedFS lost-acknowledgement scenarios pass with real accepted PUT/retry-412 responses and isolated test-prefix cleanup.
+
+
+### 2026-11-25 — F8-1 typed logging boundaries
+
+Reporting, backend construction/startup, application hosting and shutdown retain
+cause classes and typed diagnostic fields only. Fixed replacement exceptions
+suppress external chains before host formatting; reporting keeps outcome unknown.
+No vault wire behavior or configuration default changes.

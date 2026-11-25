@@ -10,9 +10,15 @@ if __name__ == "__main__":
     from config import ConfigError
 
     try:
-        from server import mcp
+        from server import mcp, run_host
     except ConfigError as error:
         print(f"Configuration error: {error}", file=sys.stderr)
         raise SystemExit(2) from None
 
-    mcp.run(transport="streamable-http")
+    except Exception as error:
+        from diagnostic_hygiene import cause_name
+        import logging
+        logging.getLogger(__name__).error('application import failed; cause: %s', cause_name(type(error)))
+        raise SystemExit(1) from None
+
+    run_host(mcp.run)
