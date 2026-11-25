@@ -140,3 +140,76 @@ def test_compatibility_publication_count_requires_exact_positive_int(invalid):
     suffix = result[len(original):]
     assert json.loads(suffix.splitlines()[1]) == {
         'notices': [{'code': 'journal_surrogates_replaced', 'count': 5}]}
+
+
+# Peer-owned schema, not plugin numeric coercion. Source of transformations:
+# common/utils.ts:100-115; journalRecords.ts:69-75; chunks.ts:228,350-360;
+# EntryManagerImpls.ts:280 and reflection.ts:272-283. These exact-type safety
+# tests must kill type(value) is kind -> isinstance(value, kind).
+NOTICE_FIELDS = [
+    ({'code': 'couchdb_marker_interpreted', 'chunks': 2, 'metadata_size_preserved': True}, 'chunks', int),
+    ({'code': 'couchdb_marker_interpreted', 'chunks': 2, 'metadata_size_preserved': True}, 'metadata_size_preserved', bool),
+    ({'code': 'legacy_bom_removed', 'removed_bytes': 3, 'metadata_size_preserved': True}, 'removed_bytes', int),
+    ({'code': 'legacy_bom_removed', 'removed_bytes': 3, 'metadata_size_preserved': True}, 'metadata_size_preserved', bool),
+    ({'code': 'invalid_utf8_replaced', 'invalid_bytes': 2}, 'invalid_bytes', int),
+    ({'code': 'input_surrogates_replaced', 'count': 2}, 'count', int),
+    ({'code': 'journal_surrogates_replaced', 'count': 2}, 'count', int),
+]
+BAD_NOTICE_FIELDS = [(notice, field, bad) for notice, field, kind in NOTICE_FIELDS
+    for bad in ([True, False, 0, -1, 1.0, 2.5, '1', '', None, [1], {'n': 1}]
+                if kind is int else [1, 0, -1, 1.0, 0.0, 'true', '', False, None, [True], {'n': True}])]
+
+
+@pytest.mark.parametrize('notice,field,bad', BAD_NOTICE_FIELDS)
+def test_direct_notice_fields_are_exact_types_in_all_projections(notice, field, bad):
+    from publication_notices import typed_notices, complete_publication, notice_text, publication_notices
+    invalid = {**notice, field: bad, 'private': 'PRIVATE_EXTRA'}
+    original = {'path': 'synthetic.md', 'size': 1}
+    collector = []
+    token = publication_notices.set(collector)
+    try:
+        assert typed_notices([invalid]) == []
+        result = complete_publication(dict(original), [invalid])
+        assert result == original
+        assert collector == []
+        assert notice_text('original', [invalid]) == 'original'
+        # A rejected neighbour must not erase a valid notice.
+        assert typed_notices([invalid, notice]) == [notice]
+        assert 'PRIVATE_EXTRA' not in notice_text('original', [invalid, notice])
+    finally:
+        publication_notices.reset(token)
+
+
+@pytest.mark.parametrize('notice,field,kind', NOTICE_FIELDS)
+def test_valid_notice_fields_survive_all_projections(notice, field, kind):
+    from publication_notices import typed_notices, complete_publication, notice_text, publication_notices
+    decorated = {**notice, 'private': 'PRIVATE_EXTRA'}
+    collector = []
+    token = publication_notices.set(collector)
+    try:
+        assert typed_notices([decorated]) == [notice]
+        assert complete_publication({'path': 'a'}, [decorated]) == {'path': 'a', 'notices': [notice]}
+        assert collector == [notice]
+        result = notice_text('original', [decorated])
+        assert json.loads(result.splitlines()[1]) == {'notices': [notice]}
+        assert 'PRIVATE_EXTRA' not in result
+    finally:
+        publication_notices.reset(token)
+
+
+@pytest.mark.parametrize('bad', [True, False, 0, -1, 1.0, 2.5, '1', '', None, [1], {}, float('inf'), float('nan')])
+def test_compatibility_counts_cannot_smuggle_typed_fields(bad):
+    assert server._publication_text('original', [bad]) == 'original'
+    result = server._publication_text('original', [bad, 2])
+    assert json.loads(result.splitlines()[1]) == {'notices': [
+        {'code': 'journal_surrogates_replaced', 'count': 2}]}
+
+
+@pytest.mark.parametrize('bad_code', [None, True, 1, 1.0, [], {}, 'PRIVATE_UNKNOWN'])
+@pytest.mark.parametrize('notice,field,kind', NOTICE_FIELDS)
+def test_notice_codes_are_closed_in_all_projections(bad_code, notice, field, kind):
+    from publication_notices import typed_notices, complete_publication, notice_text
+    invalid = {**notice, 'code': bad_code}
+    assert typed_notices([invalid]) == []
+    assert complete_publication({'path': 'a'}, [invalid]) == {'path': 'a'}
+    assert notice_text('original', [invalid]) == 'original'

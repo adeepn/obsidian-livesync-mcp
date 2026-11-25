@@ -91,3 +91,8 @@ New undecodable reserved-prefix pieces refuse before any chunk or metadata write
 Notice suffixes preserve the complete original result verbatim, including leading/trailing whitespace, blank lines, multi-line JSON and non-JSON text. Notices are appended outside that result; non-string results retain their identity.
 
 The compatibility notice wrapper accepts replacement counts only as exact positive integers. Booleans, floats, strings, null, nested values and nonpositive integers contribute no count; valid counts are summed independently.
+
+Successful transformation notices use closed codes and exact field types:
+counts are positive integers (booleans are refused), and size-preservation flags
+are literal true. Unknown/mistyped notices are dropped by both metadata and
+external text projections, including the compatibility count path.

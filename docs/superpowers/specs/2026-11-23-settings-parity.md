@@ -1079,3 +1079,10 @@ Native compression generator adds compact budget-witness wire and result hashes.
 [DECISION] Reject framing/routing/hop-by-hop headers case-insensitively for both
 storages, including injected dataclasses. This deliberate safety difference
 from native finalizeRequest is documented; final prepared requests are checked.
+
+### 2026-11-25 — F9-6 direct notice contract
+
+[REUSE] Table-driven direct schema tests cover every field, successful collector
+and external projection, rejected neighbour isolation, unknown codes and legacy
+count projection. The exact-type-to-isinstance mutant is killed by five count
+fields, closing the final architecture reviewer whole-suite survivor.
