@@ -1,10 +1,15 @@
 # Приёмка с настоящим Obsidian
 
-Это инструкция для будущей проверки, **не отчёт о выполненной приёмке**.
-Автоматическая проверка настоящих серверов уже завершена:
-[261 проверка](test-artifacts/2026-11-25-parity-docker/summary.txt).
-Проверка с приложением Obsidian на этом закреплённом выпуске ещё ожидается.
-Контроллер сначала вычитывает эту инструкцию, затем передаёт владельцу.
+Automated real-server acceptance: **DONE** —
+[261 checks](test-artifacts/2026-11-25-parity-docker/summary.txt).
+Live Obsidian acceptance: **IN PROGRESS**, client **1.0.50**, started **2026-11-25**;
+final live acceptance pending. **1.0.52 has not been exercised live**.
+First owner observation: ordinary sync against a confirmed wiped bucket creates
+service records (milestone and sync parameters) but does not re-send files;
+see step 0 for the explicitly authorized device-to-server rebuild sequence.
+
+Это инструкция продолжающейся проверки, не отчёт о завершённой live-приёмке.
+Контроллер сначала вычитывает инструкцию, затем передаёт владельцу.
 
 ## 1. Подготовка вместе с контроллером
 

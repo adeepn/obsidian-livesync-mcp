@@ -1111,3 +1111,10 @@ search confirmed only wrapper tests called it; configurable writers are unchange
 [DECISION] Consolidate unreleased settings parity around final operator-visible
 features, differences, overrides and recovery. Remove successive test/gate and
 acceptance narration; preserve all released history verbatim.
+
+### 2026-11-26 — F9-11 live status
+
+[DECISION] Record automated real-server acceptance DONE with its existing artifact;
+owner live acceptance IN PROGRESS on client 1.0.50 since 2026-11-25. First wiped-
+bucket observation is service records without file resend. Final live acceptance
+is pending; audited plugin 1.0.52 has not been exercised live.

@@ -37,12 +37,17 @@ reflected by a real client under its settings; it did not validate every
 settings combination or plugin 1.0.52. The sanitized real milestone was not
 captured then. Native-host invalid-byte decoding remains an open experiment.
 
-Live acceptance with a real Obsidian client at the current pin is **pending**.
-Its final evidence will be added under `docs/test-artifacts/<date>-parity-live/`.
-Update this section only after the
-[parity live acceptance](live-check-parity-checklist.md), including the actual
-client version, sanitized settings, large attachments, mutations and decoding
-experiments. Preparing a checklist/script is not live validation.
+Automated real-server acceptance: **DONE** —
+[261 checks](test-artifacts/2026-11-25-parity-docker/summary.txt).
+Live Obsidian acceptance: **IN PROGRESS**, client **1.0.50**, started **2026-11-25**;
+final live acceptance pending. **1.0.52 has not been exercised live**.
+First owner observation: ordinary sync against a confirmed wiped bucket creates
+service records (milestone and sync parameters) but does not re-send files;
+see step 0 for the explicitly authorized device-to-server rebuild sequence.
+
+Final evidence belongs under `docs/test-artifacts/<date>-parity-live/` after the
+[parity live checklist](live-check-parity-checklist.md) is complete. Preparing
+a checklist/script or recording early observations is not final live validation.
 
 Earlier historical audit: `docs/AUDIT-2026-11-10.md` §2, plugin `517f5c2` /
 commonlib `597b64e` (2026-11-10).

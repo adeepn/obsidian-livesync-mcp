@@ -865,7 +865,8 @@ def test_complete_generator_catalogue_and_acceptance_package():
         assert 'regenerating-oracle-fixtures.md' in (ROOT / path).read_text()
     pin = (ROOT / 'docs/upstream-pin.md').read_text()
     assert 'real-server\nautomated acceptance done' in pin
-    assert 'real Obsidian client at the current pin is **pending**' in pin
+    assert 'Live Obsidian acceptance: **IN PROGRESS**' in pin
+    assert 'final live acceptance pending' in pin
     assert '2026-11-25-parity-docker/summary.txt' in pin
     readme = documentation_text('README.md')
     assert 'create_app(cfg)' not in readme
@@ -1061,3 +1062,13 @@ def test_settings_changelog_is_operator_facing():
     for term in ('LIVESYNC_MAX_REQUEST_BYTES', 'LIVESYNC_COUCHDB_MAX_INFLATED_BYTES',
                  'custom headers', 'transport_replacements', 'Node', 'E2EE'):
         assert term in text
+
+
+def test_current_live_acceptance_status_is_explicit():
+    for name in ('docs/upstream-pin.md', 'docs/live-check-parity-checklist.md'):
+        text = (ROOT / name).read_text()
+        for term in ('DONE', 'IN PROGRESS', '1.0.50', '2026-11-25',
+                     '2026-11-25-parity-docker/summary.txt'):
+            assert term in text
+        assert 'final live acceptance pending' in text
+        assert '1.0.52 has not been exercised live' in text
