@@ -186,6 +186,7 @@ def test_conditional_s3_errors(code, status, result):
     storage = object.__new__(Boto3ObjectStorage)
     storage._bucket, storage._prefix = 'test', ''
     storage._conditional_warning_logged = False
+    storage._conditional_retries = False  # Constructor default: one SDK attempt.
     storage._client = Mock()
     storage._client.put_object.side_effect = ClientError({'Error': {'Code': code}, 'ResponseMetadata': {'HTTPStatusCode': status}}, 'PutObject')
     if result is None:
