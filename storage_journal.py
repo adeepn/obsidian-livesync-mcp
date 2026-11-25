@@ -391,6 +391,13 @@ class JournalBackend(TextAccessPolicy, DeviceSelection):
             candidate_text = TextAccessPolicy()
             candidate_text._text_budget_override = self._text_budget_override
             candidate_text.sync_max_size_mb = candidate_size
+            candidate_configuration = (self.selection_only, self.selection_ignore,
+                                       candidate_selection[0], candidate_selection[1])
+            if self._selection_checked_configuration != candidate_configuration:
+                await self.validate_selection_configuration(candidate_configuration)
+        except WriterUnsupported as exc:
+            self._selection_resolution_diagnostic = exc.diagnostic
+            raise
         except UnsupportedVaultSettings as exc:
             self._selection_resolution_diagnostic = settings_exception_diagnostic(exc)
             raise UnsupportedVault(self._selection_resolution_diagnostic) from exc
@@ -399,8 +406,7 @@ class JournalBackend(TextAccessPolicy, DeviceSelection):
         self._sync_max_size_mb = candidate_size
         self._effective_text_budget = candidate_text.text_scan_max_bytes
         self._selection_resolution_diagnostic = None
-        if self._selection_checked_configuration != self._selection_configuration():
-            await self.selection_startup()
+        self._selection_checked_configuration = candidate_configuration
         self._refresh_deadline = now + self.max_refresh_seconds
         self._refresh_downloaded = 0
         recent_docs: list[dict] | None = None

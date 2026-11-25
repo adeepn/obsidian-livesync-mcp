@@ -800,3 +800,7 @@ its own deadline expires first. Neither path echoes the pattern or body.
 ### 2026-11-25 F2-8 — vault scalar coercion
 
 [DECISION] Execute pinned VaultService.ts:73-81 and targetFilter.ts:132-137 with native JS builtins to cover every JSON type. Numeric strings/arrays and boolean true (1 MiB) follow numeric coercion; null/false/nonnumeric values disable size admission. Ignore enablement uses truthiness, including empty objects/arrays. Compare effective admission policies, retain strict operator inputs and actionable genuine-ambiguity/primitive-conversion refusals. The former invalid-string refresh reproducer is now admitted by design; atomic refusal is protected with genuinely conflicting size maps.
+
+### 2026-11-25 F2-5 follow-up — capability transaction
+
+[DECISION] Both independent reviews identified candidate assignment before Node validation. Validate the candidate configuration without installing it, including across await, then atomically expose selection/size/text fields and checked configuration. Missing-Node and concurrent-observation regressions failed before the fix and pass after it; typed failure retains recovery guidance.

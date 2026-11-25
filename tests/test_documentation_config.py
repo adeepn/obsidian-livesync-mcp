@@ -396,3 +396,10 @@ def test_vault_scalar_coercion_and_strict_overrides_documented():
     for name in ('README.md', '.env.example', 'docs/selection-filters.md'):
         text = (ROOT / name).read_text()
         assert 'truthiness' in text
+
+
+def test_candidate_selection_capability_documented():
+    for name in ('README.md', 'docs/size-policy.md'):
+        text = (ROOT / name).read_text()
+        assert 'While that check awaits' in text
+        assert 'without committing the candidate' in text

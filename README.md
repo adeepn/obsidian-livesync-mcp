@@ -356,3 +356,5 @@ regex output cap. Device write-size admission still applies after edits.
 ## License
 
 Apache 2.0 — see [LICENSE](LICENSE).
+
+Journal candidate validation includes the Node selection capability check. While that check awaits, effective selection, size and text limits remain the previous tuple; a missing/unusable Node refusal records a typed failure without committing the candidate. Install Node.js 22+ in the service PATH, then force refresh or restart to recover.

@@ -428,3 +428,62 @@ async def test_backend_native_scalar_startup_and_admission(tmp_path, kind, row, 
             assert (await b.read_note('probe.md'))['text'] == 'xx'
         if not row['ignoreActive']:
             assert reads == []
+
+
+async def test_refused_selection_capability_preserves_policy(tmp_path, monkeypatch):
+    # targetFilter.ts:132-146 uses the current realised settings. The peer's
+    # Node capability requirement must refuse before publishing that snapshot.
+    import selection_engine
+    from storage_base import WriterUnsupported
+    b, storage = make_backend(tmp_path, healthy_bucket())
+    try:
+        await b.startup_check()
+        before = (b.selection_use_ignore_files, b.selection_ignore_files,
+                  b.sync_max_size_mb, b.text_scan_max_bytes)
+        def unavailable(*args, **kwargs):
+            raise FileNotFoundError('PRIVATE_NODE_CAUSE')
+        monkeypatch.setattr(selection_engine.subprocess, 'Popen', unavailable)
+        storage._objects[MILESTONE_KEY] = json.dumps(milestone(
+            useIgnoreFiles=True, ignoreFiles='changed', syncMaxSizeInMB=300)).encode()
+        with pytest.raises(WriterUnsupported, match='install Node.js 22') as caught:
+            await b.refresh(force=True)
+        assert 'PRIVATE_NODE_CAUSE' not in str(caught.value)
+        assert (b.selection_use_ignore_files, b.selection_ignore_files,
+                b.sync_max_size_mb, b.text_scan_max_bytes) == before
+        assert b._selection_resolution_diagnostic is not None
+    finally:
+        await b.close()
+
+
+async def test_candidate_policy_is_invisible_during_capability_check(tmp_path, monkeypatch):
+    import asyncio
+    b, storage = make_backend(tmp_path, healthy_bucket())
+    entered, release = asyncio.Event(), asyncio.Event()
+    task = None
+    try:
+        await b.startup_check()
+        before = (b.selection_use_ignore_files, b.selection_ignore_files,
+                  b.sync_max_size_mb, b.text_scan_max_bytes)
+        original = b._selection_evaluate
+        async def paused(payload):
+            entered.set()
+            await release.wait()
+            return await original(payload)
+        monkeypatch.setattr(b, '_selection_evaluate', paused)
+        storage._objects[MILESTONE_KEY] = json.dumps(milestone(
+            useIgnoreFiles=True, ignoreFiles='changed', syncMaxSizeInMB=300)).encode()
+        task = asyncio.create_task(b.refresh(force=True))
+        await asyncio.wait_for(entered.wait(), 10)
+        assert (b.selection_use_ignore_files, b.selection_ignore_files,
+                b.sync_max_size_mb, b.text_scan_max_bytes) == before
+        release.set()
+        await task
+        assert b.selection_use_ignore_files is True
+        assert b.selection_ignore_files == ('changed',)
+        assert b.sync_max_size_mb == 300
+        assert b.text_scan_max_bytes == 314572800
+    finally:
+        release.set()
+        if task is not None:
+            await task
+        await b.close()

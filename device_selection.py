@@ -71,16 +71,27 @@ class DeviceSelection:
         return self.selection_info()
 
     async def selection_startup(self):
-        self._selection_checked_configuration = self._selection_configuration()
-        if not self._selection_active():
+        configuration = self._selection_configuration()
+        await self.validate_selection_configuration(configuration)
+        self._selection_checked_configuration = configuration
+
+    async def validate_selection_configuration(self, configuration):
+        """Check a candidate without installing effective settings.
+
+        C:serviceFeatures/targetFilter.ts:132-146 consumes realised settings;
+        the peer validates its Node constraint before exposing that snapshot.
+        """
+        only, ignore, use, names = configuration
+        if not (only or ignore or use):
             return
-        verdict = await self._selection_evaluate(self._selection_payload())
+        payload = self._selection_payload()
+        payload.update(only_patterns=only, ignore_patterns=ignore, ignore_names=names)
+        verdict = await self._selection_evaluate(payload)
         if not verdict.writer_supported:
             await self.selection_close()
             raise WriterUnsupported(getattr(self, "_selection_diagnostic", None) or verdict.reason)
         # Check ignore compilation too, even if the only list short circuits.
-        if self.selection_ignore:
-            payload = self._selection_payload()
+        if ignore:
             payload['only_patterns'] = ''
             verdict = await self._selection_evaluate(payload)
             if not verdict.writer_supported:

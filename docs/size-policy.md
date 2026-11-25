@@ -85,8 +85,10 @@ universal maximum: unusually large inputs may require tuning even with these
 defaults. No finite budget can promise admission of all unbounded histories.
 See [replay_limits.py](../replay_limits.py) for pinned source references.
 
-Journal peers re-resolve the effective size policy at every unthrottled refresh (including refresh(force=True)), and update the derived text budget through the same policy setter as startup. Explicit LIVESYNC_SYNC_MAX_SIZE_MB and LIVESYNC_TEXT_SCAN_MAX_BYTES overrides remain authoritative, including zero/unlimited.
+Journal peers re-resolve the effective size policy at every unthrottled refresh (including refresh(force=True)), and update the derived text budget using the same policy derivation as startup. Explicit LIVESYNC_SYNC_MAX_SIZE_MB and LIVESYNC_TEXT_SCAN_MAX_BYTES overrides remain authoritative, including zero/unlimited.
 
 Journal refresh validates the complete selection, size and derived text policy before committing any effective setting. A refused candidate preserves the previous effective tuple, records a typed failure and blocks writes until the milestone is repaired and refreshed.
 
 Vault-derived syncMaxSizeInMB uses the native JavaScript numeric coercion predicate for every JSON type (VaultService.ts:73-81). Numeric strings and single/nested numeric arrays work; true means a 1 MiB limit. Null, false, nonnumeric strings/arrays/ordinary objects, zero and negative values disable the predicate. Infinity or an overflowing product is unlimited. Objects with an own noncallable toString that cannot produce a primitive refuse with instructions to correct that field. Device maps agree when their coerced integer-byte admission policies agree; conflicting policies require alignment or LIVESYNC_SYNC_MAX_SIZE_MB. The operator override remains a strict finite number.
+
+Journal candidate validation includes the Node selection capability check. While that check awaits, effective selection, size and text limits remain the previous tuple; a missing/unusable Node refusal records a typed failure without committing the candidate. Install Node.js 22+ in the service PATH, then force refresh or restart to recover.
