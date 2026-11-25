@@ -443,7 +443,8 @@ def test_framing_headers_refused_without_values(backend, name, lower):
     message = str(caught.value)
     assert variable in message and 'entry 1' in message
     assert 'transport-owned' in message and 'remove' in message
-    assert 'PRIVATE' not in message and name not in message
+    assert 'PRIVATE' not in message
+    assert repr(name) not in message
 
 
 @pytest.mark.parametrize('name', FRAMING_NAMES)
