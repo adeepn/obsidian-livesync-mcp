@@ -96,3 +96,32 @@ def test_legacy_publication_wrapper_preserves_non_string_message():
     result=server._publication_text(original,[1])
     assert result.splitlines()[0]==original
     assert json.loads(result.splitlines()[1])=={'notices':[{'code':'journal_surrogates_replaced','count':1}]}
+
+
+@pytest.mark.parametrize('original', [
+    ' \n{"x":1} \n',
+    '\n\n',
+    ' \tplain text\nsecond line\r\n ',
+    '{\n  "message": {"code": 7},\n  "notices": ["original"]\n}\n',
+    '',
+])
+@pytest.mark.parametrize('compatibility', [False, True])
+def test_notice_suffix_preserves_result_verbatim(original, compatibility):
+    # common/utils.ts:100-115 and journalRecords.ts:69-75 motivate the
+    # transformation notice; this peer-owned suffix must not rewrite a result.
+    from publication_notices import notice_text
+    notice = {'code': 'journal_surrogates_replaced', 'count': 1}
+    result = (server._publication_text(original, [1]) if compatibility else
+              notice_text(original, [notice]))
+    assert result[:len(original)] == original
+    suffix = result[len(original):]
+    assert suffix.startswith('\n')
+    assert json.loads(suffix.splitlines()[1]) == {'notices': [notice]}
+
+
+@pytest.mark.parametrize('original', [None, {'message': 7}, ['original'], 7])
+def test_notice_suffix_preserves_non_string_results(original):
+    from publication_notices import notice_text
+    assert notice_text(original, [{'code': 'journal_surrogates_replaced',
+                                   'count': 1}]) is original
+    assert server._publication_text(original, [1]) is original

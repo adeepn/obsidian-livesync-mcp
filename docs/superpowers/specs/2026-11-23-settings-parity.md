@@ -784,3 +784,7 @@ its own deadline expires first. Neither path echoes the pattern or body.
 ### 2026-11-25 F2-1 — repeated minimum concatenation
 
 [DECISION] Add twelve native V2 witnesses including 401 lines and third/fourth concatenation neighbours, using the existing integrity-verified published dependencies. Reviewer double-left and additional third/fourth-only process-local mutants are detected; production splitter remains unchanged.
+
+### 2026-11-25 F2-2 — verbatim publication result
+
+[DECISION] Assert complete original string prefixes before notice suffixes, including whitespace, blank lines, multiline JSON and non-JSON text. The process-local strip-result mutant is detected; non-string identity is retained.

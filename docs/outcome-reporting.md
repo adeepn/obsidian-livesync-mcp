@@ -87,3 +87,5 @@ Projected-equivalent journal pieces retain a representative with replacement evi
 Splitter loop, JSON primitive-conversion, binary data-loss and within-publication collision refusals use closed typed diagnostics through the MCP boundary. They name customChunkSize/minimumChunkSize (or the actual migration setting) and a fixed recovery; no free exception text is projected.
 
 New undecodable reserved-prefix pieces refuse before any chunk or metadata write, with binary-attachment recovery guidance. Valid marked pieces retain their original IDs/wire values and disclose interpretation on each successful publication; repeated publication compares the stored logical reader value without overwriting shared leaves. Journal pieces do not use CouchDB decoding.
+
+Notice suffixes preserve the complete original result verbatim, including leading/trailing whitespace, blank lines, multi-line JSON and non-JSON text. Notices are appended outside that result; non-string results retain their identity.
