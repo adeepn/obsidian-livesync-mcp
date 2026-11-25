@@ -327,8 +327,8 @@
     "id": "14",
     "owner": "RabinKarpSplitter",
     "function": "split",
-    "source": "else 4 * 1024 * 1024,",
-    "mutation": "else 4 * 1024 * 1024 - 1,",
+    "source": "else 4 * 1024 * 1024)",
+    "mutation": "else 4 * 1024 * 1024 - 1)",
     "nodes": [
       "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=60-minimum=4194304-limit=default-document=boundary:4194304:png:none:0]",
       "tests/test_settings_matrix.py::test_settings_v3_ceiling_partition[couchdb]",
@@ -543,12 +543,12 @@
     "id": "N7",
     "owner": "V2Splitter",
     "function": "split",
-    "source": "adjusted = max(1, math.ceil(len(text) / (100 * minimum))) * minimum",
-    "mutation": "adjusted = (max(1, math.ceil(len(text) / (100 * minimum))) + 1) * minimum",
+    "source": "source = _js_add(source, self.minimum_chunk_size)",
+    "mutation": "source = _js_add(_js_add(source, self.minimum_chunk_size), self.minimum_chunk_size)",
     "nodes": [
-      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=5-limit=default-document=hint-path:1]",
-      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=nfc-splitter=legacy-11-hash=empty-custom=0-minimum=5-limit=0-document=md-couchdb]",
-      "tests/test_settings_matrix.py::test_settings_full_cycle[identity=nfc-splitter=legacy-11-hash=empty-custom=0-minimum=5-limit=0-document=md-journal]"
+      "tests/test_coercion_cells.py::test_v2_repeated_array_minimum_concatenation[lines-219]",
+      "tests/test_coercion_cells.py::test_v2_repeated_array_minimum_concatenation[lines-220]",
+      "tests/test_coercion_cells.py::test_v2_repeated_array_minimum_concatenation[lines-2221]"
     ]
   },
   {
@@ -688,7 +688,7 @@
     "function": "_wheels_read_string",
     "source": "index < len(raw)",
     "mutation": "index <= len(raw)",
-    "line": 51,
+    "line": 59,
     "nodes": [
       "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=20-limit=default-document=decoder:126:c2:125]",
       "tests/test_settings_matrix.py::test_settings_persisted_equality_witness[identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=20-limit=default-document=decoder:126:c2:125-couchdb]",
@@ -701,7 +701,7 @@
     "function": "_wheels_read_string",
     "source": "c < 128",
     "mutation": "c <= 128",
-    "line": 58,
+    "line": 66,
     "nodes": [
       "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=20-limit=default-document=decoder:126:80:0]",
       "tests/test_settings_matrix.py::test_settings_persisted_equality_witness[identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=20-limit=default-document=decoder:126:80:0-couchdb]",
@@ -714,7 +714,7 @@
     "function": "_wheels_read_string",
     "source": "code < 0x10000",
     "mutation": "code <= 65536",
-    "line": 66,
+    "line": 74,
     "nodes": [
       "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=20-limit=default-document=decoder:126:f0908080:0]",
       "tests/test_settings_matrix.py::test_settings_persisted_equality_witness[identity=legacy-splitter=v3-rabin-karp-hash=xxhash64-custom=0-minimum=20-limit=default-document=decoder:126:f0908080:0-couchdb]",
@@ -727,7 +727,7 @@
     "function": "_groups",
     "source": "index < count",
     "mutation": "index <= count",
-    "line": 587,
+    "line": 648,
     "nodes": [
       "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=fence-only]",
       "tests/test_settings_matrix.py::test_settings_persisted_equality_witness[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=fence-only-couchdb]",

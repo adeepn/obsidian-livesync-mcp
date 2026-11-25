@@ -74,3 +74,15 @@ def test_comparison_equality_is_observable(entry):
         # The mutant differs from the upstream result or the bounded refusal.
         return
     assert result != expected, entry
+
+
+def test_campaign_source_locations_remain_valid():
+    """Every campaign definition must execute against the current source.
+
+    Witnesses consume native pinned chunks.ts:13-72,350-432,527-545 oracles;
+    the campaign must not silently lose them after source movement.
+    """
+    from scripts.check_splitter_mutations import MANIFEST, mutated_source
+    import json
+    for definition in json.loads(MANIFEST.read_text()):
+        compile(mutated_source(definition), '<in-memory splitter mutation>', 'exec')
