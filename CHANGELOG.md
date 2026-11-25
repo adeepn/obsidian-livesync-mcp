@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Settings parity
 
+- Guard inactive ignore-file policies against validation of conflicting or wrongly typed names on either backend.
+
 - Commit journal selection, size and derived text policy atomically after candidate validation; preserve prior settings on refusal.
 
 - Pin zero/five-minute JWT cache boundaries across all algorithms and document empty expiry refusal and the upstream string-zero distinction.

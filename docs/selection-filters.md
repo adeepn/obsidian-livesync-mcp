@@ -109,3 +109,5 @@ command before making any storage changes, preserving its only copy.
 ## Ignore-name lookup and warnings
 
 Both vault-derived and explicit comma-separated names use exact JavaScript trim and retain empty entries (targetFilter.ts:95-145). Empty, repeated-comma, absolute-looking, traversal-looking and backslash-containing names never refuse startup. Inactive useIgnoreFiles=false never validates or reads names. Missing, unreadable or unusable names contribute no rule. Storage lookup normalizes separators inside the vault-note namespace; escaping paths and service IDs are absent, never host-file reads. Backend info and vault_stats expose integer `selection_unresolved_ignore_names`: explicit names unresolved by the latest root/ancestor lookup; 0 while inactive or vault-derived. Correct the explicit name or publish its ignore file if this count is nonzero. Reads bypass filters.
+
+Inactive device maps may contain conflicting or non-string ignoreFiles values. Both backends start and perform zero ignore-name storage reads while useIgnoreFiles is false.

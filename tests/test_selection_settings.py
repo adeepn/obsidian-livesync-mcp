@@ -369,3 +369,26 @@ async def test_failed_policy_refresh_preserves_effective_tuple(tmp_path):
         assert b._selection_resolution_diagnostic is not None
     finally:
         await b.close()
+
+
+@pytest.mark.parametrize('kind', ['couchdb', 's3'])
+@pytest.mark.parametrize('names', [('rules-a', 'rules-b'), (False, {'private': 'value'}),
+                                  (None, [1])])
+async def test_inactive_device_names_never_validate_or_read(tmp_path, kind, names, monkeypatch):
+    # targetFilter.ts:134-136 returns immediately for inactive settings.
+    settings = {'tweak_values': {key: {'pathNormalizationVersion': 0,
+        'useIgnoreFiles': False, 'ignoreFiles': value}
+        for key, value in zip(('a', 'b'), names)}}
+    async with vault(tmp_path, kind, settings) as (b, writes):
+        reads = []
+        original = b._read_selection_file
+        async def counted(path):
+            reads.append(path)
+            return await original(path)
+        monkeypatch.setattr(b, '_read_selection_file', counted)
+        await b.startup_check()
+        assert b.selection_use_ignore_files is False
+        await b.refresh_selection_files()
+        assert (await b.selection_for('nested/note.md')).allowed
+        await b.write_note('nested/note.md', 'allowed', create=True)
+        assert reads == []

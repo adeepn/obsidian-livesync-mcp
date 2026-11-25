@@ -776,3 +776,7 @@ its own deadline expires first. Neither path echoes the pattern or body.
 ### 2026-11-25 F2-5 — atomic policy refresh
 
 [DECISION] Resolve selection, size and derived text budgets before installing effective fields. A refused candidate preserves the previous tuple and retains a typed policy failure until repaired. The independent refresh reproducer failed before and passes after the fix.
+
+### 2026-11-25 F2-6 — inactive ignore settings
+
+[DECISION] Cover both backend startups with conflicting and wrongly typed inactive ignoreFiles maps; require successful writes and zero ignore-name reads. The inactive-validation mutant is caught.
