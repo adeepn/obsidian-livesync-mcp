@@ -95,20 +95,37 @@ async def test_supported_writer_info_and_write(tmp_path, kind):
         assert writes()
 
 
-@pytest.mark.parametrize('key,value', [('customChunkSize', 1e308),
-    ('customChunkSize', 10**400)])
-def test_overflow_is_keyed_value_error(key, value):
-    with pytest.raises(ValueError, match=key):
-        ContentSplitter({key: value})
+@pytest.mark.parametrize('value', [1e308, 10**400])
+def test_overflow_matches_executed_upstream_parameter(value):
+    import math
+    from pathlib import Path
+    fixture = json.loads(Path('tests/fixtures/chunk_parameters_upstream.json').read_text())
+    expected = next(row['piece_size'] for row in fixture['rows']
+                    if json.loads(row['input_json']) == value)
+    # ContentSplitterBase.ts:68 multiplies in binary64; +Infinity is a valid cap.
+    assert expected == 'Infinity'
+    assert ContentSplitter({'customChunkSize': value}).absolute_max_piece_size == math.inf
 
 
 @pytest.mark.parametrize('kind', ['couchdb', 'journal'])
-@pytest.mark.parametrize('key,value', [('customChunkSize', 1e308)])
-async def test_backend_overflow_is_clean_storage_error(tmp_path, kind, key, value):
-    async with vault(tmp_path, kind, {key: value}) as (backend, _, writes):
-        with pytest.raises(UnsupportedVault, match=key):
-            await backend.startup_check()
-        assert not writes()
+async def test_backend_overflow_retains_device_partitions(tmp_path, kind):
+    import base64
+    from pathlib import Path
+    fixture = json.loads(Path('tests/fixtures/coercion_overflow_upstream.json').read_text())
+    row = next(row for row in fixture['rows'] if row['key'] == 'customChunkSize'
+               and row['version'] == 'v1' and row['mode'] == 'plain'
+               and json.loads(row['settings_json'])['customChunkSize'][0] > 0)
+    # The directly executed cap oracle above proves 1e308 and [Infinity] both
+    # produce +Infinity; use the real upstream publication pieces/IDs here.
+    async with vault(tmp_path, kind, {'customChunkSize': 1e308, 'hashAlg': 'sha1'}) as (backend, _, writes):
+        await backend.startup_check()
+        text = base64.b64decode(row['payload']['base64']).decode()
+        meta = await backend.write_note(row['payload']['path'], text, create=True)
+        doc = (backend._store.winner(meta['doc_id']) if kind == 'journal'
+               else await backend._get_doc(meta['doc_id']))
+        assert doc['children'] == row['children']
+        assert (await backend.read_note(row['payload']['path']))['text'] == ''.join(row['pieces'])
+        assert writes()
 
 
 @pytest.mark.parametrize('kind', ['couchdb', 'journal'])

@@ -101,3 +101,5 @@ def test_coercion_fixture_generator_provenance():
         fixture = json.loads((FIXTURES / name).read_text())
         assert fixture['generator_sha256'] == expected, 'Regenerate the coercion fixtures with scripts/extract_coercion_cells.mjs and its recorded mode'
         assert fixture['provenance']['upstream_commit'] == '484c164450d61deb2e301582b60cb9b5f9fa977f'
+    parameters = json.loads((FIXTURES / 'chunk_parameters_upstream.json').read_text())
+    assert parameters['generator_sha256'] == hashlib.sha256(Path('scripts/extract_chunk_parameter_vectors.mjs').read_bytes()).hexdigest(), 'Regenerate with scripts/extract_chunk_parameter_vectors.mjs'

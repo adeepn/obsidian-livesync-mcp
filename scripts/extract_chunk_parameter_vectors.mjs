@@ -10,9 +10,9 @@ const constant=constants.split('\n').find(v=>v.startsWith('export const MAX_DOC_
 const expression=base.split('\n').find(v=>v.includes('const maxChunkSize = Math.floor('));
 const parameters=Function('settings',constant+'\n'+expression+'\nreturn maxChunkSize;');
 const values=[0,0.5,1,-1,-2,true,false,null,'0',' 0.5 ','\ufeff0x1\ufeff','1e0','0b10','0o10','+1.5','bad','','Infinity','-Infinity',[],[0],[1],[1.0],[0.5],[1,2],{}, {toString:0}, {valueOf:1}];
-const inputs=[...values.map(v=>JSON.stringify(v)), '[1e309]', '[-1e309]', '[1e21]', '[1e-7]', '[1.0]', '0.000001', '[0.000001]', '-0', '[-0]', '1'+'0'.repeat(400), '-1'+'0'.repeat(400)];
+const inputs=[...values.map(v=>JSON.stringify(v)), '[1e309]', '[-1e309]', '[1e21]', '[1e-7]', '[1.0]', '0.000001', '[0.000001]', '-0', '[-0]', '1e308', '1'+'0'.repeat(400), '-1'+'0'.repeat(400)];
 const rows=inputs.map(input_json=>{const value=JSON.parse(input_json);try{
  const n=parameters({customChunkSize:value}), number=Number(value), addition=value+value;
  return {input_json,piece_size:Number.isFinite(n)?n:String(n),primitive:String(value),number:String(number),addition:typeof addition==='number'?String(addition):addition,addition_type:typeof addition};
 }catch(error){return {input_json,error_class:error.constructor.name};}});
-fs.writeFileSync(out,JSON.stringify({upstream_commit:pin,node:process.version,source_sha256,dependencies:[],runtime:'Native ECMAScript Math/truthiness/ToNumber; no package dependencies',rows},null,2)+'\n');
+fs.writeFileSync(out,JSON.stringify({upstream_commit:pin,node:process.version,source_sha256,generator_sha256:createHash('sha256').update(fs.readFileSync('scripts/extract_chunk_parameter_vectors.mjs')).digest('hex'),dependencies:[],runtime:'Native ECMAScript Math/truthiness/ToNumber; no package dependencies',rows},null,2)+'\n');
