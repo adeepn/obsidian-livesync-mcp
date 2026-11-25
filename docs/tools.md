@@ -50,7 +50,7 @@ effective text budget); regex search/replacement deadlines use
 `LIVESYNC_REGEX_TIMEOUT_SECONDS` (default 10). Size and timeout refusals are
 separate and name the remedy variable. Literal replacement has no regex cap.
 Vault statistics expose numeric `text_budget_bytes`, `regex_max_output_bytes`
-and `regex_timeout_seconds`. See the [precise matrix](../README.md#text-access-tool-matrix)
+and `regex_timeout_seconds`. See the [precise matrix](peer-limitations.md#text-access-tool-matrix)
 and [scan policy](scan-policy.md).
 
 

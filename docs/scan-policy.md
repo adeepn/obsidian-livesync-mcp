@@ -128,7 +128,7 @@ metadata plus `content_available: false`, actual `size_bytes`, `budget_bytes`,
 `reason: text_budget_exceeded` and a remedy naming the variable; edits raise
 `TextBudgetExceeded` with the same fields, leaving the revision unchanged.
 Complete byte download remains available for either storage type; the caller's
-`max_bytes` still applies. See the [tool matrix](../README.md#text-access-tool-matrix).
+`max_bytes` still applies. See the [tool matrix](peer-limitations.md#text-access-tool-matrix).
 `vault_stats` reports `text_budget_bytes`, `regex_max_output_bytes` and
 `regex_timeout_seconds` as numbers. Rejected and oversized files appear in
 `skipped`, and still count against the overall scan note budget. No extension

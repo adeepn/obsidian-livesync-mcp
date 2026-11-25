@@ -60,85 +60,6 @@ COUCHDB_DATABASE=<plugin-database-name>
 > E2EE and path obfuscation remain unsupported.
 > CouchDB needs no local state directory.
 
-## CouchDB JWT authentication
-
-In the pinned plugin's **CouchDB Configuration → Experimental Settings**, enable
-**Use JWT Authentication**. Match these dialog labels exactly (plugin
-`src/modules/features/SetupWizard/dialogs/SetupRemoteCouchDB.svelte:240-297`):
-
-| Plugin dialog label | Peer variable | Where the value comes from |
-| --- | --- | --- |
-| JWT Algorithm | `COUCHDB_JWT_ALGORITHM` | Same selection: HS256, HS512, ES256 or ES512 |
-| JWT Key | `COUCHDB_JWT_KEY` | Same private signing material as the device: base64 HMAC bytes, or PKCS8 EC private PEM (P-256 for ES256, P-521 for ES512) |
-| JWT Subject (sub) | `COUCHDB_JWT_SUBJECT` | Same nonblank CouchDB username/subject as the device |
-| JWT Key ID (kid) | `COUCHDB_JWT_KEY_ID` | Same server key identifier; empty omits kid and selects the server default |
-| JWT Expiration Duration (minutes) | `COUCHDB_JWT_EXPIRY_MINUTES` | Same nonnegative finite duration; omit or use 0 for 5 minutes; negatives refuse because upstream would mint already-expired tokens |
-
-Startup explicitly checks `GET /_session`: `userCtx.name` must equal
-`COUCHDB_JWT_SUBJECT`. Anonymous or different subjects fail with typed
-authorization guidance naming key, algorithm, key ID, subject and clock/expiry.
-Later HTTP 401 is an authorization error; a later HTTP 400 probes `/_session`
-with the same token so ordinary malformed requests are not misclassified.
-Remote reason text is never used in diagnostics, even with unsafe debug enabled.
-
-Remove `COUCHDB_USER` and `COUCHDB_PASSWORD` entirely, including empty definitions.
-Do not combine the Basic block with this alternative. Keep the URL and database
-name separate, and add the shared MCP authentication block above:
-
-```dotenv
-LIVESYNC_BACKEND=couchdb
-COUCHDB_URL=<CouchDB-server-URI>
-COUCHDB_DATABASE=<plugin-database-name>
-COUCHDB_JWT_ALGORITHM=HS256
-COUCHDB_JWT_KEY=<plugin-jwt-key>
-COUCHDB_JWT_SUBJECT=<plugin-username>
-COUCHDB_JWT_KEY_ID=
-COUCHDB_JWT_EXPIRY_MINUTES=5
-```
-
-Replace every angle-bracket field locally. For ES256/ES512, change the algorithm
-and quote the entire PKCS8 PEM key as a multiline dotenv value; python-dotenv also
-expands literal `\n` inside double quotes. Never paste signing keys into logs,
-issues or MCP calls. A signing key is not a pre-generated bearer token.
-The plugin imports ES keys with `crypto.subtle.importKey("pkcs8", …)` after
-stripping PEM delimiters and whitespace (`httplib.ts:84-101`). SEC1
-`EC PRIVATE KEY` is rejected. Generate PKCS8 for ES256 with:
-
-```bash
-openssl ecparam -name prime256v1 -genkey -noout | openssl pkcs8 -topk8 -nocrypt
-```
-
-For ES512, use `secp521r1` instead of `prime256v1`. Keep generated private keys
-local; install only the matching public key on CouchDB.
-
-The server administrator must enable the JWT handler on every CouchDB node.
-For CouchDB 3.5, the handler list is `[chttpd] authentication_handlers = cookie,
-jwt, default`. Restart CouchDB after changing the handler list. In `[jwt_keys]`,
-configure `hmac:_default` with the same base64 shared key for HS256/HS512;
-configure `ec:_default` with the matching **public** SPKI PEM for ES256/ES512
-(newlines escaped as `\n` in the INI value). If kid is nonempty, replace
-`_default` with that exact ID, for example `ec:es512`. Keep the private EC key
-only on signing clients. Preserve the default `_couchdb.roles` claim mapping:
-the plugin and peer both send `["_admin"]`; configure this only for trusted admin
-signers. `sub` is mandatory. These server requirements are described in the
-[official CouchDB JWT documentation](https://docs.couchdb.org/en/stable/api/server/authn.html#jwt-authentication).
-The handler restart requirement was reported by the controller on 3.5.3; no
-live server is required to generate tokens.
-
-The peer sends `Authorization: Bearer <token>` on every CouchDB request, caches
-one token per backend and refreshes at `exp < integer current seconds + 10`
-(strict inequality). HS tokens are byte-identical at the same second; EC
-signatures vary but carry identical header/payload bytes. The pinned plugin
-validates a trimmed subject but signs the original subject, including whitespace.
-Its `btoa` JSON encoder only accepts Latin-1 identifiers; use matching Latin-1
-subject/kid values on the server and device if validation refuses them. Tokens
-include the plugin's `_admin` role, not an independently configurable role list.
-`backend_info` and `obsidian_vault_stats` expose only `auth_mode` (`basic` or
-`jwt`) and `jwt_algorithm`; no key, subject, kid or token is reported. Config
-errors name the variables to correct; wrong server verification keys or claims
-produce sanitized CouchDB errors. Check the handler, key family, kid, subject,
-clock and required claims against the device settings before retrying.
-
 ## S3 journal
 
 Open **Settings → Self-hosted LiveSync → Remote Configuration → Connection
@@ -159,22 +80,7 @@ DNS may cause the SDK to fall back to path style. Use a DNS-compatible bucket
 and hostname for virtual-host access. Like upstream, the switch applies only
 when an endpoint is configured; without one, AWS SDK endpoint rules apply.
 
-The audited plugin's **Copy the current settings to a Setup URI** (often called
-“Copy setup URI”) produces an encrypted settings link, not this peer's S3 URI.
-Do not paste it into `LIVESYNC_S3_URI`: the peer does not decrypt setup exports.
-Use the individual fields below. Source: commonlib at the pin,
-`serviceFeatures/setupObsidian/setupUri.ts:19–30` and
-`API/processSetting.ts:218–255`.
-
-If a compatible connection URI is already available, the accepted form is
-`sls://access:secret@endpoint?bucket=…&region=…&prefix=…`; paste it as one line:
-
-```dotenv
-LIVESYNC_BACKEND=s3
-LIVESYNC_S3_URI=<paste-sls://-setup-URI>
-```
-
-**S3 individual fields:** use this instead of the URI block; copy the values
+**S3 individual fields:** use these or the alternative URI block below; copy the values
 from the same plugin object-storage settings:
 
 ```dotenv
@@ -203,6 +109,31 @@ Expect the chosen `backend`, sensible note counts and known vault paths.
 CouchDB access is immediate apart from the requested vault scan; S3's initial
 replay can be lengthy. Startup validates settings but does not replay journals.
 There is no dedicated health endpoint; these tool calls check storage access too.
+
+## CouchDB JWT authentication
+
+Use the [JWT field recipe and server provisioning guide](couchdb-jwt.md).
+Basic and JWT are exclusive; MCP authentication is separate.
+
+## Alternative connection forms
+
+The audited plugin's **Copy the current settings to a Setup URI** (often called
+“Copy setup URI”) produces an encrypted settings link, not this peer's S3 URI.
+Do not paste it into `LIVESYNC_S3_URI`: the peer does not decrypt setup exports.
+Use the individual fields above. Source: commonlib at the pin,
+`serviceFeatures/setupObsidian/setupUri.ts:19–30` and
+`API/processSetting.ts:218–255`.
+
+If a compatible connection URI is already available, the accepted form is
+`sls://access:secret@endpoint?bucket=…&region=…&prefix=…`; paste it as one line:
+
+```dotenv
+LIVESYNC_BACKEND=s3
+LIVESYNC_S3_URI=<paste-sls://-setup-URI>
+```
+
+For custom headers, proxies and addressing, see the sections below.
+For disposable developer server tests, see [automated real-server acceptance](developer-acceptance.md#automated-real-server-acceptance).
 
 ## First access and smoke check
 
@@ -334,63 +265,6 @@ base64 token format). These offline tests establish configuration and wire behav
 not connectivity to a particular reverse proxy.
 
 JWT expiry input is numeric: an explicit empty `COUCHDB_JWT_EXPIRY_MINUTES` is refused; omit it or use `0` for the five-minute fallback. The upstream literal JSON string `"0"` is truthy and gives a zero-second token; this numeric environment variable cannot represent that string. For numeric 0 and 5, all four algorithms retain the cached token through +290.99 seconds and refresh at +291 seconds (httplib.ts:166-167,181-196).
-
-## Automated real-server acceptance
-
-The env-gated tests use disposable S3 prefixes and `mcp_test_<random>` CouchDB
-databases. Supply `MINIO_TEST_ENDPOINT`, `MINIO_TEST_KEY`, `MINIO_TEST_SECRET`,
-`MINIO_TEST_BUCKET`, `COUCHDB_TEST_URL`, `COUCHDB_TEST_USER` and
-`COUCHDB_TEST_PASSWORD` only in the invoking shell. No variables means skips
-and no server access. Never point these tests at an owner's vault.
-
-`tests/test_integration_parity_s3.py` and
-`tests/test_integration_parity_couchdb.py` reuse the 60-row pairwise settings
-selection and committed published-dependency oracle. `MINIO_TEST_MATRIX=full`
-also includes the existing supplemental branch rows on both backends. The
-matrix lifecycle retains each row's document kind and additionally checks plain
-text and binary newnote documents in every matrix row, with exact native-oracle
-children and fresh-reader comparisons.
-
-JWT tests additionally require `COUCHDB_TEST_JWT_URL`,
-`COUCHDB_TEST_JWT_SUBJECT`, and `COUCHDB_TEST_JWT_HS_KEY` or
-`COUCHDB_TEST_JWT_ES_KEY`; ES512 uses `COUCHDB_TEST_JWT_ES512_KEY` and
-`COUCHDB_TEST_JWT_KEY_ID_ES512=es512`. EC keys must be PKCS8 PEM. All four
-algorithms (HS256, HS512, ES256, ES512), wrong-key and expired-clock refusals
-are exercised. Backend construction
-uses JWT configuration without Basic credentials. Test environment values are
-never copied into `.env` or committed artifacts.
-
-```bash
-./venv/bin/python -m pytest tests/test_integration_minio.py tests/test_integration_couchdb.py tests/test_integration_parity_s3.py tests/test_integration_parity_couchdb.py -q --tb=short
-```
-
-The final F4 run closes JWT wrong-key HTTP 400 classification and confirms
-CouchDB rejects device-shaped lone-surrogate JSON while the peer refuses it
-before sending any request. The rotated EC test keys use PKCS8.
-
-Acceptance also exercises 40 MiB and 100 MiB binary uploads under a 200 MiB
-vault policy, byte-exact fresh-peer reads, exact native-oracle child IDs and
-piece digests, a 201 MiB skip without publication, and an oversized rename
-with its source intact. A 12 MiB textual `.json` newnote traverses `create_app`
-MCP create, whole/window fetch, near-end search, append and search-replace.
-Recovery checks retained local revisions/chunks after wipe and epoch changes,
-identity quarantine with remote rebuild, and interrupted replay checkpoints.
-S3 before-send events capture custom headers on authenticated outgoing requests;
-CouchDB request hooks cover GET, POST and PUT, including local documents,
-listing and leaf/metadata publication. Real compression reads include committed
-upstream vectors with the peer write setting both false and true.
-
-Large-file oracle regeneration (offline; Node 26.13.1+, exact published archives):
-
-```bash
-node scripts/extract_acceptance_vectors.mjs COMMONLIB WASM_ESM WHEELS_DIR WHEELS_TGZ WASM_TGZ tests/fixtures/acceptance_upstream.json
-```
-
-See [the final acceptance artifact](test-artifacts/2026-11-25-parity-docker/summary.txt)
-for counts, durations, input digests, image digests and reproduction commands.
-This establishes the enumerated scenarios on these servers; it does not prove
-all possible settings or server combinations.
-
 
 ## Connection constraints
 

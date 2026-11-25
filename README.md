@@ -7,6 +7,9 @@ with the explicit differences below. No Obsidian app or local vault folder is
 needed on the server. Read, edit, search, manage properties/tags, links and canvas
 from an MCP client; see the [tool overview](docs/tools.md).
 
+[Install and start](#quick-start) · [clients and authentication](docs/clients-and-authentication.md) ·
+[connection recipes](docs/connecting-storage.md)
+
 ## Quick start
 
 Requires Python 3.11+ and an existing vault that already syncs in LiveSync.
@@ -61,85 +64,9 @@ at application construction/startup. Configuration errors name variables and val
 rules without echoing supplied values, including invalid ports and backend names.
 Restart after changing configuration.
 
-### Environment reference
+## Configuration
 
-
-Acceptance connection variables are test-only and belong in the invoking shell; see
-[real-server acceptance](docs/connecting-storage.md#automated-real-server-acceptance).
-
-This table covers configuration consumed by `config.py` and `replay_limits.py`.
-The final debug switch is consumed separately by `diagnostic_hygiene.py`.
-Wire encoding follows devices without an environment switch: CouchDB refuses
-unpaired UTF-16 units before publication because the server rejects them; compact
-S3 journal leaves replace them with U+FFFD and writes report `transport_replacements`. [Wire details](docs/s3-journal.md#surrogate-wire-encoding).
-“Required for S3 fields” means only the individual-variable connection form;
-URI and individual fields are mutually exclusive. Backend-specific settings
-are read only for the selected backend. Empty defaults below mean an empty string.
-
-| Variable | Default | Requirement | Purpose |
-| --- | --- | --- | --- |
-| `LIVESYNC_BACKEND` | none | Required | Select `couchdb` or `s3` |
-| `COUCHDB_CUSTOM_HEADERS` | empty | Optional | Plugin Custom Headers lines or JSON object; credential values; see [connection examples](docs/connecting-storage.md#reverse-proxies-and-auth-proxies) |
-| `COUCHDB_CONNECT_TIMEOUT_SECONDS` | `5` | Optional | Positive finite seconds for CouchDB connection |
-| `COUCHDB_IO_TIMEOUT_SECONDS` | `30` | Optional | Positive finite seconds for CouchDB read, write and pool |
-| `S3_CONNECT_TIMEOUT_SECONDS` | `5` | Optional | Positive finite seconds for S3 connection |
-| `S3_READ_TIMEOUT_SECONDS` | `30` | Optional | Positive finite seconds for S3 response reads |
-| `S3_MAX_ATTEMPTS` | `1` | Optional | Positive integer SDK attempts for reads and conditional writes; unconditional PUT always one |
-| `LIVESYNC_FRONTMATTER_MAX_NODES` | `20000` | Optional | Positive integer expanded YAML nodes for properties/tags only |
-| `LIVESYNC_FRONTMATTER_MAX_BYTES` | `4194304` | Optional | Positive integer expanded UTF-8 string/key bytes for properties/tags only |
-| `LIVESYNC_FRONTMATTER_MAX_DEPTH` | `200` | Optional | Positive integer property nesting depth; parser runtime ceiling also applies |
-| `LIVESYNC_SELECTION_TIMEOUT_SECONDS` | `5` | Optional | Positive finite seconds for Node capability checks and selection requests |
-| `COUCHDB_URL` | `http://localhost:5984` | Optional | CouchDB server base URL |
-| `COUCHDB_USER` | none | Required for CouchDB Basic auth; absent for JWT | Database username |
-| `COUCHDB_PASSWORD` | none | Required for CouchDB Basic auth; absent for JWT | Database password |
-| `COUCHDB_DATABASE` | none | Required for CouchDB | LiveSync database name |
-| `COUCHDB_JWT_ALGORITHM` | empty (Basic auth) | Select JWT mode | HS256, HS512, ES256 or ES512; remove COUCHDB_USER and COUCHDB_PASSWORD |
-| `COUCHDB_JWT_KEY` | none | Required for JWT | Base64 HMAC key or matching PKCS8 EC PEM private key; never reported |
-| `COUCHDB_JWT_SUBJECT` | none | Required for JWT | Plugin JWT Subject (sub), nonblank; original whitespace preserved |
-| `COUCHDB_JWT_KEY_ID` | empty (omit kid) | Optional for JWT | Plugin JWT Key ID (kid); match server key entry; ES512 acceptance uses a named kid |
-| `COUCHDB_JWT_EXPIRY_MINUTES` | 5 | Optional for JWT | Nonnegative finite minutes; 0 uses the plugin five-minute fallback; explicit empty is refused; cached token refreshes when exp is strictly less than integer current seconds + 10 |
-| `LIVESYNC_S3_URI` | empty | Required unless S3 fields set | `sls://access:secret@endpoint?bucket=…&region=…&prefix=…` connection |
-| `S3_ENDPOINT_URL` | none | Required for S3 fields | S3-compatible endpoint URL |
-| `S3_ACCESS_KEY_ID` | none | Required for S3 fields | Object-storage access key |
-| `S3_SECRET_ACCESS_KEY` | none | Required for S3 fields | Object-storage secret key |
-| `S3_BUCKET` | none | Required for S3 fields | Existing LiveSync journal bucket |
-| `S3_REGION` | `auto` (fields); empty if omitted in URI | Optional | Object-storage region |
-| `S3_CUSTOM_HEADERS` | empty | Optional | Plugin Custom Headers lines or JSON object, applied after signing on every S3 request |
-| `S3_FORCE_PATH_STYLE` | `true` | Optional | `true` path style, `false` virtual-host style for configured endpoints |
-| `S3_PREFIX` | empty | Optional | Literal key prefix, including trailing slash if needed |
-| `S3_STATE_DIR` | `./data` | Optional | Dedicated persistent local replica directory |
-| `S3_REFRESH_MIN_INTERVAL_SEC` | `5` | Optional | Positive finite seconds below `2**63` between refresh attempts |
-| `S3_STATE_SIZE_WARN_MB` | `0` | Optional | Non-negative integer warning threshold in MiB; 0 disables |
-| `MCP_API_KEY` | empty | Required unless full OAuth group set | Shared bearer token; takes precedence over OAuth |
-| `OAUTH_PASSWORD` | empty | Required for OAuth | Password on the authorization form |
-| `OAUTH_CLIENT_ID` | empty | Required for OAuth | Pre-registered client ID |
-| `OAUTH_CLIENT_SECRET` | empty | Required for OAuth | Pre-registered client secret |
-| `MCP_SERVER_URL` | `https://localhost:8484` | Optional | External server base URL used for auth resource binding |
-| `MCP_HOST` | `0.0.0.0` | Optional | HTTP bind address |
-| `MCP_PORT` | `8484` | Optional | HTTP port, integer 1–65535 |
-| `LIVESYNC_SCAN_MAX_NOTES` | `0` | Nonnegative integer | Aggregate note cap; 0 unlimited |
-| `LIVESYNC_SCAN_MAX_BYTES` | `0` | Nonnegative integer | Aggregate UTF-8 input byte cap; 0 unlimited |
-| `LIVESYNC_SCAN_MAX_SECONDS` | `20` | Nonnegative finite number | Aggregate scan and index time budget including scan-slot waiting; 0 unlimited |
-| `LIVESYNC_TEXT_SCAN_MAX_BYTES` | `empty` | Nonnegative integer or empty | Whole-note UTF-8 text access budget; empty resolves to max(positive vault size policy, 256 MiB); 0 unlimited |
-| `LIVESYNC_REGEX_MAX_OUTPUT_BYTES` | `0` | Nonnegative integer | Regex replacement output bytes; 0 uses effective text access budget |
-| `LIVESYNC_REGEX_TIMEOUT_SECONDS` | `10` | Positive finite number | Persistent isolated regex worker request deadline in seconds |
-| `LIVESYNC_TEXT_VERDICT_CACHE_ENTRIES` | `65536` | Positive integer | Negative verdict LRU bound |
-| `LIVESYNC_SYNC_ONLY_REGEX` | `empty` | Optional | Local allow regex list, literal `|[]|` separators |
-| `LIVESYNC_SYNC_IGNORE_REGEX` | `empty` | Optional | Local ignore regex list |
-| `LIVESYNC_USE_IGNORE_FILES` | `empty` | Optional boolean | Empty/unset derives useIgnoreFiles from vault settings; true/false overrides |
-| `LIVESYNC_IGNORE_FILES` | `empty` | Optional | Empty/unset derives ignoreFiles; non-empty uses JS-trimmed comma names including empty entries; unresolved explicit names warn |
-| `LIVESYNC_SYNC_MAX_SIZE_MB` | `empty` | Finite number or empty | Strict operator override; vault data uses iterative JavaScript numeric coercion; <=0 disables |
-| `LIVESYNC_DISABLE_CHECKING_CONFIG_MISMATCH` | `false` | Boolean | Bypass ordinary tweak differences, never identity/E2EE guards; CouchDB compression follows the vault independently |
-| `LIVESYNC_AUTO_ACCEPT_COMPATIBLE_TWEAK` | `true` | Boolean | Align fully advertised compatible-lossy tweaks |
-| `LIVESYNC_JOURNAL_MAX_LINE_BYTES` | `268435456` | Positive integer <2**63 | UTF-8 record bytes |
-| `LIVESYNC_JOURNAL_MAX_INFLATED_BYTES` | `8589934592` | Positive integer <2**63 | Inflated journal bytes |
-| `LIVESYNC_JOURNAL_MAX_RECORDS` | `1000000` | Positive integer <2**63 | Records per journal |
-| `LIVESYNC_JOURNAL_MAX_JSON_DEPTH` | `512` | Positive integer <2**63 | Nesting admission; decoder capacity is separate |
-| `LIVESYNC_JOURNAL_MAX_OBJECT_BYTES` | `8589934592` | Positive integer <2**63 | Compressed/control object bytes |
-| `LIVESYNC_JOURNAL_MAX_REFRESH_KEYS` | `1000000` | Positive integer <2**63 | Keys per refresh |
-| `LIVESYNC_JOURNAL_MAX_REFRESH_BYTES` | `68719476736` | Positive integer <2**63 | Downloaded bytes per refresh |
-| `LIVESYNC_JOURNAL_MAX_REFRESH_SECONDS` | `3600` | Positive finite number <2**63 | Elapsed seconds, fractions accepted |
-| `LIVESYNC_UNSAFE_DEBUG` | `unset` | Set to 1 plus DEBUG logging | Unsafe last-line diagnostic sink; keep disabled |
+See the [complete environment reference](docs/configuration.md).
 
 ## Backends
 
@@ -160,218 +87,52 @@ For CouchDB JWT connections, follow the [JWT setup route](docs/connecting-storag
 ## Supported vault settings
 
 “Identical” means source-audited behavior at the pin, not live acceptance of every
-combination. [Source inventory and caveats](docs/superpowers/specs/2026-11-23-settings-parity.md);
-[real-client validation scope](docs/upstream-pin.md).
+combination. See the [complete setting/value/status table](docs/peer-limitations.md#supported-vault-settings)
+and [source and live evidence](docs/upstream-pin.md).
 
-| Setting | Plugin values | Status | Peer behavior |
-|---|---|---|---|
-| `couchDB_CustomHeaders` | Key: Value lines | Identical for valid HTTP headers | Configure COUCHDB_CUSTOM_HEADERS locally; all database requests, origin restricted |
-| `bucketCustomHeaders` | Key: Value lines | Identical for valid HTTP headers | Configure S3_CUSTOM_HEADERS locally; final wire overrides, including signed headers |
-| `forcePathStyle` | Boolean, default true | Identical for configured endpoints | S3_FORCE_PATH_STYLE=true/false; SDK addressing rules still apply |
-| `pathNormalizationVersion` | 0 legacy / 1 NFC | Identical | Both, independently of filename case; collisions refuse |
-| `handleFilenameCaseSensitive` | false / true | Identical | Legacy, NFC, case-sensitive and NFC+case-sensitive identities |
-| `chunkSplitterVersion` | v1, v2, v2-segmenter, v3-rabin-karp, legacy empty | Identical | All writers; legacy split-surrogate pieces retain device IDs; CouchDB refuses unpaired units as devices do; journal collisions compare projected bytes; v2-segmenter equals v2 at this pin |
-| `enableChunkSplitterV2`, `useSegmenter` | false / true (legacy migration) | Identical | One-pass migration of empty version; unknown version normalization follows upstream |
-| `hashAlg` | xxhash64, xxhash32, mixed-purejs, sha1, empty | Identical | Upstream UTF-16 length and hash semantics |
-| `customChunkSize` | JSON value; number >=0 in UI (default 0) | Device coercion; loops/data loss refuse | JavaScript truthiness/ToNumber coercion; V1 plain cap zero advances one UTF-16 unit; V3 clamps; see [loop refusals](docs/vault-format.md#invalid-writer-parameters) |
-| `minimumChunkSize` | JSON value; numeric in UI (default 20) | Identical wherever the plugin terminates | Original JSON values retain JavaScript ToPrimitive/addition (including array/string concatenation); negative, empty, null and NaN follow upstream coercion; only V2 nonempty plain minima whose addition preserves positive zero loop |
-| `syncMaxSizeInMB` | Any JSON type; iterative JavaScript numeric coercion; default 50 | Identical | Device write admission and automatic text access budget resolution; textual files remain scan-eligible independent of extension; aggregate caps default unlimited; oversized rename refuses to protect source |
-| `syncOnlyRegEx`, `syncIgnoreRegEx` | ECMAScript pattern lists | Identical when configured | Set local env explicitly; never inferred from milestone |
-| `useIgnoreFiles` | Any JSON type; JavaScript truthiness | Identical | Derived from vault settings unless overridden; active policy requires Node.js 22+ |
-| `ignoreFiles` | Filename list | Identical | Derived from vault settings unless overridden; exact comma split/JS trim; missing or unusable names add no rules; explicit unresolved names warn |
-| `useEden` and count/length/age controls | Boolean / numbers | Identical | Current upstream writes empty Eden regardless; historical inline chunks readable |
-| `longLineThreshold` | Numeric (default 250) | Identical | Unused by dispatched algorithms at this pin |
-| `encrypt`, `E2EEAlgorithm`, `useDynamicIterationCount`, `encryptInternalMetadata` | E2EE options | Not supported for E2EE | Encrypted vaults fail startup; no encryption/decryption |
-| `usePathObfuscation` | false / true | Not supported when true | Startup refuses; see issue #4 |
-| `idDerivationVersion`, `idDerivationKey` | 0 legacy / 1 keyed | Identical for unencrypted vaults | Validate version/key configuration; unencrypted IDs follow upstream |
-| `useJWT`, `jwtAlgorithm`, `jwtKey`, `jwtKid`, `jwtSub`, `jwtExpDuration` | HS256 / HS512 / ES256 / ES512 | Identical JWT wire format | Explicit connection env; zero duration uses five minutes; per-backend cached Bearer tokens, raw EC signatures; [setup](docs/connecting-storage.md#couchdb-jwt-authentication) |
-| `enableCompression` | false / true | Identical | CouchDB always reads compressed data; writes follow the vault (absent: false), verified on real CouchDB. Non-lossy CR/LF, surrogate and BOM exceptions below; reserved literal prefixes disclose decoded reads or refuse invalid input; journal forces off |
-| `deleteMetadataOfDeletedFiles` | Boolean, default false | Deliberate difference | Always publish `deleted: true` soft deletion, never `_deleted`; devices honour either deletion marker; retain body/chunk references |
-| `automaticallyDeleteMetadataOfDeletedFiles` | Days, default 0 (disabled) | Deliberate difference | Never expire or purge deletion history; device-side maintenance remains separate |
-| `disableMarkdownAutoMerge` | Boolean | Deliberate difference | No automatic Markdown merge; CouchDB mutations refuse unresolved siblings; journal keeps its deterministic winner |
-| `resolveConflictsByNewerFile` | Boolean | Deliberate difference | No mtime-based conflict resolver; resolve in Obsidian before editing a conflicted CouchDB note |
-| `writeDocumentsIfConflicted` | Boolean, default false | Deliberate difference | Device reflection policy is not applied; journal reads its deterministic winner, CouchDB writes still refuse unresolved siblings |
-| `processSizeMismatchedFiles` | Boolean, default false | Device filesystem only | Controls device reflection when metadata and reconstructed Blob size differ; the peer reads storage directly and discloses its own lossy writes |
-| `doNotDeleteFolder`, `trashInsteadDelete` | Boolean | Device filesystem only | No filesystem folders or trash on the peer; soft deletion is independent of the device's trash choice |
-| `doNotUseFixedRevisionForChunks` | Retained Boolean | No active consumer at this pin | No active chunk-manager/database implementation reads this setting; not an additional peer tuning switch |
-| `suspendParseReplicationResult` | false / true | Deliberate difference | Reads remain available from DB; no filesystem reflection stage |
-| Hidden File Sync / customization sync | `i:`, `ix:` namespaces | Not supported | No local vault folder; hidden ignore files can be read internally |
-| Plugin sync / `usePluginSyncV2` | `ps:` namespace / Boolean | Not supported | Service documents excluded from ordinary tools |
-| Tweak mismatch/auto-accept flags | Boolean | Deliberate difference | Local env policy; no device registration or PREFERRED publication |
-| YAML anchors / aliases | Note bytes, parsed by host tools | Properties supported | Memoised projection; [expanded-node/byte/depth budgets](docs/frontmatter-properties.md) affect only properties/tags |
-| Transport deadlines / SDK attempts | Device-local configuration | Local overrides | See environment table; unconditional S3 publication always single attempt |
-| Reflection/request/cache/concurrency tuning | Various local device options | Not supported as device settings | No host reflection or plugin request engine; [full inventory](docs/superpowers/specs/2026-11-23-settings-parity.md#ж-other-tweak_values-and-production-evidence-boundary) |
-
-Real-server coverage includes the 60-row pairwise matrix on both backends.
-It does not establish every setting combination on every server.
+| Settings | Status | Details |
+|---|---|---|
+| Path normalization and filename case | Identical | Legacy/NFC, insensitive/sensitive identities |
+| Splitter versions and legacy migration | Identical where terminating and lossless | [Exact coercion and guards](docs/vault-format.md#invalid-writer-parameters) |
+| Chunk hashes, Eden, long-line threshold | Identical at pin | [Full settings table](docs/peer-limitations.md#supported-vault-settings) |
+| File size and ignore-file selection | Identical admission; local overrides | [Size](docs/size-policy.md), [selection](docs/selection-filters.md) |
+| Headers, JWT and addressing | Explicit local connection settings | [Connection setup](docs/connecting-storage.md) |
+| CouchDB compression | Device-compatible; transformations disclosed | [Compression](docs/vault-format.md#couchdb-compression) |
+| E2EE and path obfuscation | Unsupported | [Recovery choices](docs/peer-limitations.md#supported-vault-settings) |
+| Deletion retention and conflict automation | Deliberate differences | [Policies](docs/peer-limitations.md#deletion-and-conflict-policies) |
+| Reflection, hidden/customization/plugin sync | Outside ordinary-tool scope | [Full scope](docs/peer-limitations.md#supported-vault-settings) |
+| YAML aliases and properties | Supported with configurable projection budgets | [Properties](docs/frontmatter-properties.md) |
+| Device request/cache/concurrency tuning | Local peer policies | [Operational bounds](docs/peer-limitations.md#operational-and-tool-bounds) |
 
 ## How the peer differs from a device
 
-Properties/tags resolve YAML anchors and aliases, including reused containers.
-Untouched top-level key text survives edits byte-for-byte. A streaming preflight
-bounds expanded nodes (default 20000) and expanded UTF-8 string/key bytes (4 MiB) and nesting depth (200), all adjustable
-with the environment table. Cycles have no finite JSON representation. Typed
-refusals leave the note intact and synced and direct callers to fetch/edit raw
-note text. These are property-tool budgets, not file sync limits;
-[details and recovery](docs/frontmatter-properties.md).
+The [full inventory](docs/peer-limitations.md) retains exact defaults, coercion,
+refusal conditions and recovery instructions. The main practical differences:
 
-Transport defaults remain 5 s connect / 30 s I/O and 5 s selection requests;
-all are configurable in the environment table. CouchDB pool waits now use the
-I/O value. S3 defaults to one SDK attempt to preserve ambiguous-write reporting;
-set S3_MAX_ATTEMPTS=4 for upstream's attempt count on reads and conditional
-writes. Unconditional fallback PUT always uses one attempt, even then. See
-[retry and lost-response semantics](docs/s3-journal.md#transport-policy).
-
-The 2026-11-25 acceptance run found JWT wrong-key HTTP 400 classified as a
-generic storage error and CouchDB rejecting a lone-surrogate leaf with HTTP 400.
-Both production paths are corrected; the final automated acceptance covers
-text and binary in every matrix row, 40 MiB and 100 MiB binary round trips,
-a 201 MiB skip and a 12 MiB textual MCP workflow. See the [recorded results](docs/test-artifacts/2026-11-25-parity-docker/summary.txt).
-
-CouchDB 3.5.3 rejects unpaired UTF-16 surrogate JSON escapes, including device
-writes. The peer refuses the complete write before publishing any leaf. V1's
-non-plain text splitter can cut inside an emoji pair; use a vault splitter with
-surrogate protection such as v3, or avoid synchronizing that note. Journal
-TextEncoder replacement and device chunk IDs remain unchanged.
-
-- CouchDB auth is explicit local configuration: choose Basic credentials or the
-  JWT environment group, independently of MCP client auth. JWT requires PKCS8 EC keys for ES256/ES512 (SEC1 is rejected);
-  see [key generation](docs/connecting-storage.md#couchdb-jwt-authentication).
-  JWT matches the pinned plugin, including original subject whitespace and Latin-1 JSON encoding.
-  Non-Latin-1 identifiers cannot be encoded by the plugin either; configure
-  matching Latin-1 identifiers on the server and device. Vault stats expose only
-  `auth_mode` (`basic` or `jwt`) and `jwt_algorithm`, never keys or subjects.
-  JWT startup verifies `/_session` returns the configured subject. Failed tokens
-  receive typed authorization guidance for key, algorithm, key ID, subject and
-  clock. A later HTTP 400 is an auth error only if the same token fails this
-  session check; ordinary bad requests retain their original classification.
-
-- CouchDB compression uses Python zlib raw deflate level 8; bytes may differ
-  from device fflate output, but devices read either stream. The peer preserves
-  CR/LF text instead of treating line-wrapped base64 as binary (upstream loses
-  those line breaks). It publishes data containing
-  a leading BOM uncompressed to prevent Blob conversion/decoding losses.
-  Reads of existing compressed text match device Blob.text(), including U+FFFD
-  replacement and BOM removal. Invalid base64/deflate refuses with a sanitized
-  error: restore the document from a healthy device or backup. Literal reserved
-  compression prefixes in new text pieces retain device decoding with typed
-  notices; undecodable prefixes refuse before publication. Use a binary
-  attachment path to preserve literal prefix bytes. See
-  [compressed document format](docs/vault-format.md#couchdb-compression).
-
-- JWT expiry is numeric: omit it or set `0` for five minutes; an explicit empty value
-  is refused. Upstream literal JSON string `"0"` means zero seconds and cannot be
-  represented by this numeric environment setting.
-- Existing conflicting shared journal leaves refuse before publication. Inspect and
-  resolve the conflicting leaf in Obsidian, or coordinate an alternate hashAlg
-  or a positive customChunkSize before retrying.
-- E2EE and obfuscated paths are unsupported; use an unencrypted, unobfuscated
-  vault until [#3](https://github.com/adeepn/obsidian-livesync-mcp/issues/3) /
-  [#4](https://github.com/adeepn/obsidian-livesync-mcp/issues/4) are implemented.
-- Deletion always publishes a soft `deleted: true` revision, retaining body and
-  chunk references; the peer never purges deletion history. Devices honour this
-  marker even when configured to publish `_deleted` themselves. The peer does
-  not implement `deleteMetadataOfDeletedFiles` or timed
-  `automaticallyDeleteMetadataOfDeletedFiles` cleanup. Run any intentional
-  history cleanup separately through LiveSync after agreeing retention.
-- No automatic conflict resolution runs: `disableMarkdownAutoMerge`,
-  `resolveConflictsByNewerFile` and `writeDocumentsIfConflicted` do not change
-  peer conflict handling. CouchDB refuses mutations of notes with unresolved
-  sibling revisions; journal reads/writes use the deterministic generation/hash
-  winner while retaining siblings. Resolve conflicts in Obsidian before retrying
-  a refused edit; a successful journal write is not proof that another branch
-  was merged. [Source references](docs/peer-limitations.md#deletion-and-conflict-policies).
-- Replay has operational byte/count/depth/time budgets. Named
-  `ReplayBudgetExceeded` errors identify the env override to raise; Python JSON
-  decoder capacity is a separate ceiling. [Budget defaults and recovery](docs/size-policy.md).
-- Rename into an excluded or oversized destination refuses before mutation:
-  the peer has no disk copy at the destination and must protect the only source.
-  Choose an admitted path/size. Invalid UTF-8 on plain paths also refuses unless
-  attachment upload explicitly opts into `lossy_text=true` replacement.
-- Remote wipe recovery retains local revisions/chunks. Local-only survivors stay
-  readable and are not republished automatically; account for them before reset.
-- Vault-derived scalar settings use JavaScript coercion: numeric strings and arrays
-  can limit size; `true` means 1 MiB, while null, false and nonnumeric values
-  disable size admission. Ignore enablement uses truthiness, including truthy
-  empty arrays/objects and strings. Operator overrides keep strict validation.
-  Array conversion is iterative; it adds no coercion depth limit after JSON admission.
-  Cyclic Python arrays use native empty-field cycle handling.
-  Device maps refuse only when effective policies disagree; an object whose
-  toString prevents numeric conversion needs correction in the vault.
-- Ignore-file selection derives from vault settings unless independently overridden.
-  Active selection requires Node.js 22+, including vault useIgnoreFiles=true.
-  LIVESYNC_USE_IGNORE_FILES=false is allowed, but devices drop peer writes to
-  ignored paths. Reads bypass all filters, including explicitly configured filters;
-  devices retain local files that later become ignored, and the database remains
-  the read source of truth. With filters off no Node is launched.
-  Ignore names never refuse startup; unusable/missing names contribute no rules.
-  `selection_unresolved_ignore_names` counts explicitly configured names not resolved
-  by the latest root/ancestor lookup. Inactive ignore settings are not validated.
-  [Filter syntax](docs/selection-filters.md).
-- Hidden File Sync, customization/plugin sync and suspended filesystem reflection
-  are outside the ordinary-tool scope. The peer has no local vault folder; this
-  is a scope choice, not a claim that service namespaces cannot have APIs.
-  DB reads include received oversized files;
-  a device may decline to reflect those files until its settings permit them.
-  `processSizeMismatchedFiles` controls device size-mismatch reflection;
-  `doNotDeleteFolder` and `trashInsteadDelete` affect only its filesystem.
-  Plugin encrypted setup exports are not supported; copy
-  connection fields and choose CouchDB Basic or JWT authentication.
-  Ordinary tools reserve service prefixes/names and dot-prefixed paths;
-  [path admission](docs/vault-format.md#path-admission) lists the exact exclusions.
-- Successful writes disclose lossy ingestion through typed publication notices: legacy BOM removal, invalid UTF-8 replacement, Blob input surrogates and journal wire surrogates. The original tool result remains verbatim, followed by a separate notice record and fixed prose. BOM size mismatches prevent default device reflection; see [typed notices](docs/outcome-reporting.md#typed-publication-notices).
-- Distinct colliding CouchDB pieces refuse before publication: configure a positive
-  `customChunkSize` or a collision-free `hashAlg` such as `sha1`. Journal pieces
-  with identical TextEncoder bytes share the original ID and report replacements.
-- Refuse inputs on which the plugin itself does not terminate: V1
-  nonempty binary/non-plain text with nonpositive caps, V1 nonempty plain text
-  with negative caps, V2 nonempty binary with nonpositive caps, V2 text groups
-  containing more than one Unicode code point with nonpositive caps (or empty
-  groups with negative caps), and V2 nonempty decoded plain text with
-  `minimumChunkSize` whose first JavaScript addition preserves positive zero (ordinary 0, empty string, null, or zero-only/whitespace-only primitive strings);
-  negative zero and zero strings whose concatenation becomes NaN terminate.
-  The terminating NaN-cap V2 binary case also refuses: upstream slice(i, NaN)
-  discards the input bytes. This safety refusal protects data; set a numeric
-  `customChunkSize` such as 0. For loops, use `customChunkSize` producing a
-  positive pieceSize and a positive V2 plain `minimumChunkSize`.
-  Empty inputs and V3 retain upstream semantics.
-  [Exact cell evidence and recovery](docs/vault-format.md#invalid-writer-parameters).
-- The peer is an invisible writer: it does not register a device or modify
-  milestone/PREFERRED settings. Align device settings separately; review
-  [tweak compatibility](docs/tweak-compatibility.md) after upgrades.
-- All text access uses one UTF-8 byte budget for plain documents and textual
-  newnotes: unset resolves to max(positive vault size policy in bytes, 256 MiB),
-  explicit `LIVESYNC_TEXT_SCAN_MAX_BYTES` wins, and 0 is unlimited. Newnotes
-  additionally require strict UTF-8/control validation. Beyond-budget fetches
-  explain the refusal and edits preserve the revision; byte download is available.
-  Scans report skipped paths and have no default note/byte cap. Each call has a
-  20-second time budget (0 disables it), including scan-slot waiting; a busy
-  refusal has reason `scans_busy` and retry guidance. Optional operator caps and
-  response limits produce `truncated: true`, `next_cursor`, and a `scan` object
-  with notes, bytes, `elapsed_ms`, configured maxima and `stopped_because`.
-  Pass the opaque `cursor` to continue strictly after the last processed display
-  path; paths created or renamed behind it between pages can be missed or
-  repeated. The CouchDB metadata index resumes by database update sequence and
-  explicitly reports incomplete state. Search defaults to 200 matching notes;
-  other growing responses page by 200 source notes. List responses use a
-  `results` envelope so even complete responses can carry `scan` metadata.
-  Fetch accepts inclusive `start_line` / `end_line` windows after full text
-  validation. Regex uses one persistent isolated worker; replacement output
-  defaults to the effective text budget and request deadlines default to
-  10 seconds. [Tool matrix and scan policy](docs/scan-policy.md).
-- Custom request headers are local connection credentials, copied from the plugin,
-  not inferred from shared vault settings. Invalid HTTP names/control characters
-  refuse startup with variable, entry ordinal and rule; correct that entry.
-  Text form follows upstream colon truncation; use JSON for colon-containing values.
-  Transport library logs are suppressed process-wide once custom headers are used;
-  application diagnostics report typed presence/count only.
-- S3 custom endpoints default to path-style addressing; virtual-host-only providers
-  must set S3_FORCE_PATH_STYLE=false. Publication has an exists+put race fallback on stores
-  without conditional writes. [S3 operation](docs/s3-journal.md).
-
-The [complete limit and refusal inventory](docs/peer-limitations.md) also covers
-fixed transport/selection deadlines, YAML property-conversion bounds and SQLite
-capacity. These are resource/tool constraints, not LiveSync vault settings.
+- E2EE and obfuscated paths require an unencrypted, unobfuscated vault.
+  [Scope and alternatives](docs/peer-limitations.md#supported-vault-settings).
+- Hidden files, customization and plugin namespaces are excluded from ordinary tools.
+  [Path and reflection scope](docs/peer-limitations.md#how-the-peer-differs-from-a-device).
+- The peer is an invisible writer: no device registration or PREFERRED publication.
+  [Tweak policy](docs/peer-limitations.md#how-the-peer-differs-from-a-device).
+- Deletions retain body/chunk history; no timed purge or automatic conflict merging.
+  [Retention and conflicts](docs/peer-limitations.md#deletion-and-conflict-policies).
+- Reads come from storage and bypass device selection/reflection filters.
+  [Selection and size behavior](docs/peer-limitations.md#how-the-peer-differs-from-a-device).
+- Native nontermination, data loss, unsafe renames and chunk collisions refuse before publication.
+  [Exact guards and remedies](docs/peer-limitations.md#how-the-peer-differs-from-a-device).
+- Compression preserves CR/LF and leading BOM; CouchDB refuses unpaired surrogates.
+  [Transport and compression](docs/peer-limitations.md#how-the-peer-differs-from-a-device).
+- Successful lossy writes disclose typed notices; ambiguous writes require re-reading.
+  [Publication and outcomes](docs/peer-limitations.md#how-the-peer-differs-from-a-device).
+- Replay has configurable resource budgets; runtime decoder/SQLite capacity also applies.
+  [Limits and recovery](docs/peer-limitations.md#operational-and-tool-bounds).
+- Whole-text access, scans and regex requests use separate configurable budgets and pagination.
+  [Tool contracts](docs/peer-limitations.md#how-the-peer-differs-from-a-device).
+- Properties/tags have expanded YAML node, byte and depth budgets; raw text remains available.
+  [Projection limits](docs/peer-limitations.md#how-the-peer-differs-from-a-device).
+- Transport/selection deadlines, retries, auth and headers are configured locally.
+  [Defaults and connection constraints](docs/peer-limitations.md#how-the-peer-differs-from-a-device).
 
 ## Outcome reporting
 
@@ -381,15 +142,6 @@ capacity. These are resource/tool constraints, not LiveSync vault settings.
 remains. **Outcome unknown** means metadata publication may have happened:
 re-read affected paths before retrying, especially non-idempotent edits.
 [Operation/retry contract and journal reconciliation](docs/outcome-reporting.md).
-
-## Size behavior
-
-Ordinary writes skip only if `max > 0 && size > 0 && size > max*1024*1024`.
-Equality is admitted; fractions work; <=0 disables. Default is 50 MiB from
-vault settings, unless explicitly overridden. Raw and converted Blob bytes are
-checked before publication. Downloads have no device-size gate; `max_bytes`
-is an optional caller limit. Journal refresh validates the complete selection/size/text candidate before committing any effective setting; refused candidates preserve the previous tuple and block writes until repaired. Journal refresh re-resolves the effective vault size policy and derived text budget; explicit overrides remain authoritative. CouchDB re-resolves at startup.
-[Full size policy, skips, protected renames and independent replay budgets](docs/size-policy.md).
 
 ## Local state and recovery (S3)
 
@@ -426,26 +178,15 @@ Bearer takes precedence if both are supplied. OAuth uses password + PKCE,
 pre-registered Claude callbacks and resource binding to the configured URL
 plus `/mcp`; DCR is disabled. [Systemd commands, Claude.ai setup and other clients](docs/clients-and-authentication.md).
 
-### Text access tool matrix
+## Configuration and tool reference
 
-| Tools | Within effective text budget | Beyond effective text budget |
-|---|---|---|
-| `obsidian_fetch` | Whole text, properties and optional stats | Metadata, `content_available: false`, `size_bytes`, `budget_bytes`, `reason: text_budget_exceeded`, remedy naming `LIVESYNC_TEXT_SCAN_MAX_BYTES` |
-| `obsidian_update_note` (all modes), properties, tags, canvas, templates | Whole-text operation with existing type/path rules | Typed `TextBudgetExceeded` refusal with the same fields and remedy; no write |
-| Search, tags, links, graph, statistics | Whole eligible text subject to aggregate scan limits | Path in `skipped`; metadata still counts against aggregate limits |
-| `obsidian_download_attachment` | Existing binary/newnote byte download rules; plain text uses fetch | Complete bytes for either storage type, subject to caller `max_bytes` |
+The [environment reference](docs/configuration.md) lists every variable, default,
+requirement and override. Copy only the selected backend and authentication group
+from [.env.example](.env.example); keep secrets local.
 
-`obsidian_vault_stats` exposes `text_budget_bytes`, `regex_max_output_bytes`
-and `regex_timeout_seconds`. Zero bytes means unlimited. Explicit regex output
-limits are independent of the input text budget. Regex size and deadline
-refusals name `LIVESYNC_REGEX_MAX_OUTPUT_BYTES` and
-`LIVESYNC_REGEX_TIMEOUT_SECONDS` respectively. Literal replacement has no
-regex output cap. Device write-size admission still applies after edits.
+[Tool overview](docs/tools.md) · [text access and scan policy](docs/scan-policy.md) ·
+[full size policy](docs/size-policy.md) · [oracle regeneration](docs/regenerating-oracle-fixtures.md).
 
 ## License
 
 Apache 2.0 — see [LICENSE](LICENSE).
-
-Journal candidate validation includes the Node selection capability check. While that check awaits, effective selection, size and text limits remain the previous tuple; a missing/unusable Node refusal records a typed failure without committing the candidate. Install Node.js 22+ in the service PATH, then force refresh or restart to recover.
-
-After a failed candidate, force refresh also revalidates a restored previously active policy, so recovered backend/vault stats clear stale Node capability failures before another write.

@@ -1028,3 +1028,14 @@ Owner action 0 now precedes A: authorize initialization of the dedicated empty
 S3 test target, run the saved-connection sync, then reconnect. Fetch/Rebuild are
 not prescribed; the missing-settings dialog belongs to their preflight, with
 English provisional labels at this pin. Native sources are cited in the checklist.
+
+
+### 2026-11-25 — F8-3 practical documentation
+
+README now provides setup/client links, backend recipes, a compact settings table
+and twelve difference bullets. Exact environment cells move to configuration.md;
+full setting/coercion/refusal/default/transport prose remains in peer-limitations.md.
+JWT provisioning and automated acceptance move to linked dedicated pages. The
+documentation contract executes the authoritative environment table and all
+connection blocks across their new locations; historical acceptance corrections
+remain in upstream-pin.md.

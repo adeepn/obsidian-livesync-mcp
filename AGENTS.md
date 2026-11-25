@@ -251,3 +251,8 @@ size predicate (Node builtins, no packages) into
 not an invented plugin YAML parser oracle. See `docs/frontmatter-properties.md`.
 
 F7 capability probes use a test-only 60-second scheduler margin in tests/conftest.py; production selection deadlines remain configurable and unchanged. Stalled-worker deadline tests wait for readiness before applying the short request timeout. tests/test_retry_confirmation.py covers original-key confirmation and pending state after ambiguous conditional publication; real-server cases live in tests/test_integration_parity_s3.py.
+
+F8 documentation contracts read the environment table in `docs/configuration.md`;
+README is the practical entry point and `docs/peer-limitations.md` holds the
+complete setting/difference inventory. `docs/couchdb-jwt.md` holds JWT provisioning;
+`docs/developer-acceptance.md` holds automated real-server acceptance.

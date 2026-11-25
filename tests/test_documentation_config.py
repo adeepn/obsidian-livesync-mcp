@@ -13,13 +13,22 @@ from config import load_config
 from replay_limits import ReplayLimits
 
 ROOT = Path(__file__).resolve().parents[1]
+def documentation_text(name):
+    # Semantic contracts follow their named focused pages after F8 relocation.
+    locations = {
+        'README.md': ('README.md', 'docs/configuration.md', 'docs/peer-limitations.md'),
+        'docs/connecting-storage.md': ('docs/connecting-storage.md', 'docs/couchdb-jwt.md', 'docs/developer-acceptance.md'),
+    }
+    return '\n'.join((ROOT / path).read_text() for path in locations.get(name, (name,)))
+
+
 ENV_NAME = r'(?:LIVESYNC|COUCHDB|S3|MCP|OAUTH)_[A-Z0-9_]+'
 
 
 def environment_names():
     # Include the separate render-time debug consumer, deriving its spelling
     # from actual source instead of hardcoding a second inventory.
-    trees = [ast.parse((ROOT / name).read_text()) for name in ('config.py', 'diagnostic_hygiene.py')]
+    trees = [ast.parse(documentation_text(name)) for name in ('config.py', 'diagnostic_hygiene.py')]
     names = {node.value for tree in trees for node in ast.walk(tree)
              if isinstance(node, ast.Constant) and isinstance(node.value, str)
              and re.fullmatch(ENV_NAME, node.value) and not node.value.endswith('_')}
@@ -30,17 +39,17 @@ def environment_names():
 def test_environment_inventory_matches_readme_and_template():
     actual = environment_names()
     readme = set(re.findall(r'^\| `(' + ENV_NAME + r')` \|',
-                            (ROOT / 'README.md').read_text(), re.M))
+                            (ROOT / 'docs/configuration.md').read_text(), re.M))
     template = set(re.findall(r'^(?:# )?(' + ENV_NAME + r')=',
                               (ROOT / '.env.example').read_text(), re.M))
     assert readme == actual
-    inline_names = set(re.findall(r'\b(' + ENV_NAME + r')\b', (ROOT / 'README.md').read_text()))
+    inline_names = set(re.findall(r'\b(' + ENV_NAME + r')\b', documentation_text('README.md')))
     assert inline_names <= actual
     assert template == actual
 
 
 def blocks():
-    for path in [ROOT / 'README.md', ROOT / 'docs/connecting-storage.md']:
+    for path in [ROOT / 'README.md', ROOT / 'docs/connecting-storage.md', ROOT / 'docs/couchdb-jwt.md']:
         for index, block in enumerate(re.findall(r'```dotenv\n(.*?)```', path.read_text(), re.S)):
             yield f'{path.name}-{index}', block
 
@@ -114,7 +123,7 @@ def test_env_template_loads_after_required_configuration(connection, auth):
 def test_surrogate_wire_contract_is_documented_without_a_switch():
     for name in ('README.md', '.env.example', 'docs/s3-journal.md',
                  'docs/vault-format.md', 'CHANGELOG.md'):
-        text = (ROOT / name).read_text()
+        text = documentation_text(name)
         assert 'transport_replacements' in text, name
     journal = (ROOT / 'docs/s3-journal.md').read_text()
     assert 'U+FFFD' in journal and 'TextEncoder' in journal
@@ -174,7 +183,7 @@ def test_ignore_environment_choices_are_independent(use, names):
 
 
 def test_vault_ignore_derivation_documentation_contract():
-    readme = (ROOT / 'README.md').read_text()
+    readme = documentation_text('README.md')
     for setting in ('useIgnoreFiles', 'ignoreFiles'):
         row = next(line for line in readme.splitlines() if line.startswith('| `' + setting + '` |'))
         assert '| Identical |' in row
@@ -187,7 +196,7 @@ def test_vault_ignore_derivation_documentation_contract():
 
 
 def test_couchdb_compression_documentation_contract():
-    readme = (ROOT / 'README.md').read_text()
+    readme = documentation_text('README.md')
     row = next(line for line in readme.splitlines() if line.startswith('| `enableCompression` |'))
     assert '| Identical |' in row
     assert 'CR/LF' in row and 'surrogate' in row and 'BOM' in row
@@ -202,7 +211,7 @@ def test_couchdb_compression_documentation_contract():
 
 
 def test_legacy_parameter_recovery_documented():
-    readme = (ROOT / 'README.md').read_text()
+    readme = documentation_text('README.md')
     focused = (ROOT / 'docs/vault-format.md').read_text()
     assert 'Nonpositive legacy piece caps and V2 plain-text minimums are unsupported' not in readme
     assert 'plugin itself does not terminate' in readme
@@ -216,16 +225,16 @@ def test_legacy_parameter_recovery_documented():
 def test_custom_header_connection_contract():
     for variable in ('COUCHDB_CUSTOM_HEADERS', 'S3_CUSTOM_HEADERS', 'S3_FORCE_PATH_STYLE'):
         assert variable in environment_names()
-        assert variable in (ROOT / 'docs/connecting-storage.md').read_text()
-    readme = (ROOT / 'README.md').read_text()
+        assert variable in documentation_text('docs/connecting-storage.md')
+    readme = documentation_text('README.md')
     for setting in ('couchDB_CustomHeaders', 'bucketCustomHeaders', 'forcePathStyle'):
         assert f'| `{setting}` |' in readme
     assert 'set S3_FORCE_PATH_STYLE=false' in readme
-    connection = (ROOT / 'docs/connecting-storage.md').read_text()
+    connection = documentation_text('docs/connecting-storage.md')
     for term in ('Custom Headers', 'JSON object', 'python-dotenv', 'entry', 'control', 'https://', '127.0.0.1'):
         assert term in connection
     for name in ('docs/s3-journal.md', 'docs/vault-format.md', 'CHANGELOG.md'):
-        assert 'custom headers' in (ROOT / name).read_text()
+        assert 'custom headers' in documentation_text(name)
     assert '2026-11-25 — G5' in (ROOT / 'docs/superpowers/specs/2026-11-23-settings-parity.md').read_text()
 
 
@@ -233,15 +242,15 @@ def test_jwt_connection_contract_is_documented():
     names = ('COUCHDB_JWT_ALGORITHM', 'COUCHDB_JWT_KEY', 'COUCHDB_JWT_SUBJECT',
              'COUCHDB_JWT_KEY_ID', 'COUCHDB_JWT_EXPIRY_MINUTES')
     for file in ('README.md', '.env.example', 'docs/connecting-storage.md'):
-        text = (ROOT / file).read_text()
+        text = documentation_text(file)
         assert all(name in text for name in names), file
-    text = (ROOT / 'docs/connecting-storage.md').read_text()
+    text = documentation_text('docs/connecting-storage.md')
     for label in ('Use JWT Authentication', 'JWT Algorithm', 'JWT Key',
                   'JWT Key ID (kid)', 'JWT Subject (sub)',
                   'JWT Expiration Duration (minutes)', 'PKCS8', 'hmac:_default',
                   'ec:_default', 'authentication_handlers', 'auth_mode', 'jwt_algorithm'):
         assert label in text
-    assert 'CouchDB JWT auth are not supported' not in (ROOT / 'README.md').read_text()
+    assert 'CouchDB JWT auth are not supported' not in documentation_text('README.md')
     assert '2026-11-25 — G6' in (ROOT / 'docs/superpowers/specs/2026-11-23-settings-parity.md').read_text()
     for artifact in ('couchdb_jwt.py', 'scripts/extract_jwt_vectors.mjs'):
         assert artifact in (ROOT / 'AGENTS.md').read_text()
@@ -254,7 +263,7 @@ def test_text_access_budget_defaults_and_documented_controls():
     assert cfg.regex_max_output_bytes == 0
     assert cfg.regex_timeout_seconds == 10
     for name in ('README.md', '.env.example', 'docs/scan-policy.md', 'docs/tools.md'):
-        text = (ROOT / name).read_text()
+        text = documentation_text(name)
         for variable in ('LIVESYNC_TEXT_SCAN_MAX_BYTES', 'LIVESYNC_REGEX_MAX_OUTPUT_BYTES',
                          'LIVESYNC_REGEX_TIMEOUT_SECONDS'):
             assert variable in text
@@ -264,7 +273,7 @@ def test_text_access_budget_defaults_and_documented_controls():
     assert template['LIVESYNC_TEXT_SCAN_MAX_BYTES'] == ''
     assert template['LIVESYNC_REGEX_MAX_OUTPUT_BYTES'] == '0'
     assert template['LIVESYNC_REGEX_TIMEOUT_SECONDS'] == '10'
-    readme = (ROOT / 'README.md').read_text()
+    readme = documentation_text('README.md')
     for key, default in [('LIVESYNC_TEXT_SCAN_MAX_BYTES', 'empty'),
                          ('LIVESYNC_REGEX_MAX_OUTPUT_BYTES', '0'),
                          ('LIVESYNC_REGEX_TIMEOUT_SECONDS', '10')]:
@@ -288,12 +297,12 @@ def test_complete_scan_defaults_and_documented_pagination():
     assert (cfg.scan_max_notes, cfg.scan_max_bytes, cfg.scan_max_seconds,
             cfg.text_verdict_cache_entries) == (0, 0, 20, 65536)
     template = dotenv_values(ROOT / '.env.example')
-    readme = (ROOT / 'README.md').read_text()
+    readme = documentation_text('README.md')
     for key, value in defaults.items():
         assert template[key] == value
         assert f'| `{key}` | `{value}` |' in readme
     for name in ('README.md', 'docs/scan-policy.md', 'docs/tools.md'):
-        text = (ROOT / name).read_text()
+        text = documentation_text(name)
         for token in ('cursor', 'next_cursor', 'elapsed_ms', 'stopped_because',
                       'start_line', 'end_line', 'scans_busy'):
             assert token in text
@@ -312,18 +321,18 @@ def test_complete_scan_defaults_and_documented_pagination():
 
 
 def test_collision_recovery_documented():
-    text = (ROOT / 'README.md').read_text()
+    text = documentation_text('README.md')
     assert 'Distinct colliding CouchDB pieces refuse before publication' in text
     assert 'Journal within-publication collisions compare TextEncoder-projected data' in (ROOT / 'docs/vault-format.md').read_text()
 
 
 def test_custom_coercion_documented():
-    assert 'JavaScript truthiness/ToNumber coercion' in (ROOT / 'README.md').read_text()
+    assert 'JavaScript truthiness/ToNumber coercion' in documentation_text('README.md')
     assert 'V2 binary data loss' in (ROOT / 'docs/vault-format.md').read_text()
 
 
 def test_minimum_addition_documented():
-    assert 'JavaScript ToPrimitive/addition' in (ROOT / 'README.md').read_text()
+    assert 'JavaScript ToPrimitive/addition' in documentation_text('README.md')
     assert 'integer shortcut and its invalid array-equivalence proof have been removed' in (ROOT / 'docs/vault-format.md').read_text()
 
 
@@ -331,24 +340,24 @@ def test_typed_publication_notices_documented():
     text = (ROOT / 'docs/outcome-reporting.md').read_text()
     for code in ('legacy_bom_removed','invalid_utf8_replaced','input_surrogates_replaced','journal_surrogates_replaced'):
         assert code in text
-    assert 'original tool result remains verbatim' in (ROOT / 'README.md').read_text()
+    assert 'original tool result remains verbatim' in documentation_text('README.md')
     assert 'typed notices' in (ROOT / '.env.example').read_text()
 
 
 def test_ignore_name_warning_documented():
     for name in ('README.md','docs/selection-filters.md','docs/tools.md','.env.example'):
-        assert 'selection_unresolved_ignore_names' in (ROOT / name).read_text()
+        assert 'selection_unresolved_ignore_names' in documentation_text(name)
 
 
 def test_runtime_journal_size_policy_documented():
-    assert 'Journal refresh re-resolves' in (ROOT / 'README.md').read_text()
+    assert 'Journal refresh re-resolves' in documentation_text('README.md')
     assert 'every unthrottled refresh' in (ROOT / 'docs/size-policy.md').read_text()
 
 
 def test_jwt_zero_expiry_documented():
-    assert '0 uses the plugin five-minute fallback' in (ROOT / 'README.md').read_text()
+    assert '0 uses the plugin five-minute fallback' in documentation_text('README.md')
     assert 'zero uses the plugin five-minute fallback' in (ROOT / '.env.example').read_text()
-    assert 'already-expired tokens' in (ROOT / 'docs/connecting-storage.md').read_text()
+    assert 'already-expired tokens' in documentation_text('docs/connecting-storage.md')
 
 
 def test_json_coercion_recovery_documented():
@@ -359,13 +368,13 @@ def test_json_coercion_recovery_documented():
 
 def test_reserved_compression_prefix_notice_documented():
     for name in ('docs/outcome-reporting.md','docs/vault-format.md','docs/tools.md'):
-        assert 'couchdb_marker_interpreted' in (ROOT / name).read_text()
-    assert 'binary attachment path to preserve literal prefix bytes' in ' '.join((ROOT / 'README.md').read_text().split())
+        assert 'couchdb_marker_interpreted' in documentation_text(name)
+    assert 'binary attachment path to preserve literal prefix bytes' in ' '.join(documentation_text('README.md').split())
 
 
 def test_jwt_empty_and_string_zero_documented():
     for name in ('README.md', '.env.example', 'docs/connecting-storage.md', 'docs/vault-format.md'):
-        text = (ROOT / name).read_text()
+        text = documentation_text(name)
         assert 'empty' in text and 'refused' in text
         assert 'zero-second' in text or 'zero seconds' in text
         assert 'cannot' in text and 'numeric' in text
@@ -373,14 +382,14 @@ def test_jwt_empty_and_string_zero_documented():
 
 def test_atomic_journal_policy_documented():
     for name in ('README.md', 'docs/size-policy.md'):
-        text = (ROOT / name).read_text()
+        text = documentation_text(name)
         assert 'before committing any effective setting' in text
         assert 'previous' in text and 'tuple' in text
 
 
 def test_shared_leaf_recovery_documented():
     for name in ('README.md', 'docs/vault-format.md'):
-        text = ' '.join((ROOT / name).read_text().split())
+        text = ' '.join(documentation_text(name).split())
         assert 'resolve the conflicting leaf in Obsidian' in text
         assert 'alternate hashAlg or a positive customChunkSize' in text
 
@@ -392,16 +401,16 @@ def test_vault_scalar_coercion_and_strict_overrides_documented():
         with pytest.raises(ConfigError, match='LIVESYNC_SYNC_MAX_SIZE_MB'):
             load_config({**COUCHDB_ENV, 'LIVESYNC_SYNC_MAX_SIZE_MB': value})
     for name in ('README.md', '.env.example', 'docs/size-policy.md'):
-        text = ' '.join((ROOT / name).read_text().split())
+        text = ' '.join(documentation_text(name).split())
         assert '1 MiB' in text and 'coercion' in text
     for name in ('README.md', '.env.example', 'docs/selection-filters.md'):
-        text = (ROOT / name).read_text()
+        text = documentation_text(name)
         assert 'truthiness' in text
 
 
 def test_candidate_selection_capability_documented():
     for name in ('README.md', 'docs/size-policy.md'):
-        text = (ROOT / name).read_text()
+        text = documentation_text(name)
         assert 'While that check awaits' in text
         assert 'without committing the candidate' in text
         assert 'revalidates a restored previously active policy' in text
@@ -409,7 +418,7 @@ def test_candidate_selection_capability_documented():
 
 def test_iterative_scalar_depth_documented():
     for name in ('README.md', '.env.example', 'docs/size-policy.md'):
-        text = (ROOT / name).read_text()
+        text = documentation_text(name)
         assert 'iterative' in text and 'JSON admission' in text
         assert 'no coercion depth limit' in text
     text = (ROOT / 'docs/size-policy.md').read_text()
@@ -418,8 +427,8 @@ def test_iterative_scalar_depth_documented():
 
 
 def test_real_server_acceptance_scope_documented():
-    for name in ('README.md', 'docs/connecting-storage.md'):
-        text = (ROOT / name).read_text()
+    for name in ('docs/upstream-pin.md', 'docs/developer-acceptance.md'):
+        text = documentation_text(name)
         assert '60-row pairwise' in text
         assert 'JWT wrong-key HTTP 400' in text
         assert '2026-11-25-parity-docker/summary.txt' in text
@@ -429,7 +438,7 @@ def test_real_server_acceptance_scope_documented():
 def test_couchdb_surrogate_constraint_documented():
     # chunks.ts:243-252; live CouchDB 3.5.3, 2026-11-25 invalid UTF-8 JSON.
     for name in ('README.md', 'docs/vault-format.md', 'docs/outcome-reporting.md'):
-        text = (ROOT / name).read_text()
+        text = documentation_text(name)
         assert 'CouchDB 3.5.3' in text
         if name != 'docs/outcome-reporting.md':
             assert 'v3' in text
@@ -439,27 +448,27 @@ def test_couchdb_surrogate_constraint_documented():
 
 def test_jwt_session_auth_documented():
     for name in ('README.md', 'docs/connecting-storage.md', '.env.example'):
-        text = (ROOT / name).read_text()
+        text = documentation_text(name)
         assert '/_session' in text
         assert 'subject' in text
 
 
 def test_jwt_pkcs8_generation_documented():
-    text = (ROOT / 'docs/connecting-storage.md').read_text()
+    text = documentation_text('docs/connecting-storage.md')
     assert 'openssl ecparam -name prime256v1 -genkey -noout | openssl pkcs8 -topk8 -nocrypt' in text
     for name in ('README.md', 'docs/connecting-storage.md', '.env.example'):
-        text = (ROOT / name).read_text()
+        text = documentation_text(name)
         assert 'PKCS8' in text and 'SEC1' in text
     assert 'secp521r1' in (ROOT / '.env.example').read_text()
 
 
 def test_f4_real_acceptance_contract_documented():
     # Live evidence complements the pinned native splitter/compression oracles.
-    for name in ('README.md', 'docs/connecting-storage.md'):
-        text = (ROOT / name).read_text()
+    for name in ('docs/upstream-pin.md', 'docs/developer-acceptance.md'):
+        text = documentation_text(name)
         for phrase in ('40 MiB', '100 MiB', '201 MiB', '12 MiB', 'every matrix row'):
             assert phrase in text
-    guide = (ROOT / 'docs/connecting-storage.md').read_text()
+    guide = documentation_text('docs/connecting-storage.md')
     for algorithm in ('HS256', 'HS512', 'ES256', 'ES512'):
         assert algorithm in guide
     assert 'COUCHDB_TEST_JWT_ES512_KEY' in guide
@@ -468,7 +477,7 @@ def test_f4_real_acceptance_contract_documented():
 
 
 def test_startup_configuration_error_policy_is_documented():
-    readme = (ROOT / 'README.md').read_text()
+    readme = documentation_text('README.md')
     template = (ROOT / '.env.example').read_text()
     policy = (ROOT / 'docs/diagnostics-and-secrets.md').read_text()
     assert 'without echoing supplied values' in readme
@@ -518,7 +527,7 @@ CONFIG_PATHS.update({'LIVESYNC_JOURNAL_' + item.name.upper(): 'replay_limits.' +
 
 def environment_rows(text=None):
     """Parse the actual four-column table, retaining requirement and purpose."""
-    text = (ROOT / 'README.md').read_text() if text is None else text
+    text = (ROOT / 'docs/configuration.md').read_text() if text is None else text
     pattern = r'^\| `(' + ENV_NAME + r')` \| (.*?) \| (.*?) \| (.*) \|$'
     rows = {name: (default, requirement, purpose)
             for name, default, requirement, purpose in re.findall(pattern, text, re.M)}
@@ -585,7 +594,7 @@ def test_readme_default_matches_actual_consumer(name):
 def test_documentation_contract_rejects_changed_default_and_table_mutations():
     """Exercise the checker in memory; never edit an imported production file."""
     import config
-    text = (ROOT / 'README.md').read_text()
+    text = documentation_text('README.md')
     rows = environment_rows(text)
     namespace = dict(config.__dict__)
     source = (ROOT / 'config.py').read_text()
@@ -735,7 +744,7 @@ def test_readme_port_range_matches_runtime(raw):
 
 def test_readme_connection_exclusivity_is_executable():
     from config import ConfigError
-    text = (ROOT / 'README.md').read_text()
+    text = documentation_text('README.md')
     assert 'URI and individual fields are mutually exclusive' in text
     contexts = connection_contexts()
     for name in ('S3_ENDPOINT_URL', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY',
@@ -856,7 +865,7 @@ def test_complete_generator_catalogue_and_acceptance_package():
     assert 'real-server\nautomated acceptance done' in pin
     assert 'real Obsidian client at the current pin is **pending**' in pin
     assert '2026-11-25-parity-docker/summary.txt' in pin
-    readme = (ROOT / 'README.md').read_text()
+    readme = documentation_text('README.md')
     assert 'create_app(cfg)' not in readme
     for setting in ('deleteMetadataOfDeletedFiles', 'automaticallyDeleteMetadataOfDeletedFiles',
                     'disableMarkdownAutoMerge', 'resolveConflictsByNewerFile',
@@ -931,7 +940,7 @@ def test_readme_enum_choices_match_actual_configuration(name):
 
 def test_readme_names_terminating_binary_data_loss_refusal():
     # C:string_and_binary/chunks.ts:418-432 native slice(i,NaN) yields no bytes.
-    text = (ROOT / 'README.md').read_text()
+    text = documentation_text('README.md')
     row = next(line for line in text.splitlines() if line.startswith('| `customChunkSize` |'))
     assert 'data loss' in row
     assert 'NaN-cap V2 binary' in text
@@ -947,7 +956,7 @@ def test_f6_transport_policy_documentation():
     s3 = (ROOT / 'docs/s3-journal.md').read_text()
     assert 'Always one' in s3 and '412' in s3 and 'Outcome unknown' in s3
     assert 'LIVESYNC_SELECTION_TIMEOUT_SECONDS' in (ROOT / 'docs/selection-filters.md').read_text()
-    assert 'COUCHDB_IO_TIMEOUT_SECONDS' in (ROOT / 'docs/connecting-storage.md').read_text()
+    assert 'COUCHDB_IO_TIMEOUT_SECONDS' in documentation_text('docs/connecting-storage.md')
 
 
 def test_f6_frontmatter_contract_documented():
@@ -971,3 +980,15 @@ def test_empty_bucket_initialisation_precedes_owner_acceptance():
                    'Не запускать Fetch, Rebuild', 'остаются английскими',
                    'пустой bucket инициализируется автоматически'):
         assert phrase in text
+
+
+def test_practical_docs_have_single_inventory_and_recipe_order():
+    readme = (ROOT / 'README.md').read_text()
+    assert 180 <= len(readme.splitlines()) <= 230
+    assert 'docs/configuration.md' in readme
+    assert '## Environment reference' in (ROOT / 'docs/configuration.md').read_text()
+    connection = (ROOT / 'docs/connecting-storage.md').read_text()
+    assert connection.index('## CouchDB') < connection.index('**S3 individual fields:**') < connection.index('## CouchDB JWT authentication')
+    assert 'authentication_handlers' not in connection
+    assert '## Automated real-server acceptance' not in connection
+    assert 'couchdb-jwt.md' in connection and 'developer-acceptance.md' in connection

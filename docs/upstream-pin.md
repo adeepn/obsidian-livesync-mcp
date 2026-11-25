@@ -59,3 +59,15 @@ Do not advance the pin merely to silence an alert.
 Exit codes: 0 clean, 2 release drift, 3 protocol drift, 4 check error.
 Commonlib changes outside the manifest are reported without an issue by
 themselves. `--init-pin` only bootstraps an explicitly uninitialized pin.
+
+
+## 2026-11-25 acceptance corrections
+
+The 2026-11-25 acceptance run found JWT wrong-key HTTP 400 classified as a
+generic storage error and CouchDB rejecting a lone-surrogate leaf with HTTP 400.
+Both production paths are corrected; the final automated acceptance covers
+text and binary in every matrix row, 40 MiB and 100 MiB binary round trips,
+a 201 MiB skip and a 12 MiB textual MCP workflow. See the [recorded results](test-artifacts/2026-11-25-parity-docker/summary.txt).
+
+Real-server coverage includes the 60-row pairwise matrix on both backends.
+It does not establish every setting combination on every server.
