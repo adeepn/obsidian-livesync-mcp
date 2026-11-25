@@ -38,17 +38,16 @@ def test_absent_defaults_and_preferred():
     ('useIgnoreFiles', 1, 'useIgnoreFiles must be a boolean'),
     ('useIgnoreFiles', 'secret', 'useIgnoreFiles must be a boolean'),
     ('ignoreFiles', False, 'ignoreFiles must be a string'),
-    ('ignoreFiles', '../secret', 'ignoreFiles'),
 ])
 def test_invalid_settings(key, value, message):
     with pytest.raises(fmt.UnsupportedVaultSettings, match=message):
-        fmt.resolve_ignore_settings(milestone(**{key: value}))
+        fmt.resolve_ignore_settings(milestone(useIgnoreFiles=True, **{key: value}) if key != 'useIgnoreFiles' else milestone(**{key: value}))
 
 
 @pytest.mark.parametrize('key,a,b,env', [('useIgnoreFiles', True, False, 'LIVESYNC_USE_IGNORE_FILES'),
     ('ignoreFiles', 'a', 'b', 'LIVESYNC_IGNORE_FILES')])
 def test_ambiguous_maps(key, a, b, env):
-    m = {'tweak_values': {'a': {key: a}, 'b': {key: b}}}
+    m = {'tweak_values': {'a': {'useIgnoreFiles':True, key: a}, 'b': {'useIgnoreFiles':True, key: b}}}
     with pytest.raises(fmt.UnsupportedVaultSettings, match=env):
         fmt.resolve_ignore_settings(m)
 
@@ -103,7 +102,7 @@ async def seed_hidden_ignore(b, text):
     ('useIgnoreFiles', True, False, 'LIVESYNC_USE_IGNORE_FILES'),
     ('ignoreFiles', 'a', 'b', 'LIVESYNC_IGNORE_FILES')])
 async def test_backend_disagreement_refuses_before_mutation(tmp_path, kind, key, a, b, variable):
-    async with vault(tmp_path, kind, {'tweak_values': {'a': {key:a}, 'b': {key:b}}}) as (b, writes):
+    async with vault(tmp_path, kind, {'tweak_values': {'a': {'useIgnoreFiles':True,key:a}, 'b': {'useIgnoreFiles':True,key:b}}}) as (b, writes):
         with pytest.raises(UnsupportedVault, match=variable):
             await b.startup_check()
         assert not writes()
@@ -147,11 +146,7 @@ def test_upstream_template_and_name_vectors():
     assert fmt.resolve_ignore_settings(milestone()) == (
         defaults['useIgnoreFiles'], (defaults['ignoreFiles'],))
     for case in oracle['names']:
-        if any(not name for name in case['expected']):
-            with pytest.raises(fmt.UnsupportedVaultSettings):
-                fmt.resolve_ignore_settings(milestone(ignoreFiles=case['input']))
-        else:
-            assert fmt.resolve_ignore_settings(milestone(ignoreFiles=case['input']))[1] == tuple(case['expected'])
+        assert fmt.resolve_ignore_settings(milestone(ignoreFiles=case['input']))[1] == tuple(case['expected'])
 
 
 @pytest.mark.parametrize('kind', ['couchdb', 's3'])
@@ -276,3 +271,41 @@ async def test_unreadable_ignore_file_matches_upstream(tmp_path, kind, error, mo
         assert await b._selection_lines('.gitignore') is FIXTURE['selection']['unreadable']
         await b.write_note('admitted.md', 'retained', create=True)
         assert (await b.read_note('admitted.md'))['text'] == 'retained'
+
+
+IGNORE_NAMES_ORACLE = json.loads(__import__('pathlib').Path('tests/fixtures/ignore_names_upstream.json').read_text())
+
+@pytest.mark.parametrize('kind',['couchdb','s3'])
+@pytest.mark.parametrize('explicit',[False,True])
+@pytest.mark.parametrize('row',IGNORE_NAMES_ORACLE['rows'])
+async def test_device_ignore_names_lookup(tmp_path,kind,explicit,row,monkeypatch):
+    from config import load_config
+    m=milestone(**row['settings'])
+    async with vault(tmp_path,kind,m) as (b,writes):
+        if explicit:
+            # Exercise the real operator parser, including JS trim and empty entries.
+            env={'LIVESYNC_BACKEND':'couchdb','COUCHDB_USER':'test-user','COUCHDB_PASSWORD':'test-password','COUCHDB_DATABASE':'vault','MCP_API_KEY':'test-key', 'LIVESYNC_IGNORE_FILES':row['settings']['ignoreFiles']}
+            b.selection_ignore_files=load_config(env).selection_ignore_files
+        lookups=[]
+        async def read(path):
+            lookups.append(path)
+            if row['mode']=='unreadable':raise StorageUnavailable('unreadable')
+            return None if row['mode']=='missing' else '*.md\n!keep.md'
+        monkeypatch.setattr(b,'_read_selection_file',read)
+        await b.startup_check()
+        assert b.selection_ignore_files==tuple(row['names'])
+        assert (await b.selection_for('note.md')).allowed is row['allowed']
+        if not row['settings']['useIgnoreFiles']:assert not lookups
+        info=await b.backend_info()
+        expected=len(row['names']) if explicit and row['settings']['ignoreFiles'] and row['settings']['useIgnoreFiles'] and row['mode']!='readable' else 0
+        assert type(info['selection_unresolved_ignore_names']) is int
+        assert info['selection_unresolved_ignore_names']==expected
+
+@pytest.mark.parametrize('kind',['couchdb','s3'])
+async def test_ignore_lookup_never_reads_service_or_escaping_path(tmp_path,kind):
+    async with vault(tmp_path,kind,milestone(useIgnoreFiles=True,ignoreFiles='../escape,h:leaf,_local/secrets')) as (b,writes):
+        await b.startup_check()
+        assert (await b.selection_for('note.md')).allowed
+        # The storage-specific readers enforce namespace safety even if called directly.
+        for path in ('../escape','h:leaf','_local/secrets','f:folder',''):
+            assert await b._read_selection_file(path) is None

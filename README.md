@@ -110,7 +110,7 @@ are read only for the selected backend. Empty defaults below mean an empty strin
 | `LIVESYNC_SYNC_ONLY_REGEX` | `empty` | Optional | Local allow regex list, literal `|[]|` separators |
 | `LIVESYNC_SYNC_IGNORE_REGEX` | `empty` | Optional | Local ignore regex list |
 | `LIVESYNC_USE_IGNORE_FILES` | `empty` | Optional boolean | Empty/unset derives useIgnoreFiles from vault settings; true/false overrides |
-| `LIVESYNC_IGNORE_FILES` | `empty` | Optional | Empty/unset derives ignoreFiles from vault settings; non-empty overrides comma-separated names |
+| `LIVESYNC_IGNORE_FILES` | `empty` | Optional | Empty/unset derives ignoreFiles; non-empty uses JS-trimmed comma names including empty entries; unresolved explicit names warn |
 | `LIVESYNC_SYNC_MAX_SIZE_MB` | `empty` | Finite number or empty | Override vault size policy; <=0 disables |
 | `LIVESYNC_DISABLE_CHECKING_CONFIG_MISMATCH` | `false` | Boolean | Bypass ordinary tweak differences, never identity/E2EE guards; CouchDB compression follows the vault independently |
 | `LIVESYNC_AUTO_ACCEPT_COMPATIBLE_TWEAK` | `true` | Boolean | Align fully advertised compatible-lossy tweaks |
@@ -161,7 +161,7 @@ combination. [Source inventory and caveats](docs/superpowers/specs/2026-11-23-se
 | `syncMaxSizeInMB` | UI number >=0, default 50; 0 disables | Supported | Device write admission and automatic text access budget resolution; textual files remain scan-eligible independent of extension; aggregate caps default unlimited; oversized rename refuses to protect source |
 | `syncOnlyRegEx`, `syncIgnoreRegEx` | ECMAScript pattern lists | Identical when configured | Set local env explicitly; never inferred from milestone |
 | `useIgnoreFiles` | Boolean | Identical | Derived from vault settings unless overridden; active policy requires Node.js 22+ |
-| `ignoreFiles` | Filename list | Identical | Derived from vault settings unless overridden; upstream glob/rule order |
+| `ignoreFiles` | Filename list | Identical | Derived from vault settings unless overridden; exact comma split/JS trim; missing or unusable names add no rules; explicit unresolved names warn |
 | `useEden` and count/length/age controls | Boolean / numbers | Identical | Current upstream writes empty Eden regardless; historical inline chunks readable |
 | `longLineThreshold` | Numeric (default 250) | Identical | Unused by dispatched algorithms at this pin |
 | `encrypt`, `E2EEAlgorithm`, `useDynamicIterationCount`, `encryptInternalMetadata` | E2EE options | Not supported for E2EE | Encrypted vaults fail startup; no encryption/decryption |
@@ -212,6 +212,9 @@ combination. [Source inventory and caveats](docs/superpowers/specs/2026-11-23-se
   ignored paths. Reads bypass all filters, including explicitly configured filters;
   devices retain local files that later become ignored, and the database remains
   the read source of truth. With filters off no Node is launched.
+  Ignore names never refuse startup; unusable/missing names contribute no rules.
+  `selection_unresolved_ignore_names` counts explicitly configured names not resolved
+  by the latest root/ancestor lookup. Inactive ignore settings are not validated.
   [Filter syntax](docs/selection-filters.md).
 - There is no local vault folder, Hidden File Sync, customization/plugin sync or
   suspended filesystem reflection. DB reads include received oversized files;

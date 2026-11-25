@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Settings parity
 
+- Accept device ignore-file name lists without startup refusals; retain JS trim/empty entries, bound lookup to vault notes and warn on unresolved explicit names.
+
 - Preserve every original publication result field, including object-valued messages, when appending transport notices.
 
 - Preflight lossless CouchDB chunk collisions and admit journal collisions whose projected bytes agree, retaining IDs and replacement reporting.

@@ -94,3 +94,5 @@ are clamped. Omit both parameters for the existing whole-note response shape.
 Properties and optional statistics still describe the full original note.
 
 Write tools append a separate typed `notices` record and fixed sentences after their original result whenever ingestion changes bytes. This applies to create, all update modes, upload, canvas, templates, properties and tags. See [notice codes and parsing](outcome-reporting.md#typed-publication-notices).
+
+`obsidian_vault_stats.selection_unresolved_ignore_names` is a typed warning count for active explicitly configured ignore names unresolved by the latest root/ancestor lookup. Missing/unusable names never refuse startup.

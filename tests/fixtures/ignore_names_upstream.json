@@ -1,0 +1,770 @@
+{
+  "upstream_commit": "484c164450d61deb2e301582b60cb9b5f9fa977f",
+  "node": "v26.13.1",
+  "source_sha256": {
+    "string_and_binary/path.ts": "5deb06668cae485345c3904072c537791294ff7f374bd16066f3b2da6a9ffdde",
+    "serviceFeatures/targetFilter.ts": "e8507d9928f7912f188394ba737e6b9a8c27b3c3d0b246310d90706ff1124c34"
+  },
+  "dependencies": {
+    "minimatch": {
+      "version": "11.0.3",
+      "url": "https://registry.npmjs.org/minimatch/-/minimatch-11.0.3.tgz",
+      "sha256": "175b2fd9c9d3611e06980341c1be226c7af72b1f414eefb424dca1be9cd9e8ae",
+      "integrity": "sha512-iny/40PEGkNJQ5/Pv6z3nm6FbRAby32GeZRjCUJk2WnNDbgPSTcdI+DDvLqsgBdD4cD5sMtMheqPPnehCCa8Nw=="
+    },
+    "brace-expansion": {
+      "version": "5.0.12",
+      "url": "https://registry.npmjs.org/brace-expansion/-/brace-expansion-5.0.12.tgz",
+      "sha256": "ef8448ec78f20b692f04fa6d01f39b5ab34c66404bea3429f5a39c6c9e0be8b4",
+      "integrity": "sha512-YovQ3rzhaLMIrDjNDMkNS01tea93qhEhG5xy8f6+R0l+dw3Ki+5sCoIoI942iuLZTHWogWktgwVDhU09iNEimQ=="
+    },
+    "balanced-match": {
+      "version": "4.0.4",
+      "url": "https://registry.npmjs.org/balanced-match/-/balanced-match-4.0.4.tgz",
+      "sha256": "9025508d9125eee531bbc49ce3ae560183975ad595f058c378bd56af4152fb16",
+      "integrity": "sha512-BLrgEcRTwX2o6gGxGOCNyMvGSp35YofuYzw9h1IMTRmKqttAZZVU67bdb9Pr2vUHA8+j3i2tJfjO6C6+4myGTA=="
+    },
+    "@isaacs/nonrecursive-glob-match": {
+      "version": "1.0.3",
+      "url": "https://registry.npmjs.org/@isaacs/nonrecursive-glob-match/-/nonrecursive-glob-match-1.0.3.tgz",
+      "sha256": "9c67e29b5fea7f3736c427cf061c81fa0546f3587f397fa303e46c8dbf8e9998",
+      "integrity": "sha512-SI7kyKHq4XXDRozw+r9GlRZkia1ZkFrpLW98r2IC2Bpr8YkFGE3fvjzmxCG0x78A++69HmDNrDvSMYBZmHGpKA=="
+    }
+  },
+  "rows": [
+    {
+      "settings": {
+        "ignoreFiles": "",
+        "useIgnoreFiles": false
+      },
+      "mode": "missing",
+      "names": [
+        ""
+      ],
+      "allowed": true,
+      "lookups": []
+    },
+    {
+      "settings": {
+        "ignoreFiles": "",
+        "useIgnoreFiles": false
+      },
+      "mode": "unreadable",
+      "names": [
+        ""
+      ],
+      "allowed": true,
+      "lookups": []
+    },
+    {
+      "settings": {
+        "ignoreFiles": "",
+        "useIgnoreFiles": false
+      },
+      "mode": "readable",
+      "names": [
+        ""
+      ],
+      "allowed": true,
+      "lookups": []
+    },
+    {
+      "settings": {
+        "ignoreFiles": "",
+        "useIgnoreFiles": true
+      },
+      "mode": "missing",
+      "names": [
+        ""
+      ],
+      "allowed": true,
+      "lookups": [
+        "/"
+      ]
+    },
+    {
+      "settings": {
+        "ignoreFiles": "",
+        "useIgnoreFiles": true
+      },
+      "mode": "unreadable",
+      "names": [
+        ""
+      ],
+      "allowed": true,
+      "lookups": [
+        "/"
+      ]
+    },
+    {
+      "settings": {
+        "ignoreFiles": "",
+        "useIgnoreFiles": true
+      },
+      "mode": "readable",
+      "names": [
+        ""
+      ],
+      "allowed": false,
+      "lookups": [
+        "/"
+      ]
+    },
+    {
+      "settings": {
+        "ignoreFiles": "a,,b",
+        "useIgnoreFiles": false
+      },
+      "mode": "missing",
+      "names": [
+        "a",
+        "",
+        "b"
+      ],
+      "allowed": true,
+      "lookups": []
+    },
+    {
+      "settings": {
+        "ignoreFiles": "a,,b",
+        "useIgnoreFiles": false
+      },
+      "mode": "unreadable",
+      "names": [
+        "a",
+        "",
+        "b"
+      ],
+      "allowed": true,
+      "lookups": []
+    },
+    {
+      "settings": {
+        "ignoreFiles": "a,,b",
+        "useIgnoreFiles": false
+      },
+      "mode": "readable",
+      "names": [
+        "a",
+        "",
+        "b"
+      ],
+      "allowed": true,
+      "lookups": []
+    },
+    {
+      "settings": {
+        "ignoreFiles": "a,,b",
+        "useIgnoreFiles": true
+      },
+      "mode": "missing",
+      "names": [
+        "a",
+        "",
+        "b"
+      ],
+      "allowed": true,
+      "lookups": [
+        "/a",
+        "/",
+        "/b"
+      ]
+    },
+    {
+      "settings": {
+        "ignoreFiles": "a,,b",
+        "useIgnoreFiles": true
+      },
+      "mode": "unreadable",
+      "names": [
+        "a",
+        "",
+        "b"
+      ],
+      "allowed": true,
+      "lookups": [
+        "/a",
+        "/",
+        "/b"
+      ]
+    },
+    {
+      "settings": {
+        "ignoreFiles": "a,,b",
+        "useIgnoreFiles": true
+      },
+      "mode": "readable",
+      "names": [
+        "a",
+        "",
+        "b"
+      ],
+      "allowed": false,
+      "lookups": [
+        "/a"
+      ]
+    },
+    {
+      "settings": {
+        "ignoreFiles": " .gitignore , ",
+        "useIgnoreFiles": false
+      },
+      "mode": "missing",
+      "names": [
+        ".gitignore",
+        ""
+      ],
+      "allowed": true,
+      "lookups": []
+    },
+    {
+      "settings": {
+        "ignoreFiles": " .gitignore , ",
+        "useIgnoreFiles": false
+      },
+      "mode": "unreadable",
+      "names": [
+        ".gitignore",
+        ""
+      ],
+      "allowed": true,
+      "lookups": []
+    },
+    {
+      "settings": {
+        "ignoreFiles": " .gitignore , ",
+        "useIgnoreFiles": false
+      },
+      "mode": "readable",
+      "names": [
+        ".gitignore",
+        ""
+      ],
+      "allowed": true,
+      "lookups": []
+    },
+    {
+      "settings": {
+        "ignoreFiles": " .gitignore , ",
+        "useIgnoreFiles": true
+      },
+      "mode": "missing",
+      "names": [
+        ".gitignore",
+        ""
+      ],
+      "allowed": true,
+      "lookups": [
+        "/.gitignore",
+        "/"
+      ]
+    },
+    {
+      "settings": {
+        "ignoreFiles": " .gitignore , ",
+        "useIgnoreFiles": true
+      },
+      "mode": "unreadable",
+      "names": [
+        ".gitignore",
+        ""
+      ],
+      "allowed": true,
+      "lookups": [
+        "/.gitignore",
+        "/"
+      ]
+    },
+    {
+      "settings": {
+        "ignoreFiles": " .gitignore , ",
+        "useIgnoreFiles": true
+      },
+      "mode": "readable",
+      "names": [
+        ".gitignore",
+        ""
+      ],
+      "allowed": false,
+      "lookups": [
+        "/.gitignore"
+      ]
+    },
+    {
+      "settings": {
+        "ignoreFiles": "../rules",
+        "useIgnoreFiles": false
+      },
+      "mode": "missing",
+      "names": [
+        "../rules"
+      ],
+      "allowed": true,
+      "lookups": []
+    },
+    {
+      "settings": {
+        "ignoreFiles": "../rules",
+        "useIgnoreFiles": false
+      },
+      "mode": "unreadable",
+      "names": [
+        "../rules"
+      ],
+      "allowed": true,
+      "lookups": []
+    },
+    {
+      "settings": {
+        "ignoreFiles": "../rules",
+        "useIgnoreFiles": false
+      },
+      "mode": "readable",
+      "names": [
+        "../rules"
+      ],
+      "allowed": true,
+      "lookups": []
+    },
+    {
+      "settings": {
+        "ignoreFiles": "../rules",
+        "useIgnoreFiles": true
+      },
+      "mode": "missing",
+      "names": [
+        "../rules"
+      ],
+      "allowed": true,
+      "lookups": [
+        "/../rules"
+      ]
+    },
+    {
+      "settings": {
+        "ignoreFiles": "../rules",
+        "useIgnoreFiles": true
+      },
+      "mode": "unreadable",
+      "names": [
+        "../rules"
+      ],
+      "allowed": true,
+      "lookups": [
+        "/../rules"
+      ]
+    },
+    {
+      "settings": {
+        "ignoreFiles": "../rules",
+        "useIgnoreFiles": true
+      },
+      "mode": "readable",
+      "names": [
+        "../rules"
+      ],
+      "allowed": false,
+      "lookups": [
+        "/../rules"
+      ]
+    },
+    {
+      "settings": {
+        "ignoreFiles": "/rules",
+        "useIgnoreFiles": false
+      },
+      "mode": "missing",
+      "names": [
+        "/rules"
+      ],
+      "allowed": true,
+      "lookups": []
+    },
+    {
+      "settings": {
+        "ignoreFiles": "/rules",
+        "useIgnoreFiles": false
+      },
+      "mode": "unreadable",
+      "names": [
+        "/rules"
+      ],
+      "allowed": true,
+      "lookups": []
+    },
+    {
+      "settings": {
+        "ignoreFiles": "/rules",
+        "useIgnoreFiles": false
+      },
+      "mode": "readable",
+      "names": [
+        "/rules"
+      ],
+      "allowed": true,
+      "lookups": []
+    },
+    {
+      "settings": {
+        "ignoreFiles": "/rules",
+        "useIgnoreFiles": true
+      },
+      "mode": "missing",
+      "names": [
+        "/rules"
+      ],
+      "allowed": true,
+      "lookups": [
+        "//rules"
+      ]
+    },
+    {
+      "settings": {
+        "ignoreFiles": "/rules",
+        "useIgnoreFiles": true
+      },
+      "mode": "unreadable",
+      "names": [
+        "/rules"
+      ],
+      "allowed": true,
+      "lookups": [
+        "//rules"
+      ]
+    },
+    {
+      "settings": {
+        "ignoreFiles": "/rules",
+        "useIgnoreFiles": true
+      },
+      "mode": "readable",
+      "names": [
+        "/rules"
+      ],
+      "allowed": false,
+      "lookups": [
+        "//rules"
+      ]
+    },
+    {
+      "settings": {
+        "ignoreFiles": "rules/../.gitignore",
+        "useIgnoreFiles": false
+      },
+      "mode": "missing",
+      "names": [
+        "rules/../.gitignore"
+      ],
+      "allowed": true,
+      "lookups": []
+    },
+    {
+      "settings": {
+        "ignoreFiles": "rules/../.gitignore",
+        "useIgnoreFiles": false
+      },
+      "mode": "unreadable",
+      "names": [
+        "rules/../.gitignore"
+      ],
+      "allowed": true,
+      "lookups": []
+    },
+    {
+      "settings": {
+        "ignoreFiles": "rules/../.gitignore",
+        "useIgnoreFiles": false
+      },
+      "mode": "readable",
+      "names": [
+        "rules/../.gitignore"
+      ],
+      "allowed": true,
+      "lookups": []
+    },
+    {
+      "settings": {
+        "ignoreFiles": "rules/../.gitignore",
+        "useIgnoreFiles": true
+      },
+      "mode": "missing",
+      "names": [
+        "rules/../.gitignore"
+      ],
+      "allowed": true,
+      "lookups": [
+        "/rules/../.gitignore"
+      ]
+    },
+    {
+      "settings": {
+        "ignoreFiles": "rules/../.gitignore",
+        "useIgnoreFiles": true
+      },
+      "mode": "unreadable",
+      "names": [
+        "rules/../.gitignore"
+      ],
+      "allowed": true,
+      "lookups": [
+        "/rules/../.gitignore"
+      ]
+    },
+    {
+      "settings": {
+        "ignoreFiles": "rules/../.gitignore",
+        "useIgnoreFiles": true
+      },
+      "mode": "readable",
+      "names": [
+        "rules/../.gitignore"
+      ],
+      "allowed": false,
+      "lookups": [
+        "/rules/../.gitignore"
+      ]
+    },
+    {
+      "settings": {
+        "ignoreFiles": "a\\b",
+        "useIgnoreFiles": false
+      },
+      "mode": "missing",
+      "names": [
+        "a\\b"
+      ],
+      "allowed": true,
+      "lookups": []
+    },
+    {
+      "settings": {
+        "ignoreFiles": "a\\b",
+        "useIgnoreFiles": false
+      },
+      "mode": "unreadable",
+      "names": [
+        "a\\b"
+      ],
+      "allowed": true,
+      "lookups": []
+    },
+    {
+      "settings": {
+        "ignoreFiles": "a\\b",
+        "useIgnoreFiles": false
+      },
+      "mode": "readable",
+      "names": [
+        "a\\b"
+      ],
+      "allowed": true,
+      "lookups": []
+    },
+    {
+      "settings": {
+        "ignoreFiles": "a\\b",
+        "useIgnoreFiles": true
+      },
+      "mode": "missing",
+      "names": [
+        "a\\b"
+      ],
+      "allowed": true,
+      "lookups": [
+        "/a\\b"
+      ]
+    },
+    {
+      "settings": {
+        "ignoreFiles": "a\\b",
+        "useIgnoreFiles": true
+      },
+      "mode": "unreadable",
+      "names": [
+        "a\\b"
+      ],
+      "allowed": true,
+      "lookups": [
+        "/a\\b"
+      ]
+    },
+    {
+      "settings": {
+        "ignoreFiles": "a\\b",
+        "useIgnoreFiles": true
+      },
+      "mode": "readable",
+      "names": [
+        "a\\b"
+      ],
+      "allowed": false,
+      "lookups": [
+        "/a\\b"
+      ]
+    },
+    {
+      "settings": {
+        "ignoreFiles": "﻿.gitignore﻿",
+        "useIgnoreFiles": false
+      },
+      "mode": "missing",
+      "names": [
+        ".gitignore"
+      ],
+      "allowed": true,
+      "lookups": []
+    },
+    {
+      "settings": {
+        "ignoreFiles": "﻿.gitignore﻿",
+        "useIgnoreFiles": false
+      },
+      "mode": "unreadable",
+      "names": [
+        ".gitignore"
+      ],
+      "allowed": true,
+      "lookups": []
+    },
+    {
+      "settings": {
+        "ignoreFiles": "﻿.gitignore﻿",
+        "useIgnoreFiles": false
+      },
+      "mode": "readable",
+      "names": [
+        ".gitignore"
+      ],
+      "allowed": true,
+      "lookups": []
+    },
+    {
+      "settings": {
+        "ignoreFiles": "﻿.gitignore﻿",
+        "useIgnoreFiles": true
+      },
+      "mode": "missing",
+      "names": [
+        ".gitignore"
+      ],
+      "allowed": true,
+      "lookups": [
+        "/.gitignore"
+      ]
+    },
+    {
+      "settings": {
+        "ignoreFiles": "﻿.gitignore﻿",
+        "useIgnoreFiles": true
+      },
+      "mode": "unreadable",
+      "names": [
+        ".gitignore"
+      ],
+      "allowed": true,
+      "lookups": [
+        "/.gitignore"
+      ]
+    },
+    {
+      "settings": {
+        "ignoreFiles": "﻿.gitignore﻿",
+        "useIgnoreFiles": true
+      },
+      "mode": "readable",
+      "names": [
+        ".gitignore"
+      ],
+      "allowed": false,
+      "lookups": [
+        "/.gitignore"
+      ]
+    },
+    {
+      "settings": {
+        "ignoreFiles": "a,b",
+        "useIgnoreFiles": false
+      },
+      "mode": "missing",
+      "names": [
+        "a",
+        "b"
+      ],
+      "allowed": true,
+      "lookups": []
+    },
+    {
+      "settings": {
+        "ignoreFiles": "a,b",
+        "useIgnoreFiles": false
+      },
+      "mode": "unreadable",
+      "names": [
+        "a",
+        "b"
+      ],
+      "allowed": true,
+      "lookups": []
+    },
+    {
+      "settings": {
+        "ignoreFiles": "a,b",
+        "useIgnoreFiles": false
+      },
+      "mode": "readable",
+      "names": [
+        "a",
+        "b"
+      ],
+      "allowed": true,
+      "lookups": []
+    },
+    {
+      "settings": {
+        "ignoreFiles": "a,b",
+        "useIgnoreFiles": true
+      },
+      "mode": "missing",
+      "names": [
+        "a",
+        "b"
+      ],
+      "allowed": true,
+      "lookups": [
+        "/a",
+        "/b"
+      ]
+    },
+    {
+      "settings": {
+        "ignoreFiles": "a,b",
+        "useIgnoreFiles": true
+      },
+      "mode": "unreadable",
+      "names": [
+        "a",
+        "b"
+      ],
+      "allowed": true,
+      "lookups": [
+        "/a",
+        "/b"
+      ]
+    },
+    {
+      "settings": {
+        "ignoreFiles": "a,b",
+        "useIgnoreFiles": true
+      },
+      "mode": "readable",
+      "names": [
+        "a",
+        "b"
+      ],
+      "allowed": false,
+      "lookups": [
+        "/a"
+      ]
+    }
+  ]
+}

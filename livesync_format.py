@@ -467,6 +467,24 @@ _JS_TRIM = ("\u0009\u000a\u000b\u000c\u000d\u0020\u00a0\u1680"
             "\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff")
 
 
+def split_ignore_names(raw: str) -> tuple[str, ...]:
+    """targetFilter.ts:95-98: split commas, JS trim, retain empty names."""
+    return tuple(name.strip(_JS_TRIM) for name in raw.split(','))
+
+
+def selection_lookup_path(path: str) -> str | None:
+    """Resolve inside vault-note storage, never host files or service documents.
+
+    targetFilter.ts:108-128 treats unusable/missing storage names as absent.
+    path.ts:255-257 supplies raw names; normalize only at the storage boundary.
+    """
+    normalized = _normalize_path(path)
+    if (not normalized or '..' in normalized.split('/')
+            or is_service_document_id(normalized)):
+        return None
+    return normalized
+
+
 def resolve_ignore_settings(
     milestone_settings: dict, *, use_override: bool | None = None,
     names_override: tuple[str, ...] | None = None,
@@ -495,14 +513,15 @@ def resolve_ignore_settings(
     if names_override is not None:
         names = names_override
     else:
-        raw = values('ignoreFiles', '.gitignore', str,
-                     DiagnosticCode.IGNORE_STRING, DiagnosticCode.IGNORE_NAMES_CONFLICT)
-        names = tuple(name.strip(_JS_TRIM) for name in raw.split(','))
-        # Retain the existing vault-relative-name safety rule; empty names are
-        # refused rather than silently changing the upstream split result.
-        if any(name.startswith('/') or '\\' in name or
-               any(part in ('', '.', '..') for part in name.split('/')) for name in names):
-            raise UnsupportedVaultSettings(DiagnosticCode.IGNORE_NAMES.value)
+        if use:
+            raw = values('ignoreFiles', '.gitignore', str,
+                         DiagnosticCode.IGNORE_STRING, DiagnosticCode.IGNORE_NAMES_CONFLICT)
+        else:
+            # targetFilter.ts:129-131: inactive settings never affect admission.
+            # Keep string split/trim for observability, without validation/gates.
+            raw = _milestone_setting_maps(milestone_settings)[0].get('ignoreFiles', '.gitignore')
+            raw = raw if isinstance(raw, str) else ''
+        names = split_ignore_names(raw)
     return use, names
 
 

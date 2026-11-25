@@ -332,3 +332,8 @@ def test_typed_publication_notices_documented():
         assert code in text
     assert 'original tool result remains verbatim' in (ROOT / 'README.md').read_text()
     assert 'typed notices' in (ROOT / '.env.example').read_text()
+
+
+def test_ignore_name_warning_documented():
+    for name in ('README.md','docs/selection-filters.md','docs/tools.md','.env.example'):
+        assert 'selection_unresolved_ignore_names' in (ROOT / name).read_text()

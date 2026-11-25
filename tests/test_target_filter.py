@@ -83,8 +83,7 @@ def test_selection_env():
     assert cfg.selection_ignore_files == ('.gitignore','rules.txt')
 
 
-@pytest.mark.parametrize('key,value', [('LIVESYNC_USE_IGNORE_FILES','perhaps'),
-    ('LIVESYNC_IGNORE_FILES','../escape'), ('LIVESYNC_IGNORE_FILES','/absolute')])
+@pytest.mark.parametrize('key,value', [('LIVESYNC_USE_IGNORE_FILES','perhaps')])
 def test_bad_selection_env(key,value):
     with pytest.raises(ConfigError, match=key):
         load_config({'LIVESYNC_BACKEND':'couchdb', 'COUCHDB_USER':'admin',

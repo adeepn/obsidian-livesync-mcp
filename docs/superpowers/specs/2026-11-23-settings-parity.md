@@ -740,3 +740,7 @@ its own deadline expires first. Neither path echoes the pattern or body.
 ### 2026-11-25 F1-5
 
 [DECISION] Route the compatibility count wrapper through the shared external notice suffix; remove the obsolete count collector. The gate object-valued-message witness retains all original fields.
+
+### 2026-11-25 F1-6
+
+[DECISION] Remove operator-style ignore-name validation for both sources; match split/JS-trim/lookup semantics from targetFilter.ts:95-145 and path.ts:241-265. Inactive names never gate startup. Restrict actual storage lookup to note identifiers; report unresolved explicit names as a typed warning count.

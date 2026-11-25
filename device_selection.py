@@ -136,6 +136,8 @@ class DeviceSelection:
             'selection_ignore_source': 'explicit',
             'selection_use_ignore_files_source': 'explicit' if overrides[0] is not None else 'vault',
             'selection_ignore_files_source': 'explicit' if overrides[1] is not None else 'vault',
+            'selection_unresolved_ignore_names': (sum(name not in getattr(self, '_selection_resolved_names', set()) for name in self.selection_ignore_files)
+                if self.selection_use_ignore_files and overrides[1] is not None else 0),
             'selection_writer_supported': reason is None,
             'selection_unsupported_reason': reason,
         }
@@ -155,11 +157,13 @@ class DeviceSelection:
         return False if text is None else text.split('\n')
 
     async def refresh_selection_files(self):
+        self._selection_resolved_names = set()
         if not self.selection_use_ignore_files:
             return
         self._selection_root_snapshot = {
             path: await self._selection_lines(path) for path in self.selection_ignore_files
         }
+        self._selection_resolved_names.update(name for name, lines in self._selection_root_snapshot.items() if lines is not False)
 
     def selection_cache_size(self):
         store = getattr(self, '_store', None)
@@ -185,6 +189,10 @@ class DeviceSelection:
                 for name in self.selection_ignore_files:
                     candidate = '/'.join(parts[:n] + [name])
                     files[candidate] = await self._selection_lines(candidate)
+                    if files[candidate] is not False:
+                        if not hasattr(self, '_selection_resolved_names'):
+                            self._selection_resolved_names = set()
+                        self._selection_resolved_names.add(name)
         payload = self._selection_payload(path, files)
         def fingerprint(value):
             return hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=True).encode()).hexdigest()

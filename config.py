@@ -526,19 +526,8 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
     use_ignore = env.get('LIVESYNC_USE_IGNORE_FILES', '').lower()
     if use_ignore not in ('', 'true', 'false'):
         raise ConfigError('LIVESYNC_USE_IGNORE_FILES must be true or false.')
-    ignore_files = tuple(
-        name.strip() for name in env.get('LIVESYNC_IGNORE_FILES', '').split(',')
-        if name.strip()
-    )
-    if any(
-        name.startswith('/') or '\\' in name
-        or any(part in ('', '.', '..') for part in name.split('/'))
-        for name in ignore_files
-    ):
-        raise ConfigError(
-            'LIVESYNC_IGNORE_FILES must contain comma-separated vault-relative '
-            'file names without traversal.'
-        )
+    from livesync_format import split_ignore_names
+    ignore_files = split_ignore_names(env.get('LIVESYNC_IGNORE_FILES', ''))
 
     return Config(
         replay_limits=replay_limits,

@@ -176,3 +176,5 @@ shapes and the incomplete-index pagination caveat.
 `scripts/extract_coercion_cells.mjs` executes isolated pinned dispatcher cells for JSON-typed writer parameters; `tests/test_coercion_cells.py` crosses exact upstream partitions and IDs with both backend doubles.
 
 `publication_notices.py` owns closed, typed successful-write transformations, context-local collection and external result suffixes. `tests/test_publication_notices.py` exercises both backends and all writing tool families.
+
+`scripts/extract_ignore_name_vectors.mjs` executes pinned targetFilter/path functions with integrity-verified published minimatch dependencies; the committed ignore-name fixture covers inactive, missing, unreadable and readable names.

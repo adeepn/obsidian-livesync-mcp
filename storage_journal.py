@@ -1357,6 +1357,10 @@ class JournalBackend(TextAccessPolicy, DeviceSelection):
         return self._meta_from_doc(body)
 
     async def _read_selection_file(self, path):
+        from livesync_format import selection_lookup_path
+        path = selection_lookup_path(path)
+        if path is None:
+            return None
         store = self._require_store('ignore files')
         candidates = ['i:' + path, path] if _has_hidden_segment(path) else [path]
         content = None
