@@ -992,3 +992,12 @@ def test_practical_docs_have_single_inventory_and_recipe_order():
     assert 'authentication_handlers' not in connection
     assert '## Automated real-server acceptance' not in connection
     assert 'couchdb-jwt.md' in connection and 'developer-acceptance.md' in connection
+
+
+def test_selection_deadline_override_and_historical_scan_links():
+    text = (ROOT / 'docs/selection-filters.md').read_text()
+    assert 'configurable with `LIVESYNC_SELECTION_TIMEOUT_SECONDS`' in text
+    for name in ('2026-11-17-universal-mcp-foundation-couchdb.md', '2026-11-19-s3-journal-peer.md'):
+        text = (ROOT / 'docs/superpowers/plans' / name).read_text()
+        assert '../../scan-policy.md#text-scan-eligibility' in text
+        assert 'README.md#text-scan-eligibility' not in text

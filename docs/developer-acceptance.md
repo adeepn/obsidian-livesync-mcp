@@ -55,5 +55,3 @@ See [the final acceptance artifact](test-artifacts/2026-11-25-parity-docker/summ
 for counts, durations, input digests, image digests and reproduction commands.
 This establishes the enumerated scenarios on these servers; it does not prove
 all possible settings or server combinations.
-
-

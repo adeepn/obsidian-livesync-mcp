@@ -79,4 +79,3 @@ are read only for the selected backend. Empty defaults below mean an empty strin
 | `LIVESYNC_JOURNAL_MAX_REFRESH_BYTES` | `68719476736` | Positive integer <2**63 | Downloaded bytes per refresh |
 | `LIVESYNC_JOURNAL_MAX_REFRESH_SECONDS` | `3600` | Positive finite number <2**63 | Elapsed seconds, fractions accepted |
 | `LIVESYNC_UNSAFE_DEBUG` | `unset` | Set to 1 plus DEBUG logging | Unsafe last-line diagnostic sink; keep disabled |
-

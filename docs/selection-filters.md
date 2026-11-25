@@ -39,7 +39,7 @@ before dispatch to a thread. Active-filter startup is its first use; otherwise
 it starts lazily. Each new process checks the Node version and runs a health
 self-test. It restarts on the next request after a crash; a failed request is
 never silently retried. Backend close terminates and reaps the process and
-joins its pipe threads. Five-second evaluation deadlines include blocked stdin;
+joins its pipe threads. Default five-second evaluation deadlines, configurable with `LIVESYNC_SELECTION_TIMEOUT_SECONDS`, include blocked stdin;
 timeout, nonzero exit, malformed responses and invalid field types deny writes.
 Errors expose structured diagnostics; see [Diagnostics and secrets](diagnostics-and-secrets.md).
 `backend_info` exposes `selection_engine_state` (`off`, `ready`, `unsupported`),

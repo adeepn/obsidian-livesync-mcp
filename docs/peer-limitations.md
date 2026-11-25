@@ -6,6 +6,7 @@ commonlib `484c164450d61deb2e301582b60cb9b5f9fa977f/src/`; `P:` means plugin
 behaviour, not acceptance of every possible input by an Obsidian client.
 Defaults below are peer resource choices unless explicitly called upstream
 semantics. They must not be interpreted as LiveSync protocol maxima.
+See the [environment reference](configuration.md#environment-reference) for overrides.
 
 ## Deletion and conflict policies
 
@@ -278,7 +279,7 @@ TextEncoder replacement and device chunk IDs remain unchanged.
   without conditional writes. [S3 operation](s3-journal.md).
 
 The [complete limit and refusal inventory](peer-limitations.md) also covers
-fixed transport/selection deadlines, YAML property-conversion bounds and SQLite
+configured transport/selection deadlines, YAML property-conversion bounds and SQLite
 capacity. These are resource/tool constraints, not LiveSync vault settings.
 
 ## Outcome reporting

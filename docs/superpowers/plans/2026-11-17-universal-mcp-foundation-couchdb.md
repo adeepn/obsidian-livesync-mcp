@@ -8,7 +8,7 @@
 > умолчанию отклоняется, явный `lossy_text=true` доступен в upload-инструменте.
 > Textual newnotes участвуют в text-tools по общей UTF-8/control/budget eligibility.
 > Актуальные контракты: [settings parity, §в](../specs/2026-11-23-settings-parity.md#в-plain--newnote)
-> и [README](../../../README.md#text-scan-eligibility). Исходный текст сохранён
+> и [scan policy](../../scan-policy.md#text-scan-eligibility). Исходный текст сохранён
 > для истории; удалённые runtime-символы не восстанавливаются.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.

@@ -1039,3 +1039,10 @@ JWT provisioning and automated acceptance move to linked dedicated pages. The
 documentation contract executes the authoritative environment table and all
 connection blocks across their new locations; historical acceptance corrections
 remain in upstream-pin.md.
+
+
+### 2026-11-25 — F8-4 navigation and selection deadline
+
+Historical plans now link to scan-policy.md rather than the removed README
+anchor. Selection worker documentation names LIVESYNC_SELECTION_TIMEOUT_SECONDS
+beside the default deadline. Local-link inventory covers all Markdown pages.
