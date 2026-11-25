@@ -67,3 +67,17 @@ supported choices, never the supplied value. This includes invalid `MCP_PORT`
 and `LIVESYNC_BACKEND` values printed by `run.py` or `server.py`; correct the
 named variable and restart. Replay-limit validation passes an explicit public
 message field to configuration validation rather than formatting its exception.
+
+At the hosting boundary, SDK transport/validation logs contain only logger name,
+closed level and exception class. Request header values, paths, body fragments,
+third-party messages and exception text/tracebacks are withheld before handlers.
+This includes Content-Type, Host and Origin validation and resource/prompt errors.
+
+Installed mcp 1.30.0 audit: `transport_security.py:71,93,104` interpolates headers;
+`streamable_http.py:623,692,853,1131` logs methods/errors; `sse.py:261,281,287`
+logs session parameters, body and parse errors; `shared/session.py:383-384,444`
+uses the root logger for validation messages and exceptions;
+`lowlevel/server.py:494,682,713,723` logs tool names, messages and warnings;
+`fastmcp/server.py:410,1112` logs resource/prompt errors. Resource manager
+`resources/resource_manager.py:91` also supplies URI through LoggerAdapter extras.
+The filter removes these extras as well as message arguments and tracebacks.

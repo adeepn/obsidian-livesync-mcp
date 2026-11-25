@@ -142,6 +142,8 @@ def create_app(cfg: Config) -> FastMCP:
     Configuration is immutable for the lifetime of this application. Build
     another application to consume changed configuration.
     """
+    from hosting_logging import install_hosting_log_filters
+    install_hosting_log_filters()
     state = {"backend": None}
 
     @asynccontextmanager

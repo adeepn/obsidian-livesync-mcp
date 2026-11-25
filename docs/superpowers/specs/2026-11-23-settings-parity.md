@@ -1052,3 +1052,9 @@ beside the default deadline. Local-link inventory covers all Markdown pages.
 [DECISION] Explicit 1 GiB memory-held HTTP body policy, configurable through
 LIVESYNC_MAX_REQUEST_BYTES; 0 unlimited, HTTP 413 actionable via configuration.
 OAuth form cap remains separate. Installed SDK argument verified from source.
+
+### 2026-11-25 — F9-2 hosting diagnostics
+
+[DECISION] Filter installed and future SDK/HTTP logger records before handlers;
+only logger, closed level and exception class survive. Root capture covers
+header, path, body, tool, resource and prompt routes.

@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+- Withhold unstructured SDK transport and validation logs at the hosting boundary.
+
 - Configure HTTP request bodies with LIVESYNC_MAX_REQUEST_BYTES (1 GiB default, 0 unlimited); retain the separate OAuth form cap.
 
 - Repair historical scan-policy links and name the selection deadline override.

@@ -191,3 +191,8 @@ from [.env.example](.env.example); keep secrets local.
 ## License
 
 Apache 2.0 — see [LICENSE](LICENSE).
+
+At the hosting boundary, SDK transport/validation logs contain only logger name,
+closed level and exception class. Request header values, paths, body fragments,
+third-party messages and exception text/tracebacks are withheld before handlers.
+This includes Content-Type, Host and Origin validation and resource/prompt errors.

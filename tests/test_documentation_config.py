@@ -1010,3 +1010,10 @@ def test_http_body_policy_documentation():
     text = (ROOT / "docs/configuration.md").read_text()
     for term in ("1 GiB", "68 MiB", "held in memory", "HTTP 413", "OAuth", "0 (unlimited"):
         assert term in text
+
+
+def test_hosting_log_policy_documented():
+    for name in ("README.md", "docs/diagnostics-and-secrets.md"):
+        text = (ROOT / name).read_text()
+        assert "hosting boundary" in text and "Content-Type, Host and Origin" in text
+    assert "hosting_logging.py" in (ROOT / "AGENTS.md").read_text()

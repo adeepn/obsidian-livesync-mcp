@@ -70,3 +70,59 @@ def test_request_config():
     for value in ['-1', '', '1.5', 'private-value', True, 2.5]:
         with pytest.raises(ConfigError, match='LIVESYNC_MAX_REQUEST_BYTES.*nonnegative integer'):
             load_config({**COUCHDB_ENV, 'LIVESYNC_MAX_REQUEST_BYTES': value})
+
+
+@pytest.mark.parametrize('route', ['content-type', 'host', 'origin', 'path', 'body', 'tool', 'resource', 'prompt'])
+async def test_http_logs_withhold_request_values(monkeypatch, route):
+    import logging
+    marker = 'PRIVATE_HTTP_MARKER_012345'
+    records = []
+
+    class Capture(logging.Handler):
+        def emit(self, record):
+            records.append(dict(record.__dict__))
+
+    root = logging.getLogger()
+    capture = Capture()
+    root.addHandler(capture)
+    old = root.level
+    root.setLevel(logging.DEBUG)
+    try:
+        async with http_peer(monkeypatch) as (client, backend, peer):
+            headers = {}
+            path = '/mcp'
+            body = call_body('obsidian_list_notes', {})
+            if route == 'content-type':
+                headers['Content-Type'] = marker
+            elif route in ('host', 'origin'):
+                # Exercise real validation although deployment delegates rebinding
+                # protection to its authenticated proxy by default.
+                from mcp.server.transport_security import TransportSecurityMiddleware, TransportSecuritySettings
+                original = TransportSecurityMiddleware.__init__
+                def protected(self, settings=None):
+                    original(self, TransportSecuritySettings(enable_dns_rebinding_protection=True,
+                        allowed_hosts=['localhost:8484'], allowed_origins=['http://localhost:8484']))
+                monkeypatch.setattr(TransportSecurityMiddleware, '__init__', protected)
+                headers[route] = marker
+            elif route == 'path':
+                path = '/' + marker
+            elif route == 'body':
+                body = {'jsonrpc': '2.0', 'id': 1, 'method': marker, 'params': {marker: marker}}
+            elif route == 'tool':
+                body = call_body(marker, {})
+            elif route == 'resource':
+                body = {'jsonrpc': '2.0', 'id': 1, 'method': 'resources/read', 'params': {'uri': 'file:///' + marker}}
+            elif route == 'prompt':
+                body = {'jsonrpc': '2.0', 'id': 1, 'method': 'prompts/get', 'params': {'name': marker}}
+            response = await client.post(path, headers=headers, json=body)
+            assert response.status_code in (200, 400, 403, 404, 421)
+        assert records
+        assert not [(r['name'], [k for k, v in r.items() if marker in repr(v)]) for r in records if marker in repr(r)]
+        sdk = [r for r in records if r['name'].startswith('mcp.')]
+        assert sdk
+        for r in sdk:
+            assert r['args'] == () and r['exc_info'] is None and r['exc_text'] is None
+            assert r['msg'].startswith('sdk_event logger=')
+    finally:
+        root.removeHandler(capture)
+        root.setLevel(old)

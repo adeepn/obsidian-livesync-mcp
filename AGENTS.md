@@ -21,6 +21,7 @@ This repository is a small Python MCP server for accessing an Obsidian LiveSync 
 - `selection_engine.py`: optional Node capability checks, persistent worker and response validation.
 - `selection_worker.mjs`: id-correlated JSON-lines selection worker with bounded lifecycle.
 - `vendor/selection/`: pinned upstream selection functions and minimatch dependency tree, source URLs and checksums; inspect provenance before updating.
+- `hosting_logging.py`: closed SDK/HTTP log records installed at application construction.
 - `diagnostic_hygiene.py` / `diagnostic_codes.py`: typed public fields, closed reasons, control escaping and opt-in bounded debug sink.
 - `replay_limits.py`: configurable operational journal/object/refresh budgets, separate from device file-size admission.
 - `regex_runner.py`: lazy persistent isolated JSON-lines regex worker, request deadline/output cap, shutdown and loop-close cleanup.
