@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+- Freeze the tested dependency environment and pin the upstream watcher to Ubuntu 24.04.
+
 - Verify retained selection modules and worker bytes before execution.
 
 - Refuse custom routing, framing and hop-by-hop headers for both storage transports.

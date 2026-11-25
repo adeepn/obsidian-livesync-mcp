@@ -90,3 +90,7 @@ need proportionally more. The body is held in memory. Raise this variable or
 set 0 (unlimited within Python addressable memory) and restart after HTTP 413.
 Reverse proxies may have their own body limits. The OAuth authorization form
 has its separate 4 MiB cap; changing this setting does not change that cap.
+
+For reproducible development/test installation use a fresh Python 3.13 virtual
+environment and `python -m pip install -r requirements.lock`; this frozen file
+is produced by `./venv/bin/python -m pip freeze` of the working acceptance venv.

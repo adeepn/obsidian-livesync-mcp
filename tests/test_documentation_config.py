@@ -1039,3 +1039,14 @@ def test_transport_owned_headers_documented():
 def test_selection_installed_provenance_documented():
     for name in ("AGENTS.md", "docs/regenerating-oracle-fixtures.md", "docs/selection-filters.md"):
         assert "installed-sha256.json" in (ROOT / name).read_text()
+
+
+def test_reproducible_install_and_fixed_runner_are_documented():
+    lock = (ROOT / 'requirements.lock').read_text()
+    assert '# Produced by: ./venv/bin/python -m pip freeze' in lock
+    assert '# Reproduce: python -m pip install -r requirements.lock' in lock
+    assert 'python -m pip install -r requirements.lock' in (ROOT / 'AGENTS.md').read_text()
+    workflow = (ROOT / '.github/workflows/upstream-watch.yml').read_text()
+    assert 'runs-on: ubuntu-24.04' in workflow
+    assert 'ubuntu-latest' not in workflow
+    assert not re.search(r'uses:.*@(main|master|latest|v\d+)\s*$', workflow, re.M)

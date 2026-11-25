@@ -83,8 +83,13 @@ Create a virtual environment before local work:
 ```bash
 python -m venv venv
 source venv/bin/activate
-pip install -r requirements-dev.txt
+python -m pip install -r requirements.lock
 ```
+
+The lock is the exact `./venv/bin/python -m pip freeze` of the branch test and
+acceptance environment. Reproduce with `python -m pip install -r requirements.lock`
+in a fresh Python 3.13 virtual environment; it includes development dependencies.
+Regenerate deliberately after dependency changes and validate the isolated install.
 
 On Windows PowerShell, activate with `.\venv\Scripts\Activate.ps1`.
 

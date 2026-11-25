@@ -1092,3 +1092,10 @@ fields, closing the final architecture reviewer whole-suite survivor.
 [DECISION] Per-file SHA256 manifest covers every installed vendor byte, worker
 and JS verifier; Python checks before Node launch, JS before imports. Acquisition
 integrity remains independent. Scratch tamper and missing-file tests fail closed.
+
+### 2026-11-26 — F9-8 reproducible environment
+
+[DECISION] Freeze the exact working venv explicitly, replacing seven stale pins;
+use requirements.lock directly to recreate the complete test environment. Pin
+upstream-watch to ubuntu-24.04; its source acquisition already uses GITHUB_SHA.
+Isolated-install full-suite evidence belongs in ignored F9 working evidence.
