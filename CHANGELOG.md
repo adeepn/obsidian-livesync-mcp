@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Settings parity
 
+- Preserve every original publication result field, including object-valued messages, when appending transport notices.
+
 - Preflight lossless CouchDB chunk collisions and admit journal collisions whose projected bytes agree, retaining IDs and replacement reporting.
 - Apply device JavaScript coercion to customChunkSize, admitting terminating JSON-typed settings and naming recovery for binary data-loss or loop refusals.
 - Preserve JavaScript ToPrimitive and addition in V2 minimum adjustment; remove the integer shortcut and its invalid array-equivalence proof.

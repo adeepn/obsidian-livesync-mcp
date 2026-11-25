@@ -88,3 +88,11 @@ async def test_every_write_tool_exposes_typed_notice(tmp_path,kind,tool):
                 assert set(notice) <= {'code','count','invalid_bytes','removed_bytes','metadata_size_preserved'}
                 assert all(type(v) in (int,bool) for k,v in notice.items() if k!='code')
         finally:server._active_backend.reset(token)
+
+
+def test_legacy_publication_wrapper_preserves_non_string_message():
+    # Gate reproducer; JSON fields must remain byte-for-byte intact.
+    original='{"status":"ok","message":{"code":7},"other":[1,null]}'
+    result=server._publication_text(original,[1])
+    assert result.splitlines()[0]==original
+    assert json.loads(result.splitlines()[1])=={'notices':[{'code':'journal_surrogates_replaced','count':1}]}

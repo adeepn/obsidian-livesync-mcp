@@ -291,24 +291,10 @@ def _reporting_failure(error):
 
 
 def _publication_text(result, counts):
-    """Project successful journal publication counts, never content fields."""
+    """Compatibility projection for typed journal counts; preserve all fields."""
+    from publication_notices import notice_text
     count = sum(n for n in counts if type(n) is int and n > 0)
-    if not count:
-        return result
-    sentence = ("The LiveSync journal transport replaces unpaired surrogate units with U+FFFD; "
-                "the note is stored exactly as devices would store it.")
-    if isinstance(result, str):
-        try:
-            structured = json.loads(result)
-        except (ValueError, TypeError):
-            structured = None
-        if isinstance(structured, dict):
-            structured["transport_replacements"] = count
-            structured["message"] = (structured["message"] + " " + sentence
-                                     if isinstance(structured.get("message"), str) else sentence)
-            return json.dumps(structured, ensure_ascii=False)
-        return result + "\n" + sentence
-    return result
+    return notice_text(result, [{'code': 'journal_surrogates_replaced', 'count': count}])
 
 
 def _tool_errors(

@@ -12,10 +12,7 @@ from __future__ import annotations
 from diagnostic_hygiene import (PublicDiagnostic, DiagnosticPath, diagnostic, path_field, setting_key, numeric_field, numeric_text, cause_name)
 
 from typing import AsyncIterator, Protocol, TypedDict, runtime_checkable, NotRequired
-from contextvars import ContextVar
 
-# Per-tool publication counts; never store content or remote fields here.
-publication_replacements: ContextVar[list[int] | None] = ContextVar("publication_replacements", default=None)
 
 
 class StorageError(Exception):

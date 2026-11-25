@@ -1249,10 +1249,6 @@ class JournalBackend(TextAccessPolicy, DeviceSelection):
         result = self._meta_from_doc(body)
         if replacements:
             result["transport_replacements"] = replacements
-            from storage_base import publication_replacements
-            collector = publication_replacements.get()
-            if collector is not None:
-                collector.append(replacements)
         notices = split_notices(content, self._splitter.version)
         if replacements:
             notices.append({'code': 'journal_surrogates_replaced', 'count': replacements})

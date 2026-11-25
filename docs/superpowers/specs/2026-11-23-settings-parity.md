@@ -736,3 +736,7 @@ its own deadline expires first. Neither path echoes the pattern or body.
 ### 2026-11-25 F1-4
 
 [DECISION] Add typed successful-publication notices for legacy BOM stripping, opt-in malformed UTF-8 decoding, Blob USVString and compact-journal surrogate replacements. Original result text remains verbatim. P-11 verified at EntryManagerImpls.ts:280 and reflection.ts:272-283: default receiving devices refuse the resulting nonzero size mismatch; processSizeMismatchedFiles bypasses it.
+
+### 2026-11-25 F1-5
+
+[DECISION] Route the compatibility count wrapper through the shared external notice suffix; remove the obsolete count collector. The gate object-valued-message witness retains all original fields.

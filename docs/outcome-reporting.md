@@ -78,3 +78,5 @@ and tags whenever their resulting publication performs a listed transformation.
 Requested semantic edits (YAML or canvas formatting, property/tag changes,
 replacement text) are not ingestion transformations. Surrogate escapes in YAML
 or JSON preserve values and do not themselves cause a notice.
+
+The compatibility publication wrapper uses the same notice suffix. Non-string `message` values and fields named `notices` or `transport_replacements` remain unchanged; no reporting key is inserted into the original result.
