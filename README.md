@@ -156,7 +156,7 @@ combination. [Source inventory and caveats](docs/superpowers/specs/2026-11-23-se
 | `forcePathStyle` | Boolean, default true | Identical for configured endpoints | S3_FORCE_PATH_STYLE=true/false; SDK addressing rules still apply |
 | `pathNormalizationVersion` | 0 legacy / 1 NFC | Identical | Both, independently of filename case; collisions refuse |
 | `handleFilenameCaseSensitive` | false / true | Identical | Legacy, NFC, case-sensitive and NFC+case-sensitive identities |
-| `chunkSplitterVersion` | v1, v2, v2-segmenter, v3-rabin-karp, legacy empty | Identical | All writers; legacy split-surrogate pieces retain device IDs and transport encoding; journal collisions compare projected bytes; v2-segmenter equals v2 at this pin |
+| `chunkSplitterVersion` | v1, v2, v2-segmenter, v3-rabin-karp, legacy empty | Identical | All writers; legacy split-surrogate pieces retain device IDs; CouchDB refuses unpaired units as devices do; journal collisions compare projected bytes; v2-segmenter equals v2 at this pin |
 | `enableChunkSplitterV2`, `useSegmenter` | false / true (legacy migration) | Identical | One-pass migration of empty version; unknown version normalization follows upstream |
 | `hashAlg` | xxhash64, xxhash32, mixed-purejs, sha1, empty | Identical | Upstream UTF-16 length and hash semantics |
 | `customChunkSize` | JSON value; number >=0 in UI (default 0) | Identical wherever the plugin terminates | JavaScript truthiness/ToNumber coercion; V1 plain cap zero advances one UTF-16 unit; V3 clamps; see [loop refusals](docs/vault-format.md#invalid-writer-parameters) |
@@ -187,6 +187,12 @@ The 2026-11-25 acceptance run found JWT wrong-key HTTP 400 classified as a
 generic storage error and CouchDB rejecting a lone-surrogate leaf with HTTP 400.
 Acceptance remains incomplete; see the [recorded results](docs/test-artifacts/2026-11-25-parity-docker/summary.txt).
 
+CouchDB 3.5.3 rejects unpaired UTF-16 surrogate JSON escapes, including device
+writes. The peer refuses the complete write before publishing any leaf. V1's
+non-plain text splitter can cut inside an emoji pair; use a vault splitter with
+surrogate protection such as v3, or avoid synchronizing that note. Journal
+TextEncoder replacement and device chunk IDs remain unchanged.
+
 - CouchDB auth is explicit local configuration: choose Basic credentials or the
   JWT environment group, independently of MCP client auth. JWT matches the pinned
   plugin, including original subject whitespace and Latin-1 JSON encoding.
@@ -197,7 +203,7 @@ Acceptance remains incomplete; see the [recorded results](docs/test-artifacts/20
 - CouchDB compression uses Python zlib raw deflate level 8; bytes may differ
   from device fflate output, but devices read either stream. The peer preserves
   CR/LF text instead of treating line-wrapped base64 as binary (upstream loses
-  those line breaks). It publishes data containing surrogate code points or
+  those line breaks). It publishes data containing
   a leading BOM uncompressed to prevent Blob conversion/decoding losses.
   Reads of existing compressed text match device Blob.text(), including U+FFFD
   replacement and BOM removal. Invalid base64/deflate refuses with a sanitized

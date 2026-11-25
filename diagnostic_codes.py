@@ -26,6 +26,10 @@ class DiagnosticCode(str, Enum):
     E2EE_UNSUPPORTED = 'the vault uses LiveSync end-to-end encryption, which this server does not support'
     OBFUSCATION_UNSUPPORTED = 'the vault uses path obfuscation, which this server does not support'
     FAILED = "storage operation failed"
+    COUCHDB_SURROGATE_REFUSED = ('CouchDB rejects data containing an unpaired UTF-16 surrogate; it rejects devices the same way. '
+                                 'This can happen when the v1 non-plain text splitter cuts inside a surrogate pair. '
+                                 'Writing this note from a device with the same settings would fail too; use a vault splitter '
+                                 'setting with surrogate protection such as v3, or avoid synchronizing this note.')
     COUCHDB_AUTHORIZATION_ERROR = 'CouchDB authorization error'
     COUCHDB_DATABASE_NOT_FOUND = 'CouchDB database not found'
     COUCHDB_UNAVAILABLE = 'CouchDB unavailable'

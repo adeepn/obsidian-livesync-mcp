@@ -156,9 +156,14 @@ Journal storage is unchanged and keeps compression forced off.
 Published octagonal-wheels 0.1.57 `dist/binary/base64.js:367-408` detects canonical
 base64 after stripping CR/LF. The peer deliberately treats any CR/LF value as
 text: upstream's binary path silently removes line breaks. Without CR/LF the
-base64/text decision matches upstream. Data containing surrogate code points is
-published uncompressed: Blob's USVString conversion would replace unpaired
-surrogates with U+FFFD. Leading-BOM text is also uncompressed, since Blob.text()
+base64/text decision matches upstream. CouchDB 3.5.3 rejects lone-surrogate JSON escapes with HTTP 400
+`{"error":"bad_request","reason":"invalid UTF-8 JSON"}` (verified 2026-11-25).
+The backend checks every document string before publication and refuses the
+whole write with `WriterParameterRefused`. V1 non-plain cuts can isolate UTF-16
+units (`chunks.ts:243-252`); use v3's protected text boundaries
+(`chunks.ts:698-699`) or avoid synchronizing the note. Devices fail too.
+Paired JSON escapes and ordinary UTF-8 emoji are accepted. Journal leaves still
+use the upstream TextEncoder replacement; JSON serialization is unchanged. Leading-BOM text is also uncompressed, since Blob.text()
 would strip that BOM on read. Every device accepts these uncompressed values.
 Existing compressed values retain upstream decoding losses; those bytes cannot
 be recovered by a reader. These exceptions preserve the caller's data rather

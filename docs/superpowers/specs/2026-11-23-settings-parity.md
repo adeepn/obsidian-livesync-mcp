@@ -830,3 +830,17 @@ running CouchDB surrogate publication receives HTTP 400. HS256 passes; the
 supplied ES key fails PKCS8 configuration validation. No production code changed.
 Large-file/tool, expanded recovery, compression and custom-header scenarios
 remain NOT DONE. See `docs/test-artifacts/2026-11-25-parity-docker/summary.txt`.
+
+
+### 2026-11-25 — F4 A1: correct CouchDB surrogate storage premise
+
+[GOTCHA] The historical G7 statement that CouchDB preserves unpaired units is
+false for storage. JSON.stringify emits escapes, but CouchDB 3.5.3 returns HTTP
+400 `{"error":"bad_request","reason":"invalid UTF-8 JSON"}` (live 2026-11-25).
+Paired escapes and ordinary UTF-8 emoji are accepted. The strict double now
+models this on single, local and bulk endpoints. Complete writes preflight
+pieces and metadata before publishing; direct writes also guard every string.
+V1 non-plain UTF-16 cuts (`chunks.ts:243-252`) can produce these pieces; v3 text
+boundaries are protected (`chunks.ts:698-699`). The typed refusal advises v3
+or avoiding the note. This equals the device outcome; journal bytes, cuts, IDs
+and all committed upstream expectations remain unchanged. Acceptance pending.

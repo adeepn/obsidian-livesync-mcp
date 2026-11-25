@@ -52,7 +52,7 @@ import httpx
 
 
 def _json_response(status_code: int, body: dict) -> httpx.Response:
-    # CouchDB responses can escape UTF-16 surrogates on the _all_docs route.
+    # ASCII JSON responses preserve ordinary Unicode, including paired escapes.
     return httpx.Response(status_code, content=json.dumps(body, ensure_ascii=True).encode('utf-8'),
                           headers={'Content-Type': 'application/json'})
 
@@ -162,6 +162,14 @@ def make_fake_couchdb(
     def handler(request: httpx.Request) -> httpx.Response:
         request.extensions["raw_body"] = bytes(request.content)
         request_log.append(request)
+        # Verified CouchDB 3.5.3, 2026-11-25: all JSON endpoints reject lone
+        # surrogate escapes, but accept paired escapes and UTF-8 scalars.
+        if request.content:
+            try:
+                parsed = json.loads(request.content)
+                json.dumps(parsed, ensure_ascii=False).encode('utf-8')
+            except (ValueError, UnicodeError):
+                return httpx.Response(400, json={'error': 'bad_request', 'reason': 'invalid UTF-8 JSON'})
         if force_status is not None:
             # "reason" doubles as a raw-body sentinel for log-hygiene
             # tests: error logs may carry the error code, never the body.
@@ -204,6 +212,20 @@ def make_fake_couchdb(
             if request.method == "GET":
                 return all_docs_response(request)
             return httpx.Response(405, json={"error": "method_not_allowed"})
+
+        if rest == '_bulk_docs' and request.method == 'POST':
+            results = []
+            for body in json.loads(request.content)['docs']:
+                doc_id = body['_id']
+                existing = store.get(doc_id)
+                if existing is not None and body.get('_rev') != existing['_rev']:
+                    results.append({'id': doc_id, 'error': 'conflict'})
+                    continue
+                rev = _next_rev(existing['_rev']) if existing else '1-fake1'
+                store[doc_id] = {**body, '_rev': rev}
+                state['update_seq'] += 1
+                results.append({'ok': True, 'id': doc_id, 'rev': rev})
+            return httpx.Response(201, json=results)
 
         doc_id = rest
         if request.method == "GET":

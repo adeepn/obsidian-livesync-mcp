@@ -85,6 +85,12 @@ async def test_cell_backend_lifecycle(tmp_path, kind, case):
                                              create=True, overwrite=False)
             else:
                 await backend.write_note(path, data, create=True)
+        if kind == 'couchdb' and any(0xD800 <= ord(c) <= 0xDFFF for p in expected for c in p):
+            from storage_base import WriterParameterRefused
+            with pytest.raises(WriterParameterRefused, match='unpaired UTF-16 surrogate'):
+                await publish()
+            assert await backend._get_doc(backend._path2id(path)) is None
+            return
         await publish()
         metadata = await doc(path)
         assert metadata['children'] == vector['children']

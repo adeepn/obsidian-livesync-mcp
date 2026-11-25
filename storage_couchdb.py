@@ -221,6 +221,23 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
     def _doc_path(self, doc_id: str) -> str:
         return f"{self._db_path}/{urllib.parse.quote(doc_id, safe='')}"
 
+    @staticmethod
+    def _preflight_documents(value: object) -> None:
+        # chunks.ts:243-252 cuts V1 non-plain UTF-16 units; :698-699 protects
+        # Rabin-Karp text boundaries. CouchDB 3.5.3, live 2026-11-25, rejects
+        # JSON.stringify's lone escapes with 400 invalid UTF-8 JSON (devices too).
+        pending = [value]
+        while pending:
+            item = pending.pop()
+            if isinstance(item, str):
+                if any(0xD800 <= ord(char) <= 0xDFFF for char in item):
+                    raise WriterParameterRefused(PublicDiagnostic(DiagnosticCode.COUCHDB_SURROGATE_REFUSED))
+            elif isinstance(item, dict):
+                pending.extend(item.keys())
+                pending.extend(item.values())
+            elif isinstance(item, (list, tuple)):
+                pending.extend(item)
+
     async def _request(
         self,
         method: str,
@@ -235,6 +252,8 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
         other error status and every transport failure raises a storage
         exception whose message carries no URL, database or revision.
         """
+        if json_body is not None:
+            self._preflight_documents(json_body)
         # LiveSyncReplicator.ts:2071-2098 passes custom headers to the
         # database connection; diagnostics/couchdb.ts:45 uses them as well.
         # Do not allow absolute/network-path URLs to send credentials elsewhere.
@@ -944,6 +963,7 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
         4xx refusals remain ordinary errors. Stale ``_rev`` bodies surface
         as CouchDB 409s, mapped to ``ConcurrentModification``.
         """
+        self._preflight_documents(body)
         response = await self._request(
             "PUT", self._doc_path(doc_id),
             json_body=compress_doc(body) if self.enable_compression else body
@@ -1123,6 +1143,16 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
         expected_rev: str | None = None,
     ) -> NoteMeta:
         """Publish encoded chunk data through the shared write transaction."""
+        try:
+            pieces = [piece for piece in self._splitter.split(content, path=canonical_path(path)) if piece]
+        except SplitterRefusal as error:
+            # Keep codec modules storage-independent; project only typed fields.
+            raise WriterParameterRefused(
+                error.diagnostic, setting_keys=getattr(error, 'setting_keys', error.diagnostic.keys)
+            ) from None
+        # Validate the entire transaction before even the metadata lookup; an
+        # inherited metadata string must not fail after publishing any leaves.
+        self._preflight_documents([path, pieces])
         doc_id = self._path2id(path)
         doc = await self._get_doc(doc_id, conflicts=True)
         if doc is not None:
@@ -1134,13 +1164,6 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
         if not live and not create:
             raise NoteNotFound(PublicDiagnostic(DiagnosticCode.NOT_FOUND, paths=(DiagnosticPath(path, remote=False),)))
 
-        try:
-            pieces = [piece for piece in self._splitter.split(content, path=canonical_path(path)) if piece]
-        except SplitterRefusal as error:
-            # Keep codec modules storage-independent; project only typed fields.
-            raise WriterParameterRefused(
-                error.diagnostic, setting_keys=getattr(error, 'setting_keys', error.diagnostic.keys)
-            ) from None
         # P-10 / EntryManagerImpls.ts:280: retain ingested Blob.size even
         # when a legacy splitter's Blob.text() removes an initial BOM.
         # EntryManagerImpls.ts:133-159 retains all references, while
@@ -1164,7 +1187,7 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
             if chunk_id in unique and unique[chunk_id] != piece:
                 raise StorageError(PublicDiagnostic(DiagnosticCode.CHUNK_COLLISION_RECOVERY))
             unique[chunk_id] = piece
-        children = [await self._write_chunk(path, piece) for piece in pieces]
+        children = [self._splitter.chunk_id_for_piece(piece) for piece in pieces]
         new_mtime = _now_ms() if mtime is None else mtime
         if doc is None:
             body = new_metadata_doc(
@@ -1184,6 +1207,9 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
             body["type"] = doc_type
         body["_id"] = doc_id
         body["path"] = canonical_path(path)
+        self._preflight_documents(body)
+        for piece in pieces:
+            await self._write_chunk(path, piece)
         body["_rev"] = await self._put_doc(doc_id, body)
         notices = split_notices(content, self._splitter.version)
         if marker_chunks:

@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Settings parity
 
+- Refuse complete CouchDB writes containing unpaired UTF-16 units before publication, matching real CouchDB rejection of device-shaped JSON.
+
 - Add env-gated real-server pairwise and surrogate acceptance tests and JWT probes; retain failed acceptance findings without changing production behavior. Update stale epoch and chunk audit expectations.
 
 - Guard regenerated JWT timestamps and exact HMAC token bytes across two successive cache boundaries.

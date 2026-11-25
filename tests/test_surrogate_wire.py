@@ -7,6 +7,7 @@ import pytest
 
 from content_splitter import ContentSplitter
 from journal_codec import serialize_journal, parse_journal, deflate_journal, inflate_journal
+from storage_base import WriterParameterRefused
 from storage_couchdb import CouchDBBackend
 from storage_journal import JournalBackend
 from tests.couchdb_fake import make_fake_couchdb
@@ -36,6 +37,14 @@ async def test_couchdb_upstream_wire(v):
     backend = CouchDBBackend('http://test', 'user', 'password', 'vault', transport=transport)
     try:
         for doc, expected in zip(v['docs'], v['couchdb_json']):
+            # JSON.stringify bytes remain native; CouchDB 3.5.3 rejects lone
+            # escapes, so the backend must refuse before transport (F4).
+            if any(0xD800 <= ord(c) <= 0xDFFF for c in json.dumps(doc, ensure_ascii=False)):
+                before = len(log)
+                with pytest.raises(WriterParameterRefused):
+                    await backend._request('PUT', backend._doc_path(doc['_id']), json_body=doc)
+                assert len(log) == before
+                continue
             await backend._request('PUT', backend._doc_path(doc['_id']), json_body=doc)
             request = log[-1]
             assert request.content.decode('utf-8') == expected
@@ -60,6 +69,11 @@ async def test_witness_publication_and_fresh_reader(tmp_path, kind):
     backend._splitter = ContentSplitter(W['settings'])
     assert list(backend._splitter.split(W['input'], path=W['path'])) == W['pieces']
     try:
+        if kind == 'couchdb':
+            with pytest.raises(WriterParameterRefused, match='unpaired UTF-16 surrogate'):
+                await backend._write_content(W['path'], W['input'], len(W['input'].encode()), 'plain', create=True, overwrite=False)
+            assert not log
+            return
         # Programmatic text/plain disk-ingestion representation; case-sensitive .MD split hint.
         result = await backend._write_content(W['path'], W['input'], len(W['input'].encode()), 'plain', create=True, overwrite=False)
         if kind == 'journal':

@@ -14,7 +14,7 @@ async def test_transport_collision(tmp_path, kind):
         await backend.startup_check()
         before = await chunks()
         if kind == 'couchdb':
-            with pytest.raises(StorageError, match='positive customChunkSize.*sha1'):
+            with pytest.raises(StorageError, match='unpaired UTF-16 surrogate'):
                 await backend.write_note(V['path'], V['input'], create=True)
             assert await chunks() == before
             return
@@ -50,7 +50,7 @@ async def test_literal_replacement_before_surrogates_still_reports(tmp_path):
         assert (await backend.read_note('permuted.md'))['text']==''.join(d['data'] for d in V['decoded'])
 
 @pytest.mark.parametrize('kind,settings,path,data,expected',[
-    ('couchdb',V['settings'],'gate.md',V['input'],'positive customChunkSize'),
+    ('couchdb',V['settings'],'gate.md',V['input'],'unpaired UTF-16 surrogate'),
     ('couchdb',{'chunkSplitterVersion':'v1','customChunkSize':-2},'gate.md','PRIVATE_INPUT','customChunkSize=0'),
     ('journal',{'chunkSplitterVersion':'v1','customChunkSize':-2},'gate.md','PRIVATE_INPUT','customChunkSize=0'),
     ('couchdb',{'chunkSplitterVersion':'v2','customChunkSize':'PRIVATE_CAP'},'gate.png',b'PRIVATE_INPUT','customChunkSize=0'),

@@ -10,6 +10,7 @@ def json_stringify(value: object) -> str:
 
     PouchDB adapter-http 9.0.0 lib/index.es.js:765-773 sends JSON.stringify(doc).
     commonlib journalRecords.ts:76 uses the same encoding for metadata.
+    CouchDBBackend preflights documents and never sends lone-surrogate bodies.
     """
     text = json.dumps(value, ensure_ascii=False, separators=(',', ':'), allow_nan=False)
     return escape_json_surrogates(text)

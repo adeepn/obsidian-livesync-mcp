@@ -423,3 +423,12 @@ def test_real_server_acceptance_scope_documented():
         assert 'JWT wrong-key HTTP 400' in text
         assert '2026-11-25-parity-docker/summary.txt' in text
     assert 'Acceptance credentials belong only in the invoking shell' in (ROOT / '.env.example').read_text()
+
+
+def test_couchdb_surrogate_constraint_documented():
+    # chunks.ts:243-252; live CouchDB 3.5.3, 2026-11-25 invalid UTF-8 JSON.
+    for name in ('README.md', 'docs/vault-format.md'):
+        text = (ROOT / name).read_text()
+        assert 'CouchDB 3.5.3' in text
+        assert 'v3' in text
+        assert 'surrogate' in text
