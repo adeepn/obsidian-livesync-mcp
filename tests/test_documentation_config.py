@@ -918,3 +918,12 @@ def assert_documented_enum(name, rows=None):
 @pytest.mark.parametrize('name', ['LIVESYNC_BACKEND', 'COUCHDB_JWT_ALGORITHM'])
 def test_readme_enum_choices_match_actual_configuration(name):
     assert_documented_enum(name)
+
+
+def test_readme_names_terminating_binary_data_loss_refusal():
+    # C:string_and_binary/chunks.ts:418-432 native slice(i,NaN) yields no bytes.
+    text = (ROOT / 'README.md').read_text()
+    row = next(line for line in text.splitlines() if line.startswith('| `customChunkSize` |'))
+    assert 'data loss' in row
+    assert 'NaN-cap V2 binary' in text
+    assert 'Refuse only inputs on which the plugin itself does not terminate' not in text

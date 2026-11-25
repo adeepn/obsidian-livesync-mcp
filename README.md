@@ -164,7 +164,7 @@ combination. [Source inventory and caveats](docs/superpowers/specs/2026-11-23-se
 | `chunkSplitterVersion` | v1, v2, v2-segmenter, v3-rabin-karp, legacy empty | Identical | All writers; legacy split-surrogate pieces retain device IDs; CouchDB refuses unpaired units as devices do; journal collisions compare projected bytes; v2-segmenter equals v2 at this pin |
 | `enableChunkSplitterV2`, `useSegmenter` | false / true (legacy migration) | Identical | One-pass migration of empty version; unknown version normalization follows upstream |
 | `hashAlg` | xxhash64, xxhash32, mixed-purejs, sha1, empty | Identical | Upstream UTF-16 length and hash semantics |
-| `customChunkSize` | JSON value; number >=0 in UI (default 0) | Identical wherever the plugin terminates | JavaScript truthiness/ToNumber coercion; V1 plain cap zero advances one UTF-16 unit; V3 clamps; see [loop refusals](docs/vault-format.md#invalid-writer-parameters) |
+| `customChunkSize` | JSON value; number >=0 in UI (default 0) | Device coercion; loops/data loss refuse | JavaScript truthiness/ToNumber coercion; V1 plain cap zero advances one UTF-16 unit; V3 clamps; see [loop refusals](docs/vault-format.md#invalid-writer-parameters) |
 | `minimumChunkSize` | JSON value; numeric in UI (default 20) | Identical wherever the plugin terminates | Original JSON values retain JavaScript ToPrimitive/addition (including array/string concatenation); negative, empty, null and NaN follow upstream coercion; only V2 nonempty plain minima whose addition preserves positive zero loop |
 | `syncMaxSizeInMB` | Any JSON type; iterative JavaScript numeric coercion; default 50 | Identical | Device write admission and automatic text access budget resolution; textual files remain scan-eligible independent of extension; aggregate caps default unlimited; oversized rename refuses to protect source |
 | `syncOnlyRegEx`, `syncIgnoreRegEx` | ECMAScript pattern lists | Identical when configured | Set local env explicitly; never inferred from milestone |
@@ -297,15 +297,18 @@ TextEncoder replacement and device chunk IDs remain unchanged.
 - Distinct colliding CouchDB pieces refuse before publication: configure a positive
   `customChunkSize` or a collision-free `hashAlg` such as `sha1`. Journal pieces
   with identical TextEncoder bytes share the original ID and report replacements.
-- Refuse only inputs on which the plugin itself does not terminate: V1
+- Refuse inputs on which the plugin itself does not terminate: V1
   nonempty binary/non-plain text with nonpositive caps, V1 nonempty plain text
   with negative caps, V2 nonempty binary with nonpositive caps, V2 text groups
   containing more than one Unicode code point with nonpositive caps (or empty
   groups with negative caps), and V2 nonempty decoded plain text with
   `minimumChunkSize` whose first JavaScript addition preserves positive zero (ordinary 0, empty string, null, or zero-only/whitespace-only primitive strings);
   negative zero and zero strings whose concatenation becomes NaN terminate.
-  Use `customChunkSize` producing a positive pieceSize and a positive V2 plain
-  `minimumChunkSize`. Empty inputs and V3 retain upstream semantics.
+  The terminating NaN-cap V2 binary case also refuses: upstream slice(i, NaN)
+  discards the input bytes. This safety refusal protects data; set a numeric
+  `customChunkSize` such as 0. For loops, use `customChunkSize` producing a
+  positive pieceSize and a positive V2 plain `minimumChunkSize`.
+  Empty inputs and V3 retain upstream semantics.
   [Exact cell evidence and recovery](docs/vault-format.md#invalid-writer-parameters).
 - The peer is an invisible writer: it does not register a device or modify
   milestone/PREFERRED settings. Align device settings separately; review
