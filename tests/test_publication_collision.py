@@ -48,3 +48,29 @@ async def test_literal_replacement_before_surrogates_still_reports(tmp_path):
         assert result['transport_replacements']==1
         assert {'code':'journal_surrogates_replaced','count':1} in result['notices']
         assert (await backend.read_note('permuted.md'))['text']==''.join(d['data'] for d in V['decoded'])
+
+@pytest.mark.parametrize('kind,settings,path,data,expected',[
+    ('couchdb',V['settings'],'gate.md',V['input'],'positive customChunkSize'),
+    ('couchdb',{'chunkSplitterVersion':'v1','customChunkSize':-2},'gate.md','PRIVATE_INPUT','customChunkSize=0'),
+    ('journal',{'chunkSplitterVersion':'v1','customChunkSize':-2},'gate.md','PRIVATE_INPUT','customChunkSize=0'),
+    ('couchdb',{'chunkSplitterVersion':'v2','customChunkSize':'PRIVATE_CAP'},'gate.png',b'PRIVATE_INPUT','customChunkSize=0'),
+    ('journal',{'chunkSplitterVersion':'v2','customChunkSize':'PRIVATE_CAP'},'gate.png',b'PRIVATE_INPUT','customChunkSize=0'),
+    ('journal',{'chunkSplitterVersion':'v2','minimumChunkSize':0},'gate.md','PRIVATE_INPUT','minimumChunkSize=20'),
+])
+async def test_mcp_refusal_keeps_typed_recovery(tmp_path,kind,settings,path,data,expected):
+    import server
+    settings={'pathNormalizationVersion':0,'handleFilenameCaseSensitive':False,**settings}
+    async with matrix_vault(tmp_path,kind,settings) as (backend,doc,chunks,*_):
+        await backend.startup_check()
+        before=await chunks()
+        token=server._active_backend.set(backend)
+        @server._tool_errors(writer=True)
+        async def publish():
+            await backend.write_note(path,data,create=True)
+            return 'Created.'
+        try:
+            result=await publish()
+            assert expected in result,result
+            assert 'PRIVATE' not in result
+            assert await chunks()==before
+        finally:server._active_backend.reset(token)

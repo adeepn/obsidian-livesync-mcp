@@ -8,7 +8,7 @@ import content_splitter
 from tests.settings_oracle import ORACLE, GRID, expected_pieces
 from tests.splitter_observability import (
     SOURCE_PATH, comparison_sites, isolated_mutant, grid_result, helper_result,
-    equality_mutation, MutationFuelExhausted,
+    equality_mutation, MutationFuelExhausted, coercion_result,
 )
 
 INVENTORY = json.loads(Path(__file__).with_name('splitter_comparisons.json').read_text())
@@ -48,6 +48,11 @@ def test_comparison_equality_is_observable(entry):
                 return cell_run(module, row)
             except ValueError:
                 return ('refused',)
+    elif witness['kind'] == 'coercion':
+        from tests.test_coercion_cells import ROWS, refuses
+        row = ROWS[witness['index']]
+        expected = ('refused',) if refuses(row) else (row['split_pieces'], row['split_children'])
+        run = lambda module: coercion_result(module, row)
     elif witness['kind'] == 'helper':
         vector = ORACLE['helper_probes'][witness['family']][witness['index']]
         expected = (vector['base36'], vector['raw_hash']) if 'value' in vector else vector['base64']
@@ -60,7 +65,7 @@ def test_comparison_equality_is_observable(entry):
     assert run(content_splitter) == expected, entry
     try:
         result = run(mutant)
-    except (IndexError, ValueError, ZeroDivisionError, RecursionError, MutationFuelExhausted):
+    except (IndexError, ValueError, TypeError, ZeroDivisionError, RecursionError, MutationFuelExhausted):
         # The mutant differs from the upstream result or the bounded refusal.
         return
     assert result != expected, entry

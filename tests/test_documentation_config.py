@@ -348,3 +348,9 @@ def test_jwt_zero_expiry_documented():
     assert '0 uses the plugin five-minute fallback' in (ROOT / 'README.md').read_text()
     assert 'zero uses the plugin five-minute fallback' in (ROOT / '.env.example').read_text()
     assert 'already-expired tokens' in (ROOT / 'docs/connecting-storage.md').read_text()
+
+
+def test_json_coercion_recovery_documented():
+    text = (ROOT / 'docs/vault-format.md').read_text()
+    for fragment in ('noncallable toString','lexical overflow','zero-preserving addition','closed typed diagnostics'):
+        assert fragment in text

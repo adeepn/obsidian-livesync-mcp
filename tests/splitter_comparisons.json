@@ -1,6 +1,6 @@
 [
   {
-    "line": 44,
+    "line": 46,
     "column": 7,
     "function": "_wheels_read_string",
     "source": "len(raw) > 128",
@@ -13,7 +13,7 @@
     }
   },
   {
-    "line": 51,
+    "line": 53,
     "column": 30,
     "function": "_wheels_read_string.continuation",
     "source": "index < len(raw)",
@@ -26,7 +26,7 @@
     }
   },
   {
-    "line": 55,
+    "line": 57,
     "column": 10,
     "function": "_wheels_read_string",
     "source": "index < len(raw)",
@@ -39,7 +39,7 @@
     }
   },
   {
-    "line": 58,
+    "line": 60,
     "column": 11,
     "function": "_wheels_read_string",
     "source": "c < 128",
@@ -52,7 +52,7 @@
     }
   },
   {
-    "line": 60,
+    "line": 62,
     "column": 13,
     "function": "_wheels_read_string",
     "source": "c & 0xe0 == 0xc0",
@@ -65,7 +65,7 @@
     }
   },
   {
-    "line": 62,
+    "line": 64,
     "column": 13,
     "function": "_wheels_read_string",
     "source": "c & 0xf0 == 0xe0",
@@ -78,7 +78,7 @@
     }
   },
   {
-    "line": 64,
+    "line": 66,
     "column": 13,
     "function": "_wheels_read_string",
     "source": "c & 0xf8 == 0xf0",
@@ -91,7 +91,7 @@
     }
   },
   {
-    "line": 66,
+    "line": 68,
     "column": 15,
     "function": "_wheels_read_string",
     "source": "code < 0x10000",
@@ -104,7 +104,7 @@
     }
   },
   {
-    "line": 81,
+    "line": 83,
     "column": 7,
     "function": "_base36",
     "source": "value < 0",
@@ -118,7 +118,7 @@
     }
   },
   {
-    "line": 92,
+    "line": 94,
     "column": 20,
     "function": "_int32",
     "source": "value < 0x80000000",
@@ -132,7 +132,7 @@
     }
   },
   {
-    "line": 124,
+    "line": 126,
     "column": 7,
     "function": "_write_string",
     "source": "len(units) > 128",
@@ -145,7 +145,7 @@
     }
   },
   {
-    "line": 128,
+    "line": 130,
     "column": 10,
     "function": "_write_string",
     "source": "i < len(units)",
@@ -158,7 +158,7 @@
     }
   },
   {
-    "line": 131,
+    "line": 133,
     "column": 11,
     "function": "_write_string",
     "source": "c < 0x80",
@@ -172,7 +172,7 @@
     }
   },
   {
-    "line": 133,
+    "line": 135,
     "column": 13,
     "function": "_write_string",
     "source": "c < 0x800",
@@ -186,7 +186,7 @@
     }
   },
   {
-    "line": 135,
+    "line": 137,
     "column": 13,
     "function": "_write_string",
     "source": "c < 0xd800",
@@ -200,7 +200,7 @@
     }
   },
   {
-    "line": 135,
+    "line": 137,
     "column": 27,
     "function": "_write_string",
     "source": "c > 0xdfff",
@@ -214,7 +214,7 @@
     }
   },
   {
-    "line": 138,
+    "line": 140,
     "column": 45,
     "function": "_write_string",
     "source": "i < len(units)",
@@ -225,7 +225,7 @@
     "proof": "Every SHA-1 splitter input appends ASCII \"-\" and decimal piece.length; no final surrogate can need a missing next unit. Direct helper vectors additionally exercise lone trailing surrogates."
   },
   {
-    "line": 158,
+    "line": 160,
     "column": 7,
     "function": "chunk_id_for_piece",
     "source": "hash_alg == 'xxhash64'",
@@ -238,7 +238,7 @@
     }
   },
   {
-    "line": 160,
+    "line": 162,
     "column": 9,
     "function": "chunk_id_for_piece",
     "source": "hash_alg in ('xxhash32', None)",
@@ -251,7 +251,7 @@
     }
   },
   {
-    "line": 162,
+    "line": 164,
     "column": 9,
     "function": "chunk_id_for_piece",
     "source": "hash_alg == ''",
@@ -264,7 +264,7 @@
     }
   },
   {
-    "line": 164,
+    "line": 166,
     "column": 9,
     "function": "chunk_id_for_piece",
     "source": "hash_alg == 'mixed-purejs'",
@@ -277,7 +277,7 @@
     }
   },
   {
-    "line": 166,
+    "line": 168,
     "column": 9,
     "function": "chunk_id_for_piece",
     "source": "hash_alg == 'sha1'",
@@ -290,7 +290,7 @@
     }
   },
   {
-    "line": 175,
+    "line": 177,
     "column": 7,
     "function": "_js_truthy",
     "source": "value is None",
@@ -303,7 +303,7 @@
     }
   },
   {
-    "line": 175,
+    "line": 177,
     "column": 24,
     "function": "_js_truthy",
     "source": "value is False",
@@ -314,7 +314,7 @@
     "proof": "False is also numeric zero in Python. Removing the explicit False arm reaches the numeric value!=0 arm and still returns false; upstream JS truthiness is unchanged."
   },
   {
-    "line": 178,
+    "line": 180,
     "column": 15,
     "function": "_js_truthy",
     "source": "value != 0",
@@ -327,7 +327,7 @@
     }
   },
   {
-    "line": 179,
+    "line": 181,
     "column": 11,
     "function": "_js_truthy",
     "source": "value != ''",
@@ -340,7 +340,7 @@
     }
   },
   {
-    "line": 186,
+    "line": 188,
     "column": 30,
     "function": "_splitter_property_key",
     "source": "item is None",
@@ -353,7 +353,20 @@
     }
   },
   {
-    "line": 189,
+    "function": "_splitter_property_key",
+    "source": "'toString' in value",
+    "operator": 0,
+    "mutation": "False",
+    "citation": "ContentSplitterBase.ts:68; chunks.ts:297-313; ECMAScript OrdinaryToPrimitive/ToNumber at these sourced call sites",
+    "line": 192,
+    "column": 11,
+    "witness": {
+      "kind": "coercion",
+      "index": 303
+    }
+  },
+  {
+    "line": 195,
     "column": 7,
     "function": "_splitter_property_key",
     "source": "value is None",
@@ -364,7 +377,7 @@
     "proof": "This null-to-property-key branch is reached only for top-level null: array null items are intercepted by the item-is-null branch. Both null and the fallback spelling are unknown algorithm keys and normalize once to the empty version, without running legacy migration."
   },
   {
-    "line": 211,
+    "line": 217,
     "column": 51,
     "function": "normalize_splitter_settings",
     "source": "key == ''",
@@ -377,7 +390,7 @@
     }
   },
   {
-    "line": 212,
+    "line": 218,
     "column": 52,
     "function": "normalize_splitter_settings",
     "source": "version == 0",
@@ -390,7 +403,7 @@
     }
   },
   {
-    "line": 217,
+    "line": 223,
     "column": 9,
     "function": "normalize_splitter_settings",
     "source": "key not in (\n            'v1', 'v2', 'v2-segmenter', 'v3-rabin-karp',\n            # ChunkAlgorithmNames is a JS object literal; `in` also sees\n            # Object.prototype. These survive adjustment but fail dispatch.\n            'constructor', '__defineGetter__', '__defineSetter__',\n            'hasOwnProperty', '__lookupGetter__', '__lookupSetter__',\n            'isPrototypeOf', 'propertyIsEnumerable', 'toString',\n            'valueOf', '__proto__', 'toLocaleString')",
@@ -403,7 +416,7 @@
     }
   },
   {
-    "line": 240,
+    "line": 246,
     "column": 33,
     "function": "ContentSplitter.__init__",
     "source": "settings.get('chunkSplitterVersion', '') == ''",
@@ -416,7 +429,7 @@
     }
   },
   {
-    "line": 256,
+    "line": 268,
     "column": 11,
     "function": "ContentSplitter.__init__",
     "source": "self.hash_alg is None",
@@ -429,7 +442,7 @@
     }
   },
   {
-    "line": 258,
+    "line": 270,
     "column": 11,
     "function": "ContentSplitter.__init__",
     "source": "self.hash_alg not in ('xxhash64', 'xxhash32', 'mixed-purejs', 'sha1', '')",
@@ -440,7 +453,7 @@
     "proof": "Writer admission rejects unsupported hash algorithms before dispatch. Supported dispatches have separate witnessed comparisons; malformed algorithm names are not splitter partitions."
   },
   {
-    "line": 262,
+    "line": 274,
     "column": 11,
     "function": "ContentSplitter.__init__",
     "source": "self.version == 'v2-segmenter'",
@@ -451,7 +464,7 @@
     "proof": "For the equality value v2-segmenter, removing this alias normalization still selects V2Splitter through the dispatcher alias. At this pin V2 and V2-segmenter execute the same algorithm; useSegmenter is unused."
   },
   {
-    "line": 264,
+    "line": 276,
     "column": 11,
     "function": "ContentSplitter.__init__",
     "source": "self.version == ''",
@@ -464,7 +477,7 @@
     }
   },
   {
-    "line": 266,
+    "line": 278,
     "column": 11,
     "function": "ContentSplitter.__init__",
     "source": "self.version not in ('v1', 'v2', 'v2-segmenter', 'v3-rabin-karp')",
@@ -475,7 +488,7 @@
     "proof": "Writer admission rejects unsupported splitter versions after one-pass normalization. Upstream dispatcher likewise has no matching splitter."
   },
   {
-    "line": 272,
+    "line": 284,
     "column": 11,
     "function": "ContentSplitter.__init__",
     "source": "type(version) is not int",
@@ -486,7 +499,7 @@
     "proof": "ID-derivation version/type admission prevents writes using an unsupported identity configuration; no splitter equality is claimed for refused configurations."
   },
   {
-    "line": 272,
+    "line": 284,
     "column": 39,
     "function": "ContentSplitter.__init__",
     "source": "version not in (0, 1)",
@@ -497,7 +510,7 @@
     "proof": "ID-derivation version/type admission prevents writes using an unsupported identity configuration; no splitter equality is claimed for refused configurations."
   },
   {
-    "line": 275,
+    "line": 287,
     "column": 12,
     "function": "ContentSplitter.__init__",
     "source": "version == 0",
@@ -508,7 +521,7 @@
     "proof": "ID-derivation key/version pairing admission protects identity; invalid pairings are rejected before splitting."
   },
   {
-    "line": 275,
+    "line": 287,
     "column": 29,
     "function": "ContentSplitter.__init__",
     "source": "key != ''",
@@ -519,7 +532,7 @@
     "proof": "ID-derivation key/version pairing admission protects identity; invalid pairings are rejected before splitting."
   },
   {
-    "line": 275,
+    "line": 287,
     "column": 44,
     "function": "ContentSplitter.__init__",
     "source": "version == 1",
@@ -530,7 +543,7 @@
     "proof": "ID-derivation key/version pairing admission protects identity; invalid pairings are rejected before splitting."
   },
   {
-    "line": 276,
+    "line": 288,
     "column": 40,
     "function": "ContentSplitter.__init__",
     "source": "re.fullmatch('[0-9a-f]{64}', key) is None",
@@ -541,7 +554,20 @@
     "proof": "Key-format admission protects identity; this is not a partition threshold."
   },
   {
-    "line": 312,
+    "function": "ContentSplitter.split",
+    "source": "self._parameter_refusal is not None",
+    "operator": 0,
+    "mutation": "True",
+    "citation": "ContentSplitterBase.ts:68; chunks.ts:297-313; ECMAScript OrdinaryToPrimitive/ToNumber at these sourced call sites",
+    "line": 311,
+    "column": 11,
+    "witness": {
+      "kind": "coercion",
+      "index": 0
+    }
+  },
+  {
+    "line": 326,
     "column": 7,
     "function": "_minimum_number",
     "source": "value is None",
@@ -554,7 +580,18 @@
     }
   },
   {
-    "line": 373,
+    "function": "_minimum_number",
+    "source": "value < 0",
+    "operator": 0,
+    "mutation": "value <= 0",
+    "citation": "ContentSplitterBase.ts:68; chunks.ts:297-313; ECMAScript OrdinaryToPrimitive/ToNumber at these sourced call sites",
+    "line": 346,
+    "column": 64,
+    "class": "a",
+    "proof": "Reached only after float conversion raises OverflowError and the original value is numeric. Numeric zero converts exactly without overflow; the equality boundary is unreachable. Radix-string overflow short-circuits before this numeric comparison. This preserves ToNumber sign at ContentSplitterBase.ts:68 and chunks.ts:369."
+  },
+  {
+    "line": 391,
     "column": 15,
     "function": "RabinKarpSplitter.split",
     "source": "len(raw) >= 4 * 1024 * 1024",
@@ -567,7 +604,7 @@
     }
   },
   {
-    "line": 376,
+    "line": 394,
     "column": 22,
     "function": "RabinKarpSplitter.split",
     "source": "len(raw) / (unit * 4) > 500",
@@ -580,7 +617,7 @@
     }
   },
   {
-    "line": 393,
+    "line": 412,
     "column": 24,
     "function": "RabinKarpSplitter.split",
     "source": "size >= maximum",
@@ -593,7 +630,7 @@
     }
   },
   {
-    "line": 393,
+    "line": 412,
     "column": 44,
     "function": "RabinKarpSplitter.split",
     "source": "size >= minimum",
@@ -606,7 +643,7 @@
     }
   },
   {
-    "line": 393,
+    "line": 412,
     "column": 64,
     "function": "RabinKarpSplitter.split",
     "source": "fingerprint % modulus == 1",
@@ -619,7 +656,7 @@
     }
   },
   {
-    "line": 394,
+    "line": 413,
     "column": 45,
     "function": "RabinKarpSplitter.split",
     "source": "byte & 0xc0 != 0x80",
@@ -632,7 +669,7 @@
     }
   },
   {
-    "line": 397,
+    "line": 416,
     "column": 37,
     "function": "RabinKarpSplitter.split",
     "source": "index >= 48",
@@ -645,7 +682,7 @@
     }
   },
   {
-    "line": 425,
+    "line": 444,
     "column": 24,
     "function": "_capped",
     "source": "maximum == 0",
@@ -658,7 +695,7 @@
     }
   },
   {
-    "line": 429,
+    "line": 448,
     "column": 31,
     "function": "_capped",
     "source": "maximum > 0",
@@ -671,7 +708,7 @@
     }
   },
   {
-    "line": 429,
+    "line": 448,
     "column": 47,
     "function": "_capped",
     "source": "end < len(text)",
@@ -682,7 +719,7 @@
     "proof": "At end == text.length no following unit exists to complete a pair. Blob.text() replaces unpaired units; hence a high/low pair cannot straddle EOF."
   },
   {
-    "line": 429,
+    "line": 448,
     "column": 67,
     "function": "_capped",
     "source": "0xd800 <= ord(text[end - 1]) <= 0xdbff",
@@ -695,7 +732,7 @@
     }
   },
   {
-    "line": 429,
+    "line": 448,
     "column": 67,
     "function": "_capped",
     "source": "0xd800 <= ord(text[end - 1]) <= 0xdbff",
@@ -708,7 +745,7 @@
     }
   },
   {
-    "line": 430,
+    "line": 449,
     "column": 20,
     "function": "_capped",
     "source": "0xdc00 <= ord(text[end]) <= 0xdfff",
@@ -721,7 +758,7 @@
     }
   },
   {
-    "line": 430,
+    "line": 449,
     "column": 20,
     "function": "_capped",
     "source": "0xdc00 <= ord(text[end]) <= 0xdfff",
@@ -734,7 +771,7 @@
     }
   },
   {
-    "line": 434,
+    "line": 453,
     "column": 11,
     "function": "_capped",
     "source": "start >= len(text)",
@@ -747,7 +784,7 @@
     }
   },
   {
-    "line": 442,
+    "line": 461,
     "column": 10,
     "function": "_binary_minimum",
     "source": "w > 10",
@@ -760,7 +797,7 @@
     }
   },
   {
-    "line": 465,
+    "line": 487,
     "column": 20,
     "function": "V2Splitter.split",
     "source": "minimum == 0",
@@ -773,7 +810,7 @@
     }
   },
   {
-    "line": 465,
+    "line": 487,
     "column": 37,
     "function": "V2Splitter.split",
     "source": "math.copysign(1, minimum) > 0",
@@ -784,7 +821,20 @@
     "proof": "Reached only after minimum == 0. math.copysign(1, +0) is +1 and math.copysign(1, -0) is -1; zero is unreachable here. >0 and >=0 are equivalent. chunks.ts:369 divides by signed zero, yielding opposite infinities."
   },
   {
-    "line": 471,
+    "function": "V2Splitter.split",
+    "source": "adjusted == 0",
+    "operator": 0,
+    "mutation": "False",
+    "citation": "ContentSplitterBase.ts:68; chunks.ts:297-313; ECMAScript OrdinaryToPrimitive/ToNumber at these sourced call sites",
+    "line": 490,
+    "column": 15,
+    "witness": {
+      "kind": "coercion",
+      "index": 219
+    }
+  },
+  {
+    "line": 492,
     "column": 14,
     "function": "V2Splitter.split",
     "source": "adjusted > 0",
@@ -797,7 +847,7 @@
     }
   },
   {
-    "line": 471,
+    "line": 492,
     "column": 31,
     "function": "V2Splitter.split",
     "source": "len(text) / adjusted > 100",
@@ -810,7 +860,7 @@
     }
   },
   {
-    "line": 478,
+    "line": 499,
     "column": 15,
     "function": "V2Splitter.split",
     "source": "end - start > adjusted",
@@ -823,7 +873,7 @@
     }
   },
   {
-    "line": 489,
+    "line": 510,
     "column": 11,
     "function": "V2Splitter._cap",
     "source": "self.absolute_max_piece_size <= 0",
@@ -836,8 +886,8 @@
     }
   },
   {
-    "line": 490,
-    "column": 15,
+    "line": 511,
+    "column": 59,
     "function": "V2Splitter._cap",
     "source": "len(_from_units(text)) > 1",
     "operator": 0,
@@ -849,8 +899,8 @@
     }
   },
   {
-    "line": 490,
-    "column": 59,
+    "line": 511,
+    "column": 103,
     "function": "V2Splitter._cap",
     "source": "self.absolute_max_piece_size < 0",
     "operator": 0,
@@ -862,7 +912,7 @@
     }
   },
   {
-    "line": 506,
+    "line": 527,
     "column": 11,
     "function": "V2Splitter._binary",
     "source": "self.absolute_max_piece_size <= 0",
@@ -875,7 +925,7 @@
     }
   },
   {
-    "line": 518,
+    "line": 539,
     "column": 14,
     "function": "V2Splitter._binary",
     "source": "offset < len(data)",
@@ -888,7 +938,7 @@
     }
   },
   {
-    "line": 520,
+    "line": 541,
     "column": 15,
     "function": "V2Splitter._binary",
     "source": "preferred != -1",
@@ -899,7 +949,7 @@
     "proof": "At preferred == search, inclusive indexOf from that matching index returns the same offset. At sentinel -1, repeating the failed suffix search cannot find a match in a suffix of a suffix with no delimiter."
   },
   {
-    "line": 520,
+    "line": 541,
     "column": 35,
     "function": "V2Splitter._binary",
     "source": "preferred < search",
@@ -910,7 +960,7 @@
     "proof": "At preferred == search, inclusive indexOf from that matching index returns the same offset. At sentinel -1, repeating the failed suffix search cannot find a match in a suffix of a suffix with no delimiter."
   },
   {
-    "line": 523,
+    "line": 544,
     "column": 15,
     "function": "V2Splitter._binary",
     "source": "found == -1",
@@ -923,7 +973,7 @@
     }
   },
   {
-    "line": 524,
+    "line": 545,
     "column": 19,
     "function": "V2Splitter._binary",
     "source": "newline != -1",
@@ -934,7 +984,7 @@
     "proof": "At newline == search inclusive indexOf returns the same LF offset. At sentinel -1 a suffix of a suffix without LF still has no LF, so repeating the search is indistinguishable."
   },
   {
-    "line": 524,
+    "line": 545,
     "column": 37,
     "function": "V2Splitter._binary",
     "source": "newline < search",
@@ -945,7 +995,7 @@
     "proof": "At newline == search inclusive indexOf returns the same LF offset. At sentinel -1 a suffix of a suffix without LF still has no LF, so repeating the search is indistinguishable."
   },
   {
-    "line": 527,
+    "line": 548,
     "column": 50,
     "function": "V2Splitter._binary",
     "source": "found != -1",
@@ -958,7 +1008,7 @@
     }
   },
   {
-    "line": 539,
+    "line": 560,
     "column": 25,
     "function": "LegacySplitter.split",
     "source": "maximum <= 0",
@@ -969,7 +1019,7 @@
     "proof": "Nonpositive cap can leave the upstream offset unchanged on nonempty input; guard prevents nontermination."
   },
   {
-    "line": 551,
+    "line": 572,
     "column": 19,
     "function": "LegacySplitter.split",
     "source": "found != -1",
@@ -982,7 +1032,7 @@
     }
   },
   {
-    "line": 556,
+    "line": 577,
     "column": 19,
     "function": "LegacySplitter.split",
     "source": "offset >= len(data)",
@@ -995,7 +1045,7 @@
     }
   },
   {
-    "line": 561,
+    "line": 582,
     "column": 44,
     "function": "LegacySplitter.split",
     "source": "maximum < 0",
@@ -1008,7 +1058,7 @@
     }
   },
   {
-    "line": 561,
+    "line": 582,
     "column": 80,
     "function": "LegacySplitter.split",
     "source": "maximum == 0",
@@ -1021,7 +1071,7 @@
     }
   },
   {
-    "line": 584,
+    "line": 608,
     "column": 35,
     "function": "LegacySplitter._groups.take",
     "source": "index < count",
@@ -1034,7 +1084,7 @@
     }
   },
   {
-    "line": 586,
+    "line": 610,
     "column": 14,
     "function": "LegacySplitter._groups",
     "source": "index < count",
@@ -1047,7 +1097,7 @@
     }
   },
   {
-    "line": 591,
+    "line": 615,
     "column": 22,
     "function": "LegacySplitter._groups",
     "source": "index < count",
@@ -1060,7 +1110,7 @@
     }
   },
   {
-    "line": 593,
+    "line": 617,
     "column": 23,
     "function": "LegacySplitter._groups",
     "source": "index == count",
@@ -1073,7 +1123,7 @@
     }
   },
   {
-    "line": 596,
+    "line": 620,
     "column": 47,
     "function": "LegacySplitter._groups",
     "source": "len(pre) > 2048",
@@ -1086,7 +1136,7 @@
     }
   },
   {
-    "line": 597,
+    "line": 621,
     "column": 19,
     "function": "LegacySplitter._groups",
     "source": "index < count",
@@ -1099,7 +1149,7 @@
     }
   },
   {
-    "line": 611,
+    "line": 635,
     "column": 20,
     "function": "LegacySplitter._groups",
     "source": "length >= _minimum_number(self.minimum_chunk_size)",
@@ -1112,7 +1162,7 @@
     }
   },
   {
-    "line": 611,
+    "line": 635,
     "column": 74,
     "function": "LegacySplitter._groups",
     "source": "index == count",
@@ -1125,7 +1175,7 @@
     }
   },
   {
-    "line": 612,
+    "line": 636,
     "column": 27,
     "function": "LegacySplitter._groups",
     "source": "lines[index] == '#'",

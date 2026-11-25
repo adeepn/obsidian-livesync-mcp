@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Settings parity
 
+- Preserve parameter coercion evaluation order on empty/NaN inputs, numeric array overflow and terminating zero-string additions; expose actionable typed writer refusals through MCP.
+
 - Make timeout-tool tests deterministic, coordinate concurrent test operations with events and widen tight scheduler-sensitive smoke-test margins.
 
 - Accept zero CouchDB JWT expiry with the device five-minute fallback; explain negative-duration refusal as already-expired upstream tokens.

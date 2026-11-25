@@ -12,6 +12,7 @@ from __future__ import annotations
 from diagnostic_hygiene import (PublicDiagnostic, DiagnosticPath, diagnostic, path_field, setting_key, numeric_field, numeric_text, cause_name)
 
 from typing import AsyncIterator, Protocol, TypedDict, runtime_checkable, NotRequired
+from publication_notices import PublicationNotice
 
 
 
@@ -40,6 +41,10 @@ class StorageError(Exception):
     def format(self):
         value = getattr(self, 'diagnostic', None)
         return value.format() if isinstance(value, PublicDiagnostic) else cause_name(type(self))
+
+
+class WriterParameterRefused(StorageError, ValueError):
+    """A sourced device loop/coercion or data-loss guard with typed recovery."""
 
 
 class TextBudgetExceeded(StorageError):
@@ -256,7 +261,7 @@ class NoteMeta(TypedDict):
     type: str
     rev: str
     transport_replacements: NotRequired[int]
-    notices: NotRequired[list[dict]]
+    notices: NotRequired[list[PublicationNotice]]
 
 
 class NoteContent(TypedDict):

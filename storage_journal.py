@@ -1238,7 +1238,7 @@ class JournalBackend(TextAccessPolicy, DeviceSelection):
         for chunk_id, piece in zip(children, pieces):
             # journalRecords.ts:69-74: leaf equality is after TextEncoder projection.
             if chunk_id in unique and text_encoder_string(unique[chunk_id]) != text_encoder_string(piece):
-                raise StorageError('content chunks with the same id hold different data')
+                raise StorageError(PublicDiagnostic(DiagnosticCode.CHUNK_COLLISION_RECOVERY))
             # Keep replacement evidence even if a literal U+FFFD arrived first
             # (journalRecords.ts:69-74 projects both surrogate units to U+FFFD).
             if chunk_id not in unique or surrogate_count(piece) > surrogate_count(unique[chunk_id]):

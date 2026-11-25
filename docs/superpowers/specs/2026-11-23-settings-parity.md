@@ -756,3 +756,7 @@ its own deadline expires first. Neither path echoes the pattern or body.
 ### 2026-11-25 F1-9
 
 [DECISION] Inject typed timeouts at the tool boundary while retaining real isolated-worker lifecycle tests. Replace sleep-based cancellation/scan coordination with events; widen scheduler-sensitive smoke-test margins. A 200 ms process-start-delay probe reproduced the gate failure before the change and passes afterward. Gate completion requires two concurrent full-suite runs plus a final post-commit suite.
+
+### 2026-11-25 F1 independent-review follow-ups
+
+[DECISION] Keep replacement evidence for either collision order; refresh unresolved-name warnings from current lookups. Extend executable coercion evidence to own toString fields, lexical numeric overflow, empty/BOM inputs, NaN-cap/minimum interaction and zero strings whose first += becomes NaN. Preserve V1/V3 evaluation order and refuse negative-infinite V2 caps. Use closed typed diagnostics so all recovery instructions reach the caller. The obsolete integer modulo branch is removed; no claim that its historical equivalent mutant was killed.

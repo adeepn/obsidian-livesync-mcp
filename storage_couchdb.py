@@ -1139,10 +1139,7 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
         for piece in pieces:
             chunk_id = self._splitter.chunk_id_for_piece(piece)
             if chunk_id in unique and unique[chunk_id] != piece:
-                raise StorageError(
-                    'content chunks with the same id hold different data; '
-                    'configure a positive customChunkSize or a collision-free hashAlg such as sha1'
-                )
+                raise StorageError(PublicDiagnostic(DiagnosticCode.CHUNK_COLLISION_RECOVERY))
             unique[chunk_id] = piece
         children = [await self._write_chunk(path, piece) for piece in pieces]
         new_mtime = _now_ms() if mtime is None else mtime

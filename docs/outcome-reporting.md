@@ -82,3 +82,5 @@ or JSON preserve values and do not themselves cause a notice.
 The compatibility publication wrapper uses the same notice suffix. Non-string `message` values and fields named `notices` or `transport_replacements` remain unchanged; no reporting key is inserted into the original result.
 
 Projected-equivalent journal pieces retain a representative with replacement evidence even when a literal U+FFFD is the first colliding piece; replacement notices do not depend on piece order.
+
+Splitter loop, JSON primitive-conversion, binary data-loss and within-publication collision refusals use closed typed diagnostics through the MCP boundary. They name customChunkSize/minimumChunkSize (or the actual migration setting) and a fixed recovery; no free exception text is projected.

@@ -9,7 +9,8 @@ See docs/superpowers/specs/2026-11-23-settings-parity.md sections а/б.
 """
 from __future__ import annotations
 
-from diagnostic_hygiene import invalid_setting, SettingIssue
+from diagnostic_hygiene import invalid_setting, SettingIssue, PublicDiagnostic, DiagnosticCode
+from storage_base import WriterParameterRefused
 
 import base64
 import hashlib
@@ -18,6 +19,7 @@ import re
 from collections.abc import Mapping
 
 import xxhash
+from wire_encoding import js_number_string
 
 
 class UnsupportedWriterMode(ValueError):
@@ -179,12 +181,16 @@ def _js_truthy(value) -> bool:
     return value != ''
 
 
-def _splitter_property_key(value) -> str:
+def _splitter_property_key(value, *, setting='chunkSplitterVersion') -> str:
     # Only relevant for malformed JSON setting values: JS == / `in` coerce
     # arrays to comma-joined strings and plain objects to [object Object].
     if isinstance(value, list):
-        return ','.join('' if item is None else _splitter_property_key(item) for item in value)
+        return ','.join('' if item is None else _splitter_property_key(item, setting=setting) for item in value)
     if isinstance(value, dict):
+        # ECMAScript OrdinaryToPrimitive: JSON own toString is noncallable;
+        # inherited valueOf returns the object, so no primitive can be produced.
+        if 'toString' in value:
+            raise WriterParameterRefused(PublicDiagnostic(DiagnosticCode.SPLITTER_PRIMITIVE, keys=(setting,)))
         return '[object Object]'
     if value is None:
         return 'null'
@@ -192,7 +198,7 @@ def _splitter_property_key(value) -> str:
         return 'true' if value else 'false'
     if isinstance(value, (int, float)):
         # JSON Number's primitive string has no .0 suffix or signed zero.
-        return str(value).removesuffix('.0') if value else '0'
+        return js_number_string(value)
     return str(value)
 
 
@@ -245,7 +251,13 @@ class ContentSplitter:
         # ContentSplitterBase.ts:68: Math.floor(MAX_DOC_SIZE_BIN *
         # ((settings.customChunkSize || 0) * 1 + 1)); arrays/objects are truthy.
         custom = settings.get('customChunkSize', 0)
-        custom = _minimum_number(custom if _js_truthy(custom) else 0)
+        self._parameter_refusal = None
+        try:
+            custom = _minimum_number(custom if _js_truthy(custom) else 0, setting='customChunkSize')
+        except WriterParameterRefused as error:
+            # getParamsFor evaluates on writes, not startup/read access.
+            self._parameter_refusal = error
+            custom = math.nan
         maximum = 102400 * (custom + 1)
         self.absolute_max_piece_size = math.floor(maximum) if math.isfinite(maximum) else maximum
         if settings.get('encrypt'):
@@ -296,6 +308,8 @@ class ContentSplitter:
 
     def split(self, data: str | bytes, *, path: str = '', plain_split: bool = False,
               text_blob: bool = False) -> list[str]:
+        if self._parameter_refusal is not None:
+            raise self._parameter_refusal
         # Raw bytes normally denote binary; text_blob exposes a text/plain Blob
         # without first decoding malformed input through a Python string.
         if text_blob and isinstance(data, bytes):
@@ -307,12 +321,12 @@ class ContentSplitter:
         return algorithm(self).split(data, path=path, plain_split=plain)
 
 
-def _minimum_number(value):
+def _minimum_number(value, *, setting='minimumChunkSize'):
     """JS numeric coercion in chunks.ts:66,279,369,537 (not validation)."""
     if value is None:
         return 0.0
     if isinstance(value, (list, dict)):
-        value = _splitter_property_key(value)
+        value = _splitter_property_key(value, setting=setting)
     try:
         if isinstance(value, str):
             # ECMAScript StringNumericLiteral, used by the comparisons and
@@ -329,23 +343,24 @@ def _minimum_number(value):
                 return math.nan
         return float(value)
     except OverflowError:
-        return -math.inf if str(value).startswith('-') else math.inf
+        return -math.inf if isinstance(value, (int, float)) and value < 0 else math.inf
     except (ValueError, TypeError):
         return math.nan
 
 
 def _js_add(left, right):
     """chunks.ts:370 uses ECMAScript addition, not numeric-only addition."""
-    left = _splitter_property_key(left) if isinstance(left, (list, dict)) else left
-    right = _splitter_property_key(right) if isinstance(right, (list, dict)) else right
+    left = _splitter_property_key(left, setting='minimumChunkSize') if isinstance(left, (list, dict)) else left
+    right = _splitter_property_key(right, setting='minimumChunkSize') if isinstance(right, (list, dict)) else right
     if isinstance(left, str) or isinstance(right, str):
-        return _splitter_property_key(left) + _splitter_property_key(right)
+        return _splitter_property_key(left, setting='minimumChunkSize') + _splitter_property_key(right, setting='minimumChunkSize')
     return _minimum_number(left) + _minimum_number(right)
 
 
 def _loop_refusal(setting, remedy):
-    error = ValueError(
-        f'{setting}: the plugin itself does not terminate for this input; use {remedy}')
+    codes = {'customChunkSize': DiagnosticCode.SPLITTER_CUSTOM_LOOP,
+             'minimumChunkSize': DiagnosticCode.SPLITTER_MINIMUM_LOOP}
+    error = WriterParameterRefused(PublicDiagnostic(codes[setting]))
     error.setting_keys = (setting,)
     return error
 
@@ -365,6 +380,9 @@ class RabinKarpSplitter(_Splitter):
         """
         is_text = isinstance(data, (str, _TextBlob))
         raw = _js_utf8(data) if isinstance(data, str) else data
+        # chunks.ts:535-545 coerces the minimum even for an empty Blob and
+        # even when the outer Math.min will propagate a NaN maximum.
+        minimum_setting = _minimum_number(self.minimum_chunk_size)
         if not raw:
             return []
         plain = is_text or plain_split
@@ -380,7 +398,8 @@ class RabinKarpSplitter(_Splitter):
         gap = max(maximum // 4, 1)
         # chunks.ts:535-545: Math.min/max propagate NaN; place the setting
         # first so Python min/max preserve it rather than discarding it.
-        minimum = min(max(_minimum_number(self.minimum_chunk_size), unit * 2 if plain else gap), maximum)
+        minimum = (math.nan if math.isnan(maximum) else
+                   min(max(minimum_setting, unit * 2 if plain else gap), maximum))
         modulus = min(max(minimum, unit * 4), maximum) if plain else gap
         weight = pow(31, 47, 2**32)
         fingerprint = 0
@@ -459,15 +478,17 @@ class V2Splitter(_Splitter):
         if not plain_split:
             return self._cap(text)
         minimum = _minimum_number(self.minimum_chunk_size)
-        # chunks.ts:367-371: only numeric zero (including null/empty string)
-        # cannot advance xMinimumChunkSize. Negative zero divides to -Infinity;
-        # negative/NaN minima also skip this loop.
-        if text and minimum == 0 and math.copysign(1, minimum) > 0:
-            raise _loop_refusal('minimumChunkSize', 'minimumChunkSize=20 (or another positive minimumChunkSize)')
-        # chunks.ts:368-370: retain the ORIGINAL value for +=. Arrays use
-        # ToPrimitive(string), then subsequent iterations keep concatenating.
+        # chunks.ts:368-370: retain original types through the first +=.
+        # A decimal/radix/exponent zero string can become NaN and terminate;
+        # only zero-preserving addition is a loop. Numeric/null/false zero and
+        # zero-only/whitespace-only primitive strings remain zero indefinitely.
         source = self.minimum_chunk_size
         adjusted = minimum
+        if text and minimum == 0 and math.copysign(1, minimum) > 0:
+            source = _js_add(source, self.minimum_chunk_size)
+            adjusted = _minimum_number(source)
+            if adjusted == 0:
+                raise _loop_refusal('minimumChunkSize', 'minimumChunkSize=20 (or another positive minimumChunkSize)')
         while adjusted > 0 and len(text) / adjusted > 100:
             source = _js_add(source, self.minimum_chunk_size)
             adjusted = _minimum_number(source)
@@ -487,7 +508,7 @@ class V2Splitter(_Splitter):
         # then stalls at the first code point boundary. A single code point
         # (including a surrogate pair) still terminates.
         if self.absolute_max_piece_size <= 0:
-            if len(_from_units(text)) > 1 or (not text and self.absolute_max_piece_size < 0):
+            if math.isinf(self.absolute_max_piece_size) or len(_from_units(text)) > 1 or (not text and self.absolute_max_piece_size < 0):
                 # chunks.ts:299-309: a negative cap on an empty source (BOM
                 # or flushed newline tail) grows end forever, not just once.
                 raise _loop_refusal('customChunkSize', 'customChunkSize=0 (positive pieceSize)')
@@ -502,7 +523,7 @@ class V2Splitter(_Splitter):
             return []
         if math.isnan(self.absolute_max_piece_size):
             # chunks.ts:418-432: slice(i, NaN) emits nothing and loses bytes.
-            raise ValueError("customChunkSize would discard binary data; use customChunkSize=0 or another numeric value")
+            raise WriterParameterRefused(PublicDiagnostic(DiagnosticCode.SPLITTER_BINARY_LOSS))
         if self.absolute_max_piece_size <= 0:
             # chunks.ts:418-432: i = splitEnd <= i.
             raise _loop_refusal('customChunkSize', 'customChunkSize=0 (positive pieceSize)')
@@ -562,6 +583,9 @@ class LegacySplitter(_Splitter):
             raise _loop_refusal('customChunkSize',
                                 'customChunkSize=0 (zero pieceSize also works for V1 plain text)')
         if not text:
+            # chunks.ts:13-72 pickPiece still compares the empty ordinary line.
+            if plain_split:
+                _minimum_number(self.minimum_chunk_size)
             return ['']
         if not plain_split:
             return list(_capped(text, maximum, False))

@@ -85,3 +85,14 @@ def helper_result(module, vector):
     if 'text' in vector:
         return base64.b64encode(module._write_string(vector['text'])).decode()
     return module._base36(vector['value']), module._base36(module._int32(vector['value']))
+
+
+def coercion_result(module, row):
+    import base64
+    raw = base64.b64decode(row['payload']['base64'])
+    try:
+        splitter = module.ContentSplitter(row['settings'])
+        pieces = splitter.split(raw, path=row['payload']['path'], text_blob=row['payload']['text'])
+        return pieces, [splitter.chunk_id_for_piece(p) for p in pieces]
+    except ValueError:
+        return ('refused',)

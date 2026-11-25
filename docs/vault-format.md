@@ -75,20 +75,20 @@ null and NaN minima follow JavaScript coercion, not peer numeric validation.
 Overflowing numeric minimum literals become Infinity and follow the same
 upstream grouping and clamp rules.
 V3 retains its 30 KiB cap floor and minimum/maximum clamps, including NaN's
-suppression of content-defined candidates (maximum cuts still apply).
+suppression of content-defined candidates (finite maximum cuts still apply). A NaN cap suppresses all V3 boundaries.
 
-The peer refuses only these upstream nontermination cases:
+The following guards refuse actual upstream nontermination. Separate data-loss and primitive-coercion guards are described below:
 
 | Algorithm and input | Loop condition | Recovery |
 | --- | --- | --- |
-| V1 nonempty plain text | Negative pieceSize; substring cannot consume the buffer | Use customChunkSize producing a positive pieceSize; zero also terminates |
-| V1 nonempty non-plain text or binary | Nonpositive pieceSize; remaining text or byte offset does not advance | Use customChunkSize producing a positive pieceSize |
+| V1 nonempty plain text | Negative or NaN pieceSize; substring cannot consume the buffer | Use customChunkSize producing a positive pieceSize; zero also terminates |
+| V1 nonempty non-plain text or binary | Nonpositive or NaN pieceSize; remaining text or byte offset does not advance | Use customChunkSize producing a positive pieceSize |
 | V2/V2-segmenter nonempty binary | Nonpositive pieceSize; splitEnd never advances | Use customChunkSize producing a positive pieceSize |
-| V2/V2-segmenter text | Nonpositive pieceSize with a group containing more than one Unicode code point (from stalls at the first code point boundary), or negative pieceSize with an empty group (surrogate-growth loop never ends) | Use customChunkSize producing a positive pieceSize |
-| V2/V2-segmenter nonempty decoded plain text | Positive-zero-coercing minimumChunkSize (ordinary 0, empty string, null) leaves minimum adjustment unchanged; negative zero terminates | Use a positive minimumChunkSize |
+| V2/V2-segmenter text | Negative-infinite pieceSize (even a single code point), or finite nonpositive pieceSize with a group containing more than one Unicode code point (from stalls at the first code point boundary), or negative pieceSize with an empty group (surrogate-growth loop never ends) | Use customChunkSize producing a positive pieceSize |
+| V2/V2-segmenter nonempty decoded plain text | The first original-type += preserves positive zero (ordinary 0/null/false, zero-only or whitespace-only primitive strings); decimal/radix/exponent zero strings becoming NaN and negative zero terminate | Use a positive minimumChunkSize |
 
-Empty Blobs terminate at every tested cap/minimum. V2 text groups containing
-a single code point (including a surrogate pair) terminate even with a
+Empty Blobs retain the tested primitive-parameter behavior; a noncallable own toString can throw during required coercion. V2 text groups containing
+a single code point (including a surrogate pair) terminate with a finite
 nonpositive cap. V1 plain zero-cap splitting emits
 one UTF-16 unit per piece, intentionally splitting surrogate pairs. Different
 lone surrogates can share an xxhash ID after TextEncoder replacement; the
@@ -197,3 +197,5 @@ minimumChunkSize remains its original JSON type during the V2 / V2-segmenter adj
 Legacy Blob.text strips a leading BOM while metadata keeps Blob.size (EntryManagerImpls.ts:280). Incoming reflection.ts:272-283 rejects a nonzero size mismatch unless processSizeMismatchedFiles is enabled. Every successful lossy peer publication now appends typed notices; V3 retains the BOM.
 
 JWT duration follows httplib.ts:167 `(jwtExpDuration || 5) * 60`: COUCHDB_JWT_EXPIRY_MINUTES=0 uses five minutes. Negative durations refuse because the upstream token would already be expired.
+
+JSON coercion edge recovery follows the executed device: an own noncallable toString field cannot produce a primitive; remove that field or use a primitive for the named setting. JSON lexical overflow inside arrays retains JavaScript Infinity spelling. V3 evaluates its minimum even for empty input or a NaN cap; V1 empty ordinary text also evaluates its minimum. V2 admits zero strings such as "0.0", "+0", " 0 ", "0x0" and "1e-1000" when += becomes NaN, while zero-preserving addition refuses the actual loop. A negative-infinite V2 cap loops even on one code point. All refusals reach MCP as closed typed diagnostics naming the setting and recovery, without setting values.
