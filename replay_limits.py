@@ -21,6 +21,15 @@ from storage_base import StorageError
 _ABSENT = object()
 
 
+class ReplayConfigError(ValueError):
+    """Closed variable/rule message, separate from arbitrary exception text."""
+
+    def __init__(self, variable: str, requirement: str):
+        # Only ReplayLimits.from_env supplies these internal names/rules.
+        self.public_message = f'{variable} must be a positive {requirement} below 2**63'
+        super().__init__(self.public_message)
+
+
 class ReplayBudgetExceeded(StorageError, ValueError):
     """Safe public diagnostic; observed can be a bounded lower bound."""
 
@@ -84,6 +93,6 @@ class ReplayLimits:
                 if not 0 < value < 2**63 or (type(value) is float and not math.isfinite(value)):
                     raise ValueError
             except (ValueError, TypeError, OverflowError):
-                raise ValueError(f'{variable} must be a positive {requirement} below 2**63') from None
+                raise ReplayConfigError(variable, requirement) from None
             values[field.name] = value
         return cls(**values)

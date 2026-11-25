@@ -52,7 +52,9 @@ bearer_token_env_var = "MCP_API_KEY"
 ```
 
 Missing credentials/auth, template secrets or incompatible vault settings fail
-at application construction/startup. Restart after changing configuration.
+at application construction/startup. Configuration errors name variables and validation
+rules without echoing supplied values, including invalid ports and backend names.
+Restart after changing configuration.
 `create_app(cfg)` also accepts a validated injected `Config`; that same object
 controls auth, URL, host, port and backend startup.
 

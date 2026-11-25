@@ -894,3 +894,18 @@ and journal coverage without claiming CouchDB can persist it. Final combined
 real-server run: 261 passed in 240.73 s; strengthened fresh-reader assertions:
 63 passed in 47.82 s. All six required A1/A2 mutations and two new acceptance
 mutations are killed; both remaining G3 witnesses also kill its encoder flip.
+
+
+### 2026-11-25 — F5: omit configuration values from startup errors
+
+[DECISION] Keep the closed MCP_PORT integer rule and LIVESYNC_BACKEND choices,
+but omit the supplied values. Replay-limit validation now passes an explicit
+public message instead of exception text. The Task D blocker above remains
+historical; this focused fix resolves its two startup leaks.
+
+The configuration security inventory covers every consumed variable: invalid
+values for validated fields, real template sentinels for credentials, and
+continued acceptance of unrestricted strings. Both run.py and server.py startup
+paths are tested with dotenv disabled and controlled subprocess environments.
+This is peer diagnostic policy, not a change to vault semantics or an upstream
+oracle; no fixture regeneration is required.

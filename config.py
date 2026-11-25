@@ -16,7 +16,7 @@ from dataclasses import dataclass, field, replace
 from typing import Literal, Mapping
 from urllib.parse import parse_qs
 
-from replay_limits import ReplayLimits
+from replay_limits import ReplayConfigError, ReplayLimits
 
 S3_URI_SCHEME = "sls://"
 
@@ -433,7 +433,8 @@ def _load_port(env: Mapping[str, str]) -> int:
     try:
         port = int(raw)
     except ValueError:
-        raise ConfigError(f"MCP_PORT must be an integer (got {raw!r}).") from None
+        # Peer-only listener policy (P-19/P-21/P-22), not a vault setting.
+        raise ConfigError("MCP_PORT must be an integer.") from None
 
     if not 1 <= port <= 65535:
         raise ConfigError("MCP_PORT must be in 1..65535.")
@@ -451,8 +452,8 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
         env = os.environ
     try:
         replay_limits = ReplayLimits.from_env(env)
-    except ValueError as exc:
-        raise ConfigError(str(exc)) from None
+    except ReplayConfigError as exc:
+        raise ConfigError(exc.public_message) from None
     tweak_policy = {}
     for key, default in (('LIVESYNC_DISABLE_CHECKING_CONFIG_MISMATCH', 'false'),
                          ('LIVESYNC_AUTO_ACCEPT_COMPATIBLE_TWEAK', 'true')):
@@ -511,7 +512,7 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
         )
     if backend not in BACKENDS:
         raise ConfigError(
-            f"LIVESYNC_BACKEND must be 'couchdb' or 's3' (got {backend!r})."
+            "LIVESYNC_BACKEND must be 'couchdb' or 's3'."
         )
 
     couchdb: CouchDBConfig | None = None

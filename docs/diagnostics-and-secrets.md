@@ -59,3 +59,9 @@ observability adds `custom_headers_configured` (boolean) and
 `custom_headers_count` (nonnegative integer) only. SDK/HTTP loggers are silenced
 process-wide after constructing a connection with custom headers, including
 free-form transport debug tracebacks; application logs retain typed fields.
+
+Startup configuration validation errors name the variable and its closed rule or
+supported choices, never the supplied value. This includes invalid `MCP_PORT`
+and `LIVESYNC_BACKEND` values printed by `run.py` or `server.py`; correct the
+named variable and restart. Replay-limit validation passes an explicit public
+message field to configuration validation rather than formatting its exception.

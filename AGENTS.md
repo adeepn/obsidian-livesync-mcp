@@ -133,6 +133,9 @@ No formatter or linter config is committed. If adding one, document the command 
 
 ## Testing Guidelines
 
+`tests/test_config_public.py` inventories validated and unrestricted environment
+variables and checks value-free errors through configuration and both startup entry points.
+
 The automated suite covers configuration, codecs, frontmatter, links, the CouchDB backend (against an HTTP-level fake), all tool groups, and auth. Keep it green; add focused tests in `tests/test_<module>.py` before broad refactors, especially for note parsing, CouchDB document handling, OAuth, or MCP tools.
 
 Tool tests run against `tests/fake_backend.py`; backend tests against `tests/couchdb_fake.py`. Manual verification with a configured CouchDB instance and `python run.py` remains useful for end-to-end checks: exercise the changed MCP tool and check note content, frontmatter, and CouchDB revisions.
