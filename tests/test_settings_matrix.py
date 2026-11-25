@@ -427,8 +427,24 @@ async def test_settings_persisted_equality_witness(tmp_path, kind, case):
     path = grid_path(case[-1])
     data = grid_payload(case[-1])[1]
     vector = GRID[case_id(case)]
-    async with matrix_vault(tmp_path, kind, settings) as (backend, doc, _, _, _):
+    async with matrix_vault(tmp_path, kind, settings) as (backend, doc, chunks, requests, _):
         await backend.startup_check()
+        if kind == 'couchdb' and case[-1] == 'encoder-exact128':
+            # chunks.ts:243-252; live CouchDB 3.5.3 rejects JSON lone units.
+            # The native codec/hash oracle stays byte-exact; only journal can
+            # persist this witness after TextEncoder replacement.
+            from storage_base import WriterParameterRefused
+            from diagnostic_codes import DiagnosticCode
+            before = await chunks()
+            requests.clear()
+            with pytest.raises(WriterParameterRefused) as caught:
+                await backend._write_content(path, data, len(data.encode()), 'plain',
+                                             create=True, overwrite=False)
+            assert caught.value.diagnostic.code == DiagnosticCode.COUCHDB_SURROGATE_REFUSED
+            assert not requests
+            assert await chunks() == before
+            assert await backend.read_note(path) is None
+            return
         if is_text_blob(case[-1]):
             await backend._write_content(path, _TextBlob(data), len(data), 'plain',
                                          create=True, overwrite=False)
@@ -445,8 +461,7 @@ async def test_settings_persisted_equality_witness(tmp_path, kind, case):
             wire = json.loads((FIXTURES / 'surrogate_wire_upstream.json').read_text())
             assert data == wire['witness']['input']
             assert vector['children'] == wire['witness']['ids']
-            expected = ([d['data'] for d in wire['vectors'][0]['decoded']]
-                        if kind == 'journal' else wire['witness']['pieces'])
+            expected = [d['data'] for d in wire['vectors'][0]['decoded']]
             assert stored == expected, 'PARTITION stored pieces mismatch'
             assert children == wire['witness']['ids'], 'PARTITION stored children mismatch'
         else:

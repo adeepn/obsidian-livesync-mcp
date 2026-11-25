@@ -86,13 +86,13 @@ def main():
                                     cwd=ROOT, stdout=log, stderr=subprocess.STDOUT)
         data = json.loads(report.read_text()) if report.exists() else {}
         calls = data.get('reports', [])
-        caught = (result.returncode == 1 and len(calls) == 3 and
+        caught = (result.returncode == 1 and len(calls) == len(definition['nodes']) and
                   {r['node'] for r in calls} == set(definition['nodes']) and
                   all(r['phase'] == 'call' and r['outcome'] == 'failed' for r in calls))
-        summary.append({'id': definition['id'], 'caught_all_three': caught, **data})
-        print(definition['id'], 'caught grid + CouchDB + journal' if caught else 'NOT CAUGHT', flush=True)
+        summary.append({'id': definition['id'], 'caught_all_selected': caught, **data})
+        print(definition['id'], 'caught all selected witnesses' if caught else 'NOT CAUGHT', flush=True)
         (output / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
-    return 0 if all(r['caught_all_three'] for r in summary) else 1
+    return 0 if all(r['caught_all_selected'] for r in summary) else 1
 
 
 if __name__ == '__main__':

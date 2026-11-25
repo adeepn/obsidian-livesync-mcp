@@ -141,7 +141,8 @@
     "citation": "octagonal-wheels@0.1.57 dist/binary/base64.js:198-240; managers/HashManager/PureJSHashManager.ts:86-87",
     "witness": {
       "kind": "grid",
-      "id": "identity=legacy-splitter=v1-hash=sha1-custom=-0.9987841796875-minimum=5-limit=default-document=encoder-exact128"
+      "id": "identity=legacy-splitter=v1-hash=sha1-custom=-0.9987841796875-minimum=5-limit=default-document=encoder-exact128",
+      "storage_scope": "Journal only; CouchDB 3.5.3 refuses the unpaired-surrogate pieces before publication"
     }
   },
   {

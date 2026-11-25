@@ -63,6 +63,7 @@ async def test_every_write_tool_exposes_typed_notice(tmp_path,kind,tool):
         await backend.startup_check()
         await backend.write_note('edit.md','# Anchor\nold',create=True)
         await backend.write_note('template.md','{{value}}',create=True)
+        before = await backend.read_note('edit.md')
         token=server._active_backend.set(backend)
         try:
             if tool=='create':result=await server.obsidian_create_note('new.md','\ufeffABC')
@@ -78,9 +79,11 @@ async def test_every_write_tool_exposes_typed_notice(tmp_path,kind,tool):
             else:result=await server.obsidian_update_note('edit.md',tool,content='\ud800',**({'heading':'Anchor'} if tool=='after-heading' else {}))
             records=[json.loads(line) for line in result.splitlines() if line.startswith('{"notices":')]
             if tool in ('properties','tags') and kind=='couchdb':
-                # Lossless CouchDB rejoins the split UTF-16 pair; no notice.
+                # chunks.ts:243-252; real CouchDB 3.5.3 rejects lone units.
                 assert not records
-                assert '🙂' in (await backend.read_note('edit.md'))['text']
+                assert 'CouchDB rejects data containing an unpaired UTF-16 surrogate' in result
+                assert 'v3' in result
+                assert await backend.read_note('edit.md') == before
                 return
             assert len(records)==1, result
             assert records[0]['notices']
