@@ -116,8 +116,8 @@ Documentation/configuration contract:
 git ls-files -i -c --exclude-standard
 ```
 
-The second command must emit nothing. The test compares README and `.env.example`
-variable inventories with config/replay consumers (plus the separate unsafe-debug
+The second command must emit nothing. The test compares `docs/configuration.md`
+and `.env.example` variable inventories with config/replay consumers (plus the separate unsafe-debug
 consumer), and loads documented connection snippets after required field
 substitution. Never add new tracked files under ignored paths.
 Working evidence and suite logs belong in gitignored `.superpowers/`.

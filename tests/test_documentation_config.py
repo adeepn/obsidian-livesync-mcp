@@ -487,7 +487,7 @@ def test_startup_configuration_error_policy_is_documented():
 
 
 # The paths below map consumers to their returned fields; defaults and validation
-# expectations come from the published README cells, not a second value table.
+# expectations come from the published configuration table, not a second value table.
 CONFIG_PATHS = {
     'LIVESYNC_FRONTMATTER_MAX_BYTES': 'frontmatter_max_bytes',
     'LIVESYNC_FRONTMATTER_MAX_NODES': 'frontmatter_max_nodes',
