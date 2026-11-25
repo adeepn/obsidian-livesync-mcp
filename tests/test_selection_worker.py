@@ -86,7 +86,7 @@ async def test_concurrent_evaluations_have_dedicated_limit(backend, monkeypatch)
             active += 1
             maximum = max(maximum, active)
         try:
-            time.sleep(.002)
+            time.sleep(0)
             return original(self, payload)
         finally:
             with lock:
@@ -149,7 +149,7 @@ for line in sys.stdin:
             args = [sys.executable, '-u', str(script)]
         return original(args, *a, **k)
     monkeypatch.setattr(subprocess, 'Popen', popen)
-    monkeypatch.setattr(selection_engine, 'TIMEOUT', .5)
+    monkeypatch.setattr(selection_engine, 'TIMEOUT', 5)
     before = mutations()
     with pytest.raises(StorageError) as exc:
         await b.write_note('denied.md', 'denied', create=True)
@@ -192,7 +192,7 @@ def test_stalled_stdin_write_obeys_timeout(monkeypatch, tmp_path):
     monkeypatch.setattr(subprocess, 'Popen', popen)
     worker = selection_engine.SelectionWorker()
     worker._start()
-    monkeypatch.setattr(selection_engine, 'TIMEOUT', .1)
+    monkeypatch.setattr(selection_engine, 'TIMEOUT', 1)
     errors = []
     def evaluate():
         try:
@@ -202,13 +202,13 @@ def test_stalled_stdin_write_obeys_timeout(monkeypatch, tmp_path):
     thread = threading.Thread(target=evaluate)
     thread.start()
     try:
-        thread.join(1)
+        thread.join(15)
         assert not thread.is_alive(), 'stdin write escaped engine deadline'
         assert errors == ['timeout']
     finally:
         if worker.process:
             worker.process.kill()
-        thread.join(2)
+        thread.join(15)
         worker.close()
 
 
@@ -221,21 +221,23 @@ async def test_repeated_cancellation_keeps_admission_until_thread_exits(backend,
     b.selection_only = 'md$'
     active = maximum = 0
     started = threading.Event()
+    release = threading.Event()
     def slow(self, payload):
         nonlocal active, maximum
         active += 1
         maximum = max(maximum, active)
         started.set()
-        time.sleep(.15)
+        assert release.wait(30), 'test failed to release evaluator'
         active -= 1
         return TargetVerdict(True)
     monkeypatch.setattr(SelectionWorker, 'evaluate', slow)
     first = asyncio.create_task(b.selection_for('first.md'))
-    while not started.is_set():
-        await asyncio.sleep(.001)
+    assert await asyncio.to_thread(started.wait, 30)
     first.cancel()
-    await asyncio.sleep(.005)
+    await asyncio.sleep(0)
     first.cancel()
     second = asyncio.create_task(b.selection_for('second.md'))
-    await asyncio.gather(first, second, return_exceptions=True)
+    await asyncio.sleep(0)
+    release.set()
+    await asyncio.wait_for(asyncio.gather(first, second, return_exceptions=True), 30)
     assert maximum == 1

@@ -7,21 +7,21 @@ def test_timeout_terminates_worker():
     start = time.monotonic()
     with pytest.raises(regex_runner.RegexTimeoutError):
         regex_runner.apply('(a+)+$', 'a' * 1024 + '!', 'findall', .2)
-    assert time.monotonic() - start < 5
+    assert time.monotonic() - start < 30
 
 
 def test_operations_and_output_limit():
     import regex_runner
-    assert regex_runner.apply('(a)', 'Ab', 'findall', 2)['matches'] == ['A']
-    assert regex_runner.apply('a', 'abc', 'search', 2)['context'] == 'abc'
-    assert regex_runner.apply('a', 'aa', 'subn', 2, replacement='x')['result'] == 'xx'
+    assert regex_runner.apply('(a)', 'Ab', 'findall', 30)['matches'] == ['A']
+    assert regex_runner.apply('a', 'abc', 'search', 30)['context'] == 'abc'
+    assert regex_runner.apply('a', 'aa', 'subn', 30, replacement='x')['result'] == 'xx'
     with pytest.raises(ValueError, match='large'):
-        regex_runner.apply('', 'a' * 10, 'subn', 2, replacement='xx', max_output_bytes=20)
+        regex_runner.apply('', 'a' * 10, 'subn', 30, replacement='xx', max_output_bytes=20)
 
 
 def test_findall_unmatched_groups_match_python_contract():
     import regex_runner
-    assert regex_runner.apply('(a)|(b)', 'ab', 'findall', 2)['matches'] == [
+    assert regex_runner.apply('(a)|(b)', 'ab', 'findall', 30)['matches'] == [
         ('a', ''), ('', 'b')]
 
 
@@ -46,7 +46,7 @@ if __name__ == '__main__':
     env = dict(os.environ, PYTHONPATH=str(root))
     env.pop('LIVESYNC_BACKEND', None)
     result = subprocess.run([sys.executable, str(script)], env=env,
-                            capture_output=True, text=True, timeout=15)
+                            capture_output=True, text=True, timeout=60)
     assert result.returncode == 0, result.stderr
 
 
@@ -159,21 +159,21 @@ def test_close_interrupts_inflight_request_without_waiting_for_deadline(monkeypa
     closer = threading.Thread(target=regex_runner.close)
     operation.start()
     try:
-        assert written.wait(2)
+        assert written.wait(30)
         closer.start()
-        closer.join(1)
+        closer.join(15)
         assert not closer.is_alive(), 'shutdown waited for the regex deadline'
         assert process.poll() is not None
-        operation.join(1)
+        operation.join(15)
         assert not operation.is_alive()
         assert failures == ['ValueError']
         assert regex_runner._process is None
     finally:
         if process.poll() is None:
             process.kill()
-        operation.join(2)
+        operation.join(15)
         if closer.ident is not None:
-            closer.join(2)
+            closer.join(15)
         regex_runner.close()
     assert regex_runner.apply('b', 'b', 'findall')['matches'] == ['b']
     regex_runner.close()

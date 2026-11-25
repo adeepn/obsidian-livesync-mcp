@@ -131,10 +131,13 @@ async def test_regex_timeout_is_per_note_and_hygienic(monkeypatch):
     fake = FakeBackend()
     fake.add('a.md', 'a' * 1000 + '!PRIVATE_NOTE')
     fake.add('b.md', 'safe a')
-    fake.regex_timeout_seconds = .08
+    from tests.regex_doubles import timeout_for
+    timeout_for(monkeypatch, lambda pattern, text, op: 'PRIVATE_NOTE' in text)
+    fake.regex_timeout_seconds = 10
     monkeypatch.setattr(server, 'backend', fake)
     response = json.loads(await server.obsidian_search('(a+)+$', regex=True))
-    assert 'a.md' in response['errors']
+    assert set(response['errors']) == {'a.md'}
+    assert [row['path'] for row in response['results']] == ['b.md']
     assert response['scan']['notes'] == 2
     assert 'LIVESYNC_REGEX_TIMEOUT_SECONDS' in response['errors']['a.md']
     assert 'PRIVATE_NOTE' not in str(response)
@@ -172,12 +175,12 @@ async def test_backend_info_wait_respects_scan_deadline(monkeypatch, tool):
     fake = FakeBackend()
     fake.add('a.md', 'safe')
     async def slow_info():
-        await asyncio.sleep(1)
+        await asyncio.Event().wait()
         return {'backend': 'fake'}
     monkeypatch.setattr(fake, 'backend_info', slow_info)
     monkeypatch.setattr(server, 'backend', fake)
     monkeypatch.setattr(server, '_active_scan_limits', ContextVar('info_time', default=(0, 0, .01)))
-    response = json.loads(await asyncio.wait_for(getattr(server, tool)(), .2))
+    response = json.loads(await asyncio.wait_for(getattr(server, tool)(), 30))
     assert response['scan']['stopped_because'] == 'time'
 
 

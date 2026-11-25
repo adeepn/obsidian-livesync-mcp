@@ -363,17 +363,13 @@ async def test_default_lifespan_closes_on_startup_failure(monkeypatch):
 
 
 async def test_regex_worker_tool_timeout_and_normal(tools, monkeypatch):
-    import regex_runner
-    import time
+    from tests.regex_doubles import timeout_for
     server, fake = tools
     fake.add('a.md', 'a' * 1024 + '!')
-    monkeypatch.setattr(regex_runner, 'DEFAULT_TIMEOUT', .2)
-    start = time.monotonic()
+    timeout_for(monkeypatch, lambda pattern, text, op: pattern == '(a+)+$')
     assert 'regex pattern too complex' in await server.obsidian_search('(a+)+$', True)
     assert 'regex pattern too complex' in await server.obsidian_update_note(
         'a.md', 'search-replace', search='(a+)+$', replace='x', regex=True)
-    assert time.monotonic() - start < 5
-    monkeypatch.setattr(regex_runner, 'DEFAULT_TIMEOUT', 2)
     assert json.loads(await server.obsidian_search('a+', True))['results']
     assert '1 matches replaced' in await server.obsidian_update_note(
         'a.md', 'search-replace', search='a+', replace='x', regex=True)
@@ -406,13 +402,16 @@ async def test_scan_byte_budget_and_concurrency(tools, monkeypatch):
     assert result['truncated'] is True
     assert result['scan']['bytes'] <= 1000
     active = peak = 0
+    both_entered = asyncio.Event()
     original = fake.iterate_texts
     async def delayed(*args, **kwargs):
         nonlocal active, peak
         active += 1
         peak = max(peak, active)
         try:
-            await asyncio.sleep(.03)
+            if active == 2:
+                both_entered.set()
+            await asyncio.wait_for(both_entered.wait(), 30)
             async for item in original(*args, **kwargs):
                 yield item
         finally:

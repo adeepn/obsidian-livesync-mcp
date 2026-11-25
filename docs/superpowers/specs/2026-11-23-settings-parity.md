@@ -752,3 +752,7 @@ its own deadline expires first. Neither path echoes the pattern or body.
 ### 2026-11-25 F1-8
 
 [DECISION] Accept zero JWT minutes and apply the five-minute fallback in JWTTokenGenerator, matching httplib.ts:167. Negative durations name the real already-expired-token constraint. Regenerated native WebCrypto oracle includes zero-duration HS/ES vectors at fixed time with integrity-verified published wheels.
+
+### 2026-11-25 F1-9
+
+[DECISION] Inject typed timeouts at the tool boundary while retaining real isolated-worker lifecycle tests. Replace sleep-based cancellation/scan coordination with events; widen scheduler-sensitive smoke-test margins. A 200 ms process-start-delay probe reproduced the gate failure before the change and passes afterward. Gate completion requires two concurrent full-suite runs plus a final post-commit suite.

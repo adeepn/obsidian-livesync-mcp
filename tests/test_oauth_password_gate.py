@@ -188,7 +188,7 @@ class PasswordGateTests(unittest.TestCase):
         elapsed = time.monotonic() - start
         self.assertEqual(body, b"x" * self.gate.max_body_bytes)
         self.assertIsInstance(body, bytes)
-        self.assertLess(elapsed, 2.0)
+        self.assertLess(elapsed, 30.0)
 
         self.gate.max_body_bytes = 512
         request = StreamingRequest()

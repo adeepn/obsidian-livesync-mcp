@@ -265,7 +265,8 @@ async def test_regex_tool_refusals_are_distinct_and_preserve_revision(backend, m
     assert 'LIVESYNC_REGEX_MAX_OUTPUT_BYTES' in size
     assert 'LIVESYNC_REGEX_TIMEOUT_SECONDS' not in size
     assert 'PRIVATE_OUTPUT' not in size
-    backend.regex_timeout_seconds = .1
+    from tests.regex_doubles import timeout_for
+    timeout_for(monkeypatch, lambda pattern, text, op: pattern == '(a+)+$')
     timeout = await server.obsidian_update_note('regex.md', 'search-replace',
         search='(a+)+$', replace='PRIVATE_OUTPUT', regex=True)
     assert 'LIVESYNC_REGEX_TIMEOUT_SECONDS' in timeout
