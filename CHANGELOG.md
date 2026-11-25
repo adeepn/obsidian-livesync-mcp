@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Settings parity
 
+- Resolve YAML anchors and aliases in properties/tags, preserve untouched key bytes during edits, and expose configurable expanded-node/depth budgets with typed recovery guidance.
+
 - Retain outcome uncertainty when a conditional S3 retry ends in a pre-dispatch failure or unsupported response after an earlier response may have been lost.
 
 - Make CouchDB, S3 and selection deadlines configurable; allow configured read/conditional S3 retries while retaining single-attempt unconditional publication.

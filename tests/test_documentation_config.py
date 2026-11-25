@@ -480,6 +480,8 @@ def test_startup_configuration_error_policy_is_documented():
 # The paths below map consumers to their returned fields; defaults and validation
 # expectations come from the published README cells, not a second value table.
 CONFIG_PATHS = {
+    'LIVESYNC_FRONTMATTER_MAX_NODES': 'frontmatter_max_nodes',
+    'LIVESYNC_FRONTMATTER_MAX_DEPTH': 'frontmatter_max_depth',
     'COUCHDB_CONNECT_TIMEOUT_SECONDS': 'couchdb.connect_timeout_seconds',
     'COUCHDB_IO_TIMEOUT_SECONDS': 'couchdb.io_timeout_seconds',
     'S3_CONNECT_TIMEOUT_SECONDS': 's3.connect_timeout_seconds',
@@ -945,3 +947,15 @@ def test_f6_transport_policy_documentation():
     assert 'Always one' in s3 and '412' in s3 and 'Outcome unknown' in s3
     assert 'LIVESYNC_SELECTION_TIMEOUT_SECONDS' in (ROOT / 'docs/selection-filters.md').read_text()
     assert 'COUCHDB_IO_TIMEOUT_SECONDS' in (ROOT / 'docs/connecting-storage.md').read_text()
+
+
+def test_f6_frontmatter_contract_documented():
+    assert 'ruamel.yaml==0.18.17' in (ROOT / 'requirements.txt').read_text().splitlines()
+    guide = (ROOT / 'docs/frontmatter-properties.md').read_text()
+    for name in ('LIVESYNC_FRONTMATTER_MAX_NODES', 'LIVESYNC_FRONTMATTER_MAX_DEPTH'):
+        assert name in guide and name in environment_names()
+    assert 'alias expansion' in guide and 'raw note text' in guide
+    assert '4 GiB' in guide and '1723285504' in guide
+    assert '2026-11-25 — F6 operational limits' in (ROOT / 'docs/superpowers/specs/2026-11-23-settings-parity.md').read_text()
+    assert 'frontmatter_admission_upstream.json' in (ROOT / 'AGENTS.md').read_text()
+    assert 'extract_frontmatter_admission_vectors.mjs' in (ROOT / 'docs/regenerating-oracle-fixtures.md').read_text()

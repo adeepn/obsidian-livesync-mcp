@@ -85,6 +85,8 @@ are read only for the selected backend. Empty defaults below mean an empty strin
 | `S3_CONNECT_TIMEOUT_SECONDS` | `5` | Optional | Positive finite seconds for S3 connection |
 | `S3_READ_TIMEOUT_SECONDS` | `30` | Optional | Positive finite seconds for S3 response reads |
 | `S3_MAX_ATTEMPTS` | `1` | Optional | Positive integer SDK attempts for reads and conditional writes; unconditional PUT always one |
+| `LIVESYNC_FRONTMATTER_MAX_NODES` | `1000000` | Optional | Positive integer expanded YAML nodes for properties/tags only |
+| `LIVESYNC_FRONTMATTER_MAX_DEPTH` | `200` | Optional | Positive integer property nesting depth; parser runtime ceiling also applies |
 | `LIVESYNC_SELECTION_TIMEOUT_SECONDS` | `5` | Optional | Positive finite seconds for Node capability checks and selection requests |
 | `COUCHDB_URL` | `http://localhost:5984` | Optional | CouchDB server base URL |
 | `COUCHDB_USER` | none | Required for CouchDB Basic auth; absent for JWT | Database username |
@@ -195,6 +197,7 @@ combination. [Source inventory and caveats](docs/superpowers/specs/2026-11-23-se
 | Hidden File Sync / customization sync | `i:`, `ix:` namespaces | Not supported | No local vault folder; hidden ignore files can be read internally |
 | Plugin sync / `usePluginSyncV2` | `ps:` namespace / Boolean | Not supported | Service documents excluded from ordinary tools |
 | Tweak mismatch/auto-accept flags | Boolean | Deliberate difference | Local env policy; no device registration or PREFERRED publication |
+| YAML anchors / aliases | Note bytes, parsed by host tools | Properties supported | Memoised projection; [expanded-node/depth budgets](docs/frontmatter-properties.md) affect only properties/tags |
 | Transport deadlines / SDK attempts | Device-local configuration | Local overrides | See environment table; unconditional S3 publication always single attempt |
 | Reflection/request/cache/concurrency tuning | Various local device options | Not supported as device settings | No host reflection or plugin request engine; [full inventory](docs/superpowers/specs/2026-11-23-settings-parity.md#ж-other-tweak_values-and-production-evidence-boundary) |
 
@@ -202,6 +205,14 @@ Real-server coverage includes the 60-row pairwise matrix on both backends.
 It does not establish every setting combination on every server.
 
 ## How the peer differs from a device
+
+Properties/tags resolve YAML anchors and aliases, including reused containers.
+Untouched top-level key text survives edits byte-for-byte. A streaming preflight
+bounds expanded nodes (default 1000000) and nesting depth (200), both adjustable
+with the environment table. Cycles have no finite JSON representation. Typed
+refusals leave the note intact and synced and direct callers to fetch/edit raw
+note text. These are property-tool budgets, not file sync limits;
+[details and recovery](docs/frontmatter-properties.md).
 
 Transport defaults remain 5 s connect / 30 s I/O and 5 s selection requests;
 all are configurable in the environment table. CouchDB pool waits now use the

@@ -248,22 +248,22 @@ def test_invalid_yaml_raises():
         set_properties(text, {"a": 1})
 
 
-def test_reject_aliases_depth_and_node_budget():
-    from frontmatter import _to_plain
+def test_aliases_depth_and_node_budget():
+    from frontmatter import _to_plain, FrontmatterLimits
     shared = [1, 2]
-    with pytest.raises(FrontmatterError, match='aliases'):
-        _to_plain({'a': shared, 'b': [shared] * 8})
+    result = _to_plain({'a': shared, 'b': [shared] * 8})
+    assert result['b'][0] == result['a']
     value = 'leaf'
     for _ in range(34):
         value = [value]
-    with pytest.raises(FrontmatterError, match='depth'):
-        _to_plain(value)
+    assert _to_plain(value) == value
+    assert len(_to_plain(list(range(10001)))) == 10001
     with pytest.raises(FrontmatterError, match='nodes'):
-        _to_plain(list(range(10001)))
+        _to_plain(list(range(10001)), limits=FrontmatterLimits(max_nodes=10000))
     assert _to_plain({'a': [{'b': 2}]}) == {'a': [{'b': 2}]}
 
 
-def test_yaml_alias_bomb_rejected():
+def test_small_yaml_alias_graph_accepted():
     text = '---\na: &a [one, two]\nb: &b [*a, *a, *a]\nc: [*b, *b, *b]\n---\nbody'
-    with pytest.raises(FrontmatterError, match='aliases'):
-        get_properties(text)
+    props = get_properties(text)
+    assert props['c'][0][0] == props['a']

@@ -1,0 +1,78 @@
+{
+  "generator_sha256": "9b3da82b2004f25c59bb64ec8dd28bdbda19d47f18fcce8beb85a15c075dd362",
+  "upstream_commit": "484c164450d61deb2e301582b60cb9b5f9fa977f",
+  "node": "v26.13.1",
+  "dependencies": [],
+  "sources": [
+    {
+      "file": "src/services/base/VaultService.ts",
+      "sha256": "33cde242bd041fa4dec3e1bf66412a53795e2caf6f26955070024e2df88db079"
+    }
+  ],
+  "citations": [
+    "src/services/base/VaultService.ts:73-81",
+    "src/managers/EntryManager/EntryManagerImpls.ts:253-280"
+  ],
+  "vectors": [
+    {
+      "name": "nodes-10001",
+      "size": 20024,
+      "input_sha256": "2aa952031536cbd1299b807a5d5023df85911e272858e1717e34002d11b4d885",
+      "too_large": false
+    },
+    {
+      "name": "depth-34",
+      "size": 90,
+      "input_sha256": "aa0a37e6fac60c16b9f20c68f3786bbe6209f063d1a812f2ce4a9f74fb443ee5",
+      "too_large": false
+    },
+    {
+      "name": "alias-sequence",
+      "size": 31,
+      "input_sha256": "fd62ec93efc8c6efb3e61dfdfd6663490f3f4d45ab2b129c37b4b3cdb57089a8",
+      "too_large": false
+    },
+    {
+      "name": "alias-scalar",
+      "size": 32,
+      "input_sha256": "34e2dadf182ab65ffa8a4762c704354e8b5d36d61f4baa80948018f6cc92cddb",
+      "too_large": false
+    },
+    {
+      "name": "alias-mapping",
+      "size": 32,
+      "input_sha256": "2a43e60b1fbdab4adf34ce66b723b7cbddca5ba9972ba72077902aa46e27957b",
+      "too_large": false
+    },
+    {
+      "name": "alias-chain",
+      "size": 40,
+      "input_sha256": "77c81cd4296294a3643266a77f972e68a1a533e788a6e6c827affaab8c0850b6",
+      "too_large": false
+    },
+    {
+      "name": "alias-cycle",
+      "size": 24,
+      "input_sha256": "be6ccb15a9fa746ec16de492c5ae0568e87348934cba63be606e78c544bd63ca",
+      "too_large": false
+    },
+    {
+      "name": "billion-laughs",
+      "size": 563,
+      "input_sha256": "c22fd3f7fb00b8dd22d30e72121a9aa6980c4752267ba317e56b2109d29b214f",
+      "too_large": false
+    },
+    {
+      "name": "depth-1000",
+      "size": 2018,
+      "input_sha256": "9c044e7bf3b67040633669566e4928e2a24a97ab39723dac6488cc91f7d642b0",
+      "too_large": false
+    },
+    {
+      "name": "million-nodes",
+      "size": 2000016,
+      "input_sha256": "9e936f15d4c9903d42cdf1e7ce0ac938ef5af2f30d3b180288367a9737867c64",
+      "too_large": false
+    }
+  ]
+}

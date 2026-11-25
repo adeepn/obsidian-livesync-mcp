@@ -955,3 +955,39 @@ use configured attempts; unconditional fallback upload stays single-attempt
 to preserve outcome-unknown semantics after a lost response. Native source:
 commonlib MinioStorageAdapter.ts:70-80,132-145 and targetFilter.ts:132-149.
 Tests exercise actual botocore transport response loss, including 412 repetition.
+
+
+### 2026-11-25 — F6 operational limits
+
+[DECISION] Resolve YAML scalar/container aliases with memoised plain projection
+and cycle-safe YAML-event preflight. Default expanded-node budget 1000000 and
+depth 200 accept Task D's 10001-item, depth-34 and reused-container reproducers.
+Both positive integer limits are configurable. Typed nodes/depth/alias expansion,
+invalid YAML and mapping-required errors retain raw-note access; valid YAML is
+never called invalid merely because a budget was reached. Creation refusals
+explicitly state that no note was created. Source-span edits preserve untouched
+key bytes, including anchors/aliases, merge keys, explicit complex keys, comments
+and flow punctuation. Unsafe dangling-anchor edits decline before publication.
+
+[GOTCHA] Measured default-budget peak process RSS: repeated-million read
+1085194240 bytes / 41.870 s; distinct-million read 771342336 bytes / 45.474 s;
+near-million scalar-key edit 1723285504 bytes / 139.656 s. Provision at least
+4 GiB headroom per concurrent near-limit edit plus server baseline. Billion-laughs
+read/edit refuses before round-trip construction in approximately 0.002 s and
+under 20 MB process RSS. These measured cases are not portable guarantees;
+Python/YAML runtime recursion remains a separately named real constraint.
+
+[DECISION] Transport overrides preserve existing defaults except CouchDB pool
+now follows the 30-second I/O value. Configured S3 attempts apply to list/get/HEAD
+and conditional creates; unconditional fallback PUT is always single-attempt.
+A conditional terminal error cannot erase uncertainty from earlier attempts;
+a retried unsupported response also refuses outcome-unknown instead of entering
+fallback. A 412 remains already-exists and can allocate a duplicate immutable
+payload candidate; no overwrite occurs. See the exact matrix in s3-journal.md.
+
+Native admission oracle source: commonlib VaultService.ts:73-81, byte ingestion
+EntryManagerImpls.ts:253-280. Transport sources: MinioStorageAdapter.ts:70-80,132-145
+and targetFilter.ts:132-149. The plugin does not parse YAML during sync; property
+projection assertions define the peer tool contract rather than invent a host
+parser oracle. Node v26.13.1 uses builtins only, no published packages needed.
+Fixture SHA256: `eb72adde821251b3b4be28ef8a427570a04165fdd70e96dcac65807b154fd709`.

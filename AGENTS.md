@@ -238,3 +238,14 @@ injected `config.Config`. That same object controls client authentication, publi
 URL, host, port and backend startup. `run.py` loads dotenv before application
 construction; alternative launchers must supply their environment themselves.
 Restart an application after changing its configuration.
+
+
+F6 property projection: `frontmatter.py` preflights YAML events before
+round-trip construction, memoises aliases and binds `FrontmatterLimits` through
+the per-tool context. `tests/test_frontmatter_limits.py` covers aliases, bombs
+and byte preservation; `tests/test_frontmatter_tools_limits.py` covers both
+backend doubles and value-free typed errors.
+`scripts/extract_frontmatter_admission_vectors.mjs` executes the pinned native
+size predicate (Node builtins, no packages) into
+`tests/fixtures/frontmatter_admission_upstream.json`. This is admission evidence,
+not an invented plugin YAML parser oracle. See `docs/frontmatter-properties.md`.

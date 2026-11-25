@@ -48,7 +48,7 @@ from storage_couchdb import CouchDBBackend
 from storage_journal import JournalBackend
 from object_storage import Boto3ObjectStorage
 from frontmatter import (
-    FrontmatterError, get_properties, split_frontmatter, set_properties,
+    FrontmatterError, FrontmatterLimits, frontmatter_limits, get_properties, split_frontmatter, set_properties,
     delete_properties, add_tags, remove_tags, insert_after_frontmatter,
 )
 from livesync_format import (ForbiddenPathError, PATH_IDENTITY_LEGACY,
@@ -61,6 +61,8 @@ from oauth_provider import SimpleOAuthProvider
 def _configure_device_policy(result, cfg):
     result.disable_checking_config_mismatch = getattr(cfg, 'disable_checking_config_mismatch', False)
     result.auto_accept_compatible_tweak = getattr(cfg, 'auto_accept_compatible_tweak', True)
+    result.frontmatter_max_nodes = getattr(cfg, 'frontmatter_max_nodes', 1_000_000)
+    result.frontmatter_max_depth = getattr(cfg, 'frontmatter_max_depth', 200)
     result.selection_timeout_seconds = getattr(cfg, 'selection_timeout_seconds', 5.0)
     result.selection_only = getattr(cfg, 'selection_only', '')
     result.selection_ignore = getattr(cfg, 'selection_ignore', '')
@@ -334,10 +336,14 @@ def _tool_errors(
             from publication_notices import publication_notices, notice_text
             notices = []
             token = publication_notices.set(notices)
+            fm_token = frontmatter_limits.set(FrontmatterLimits(
+                max_nodes=getattr(_backend(), 'frontmatter_max_nodes', 1_000_000),
+                max_depth=getattr(_backend(), 'frontmatter_max_depth', 200)))
             try:
                 result = await handler(*args, **kwargs)
                 return notice_text(result, notices)
             finally:
+                frontmatter_limits.reset(fm_token)
                 publication_notices.reset(token)
         except (regex_runner.RegexTimeoutError, regex_runner.RegexOutputExceeded) as error:
             return error.format()
@@ -383,8 +389,8 @@ def _tool_errors(
 
         except ForbiddenPathError:
             return "Error: forbidden vault path."
-        except FrontmatterError:
-            return "Error: invalid YAML frontmatter."
+        except FrontmatterError as error:
+            return error.for_creation() if operation == "note create" else error.public_message
         except Exception as error:
             try:
                 arguments = signature.bind(*args, **kwargs)
@@ -693,9 +699,9 @@ async def _tags(metadata=None) -> dict:
             try:
                 props = get_properties(text)
                 _, body = split_frontmatter(text)
-            except FrontmatterError:
+            except FrontmatterError as error:
                 skipped.append(path)
-                errors[path] = "Error: invalid YAML frontmatter."
+                errors[path] = error.public_message
                 continue
             tags = props.get("tags", [])
             if isinstance(tags, str):

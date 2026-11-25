@@ -126,6 +126,8 @@ class Config:
     regex_max_output_bytes: int = 0
     regex_timeout_seconds: float = 10.0
     selection_timeout_seconds: float = 5.0
+    frontmatter_max_nodes: int = 1_000_000
+    frontmatter_max_depth: int = 200
     scan_max_notes: int = 0
     scan_max_bytes: int = 0
     scan_max_seconds: float = 20.0
@@ -575,6 +577,8 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
         regex_max_output_bytes=regex_max_output_bytes,
         regex_timeout_seconds=regex_timeout_seconds,
         selection_timeout_seconds=selection_timeout_seconds,
+        frontmatter_max_nodes=_positive_transport(env, "LIVESYNC_FRONTMATTER_MAX_NODES", 1_000_000, integer=True),
+        frontmatter_max_depth=_positive_transport(env, "LIVESYNC_FRONTMATTER_MAX_DEPTH", 200, integer=True),
         scan_max_notes=scan_limits[0],
         scan_max_bytes=scan_limits[1],
         scan_max_seconds=scan_max_seconds,

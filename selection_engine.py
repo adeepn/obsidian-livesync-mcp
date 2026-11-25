@@ -9,6 +9,8 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 RUNNER = Path(__file__).parent / 'vendor/selection/runner.mjs'
+# commonlib serviceFeatures/targetFilter.ts:132-149 has no native deadline.
+# This local worker safety deadline is adjustable per configured application.
 TIMEOUT = 5
 
 

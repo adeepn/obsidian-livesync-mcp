@@ -230,3 +230,15 @@ from result changes; never hand-edit arrays or expected IDs. Record the new
 fixture SHA256 and preserve acquisition provenance in review evidence. JWT's
 random synthetic key fixture is not expected to regenerate byte-identically;
 regenerate its dependent refresh fixture against whichever baseline is selected.
+
+
+### Frontmatter admission
+
+`node scripts/extract_frontmatter_admission_vectors.mjs /tmp/settings-parity-commonlib /tmp/frontmatter_admission_upstream.json`
+executes `VaultService.ts:73-81` at the pin using Node 26.13.1 builtins. No
+published packages are required. The committed
+`tests/fixtures/frontmatter_admission_upstream.json` records source/generator
+hashes and note digests; `tests/test_frontmatter_limits.py` consumes it.
+LiveSync stores Blob bytes without YAML parsing (`EntryManagerImpls.ts:253-280`);
+this oracle establishes admission only, while property projection tests define
+the additional peer JSON tool behaviour.
