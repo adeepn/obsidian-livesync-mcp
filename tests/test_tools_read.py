@@ -203,10 +203,11 @@ async def test_search_regex_and_invalid_pattern(tools):
 
 
 async def test_get_backend_couchdb():
-    from config import CouchDBConfig
+    from config import load_config
     from storage_couchdb import CouchDBBackend
-    cfg = SimpleNamespace(backend="couchdb", couchdb=CouchDBConfig(
-        url="http://localhost:5984", user="test", password="test", database="vault"), scan_max_notes=10000, scan_max_bytes=67108864, text_scan_max_bytes=8388608, text_verdict_cache_entries=4096, sync_max_size_mb=None)
+    cfg = load_config({'LIVESYNC_BACKEND': 'couchdb', 'COUCHDB_USER': 'test',
+        'COUCHDB_PASSWORD': 'test-password', 'COUCHDB_DATABASE': 'vault',
+        'MCP_API_KEY': 'test-key'})
     backend = server.get_backend(cfg)
     assert isinstance(backend, CouchDBBackend)
     await backend.close()
