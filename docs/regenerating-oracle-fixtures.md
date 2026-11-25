@@ -242,3 +242,15 @@ hashes and note digests; `tests/test_frontmatter_limits.py` consumes it.
 LiveSync stores Blob bytes without YAML parsing (`EntryManagerImpls.ts:253-280`);
 this oracle establishes admission only, while property projection tests define
 the additional peer JSON tool behaviour.
+
+## Installed selection provenance
+
+`scripts/vendor_selection.py` writes `vendor/selection/installed-sha256.json`
+for every installed vendor file, the worker and `scripts/selection_provenance.mjs`.
+Runtime extraction refreshes the manifest after replacing the pinned runtime.
+Production verifies the full manifest before launching Node; workers and oracle
+generators verify again before importing vendor modules. Missing, modified or
+unlisted files refuse with provenance-mismatch. Restore the checkout or regenerate
+from the pinned source and integrity-verified published archives, then restart.
+The manifest is repository integrity evidence, not a signature against a checkout
+attacker who can replace both the verifier and manifest.

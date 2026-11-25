@@ -21,3 +21,7 @@ const matcher=paths.slice(paths.indexOf('const matchOpts:'),paths.indexOf('\n}',
 const header="// Generated from pinned commonlib. Regenerate with scripts/extract_selection_runtime.mjs.\nimport {Minimatch} from './node_modules/minimatch/dist/esm/index.js';\nconst unique = a => [...new Set(a)];\n";
 fs.writeFileSync('vendor/selection/upstream.mjs',header+stripTypeScriptTypes(parser+list+custom+matcher)+'\nexport {parseCustomRegExpList};\n');
 fs.writeFileSync('vendor/selection/upstream-sources.json',JSON.stringify({pin,hashes},null,2)+'\n');
+
+// Regeneration changes retained bytes; refresh their installed manifest last.
+const {writeSelectionManifest}=await import('./selection_provenance.mjs');
+writeSelectionManifest();

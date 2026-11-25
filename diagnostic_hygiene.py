@@ -191,12 +191,14 @@ class PublicDiagnostic:
         if self.code is DiagnosticCode.SELECTION_ENGINE:
             cause = self.selection_cause if self.selection_cause in {
                 'node-missing', 'node-version-too-old', 'timeout', 'nonzero-exit',
-                'malformed-output', 'runner-selftest-failed', 'worker-unavailable',
+                'malformed-output', 'runner-selftest-failed', 'worker-unavailable', 'provenance-mismatch',
             } else '<value hidden>'
             result += ': ' + cause
             if self.status is not None:
                 result += f" (status {numeric_text(self.status, kind='exit')})"
-            if cause == 'timeout':
+            if cause == 'provenance-mismatch':
+                result += '; restore or regenerate the verified selection installation, then restart'
+            elif cause == 'timeout':
                 result += '; raise LIVESYNC_SELECTION_TIMEOUT_SECONDS and restart, or simplify selection rules'
             else:
                 result += '; install Node.js 22+ in the service PATH or disable selection filters'

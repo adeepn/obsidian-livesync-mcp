@@ -61,10 +61,19 @@ def run(args, *, timeout=None, **kwargs):
 
 
 def evaluate(payload):
+    _verify_installation()
     try:
         return validate_response(json.loads(run(['node', str(RUNNER)], input=json.dumps(payload))))
     except (ValueError, UnicodeError) as exc:
         raise EngineFailure('malformed-output') from exc
+
+
+def _verify_installation():
+    from selection_provenance import verify_selection_files, SelectionProvenanceError
+    try:
+        verify_selection_files(Path(__file__).parent)
+    except SelectionProvenanceError:
+        raise EngineFailure('provenance-mismatch') from None
 
 
 class SelectionWorker:
@@ -85,6 +94,7 @@ class SelectionWorker:
     def _start(self):
         import threading
         from collections import deque
+        _verify_installation()
         capability_version_check(timeout=self.timeout)
         try:
             self.process = subprocess.Popen(

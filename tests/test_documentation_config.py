@@ -1034,3 +1034,8 @@ def test_transport_owned_headers_documented():
         text = (ROOT / name).read_text()
         for field in ("Content-Length", "Transfer-Encoding", "Host", "Proxy-*"):
             assert field in text
+
+
+def test_selection_installed_provenance_documented():
+    for name in ("AGENTS.md", "docs/regenerating-oracle-fixtures.md", "docs/selection-filters.md"):
+        assert "installed-sha256.json" in (ROOT / name).read_text()

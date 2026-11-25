@@ -18,8 +18,10 @@ This repository is a small Python MCP server for accessing an Obsidian LiveSync 
 - `livesync_format.py`: LiveSync document/chunk codecs, device disk-ingestion document typing, path rules, and vault validation.
 - `content_splitter.py`: pinned V1/V2/V2-segmenter/V3 and legacy migration, UTF-16/UTF-8 boundaries and all supported unencrypted chunk hashes.
 - `device_selection.py`: shared backend admission, ignore-file loading and bounded verdict caching.
+- `selection_provenance.py` / `scripts/selection_provenance.mjs`: verify the complete installed SHA256 manifest before worker launch or oracle imports.
 - `selection_engine.py`: optional Node capability checks, persistent worker and response validation.
 - `selection_worker.mjs`: id-correlated JSON-lines selection worker with bounded lifecycle.
+- `vendor/selection/installed-sha256.json`: hashes every retained vendor file, `selection_worker.mjs` and the JS verifier; regenerate after changing those files.
 - `vendor/selection/`: pinned upstream selection functions and minimatch dependency tree, source URLs and checksums; inspect provenance before updating.
 - `hosting_logging.py`: closed SDK/HTTP log records installed at application construction.
 - `diagnostic_hygiene.py` / `diagnostic_codes.py`: typed public fields, closed reasons, control escaping and opt-in bounded debug sink.

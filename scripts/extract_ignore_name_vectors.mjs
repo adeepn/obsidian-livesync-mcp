@@ -5,6 +5,8 @@ import vm from 'node:vm';
 import {execFileSync} from 'node:child_process';
 import {stripTypeScriptTypes} from 'node:module';
 import {createHash} from 'node:crypto';
+import {verifySelectionFiles} from './selection_provenance.mjs';
+verifySelectionFiles();
 const [root,archives,out]=process.argv.slice(2),pin='484c164450d61deb2e301582b60cb9b5f9fa977f';
 const source_sha256={},sha=b=>createHash('sha256').update(b).digest('hex');
 function read(file){const s=fs.readFileSync(root+'/src/'+file,'utf8');if(s!==execFileSync('git',['-C',root,'show',pin+':src/'+file],{encoding:'utf8'}))throw Error('Modified source');source_sha256[file]=sha(s);return s;}

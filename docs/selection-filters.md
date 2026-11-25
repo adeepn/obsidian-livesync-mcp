@@ -119,3 +119,8 @@ controls capability/version checks and each persistent worker request. Raise it
 and restart when valid selection rules need longer. A deadline stops the worker
 and declines that request; simplify pathological regexes or increase the value.
 Upstream `serviceFeatures/targetFilter.ts:132-149` has no corresponding deadline.
+
+Installed vendor bytes and the worker are verified against
+`vendor/selection/installed-sha256.json` before Node launch/import. A
+`provenance-mismatch` refusal means restore or regenerate the verified installation
+and restart; changing vault settings cannot repair installed code.

@@ -1086,3 +1086,9 @@ from native finalizeRequest is documented; final prepared requests are checked.
 and external projection, rejected neighbour isolation, unknown codes and legacy
 count projection. The exact-type-to-isinstance mutant is killed by five count
 fields, closing the final architecture reviewer whole-suite survivor.
+
+### 2026-11-26 — F9-7 installed selection provenance
+
+[DECISION] Per-file SHA256 manifest covers every installed vendor byte, worker
+and JS verifier; Python checks before Node launch, JS before imports. Acquisition
+integrity remains independent. Scratch tamper and missing-file tests fail closed.

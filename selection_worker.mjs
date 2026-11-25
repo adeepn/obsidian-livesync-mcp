@@ -1,6 +1,8 @@
 // Transport wrapper; evaluation body mirrors the unchanged pinned runner.
 import readline from 'node:readline';
-import {parseCustomRegExpList,isAcceptedAll} from './vendor/selection/upstream.mjs';
+import {verifySelectionFiles} from './scripts/selection_provenance.mjs';
+verifySelectionFiles();
+const {parseCustomRegExpList,isAcceptedAll}=await import('./vendor/selection/upstream.mjs');
 async function evaluate(input) {
 try {
  const flags=input.case_sensitive?'':'i';

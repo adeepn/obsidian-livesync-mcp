@@ -206,3 +206,6 @@ Content-Length, Transfer-Encoding, Host, Connection, Keep-Alive, TE, Trailer,
 Upgrade and all Proxy-* fields are transport-owned and refused case-insensitively
 for both storages. Remove these entries and configure routing/proxy transport
 separately. Other headers still apply after S3 signing.
+
+Active selection verifies installed vendor/worker hashes before execution;
+restore or regenerate the verified installation after a provenance-mismatch.

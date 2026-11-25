@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+- Verify retained selection modules and worker bytes before execution.
+
 - Refuse custom routing, framing and hop-by-hop headers for both storage transports.
 
 - Bound CouchDB inflation before data projection and publication; expose LIVESYNC_COUCHDB_MAX_INFLATED_BYTES for larger legitimate pieces.

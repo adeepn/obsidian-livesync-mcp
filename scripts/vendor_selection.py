@@ -48,3 +48,11 @@ for name in ('minimatch', 'brace-expansion', 'balanced-match',
         'sha256': hashlib.sha256(data).hexdigest(), 'integrity': integrity,
     }
 Path('vendor/selection/sources.json').write_text(json.dumps(manifest, indent=2) + '\n')
+
+# Manifest covers every installed byte, not just acquisition archives.
+base = Path('vendor/selection')
+files = {str(p): hashlib.sha256(p.read_bytes()).hexdigest()
+         for p in sorted(base.rglob('*')) if p.is_file() and p.name != 'installed-sha256.json'}
+for name in ('selection_worker.mjs', 'scripts/selection_provenance.mjs'):
+    files[name] = hashlib.sha256(Path(name).read_bytes()).hexdigest()
+(base / 'installed-sha256.json').write_text(json.dumps({'version': 1, 'files': dict(sorted(files.items()))}, indent=2) + '\n')
