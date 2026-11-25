@@ -1,5 +1,6 @@
 """Pinned httplib.ts:67-212 JWT wire and refresh oracle (synthetic keys only)."""
 import base64
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -12,6 +13,7 @@ from storage_couchdb import CouchDBBackend
 from tests.couchdb_fake import make_fake_couchdb
 
 FIXTURE = json.loads(Path('tests/fixtures/jwt_upstream.json').read_text())
+REFRESH_FIXTURE = json.loads(Path('tests/fixtures/jwt_refresh_upstream.json').read_text())
 
 
 def env_for(vector=FIXTURE['vectors'][0]):
@@ -62,7 +64,7 @@ def test_refresh_oracle(v):
 def test_cached_token_boundary(algorithm, duration):
     # Pinned src/replication/httplib.ts:166-167 applies the zero fallback
     # before :181-196 evaluates the cached payload expiry (strict < and ~~).
-    # Both durations have native wire/refresh expectations in jwt_upstream.json.
+    # Native lifecycle expectations reuse the original synthetic fixture keys.
     v = next(v for v in FIXTURE['vectors']
              if v['auth']['jwtAlgorithm'] == algorithm
              and v['auth']['jwtExpDuration'] == duration
@@ -71,11 +73,43 @@ def test_cached_token_boundary(algorithm, duration):
     g = generator(v, lambda: now[0])
     first = g.token()
     assert first.split('.')[:2] == v['token'].split('.')[:2]
-    for offset in (289, 290, 290.99):
+    native = next(row for row in REFRESH_FIXTURE['cache_vectors']
+                  if row['algorithm'] == algorithm and row['duration'] == duration)
+    refreshed = None
+    # httplib.ts:166-167 recomputes BOTH iat and exp for each generation;
+    # :181-196 then uses that refreshed expiry for the NEXT cache boundary.
+    for observation in native['observations']:
+        offset = observation['offset']
         now[0] = v['now'] + offset
-        assert g.token() == first
-    now[0] = v['now'] + 291
-    assert g.token() != first
+        token = g.token()
+        _, payload, _ = token.split('.')
+        actual = json.loads(base64.urlsafe_b64decode(payload + '=' * (-len(payload) % 4)).decode('latin1'))
+        expected = json.loads(observation['payload_json'])
+        assert actual['iat'] == expected['iat']
+        assert actual['exp'] == expected['exp']
+        assert actual == expected
+        assert token.split('.')[:2] == observation['token'].split('.')[:2]
+        if algorithm.startswith('HS'):
+            assert token == observation['token']
+        if offset <= 290.99:
+            assert token == first
+        elif offset == 291:
+            assert token != first
+            refreshed = token
+        elif offset <= 581.99:
+            assert token == refreshed
+        else:
+            assert token != refreshed
+
+
+def test_refresh_fixture_provenance():
+    assert REFRESH_FIXTURE['upstream_commit'] == '484c164450d61deb2e301582b60cb9b5f9fa977f'
+    assert REFRESH_FIXTURE['sources'] == FIXTURE['sources']
+    assert REFRESH_FIXTURE['generator_sha256'] == hashlib.sha256(Path('scripts/extract_jwt_vectors.mjs').read_bytes()).hexdigest()
+    assert REFRESH_FIXTURE['baseline_sha256'] == hashlib.sha256(Path('tests/fixtures/jwt_upstream.json').read_bytes()).hexdigest()
+    dependency, = REFRESH_FIXTURE['dependencies']
+    assert dependency['version'] == '0.1.57'
+    assert dependency['integrity'] == FIXTURE['dependencies'][0]['integrity']
 
 
 @pytest.mark.parametrize('updates,names', [

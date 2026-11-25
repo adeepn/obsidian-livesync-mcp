@@ -1,4 +1,6 @@
 // Node 26.13.1+: node scripts/extract_jwt_vectors.mjs COMMONLIB WHEELS_DIR WHEELS_TARBALL OUTPUT
+// Optional fifth argument: existing jwt_upstream.json; emit cache-lifecycle vectors
+// using its synthetic keys without regenerating the original fixture.
 // Execute the pinned JWTTokenGenerator, real published Computed and binary helpers.
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -8,7 +10,7 @@ import {createHash, webcrypto} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {pathToFileURL} from 'node:url';
 import {splitterDependencies} from './splitter_oracle_dependencies.mjs';
-const [root,wheels,archive,out] = process.argv.slice(2);
+const [root,wheels,archive,out,baseline] = process.argv.slice(2);
 const pin='484c164450d61deb2e301582b60cb9b5f9fa977f', sources={};
 const sha=b=>createHash('sha256').update(b).digest('hex');
 function read(file) {
@@ -40,6 +42,23 @@ vm.runInContext(stripTypeScriptTypes(convert.slice(convert.indexOf('export async
 const src=read('src/replication/httplib.ts');
 read('src/common/models/setting.const.defaults.ts');
 const Generator=vm.runInContext(stripTypeScriptTypes(src.slice(src.indexOf('export class JWTTokenGenerator'),src.indexOf('export class AuthorizationHeaderGenerator')).replace('export ',''))+';JWTTokenGenerator',ctx);
+if (baseline) {
+ const original = JSON.parse(fs.readFileSync(baseline, 'utf8'));
+ const cache_vectors = [];
+ for (const v of original.vectors.filter(v => v.now === 1806000000 && [0,5].includes(v.auth.jwtExpDuration))) {
+  const generator = new Generator(), observations = [];
+  // httplib.ts:166-167,181-196: two successive native cache boundaries.
+  for (const offset of [0,289,290,290.99,291,580,581,581.99,582]) {
+   now = v.now + offset;
+   const jwt = await generator.getJWT(v.auth);
+   observations.push({offset, header_json:JSON.stringify(jwt.header), payload_json:JSON.stringify(jwt.payload), token:jwt.token});
+  }
+  cache_vectors.push({algorithm:v.auth.jwtAlgorithm, duration:v.auth.jwtExpDuration, now:v.now, observations});
+ }
+ fs.writeFileSync(out, JSON.stringify({upstream_commit:pin, sources, node:process.version, dependencies:[dependency],
+  generator_sha256:sha(fs.readFileSync(import.meta.filename)), baseline_sha256:sha(fs.readFileSync(baseline)), cache_vectors}, null, 2)+'\n');
+ process.exit(0);
+}
 const pem=(label,b)=>`-----BEGIN ${label}-----\n${Buffer.from(b).toString('base64')}\n-----END ${label}-----`;
 const vectors=[], refresh=[];
 for(const alg of ['HS256','HS512','ES256','ES512']) {

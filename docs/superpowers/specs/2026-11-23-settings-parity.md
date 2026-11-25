@@ -812,3 +812,9 @@ its own deadline expires first. Neither path echoes the pattern or body.
 ### 2026-11-25 F3-1 — iterative scalar arrays
 
 [DECISION] Replace recursive array coercion with active-path iterative join shared by size admission and splitter parameters. Native fixtures cover depths 480/500/1000/5000, null/undefined, cycles and shared arrays. JSON decoder capacity and journal depth admission remain separate documented constraints; depth-5000 oracle execution records its enlarged Node stack.
+
+### 2026-11-25 F3-2 — regenerated JWT expiry coverage
+
+[DECISION] Pin exact regenerated iat/exp and HS256/HS512 token bytes at +291 seconds, retained cache through +581.99 and second refresh at +582 for numeric durations 0/5 and all four algorithms. Execute the pinned JWT generator with integrity-verified octagonal-wheels 0.1.57 and the original synthetic keys. The stale-expiry reviewer mutant now fails the committed boundary test; production JWT behavior is unchanged.
+
+The first F3 full run exposed line-addressed comparison inventory drift after the iterative helper grew. Preserve existing witnesses at relocated AST sites and replace the removed recursive null check with three native deep-scalar witnesses; no splitter behavior or oracle expectations change.

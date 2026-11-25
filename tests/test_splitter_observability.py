@@ -48,6 +48,11 @@ def test_comparison_equality_is_observable(entry):
                 return cell_run(module, row)
             except ValueError:
                 return ('refused',)
+    elif witness['kind'] == 'deep_scalar':
+        from tests.test_deep_scalar import FIXTURE, value_for
+        row = FIXTURE['rows'][witness['index']]
+        expected = row['primitive']
+        run = lambda module: module._splitter_property_key(value_for(row['recipe']))
     elif witness['kind'] == 'coercion':
         from tests.test_coercion_cells import ROWS, refuses
         row = ROWS[witness['index']]

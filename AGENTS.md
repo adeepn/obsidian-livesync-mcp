@@ -192,3 +192,5 @@ shapes and the incomplete-index pagination caveat.
 `scripts/extract_scalar_policy_vectors.mjs` executes the pinned VaultService size method and targetFilter truthiness gate with Node builtins only; `tests/fixtures/scalar_policy_upstream.json.gz` records source hashes and native predicate/equivalence vectors consumed by tweak and backend selection tests.
 
 `scripts/extract_deep_scalar_vectors.mjs` executes pinned size/cap/adjustment expressions with native JS builtins and records source hashes and Node stack flags. `tests/test_deep_scalar.py` covers deep scalar coercion, cyclic/shared arrays, both backend startups and journal refresh.
+
+`scripts/extract_jwt_vectors.mjs` accepts an optional fifth argument naming the original JWT fixture to emit cache-lifecycle expectations with the same synthetic keys. `tests/fixtures/jwt_refresh_upstream.json` covers two successive native cache boundaries, exact refreshed timestamps and HS token bytes.
