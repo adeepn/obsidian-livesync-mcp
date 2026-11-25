@@ -13,6 +13,7 @@ class DiagnosticCode(str, Enum):
     IGNORE_USE_CONFLICT = 'conflicting useIgnoreFiles settings; set LIVESYNC_USE_IGNORE_FILES explicitly'
     IGNORE_NAMES_CONFLICT = 'conflicting ignoreFiles settings; set LIVESYNC_IGNORE_FILES explicitly'
     COMPRESSION_BOOLEAN = 'enableCompression must be a boolean; correct the vault setting and restart'
+    COMPRESSION_PREFIX_INPUT = 'a literal reserved CouchDB compression prefix cannot be decoded; remove the prefix or upload bytes to a binary attachment path before retrying'
     COMPRESSED_DATA = 'invalid compressed CouchDB data; restore the document from a healthy device or backup before retrying'
     SPLITTER_CUSTOM_LOOP = 'customChunkSize: the plugin itself does not terminate for this input; use customChunkSize=0 (positive pieceSize)'
     SPLITTER_MINIMUM_LOOP = 'minimumChunkSize: the plugin itself does not terminate for this input; use minimumChunkSize=20 (or another positive minimumChunkSize)'

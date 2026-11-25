@@ -57,7 +57,7 @@ journal and repairs last-sent tracking on the next refresh, without another writ
 
 ## Typed publication notices
 
-Successful writes that alter caller bytes append a separate JSON record
+Successful writes whose read-back changes after ingestion or reserved-prefix interpretation append a separate JSON record
 `{"notices": [{"code": "legacy_bom_removed", "removed_bytes": 3, "metadata_size_preserved": true}]}`
 and one fixed sentence per code **after** the original tool result. The original
 result (including every JSON field and non-string message) stays verbatim;
@@ -72,6 +72,7 @@ never note bytes or remote values. Backend write outcomes also include a
 | `invalid_utf8_replaced` | `invalid_bytes` | Explicit lossy plain-text upload, or legacy text-Blob decoding, replaces malformed UTF-8 with U+FFFD. Ordinary malformed plain byte input still refuses with lossy_text guidance. |
 | `input_surrogates_replaced` | `count` | Blob USVString ingestion replaces unpaired surrogate units before splitting on either backend. Valid surrogate pairs combine without loss. |
 | `journal_surrogates_replaced` | `count` | Compact journal TextEncoder replaces unpaired units in emitted leaves, including cuts made by legacy splitters. Original chunk IDs remain; lossless CouchDB retains those units. |
+| `couchdb_marker_interpreted` | `chunks`, `metadata_size_preserved` | A literal reserved prefix in a CouchDB text leaf is read as encoded content, even when compression writes are off; original metadata size remains. Use a binary attachment path to preserve literal bytes. |
 
 Notices apply to create, all update modes, upload, canvas, template, properties
 and tags whenever their resulting publication performs a listed transformation.
@@ -84,3 +85,5 @@ The compatibility publication wrapper uses the same notice suffix. Non-string `m
 Projected-equivalent journal pieces retain a representative with replacement evidence even when a literal U+FFFD is the first colliding piece; replacement notices do not depend on piece order.
 
 Splitter loop, JSON primitive-conversion, binary data-loss and within-publication collision refusals use closed typed diagnostics through the MCP boundary. They name customChunkSize/minimumChunkSize (or the actual migration setting) and a fixed recovery; no free exception text is projected.
+
+New undecodable reserved-prefix pieces refuse before any chunk or metadata write, with binary-attachment recovery guidance. Valid marked pieces retain their original IDs/wire values and disclose interpretation on each successful publication; repeated publication compares the stored logical reader value without overwriting shared leaves. Journal pieces do not use CouchDB decoding.

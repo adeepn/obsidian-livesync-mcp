@@ -96,3 +96,5 @@ Properties and optional statistics still describe the full original note.
 Write tools append a separate typed `notices` record and fixed sentences after their original result whenever ingestion changes bytes. This applies to create, all update modes, upload, canvas, templates, properties and tags. See [notice codes and parsing](outcome-reporting.md#typed-publication-notices).
 
 `obsidian_vault_stats.selection_unresolved_ignore_names` is a typed warning count for active explicitly configured ignore names unresolved by the latest root/ancestor lookup. Missing/unusable names never refuse startup.
+
+CouchDB text writes with literal reserved compression prefixes append `couchdb_marker_interpreted` notices. Upload size/SHA continue to describe the saved read-back bytes. Undecodable prefixes refuse before publication; use a binary attachment path to preserve literal bytes.

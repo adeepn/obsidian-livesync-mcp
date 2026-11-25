@@ -760,3 +760,7 @@ its own deadline expires first. Neither path echoes the pattern or body.
 ### 2026-11-25 F1 independent-review follow-ups
 
 [DECISION] Keep replacement evidence for either collision order; refresh unresolved-name warnings from current lookups. Extend executable coercion evidence to own toString fields, lexical numeric overflow, empty/BOM inputs, NaN-cap/minimum interaction and zero strings whose first += becomes NaN. Preserve V1/V3 evaluation order and refuse negative-infinite V2 caps. Use closed typed diagnostics so all recovery instructions reach the caller. The obsolete integer modulo branch is removed; no claim that its historical equivalent mutant was killed.
+
+### 2026-11-25 F1-4 reserved-prefix audit
+
+[DECISION] Extend the same typed notice mechanism to the documented CouchDB reserved-prefix interpretation (compress.ts:49-71; RemoteService.ts:457). A valid 40-byte oracle piece reads as 1300 decoded bytes under either write setting; disclose this without changing IDs, wire data or metadata size. Refuse undecodable new prefixes before any mutation, with binary-attachment recovery; compare logical reader values for valid repeat publication. The unchanged compression fixture supplies all decoded expectations.

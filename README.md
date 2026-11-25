@@ -168,7 +168,7 @@ combination. [Source inventory and caveats](docs/superpowers/specs/2026-11-23-se
 | `usePathObfuscation` | false / true | Not supported when true | Startup refuses; see issue #4 |
 | `idDerivationVersion`, `idDerivationKey` | 0 legacy / 1 keyed | Identical for unencrypted vaults | Validate version/key configuration; unencrypted IDs follow upstream |
 | `useJWT`, `jwtAlgorithm`, `jwtKey`, `jwtKid`, `jwtSub`, `jwtExpDuration` | HS256 / HS512 / ES256 / ES512 | Identical JWT wire format | Explicit connection env; zero duration uses five minutes; per-backend cached Bearer tokens, raw EC signatures; [setup](docs/connecting-storage.md#couchdb-jwt-authentication) |
-| `enableCompression` | false / true | Identical | CouchDB always reads compressed data; writes follow the vault (absent: false). Non-lossy CR/LF, surrogate and BOM exceptions below; journal forces off |
+| `enableCompression` | false / true | Identical | CouchDB always reads compressed data; writes follow the vault (absent: false). Non-lossy CR/LF, surrogate and BOM exceptions below; reserved literal prefixes disclose decoded reads or refuse invalid input; journal forces off |
 | `suspendParseReplicationResult` | false / true | Deliberate difference | Reads remain available from DB; no filesystem reflection stage |
 | Hidden File Sync / customization sync | `i:`, `ix:` namespaces | Not supported | No local vault folder; hidden ignore files can be read internally |
 | Plugin sync / `usePluginSyncV2` | `ps:` namespace / Boolean | Not supported | Service documents excluded from ordinary tools |
@@ -191,7 +191,10 @@ combination. [Source inventory and caveats](docs/superpowers/specs/2026-11-23-se
   a leading BOM uncompressed to prevent Blob conversion/decoding losses.
   Reads of existing compressed text match device Blob.text(), including U+FFFD
   replacement and BOM removal. Invalid base64/deflate refuses with a sanitized
-  error: restore the document from a healthy device or backup. See
+  error: restore the document from a healthy device or backup. Literal reserved
+  compression prefixes in new text pieces retain device decoding with typed
+  notices; undecodable prefixes refuse before publication. Use a binary
+  attachment path to preserve literal prefix bytes. See
   [compressed document format](docs/vault-format.md#couchdb-compression).
 
 - E2EE and obfuscated paths are unsupported; use an unencrypted, unobfuscated

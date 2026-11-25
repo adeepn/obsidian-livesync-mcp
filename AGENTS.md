@@ -184,3 +184,5 @@ shapes and the incomplete-index pagination caveat.
 `scripts/extract_chunk_parameter_vectors.mjs` directly executes the pinned cap expression plus native JSON ToPrimitive/ToNumber/addition probes, retaining lexical overflow inputs. Coercion cell generator modes INCLUDE_MINIMUM, COERCION_EDGES, CROSS_EDGES, INGRESS_EDGES, OVERFLOW_EDGES and ZERO_EDGES cover parameter types, evaluation order and true loops.
 
 `content_splitter.SplitterRefusal` is a codec-owned ValueError with a typed diagnostic; storage backends map it to WriterParameterRefused before publication. Codec modules retain their storage-independent boundary.
+
+`tests/test_reserved_compression_prefix.py` reuses the committed native compression oracle for both write settings, repeat/fresh-reader lifecycle, typed notices, invalid-prefix preflight and shared-leaf protection.

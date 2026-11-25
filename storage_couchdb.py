@@ -59,7 +59,8 @@ from storage_base import TextBudgetExceeded
 from text_eligibility import (TextProjection, DEFAULT_TEXT_SCAN_MAX_BYTES,
                               DEFAULT_TEXT_VERDICT_CACHE_ENTRIES)
 
-from couchdb_compression import compress_doc, decompress_doc
+from couchdb_compression import (compress_doc, decompress_doc, decompress_data,
+                                 CompressedDataError, MARK_SHIFT_COMPRESSED)
 from wire_encoding import json_stringify
 
 import base64
@@ -984,13 +985,16 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
         absent, so rewriting identical content never conflicts.
         """
         chunk_id = chunk_id_for_piece(data, hash_alg=self._splitter.hash_alg)
+        # C:pouchdb/compress.ts:49-71: stored leaves are always read through
+        # one decompression pass, including already-marked caller pieces.
+        expected_data = decompress_data(data)
         existing = await self._get_doc(chunk_id)
         if existing is not None:
             if (
                 not existing.get("e_")
                 and not existing.get("deleted")
                 and existing.get("type") == "leaf"
-                and existing.get("data") == data
+                and existing.get("data") == expected_data
             ):
                 return chunk_id  # content-addressed reuse, no PUT
             logger.warning('note <omitted>: chunk <omitted> under the computed id holds different data; refusing to reuse or overwrite it')
@@ -1011,7 +1015,7 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
                 and not winner.get("e_")
                 and not winner.get("deleted")
                 and winner.get("type") == "leaf"
-                and winner.get("data") == data
+                and winner.get("data") == expected_data
             ):
                 raise ConcurrentModification(PublicDiagnostic(DiagnosticCode.CANNOT_BE_WRITTEN_CONTENT_CHUNK_IS_ENCRYPTED_OR_CHANGED_CONCURRENTLY, paths=(DiagnosticPath(path, remote=False),))) from None
         return chunk_id
@@ -1143,7 +1147,19 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
         # DatabaseWriteLayer.ts:24-49 accepts duplicate 409s. Lossless leaves
         # cannot represent distinct data under one id: preflight before PUTs.
         unique = {}
+        marker_chunks = 0
         for piece in pieces:
+            # C:pouchdb/compress.ts:54,68-69 reserves this leaf prefix even
+            # with writes uncompressed. Validate ALL pieces before any PUT.
+            if piece.startswith(MARK_SHIFT_COMPRESSED):
+                try:
+                    decoded = decompress_data(piece)
+                except CompressedDataError:
+                    raise StorageError(PublicDiagnostic(
+                        DiagnosticCode.COMPRESSION_PREFIX_INPUT,
+                        paths=(DiagnosticPath(path, remote=False),),
+                    )) from None
+                marker_chunks += int(decoded != piece)
             chunk_id = self._splitter.chunk_id_for_piece(piece)
             if chunk_id in unique and unique[chunk_id] != piece:
                 raise StorageError(PublicDiagnostic(DiagnosticCode.CHUNK_COLLISION_RECOVERY))
@@ -1169,7 +1185,11 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
         body["_id"] = doc_id
         body["path"] = canonical_path(path)
         body["_rev"] = await self._put_doc(doc_id, body)
-        return complete_publication(self._meta_from_doc(body), split_notices(content, self._splitter.version))
+        notices = split_notices(content, self._splitter.version)
+        if marker_chunks:
+            notices.append({'code': 'couchdb_marker_interpreted', 'chunks': marker_chunks,
+                            'metadata_size_preserved': True})
+        return complete_publication(self._meta_from_doc(body), notices)
 
     async def delete_note(
         self, path: str, expected_rev: str | None = None

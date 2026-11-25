@@ -5,21 +5,25 @@ from typing import Literal, TypedDict
 
 class PublicationNotice(TypedDict, total=False):
     code: Literal['legacy_bom_removed', 'invalid_utf8_replaced',
-                  'input_surrogates_replaced', 'journal_surrogates_replaced']
+                  'input_surrogates_replaced', 'journal_surrogates_replaced',
+                  'couchdb_marker_interpreted']
     removed_bytes: int
     metadata_size_preserved: bool
     invalid_bytes: int
     count: int
+    chunks: int
 
 publication_notices: ContextVar[list[PublicationNotice] | None] = ContextVar('publication_notices', default=None)
 
 _SENTENCES = {
+    'couchdb_marker_interpreted': 'CouchDB interprets a reserved compression prefix in text chunks as encoded data and reads return decoded content while the original metadata size is retained; devices refuse a nonzero size mismatch unless processSizeMismatchedFiles is enabled; use a binary attachment path to preserve literal prefix bytes.',
     'legacy_bom_removed': 'The legacy splitter removed the leading UTF-8 BOM but retained the original metadata size; receiving devices refuse filesystem reflection unless processSizeMismatchedFiles is enabled.',
     'invalid_utf8_replaced': 'Invalid UTF-8 bytes were replaced with U+FFFD during text ingestion.',
     'input_surrogates_replaced': 'Blob text ingestion replaced unpaired surrogate units with U+FFFD before splitting.',
     'journal_surrogates_replaced': 'The LiveSync journal transport replaces unpaired surrogate units with U+FFFD; the note is stored exactly as devices would store it.',
 }
 _SCHEMAS = {
+    'couchdb_marker_interpreted': {'chunks': int, 'metadata_size_preserved': bool},
     'legacy_bom_removed': {'removed_bytes': int, 'metadata_size_preserved': bool},
     'invalid_utf8_replaced': {'invalid_bytes': int},
     'input_surrogates_replaced': {'count': int},

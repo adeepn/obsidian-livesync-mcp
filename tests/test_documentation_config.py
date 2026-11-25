@@ -354,3 +354,9 @@ def test_json_coercion_recovery_documented():
     text = (ROOT / 'docs/vault-format.md').read_text()
     for fragment in ('noncallable toString','lexical overflow','zero-preserving addition','closed typed diagnostics'):
         assert fragment in text
+
+
+def test_reserved_compression_prefix_notice_documented():
+    for name in ('docs/outcome-reporting.md','docs/vault-format.md','docs/tools.md'):
+        assert 'couchdb_marker_interpreted' in (ROOT / name).read_text()
+    assert 'binary attachment path to preserve literal prefix bytes' in ' '.join((ROOT / 'README.md').read_text().split())
