@@ -48,13 +48,17 @@ async def test_reviewer_bomb_refused_before_text_admission(batch):
         await backend.close()
 
 
-async def test_reserved_prefix_budget_precedes_publication():
+@pytest.mark.parametrize('prefix', ['', 'safe\n'])
+async def test_reserved_prefix_budget_precedes_publication(prefix):
     wire = next(v['wire'] for v in VECTORS if v['size'] == 4097 and not v['binary'])
     async with fake_vault() as (backend, raw, log):
+        # Native V1 chunks.ts:228,350-360 splits safe line before marked line.
+        # A late budget refusal must not publish even the earlier safe leaf.
+        backend._splitter = ContentSplitter({'chunkSplitterVersion': 'v1', 'minimumChunkSize': 1})
         backend.couchdb_max_inflated_bytes = 4096
         before = list(log)
         with pytest.raises(StorageError) as caught:
-            await backend.write_note('inflate.md', wire, create=True)
+            await backend.write_note('inflate.md', prefix + wire, create=True)
         assert 'LIVESYNC_COUCHDB_MAX_INFLATED_BYTES' in caught.value.format()
         assert not [r for r in log[len(before):] if r.method in ('PUT', 'DELETE')]
 
