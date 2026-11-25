@@ -1,5 +1,6 @@
 """ContentSplitterBase.ts:68-71; chunks.ts:218-493,527-545 executed upstream cells."""
 import base64
+import gzip
 import json
 from pathlib import Path
 import pytest
@@ -103,3 +104,33 @@ def test_coercion_fixture_generator_provenance():
         assert fixture['provenance']['upstream_commit'] == '484c164450d61deb2e301582b60cb9b5f9fa977f'
     parameters = json.loads((FIXTURES / 'chunk_parameters_upstream.json').read_text())
     assert parameters['generator_sha256'] == hashlib.sha256(Path('scripts/extract_chunk_parameter_vectors.mjs').read_bytes()).hexdigest(), 'Regenerate with scripts/extract_chunk_parameter_vectors.mjs'
+
+
+CONCATENATION_FIXTURE = json.loads(
+    gzip.decompress((FIXTURES / 'minimum_concatenation_upstream.json.gz').read_bytes()))
+
+
+@pytest.mark.parametrize('row', CONCATENATION_FIXTURE['rows'],
+                         ids=lambda row: f"lines-{row['repeats']}")
+def test_v2_repeated_array_minimum_concatenation(row):
+    # Pinned chunks.ts:367-370 retains minimumChunkSize=[1] for every +=.
+    # These native neighbours cross 100*11, 100*111 and 100*1111;
+    # doubling the accumulated string loses the original right operand.
+    splitter = ContentSplitter(row['settings'])
+    pieces = splitter.split('abcd\n' * row['repeats'], path='concatenate.md')
+    assert pieces == row['split_pieces']
+    assert [splitter.chunk_id_for_piece(piece) for piece in pieces] == row['split_children']
+
+
+def test_repeated_minimum_fixture_provenance():
+    import hashlib
+    for key, name in (
+        ('generator_sha256', 'scripts/extract_minimum_concatenation_vectors.mjs'),
+        ('harness_sha256', 'scripts/extract_settings_oracle.mjs'),
+        ('dependency_loader_sha256', 'scripts/splitter_oracle_dependencies.mjs'),
+    ):
+        assert CONCATENATION_FIXTURE[key] == hashlib.sha256(Path(name).read_bytes()).hexdigest()
+    assert CONCATENATION_FIXTURE['provenance']['upstream_commit'] == '484c164450d61deb2e301582b60cb9b5f9fa977f'
+    assert CONCATENATION_FIXTURE['provenance']['decoder_dependency']['version'] == '0.1.57'
+    assert CONCATENATION_FIXTURE['provenance']['decoder_dependency']['integrity'].startswith('sha512-')
+    assert CONCATENATION_FIXTURE['provenance']['wasm_dependency']['integrity'].startswith('sha512-')

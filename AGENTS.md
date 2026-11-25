@@ -186,3 +186,5 @@ shapes and the incomplete-index pagination caveat.
 `content_splitter.SplitterRefusal` is a codec-owned ValueError with a typed diagnostic; storage backends map it to WriterParameterRefused before publication. Codec modules retain their storage-independent boundary.
 
 `tests/test_reserved_compression_prefix.py` reuses the committed native compression oracle for both write settings, repeat/fresh-reader lifecycle, typed notices, invalid-prefix preflight and shared-leaf protection.
+
+`scripts/extract_minimum_concatenation_vectors.mjs` records native V2 array-minimum repeated-concatenation neighbours through the fourth adjustment using the integrity-verified splitter harness; `tests/test_coercion_cells.py` consumes its exact pieces and IDs.
