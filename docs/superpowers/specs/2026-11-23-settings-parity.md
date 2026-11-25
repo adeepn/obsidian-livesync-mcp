@@ -728,3 +728,7 @@ its own deadline expires first. Neither path echoes the pattern or body.
 ### 2026-11-25 F1-2
 
 [DECISION] Execute ContentSplitterBase.ts:68 coercion for every JSON type; retain V1 loop protection and V2 binary NaN data-loss refusal. Coercion oracle records real splitter/hash dependencies and source hashes.
+
+### 2026-11-25 F1-3
+
+[DECISION] Use original-type += at chunks.ts:368-370 for V2 and V2-segmenter. Remove the integer shortcut altogether: after correct fallback semantics its numeric-only modulo mutation would be equivalent. Replace the false proof with executed [1]/[2] coercion cells; the historical modulo probe is obsolete, not a claimed kill.

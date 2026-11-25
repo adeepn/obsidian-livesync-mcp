@@ -45,3 +45,12 @@ async def test_coercion_settings_matrix(tmp_path, kind, row):
         stored = await doc(row['payload']['path'])
         assert stored['children'] == row['children']
         assert (await backend.read_note(row['payload']['path']))['text' if row['payload']['text'] else 'data'] == data
+
+@pytest.mark.parametrize('minimum', [[1.0], [2.0]])
+def test_array_numeric_representation_uses_js_primitive(minimum):
+    # JSON has one Number type: execute the same upstream [1]/[2] cell.
+    row = next(r for r in ROWS if r['key'] == 'minimumChunkSize' and r['value'] == minimum
+               and r['version'] == 'v2' and r['mode'] == 'plain')
+    settings = {**row['settings'], 'minimumChunkSize': minimum}
+    raw = base64.b64decode(row['payload']['base64'])
+    assert ContentSplitter(settings).split(raw, path=row['payload']['path'], text_blob=True) == row['split_pieces']

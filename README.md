@@ -157,7 +157,7 @@ combination. [Source inventory and caveats](docs/superpowers/specs/2026-11-23-se
 | `enableChunkSplitterV2`, `useSegmenter` | false / true (legacy migration) | Identical | One-pass migration of empty version; unknown version normalization follows upstream |
 | `hashAlg` | xxhash64, xxhash32, mixed-purejs, sha1, empty | Identical | Upstream UTF-16 length and hash semantics |
 | `customChunkSize` | JSON value; number >=0 in UI (default 0) | Identical wherever the plugin terminates | JavaScript truthiness/ToNumber coercion; V1 plain cap zero advances one UTF-16 unit; V3 clamps; see [loop refusals](docs/vault-format.md#invalid-writer-parameters) |
-| `minimumChunkSize` | Numeric (default 20) | Identical wherever the plugin terminates | Negative, empty, null and NaN follow upstream coercion; only V2 nonempty plain minima coercing to positive zero loop |
+| `minimumChunkSize` | Numeric (default 20) | Identical wherever the plugin terminates | Original JSON values retain JavaScript ToPrimitive/addition (including array/string concatenation); negative, empty, null and NaN follow upstream coercion; only V2 nonempty plain minima coercing to positive zero loop |
 | `syncMaxSizeInMB` | UI number >=0, default 50; 0 disables | Supported | Device write admission and automatic text access budget resolution; textual files remain scan-eligible independent of extension; aggregate caps default unlimited; oversized rename refuses to protect source |
 | `syncOnlyRegEx`, `syncIgnoreRegEx` | ECMAScript pattern lists | Identical when configured | Set local env explicitly; never inferred from milestone |
 | `useIgnoreFiles` | Boolean | Identical | Derived from vault settings unless overridden; active policy requires Node.js 22+ |

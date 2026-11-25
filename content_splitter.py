@@ -190,6 +190,9 @@ def _splitter_property_key(value) -> str:
         return 'null'
     if isinstance(value, bool):
         return 'true' if value else 'false'
+    if isinstance(value, (int, float)):
+        # JSON Number's primitive string has no .0 suffix or signed zero.
+        return str(value).removesuffix('.0') if value else '0'
     return str(value)
 
 
@@ -331,6 +334,15 @@ def _minimum_number(value):
         return math.nan
 
 
+def _js_add(left, right):
+    """chunks.ts:370 uses ECMAScript addition, not numeric-only addition."""
+    left = _splitter_property_key(left) if isinstance(left, (list, dict)) else left
+    right = _splitter_property_key(right) if isinstance(right, (list, dict)) else right
+    if isinstance(left, str) or isinstance(right, str):
+        return _splitter_property_key(left) + _splitter_property_key(right)
+    return _minimum_number(left) + _minimum_number(right)
+
+
 def _loop_refusal(setting, remedy):
     error = ValueError(
         f'{setting}: the plugin itself does not terminate for this input; use {remedy}')
@@ -452,18 +464,13 @@ class V2Splitter(_Splitter):
         # negative/NaN minima also skip this loop.
         if text and minimum == 0 and math.copysign(1, minimum) > 0:
             raise _loop_refusal('minimumChunkSize', 'minimumChunkSize=20 (or another positive minimumChunkSize)')
-        if minimum > 0 and not isinstance(self.minimum_chunk_size, str) and minimum % 1 == 0:
-            # Exact fast path for the integer UI setting; O(1).
-            adjusted = max(1, math.ceil(len(text) / (100 * minimum))) * minimum
-        else:
-            # Preserve JS binary64 repeated-addition rounding for fractional
-            # tweaks too; multiplication can change strict newline boundaries.
-            adjusted = minimum
-            source = self.minimum_chunk_size
-            while adjusted > 0 and len(text) / adjusted > 100:
-                # JS += concatenates when the setting is a string.
-                source = source + self.minimum_chunk_size if isinstance(source, str) else source + minimum
-                adjusted = _minimum_number(source)
+        # chunks.ts:368-370: retain the ORIGINAL value for +=. Arrays use
+        # ToPrimitive(string), then subsequent iterations keep concatenating.
+        source = self.minimum_chunk_size
+        adjusted = minimum
+        while adjusted > 0 and len(text) / adjusted > 100:
+            source = _js_add(source, self.minimum_chunk_size)
+            adjusted = _minimum_number(source)
         pieces = []
         start = 0
         for match in re.finditer('\n', text):

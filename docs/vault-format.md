@@ -191,3 +191,5 @@ Upstream: `LiveSyncReplicator.ts:2071-2098`, `diagnostics/couchdb.ts:45`.
 Journal within-publication collisions compare TextEncoder-projected data; identical projected pieces retain all original child IDs. CouchDB preflights distinct colliding pieces before any mutation; configure a positive customChunkSize or a collision-free hashAlg such as sha1.
 
 customChunkSize follows `(value || 0) * 1 + 1` and Math.floor exactly for JSON numbers, numeric/radix/exponent strings, booleans, null, arrays and objects. Nonnumeric caps are admitted where text/V3 splitting terminates; a V1 loop or V2 binary data loss refuses with guidance to set customChunkSize=0 or another numeric value.
+
+minimumChunkSize remains its original JSON type during the V2 / V2-segmenter adjustment loop (chunks.ts:368-370): [1] becomes "11", and subsequent additions concatenate. Numeric primitives use binary64 repeated addition. V1 has no adjustment loop; V3 uses Math.min/max coercion. The integer shortcut and its invalid array-equivalence proof have been removed.
