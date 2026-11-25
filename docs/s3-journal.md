@@ -123,7 +123,7 @@ to allow that count on list/get/exists and conditional put_if_absent.
 | Call | SDK attempt policy | Lost-response consequence |
 | --- | --- | --- |
 | list / get / exists | Configured count | Safe read repetition; final failure remains unavailable |
-| put_if_absent | Configured count | If the first creation succeeded, repetition returns already exists (412); publication allocates another candidate, then verifies read-back |
+| put_if_absent | Configured count | If the first creation succeeded, repetition returns already exists (412); publication allocates another candidate, then verifies read-back. Terminal failures retain outcome unknown because an earlier attempt may have succeeded |
 | unconditional put (exists+put fallback) | Always one | Outcome unknown; publication stops without retry; re-read before deciding to retry |
 
 The default stays one because an accepted upload with a lost response is

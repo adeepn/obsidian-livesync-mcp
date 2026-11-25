@@ -147,6 +147,7 @@ class Boto3ObjectStorage:
         # Upstream MinioStorageAdapter.ts:70-80 requests four attempts. Reads
         # and conditional writes may retry; unconditional publication must not:
         # a lost response is OutcomeUnknown, even if a retry would succeed.
+        self._conditional_retries = cfg.max_attempts > 1
         self._write_client = self._client
         if cfg.max_attempts != 1:
             write_kwargs = {**client_kwargs, "config": client_config.merge(
@@ -209,8 +210,13 @@ class Boto3ObjectStorage:
         except BotoCoreError as exc:
             raise self._unavailable("GET", key, exc) from None
 
-    def _put_failure(self, key: str, exc: Exception) -> StorageError:
+    def _put_failure(self, key: str, exc: Exception, *, may_have_retried=False) -> StorageError:
         public = self._unavailable("PUT", key, exc).diagnostic
+        # A terminal pre-dispatch error says nothing about earlier attempts.
+        # With retries enabled, retain uncertainty instead of discarding the
+        # pending outbound record when an earlier accepted response was lost.
+        if may_have_retried:
+            return OutcomeUnknown(public)
         if isinstance(exc, (EndpointConnectionError, ConnectTimeoutError,
                             NoCredentialsError, PartialCredentialsError,
                             ParamValidationError)):
@@ -249,9 +255,9 @@ class Boto3ObjectStorage:
                     logger.warning('conditional journal publication unsupported; using B-10 fallback; cause: %s', cause_name(type(exc)))
                     self._conditional_warning_logged = True
                 return "unsupported"
-            raise self._put_failure(key, exc) from None
+            raise self._put_failure(key, exc, may_have_retried=self._conditional_retries) from None
         except BotoCoreError as exc:
-            raise self._put_failure(key, exc) from None
+            raise self._put_failure(key, exc, may_have_retried=self._conditional_retries) from None
 
     def list(self, start_after: str = "", limit: int | None = None) -> list[str]:
         if limit is not None and limit < 1:

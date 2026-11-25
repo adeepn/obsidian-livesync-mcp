@@ -84,13 +84,14 @@ def test_dropped_response_retry_policy(operation, monkeypatch):
     from botocore.exceptions import ReadTimeoutError
     from object_storage import Boto3ObjectStorage
     from storage_base import OutcomeUnknown
-    storage = Boto3ObjectStorage(make_cfg(max_attempts=4))
+    storage = Boto3ObjectStorage(make_cfg(max_attempts=4, custom_headers=(('X-F6-Test', 'synthetic'),)))
     calls = []
     class Raw(BytesIO):
         def stream(self, amt=None, decode_content=False):
             yield self.read()
     def send(request):
         calls.append(request)
+        assert request.headers['X-F6-Test'] == b'synthetic'
         if len(calls) == 1:
             raise ReadTimeoutError(endpoint_url='http://synthetic.invalid', error='private-marker')
         if operation == 'put_if_absent':
@@ -125,3 +126,22 @@ def test_selection_timeout_remedy_names_override():
     message = str(EngineFailure('timeout'))
     assert 'LIVESYNC_SELECTION_TIMEOUT_SECONDS' in message
     assert 'restart' in message
+
+
+def test_conditional_retry_keeps_prior_uncertainty(monkeypatch):
+    from botocore.exceptions import ReadTimeoutError, EndpointConnectionError
+    from object_storage import Boto3ObjectStorage
+    from storage_base import OutcomeUnknown
+    storage = Boto3ObjectStorage(make_cfg(max_attempts=3))
+    calls = []
+    def send(request):
+        calls.append(request)
+        if len(calls) == 1:
+            # Server accepted creation, but the response never reached the SDK.
+            raise ReadTimeoutError(endpoint_url='http://synthetic.invalid')
+        raise EndpointConnectionError(endpoint_url='http://synthetic.invalid')
+    monkeypatch.setattr('botocore.endpoint.time.sleep', lambda seconds: None)
+    monkeypatch.setattr(storage._client._endpoint.http_session, 'send', send)
+    with pytest.raises(OutcomeUnknown):
+        storage.put_if_absent('journal', b'data')
+    assert len(calls) == 3
