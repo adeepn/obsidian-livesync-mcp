@@ -439,3 +439,12 @@ def test_jwt_session_auth_documented():
         text = (ROOT / name).read_text()
         assert '/_session' in text
         assert 'subject' in text
+
+
+def test_jwt_pkcs8_generation_documented():
+    text = (ROOT / 'docs/connecting-storage.md').read_text()
+    assert 'openssl ecparam -name prime256v1 -genkey -noout | openssl pkcs8 -topk8 -nocrypt' in text
+    for name in ('README.md', 'docs/connecting-storage.md', '.env.example'):
+        text = (ROOT / name).read_text()
+        assert 'PKCS8' in text and 'SEC1' in text
+    assert 'secp521r1' in (ROOT / '.env.example').read_text()

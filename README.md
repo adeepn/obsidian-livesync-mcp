@@ -195,8 +195,9 @@ surrogate protection such as v3, or avoid synchronizing that note. Journal
 TextEncoder replacement and device chunk IDs remain unchanged.
 
 - CouchDB auth is explicit local configuration: choose Basic credentials or the
-  JWT environment group, independently of MCP client auth. JWT matches the pinned
-  plugin, including original subject whitespace and Latin-1 JSON encoding.
+  JWT environment group, independently of MCP client auth. JWT requires PKCS8 EC keys for ES256/ES512 (SEC1 is rejected);
+  see [key generation](docs/connecting-storage.md#couchdb-jwt-authentication).
+  JWT matches the pinned plugin, including original subject whitespace and Latin-1 JSON encoding.
   Non-Latin-1 identifiers cannot be encoded by the plugin either; configure
   matching Latin-1 identifiers on the server and device. Vault stats expose only
   `auth_mode` (`basic` or `jwt`) and `jwt_algorithm`, never keys or subjects.

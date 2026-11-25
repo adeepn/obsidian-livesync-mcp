@@ -93,6 +93,16 @@ Replace every angle-bracket field locally. For ES256/ES512, change the algorithm
 and quote the entire PKCS8 PEM key as a multiline dotenv value; python-dotenv also
 expands literal `\n` inside double quotes. Never paste signing keys into logs,
 issues or MCP calls. A signing key is not a pre-generated bearer token.
+The plugin imports ES keys with `crypto.subtle.importKey("pkcs8", …)` after
+stripping PEM delimiters and whitespace (`httplib.ts:84-101`). SEC1
+`EC PRIVATE KEY` is rejected. Generate PKCS8 for ES256 with:
+
+```bash
+openssl ecparam -name prime256v1 -genkey -noout | openssl pkcs8 -topk8 -nocrypt
+```
+
+For ES512, use `secp521r1` instead of `prime256v1`. Keep generated private keys
+local; install only the matching public key on CouchDB.
 
 The server administrator must enable the JWT handler on every CouchDB node.
 For CouchDB 3.5, the handler list is `[chttpd] authentication_handlers = cookie,

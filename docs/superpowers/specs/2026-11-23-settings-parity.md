@@ -855,3 +855,13 @@ database must not disguise an anonymous or different JWT identity. CouchDB
 same token's session; only failed authentication becomes the typed JWT auth
 reason. Ordinary 400 remains generic. No remote reason text is inspected or
 exposed. Guidance names key, algorithm, key ID, subject, clock and expiry.
+
+
+### 2026-11-25 — F4 A3: clarify EC JWT key encoding
+
+[GOTCHA] ES256/ES512 require PKCS8, exactly as httplib.ts:84-101
+`crypto.subtle.importKey("pkcs8", …)` after PEM/whitespace removal. The SEC1
+keys used by the initial acceptance were invalid for the plugin too. Retain
+strict parsing, add conversion guidance, and document generation using
+`prime256v1` / `secp521r1` followed by `openssl pkcs8 -topk8 -nocrypt`.
+Tests re-encode committed synthetic oracle keys as SEC1; oracle bytes unchanged.

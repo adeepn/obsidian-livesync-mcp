@@ -355,3 +355,20 @@ def test_zero_expiry_matches_upstream_five_minute_fallback(algorithm):
 def test_negative_expiry_names_the_real_auth_constraint():
     with pytest.raises(ConfigError,match='upstream would mint already-expired tokens'):
         load_config({**env_for(),'COUCHDB_JWT_EXPIRY_MINUTES':'-1'})
+
+
+@pytest.mark.parametrize('algorithm', ['ES256', 'ES512'])
+def test_sec1_rejected_with_pkcs8_conversion_guidance(algorithm):
+    # httplib.ts:84-101 strips PEM lines/whitespace, then importKey('pkcs8').
+    # Re-encode the committed upstream synthetic key as SEC1; no real keys.
+    from cryptography.hazmat.primitives import serialization
+    from couchdb_jwt import JWTConfigError, JWTTokenGenerator
+    vector = next(v for v in FIXTURE['vectors'] if v['auth']['jwtAlgorithm'] == algorithm)
+    cfg = load_config(env_for(vector)).couchdb
+    private = serialization.load_pem_private_key(cfg.jwt_key.encode(), password=None)
+    from dataclasses import replace
+    sec1 = private.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.TraditionalOpenSSL,
+                                 serialization.NoEncryption()).decode()
+    with pytest.raises(JWTConfigError, match='SEC1.*openssl pkcs8 -topk8 -nocrypt') as error:
+        JWTTokenGenerator(replace(cfg, jwt_key=sec1))
+    assert sec1 not in str(error.value)

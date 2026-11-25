@@ -102,7 +102,7 @@ class JWTTokenGenerator:
                 if not isinstance(self._key, ec.EllipticCurvePrivateKey) or not isinstance(self._key.curve, curve):
                     raise ValueError
         except Exception:
-            raise JWTConfigError('COUCHDB_JWT_KEY is invalid; use base64 HMAC bytes or a matching PKCS8 EC PEM private key.') from None
+            raise JWTConfigError('COUCHDB_JWT_KEY is invalid; use base64 HMAC bytes or a matching PKCS8 EC PEM private key. SEC1 EC PRIVATE KEY is not accepted; convert with openssl pkcs8 -topk8 -nocrypt.') from None
         self._header = {'alg': self.algorithm, 'typ': 'JWT'}
         if cfg.jwt_key_id:
             self._header['kid'] = cfg.jwt_key_id
