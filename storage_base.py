@@ -44,7 +44,10 @@ class StorageError(Exception):
 
 
 class WriterParameterRefused(StorageError, ValueError):
-    """A sourced device loop/coercion or data-loss guard with typed recovery."""
+    """A sourced guard retaining the codec's typed recovery and setting keys."""
+    def __init__(self, reason=None, *, setting_keys=()):
+        super().__init__(reason)
+        self.setting_keys = tuple(setting_key(key) for key in setting_keys)
 
 
 class TextBudgetExceeded(StorageError):

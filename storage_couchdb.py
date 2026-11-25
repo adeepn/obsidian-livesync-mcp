@@ -1134,7 +1134,9 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
             pieces = [piece for piece in self._splitter.split(content, path=canonical_path(path)) if piece]
         except SplitterRefusal as error:
             # Keep codec modules storage-independent; project only typed fields.
-            raise WriterParameterRefused(error.diagnostic) from None
+            raise WriterParameterRefused(
+                error.diagnostic, setting_keys=getattr(error, 'setting_keys', error.diagnostic.keys)
+            ) from None
         # P-10 / EntryManagerImpls.ts:280: retain ingested Blob.size even
         # when a legacy splitter's Blob.text() removes an initial BOM.
         # EntryManagerImpls.ts:133-159 retains all references, while
