@@ -198,3 +198,10 @@ shapes and the incomplete-index pagination caveat.
 `tests/test_integration_parity_s3.py` and `tests/test_integration_parity_couchdb.py`
 add env-gated real-server pairwise/oracle, surrogate and JWT acceptance.
 See `docs/connecting-storage.md` for environment and incomplete acceptance scope.
+
+`scripts/extract_acceptance_vectors.mjs` executes the integrity-verifying native
+splitter harness for 40/100 MiB binary inputs; its compact committed
+`tests/fixtures/acceptance_upstream.json` retains ordered children, piece
+digests, source hashes and published dependency provenance. Real-server F4
+coverage extends both parity integration modules with per-row document
+classes, large uploads/MCP text access, recovery, compression and request hooks.

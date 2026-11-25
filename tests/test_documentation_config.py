@@ -448,3 +448,17 @@ def test_jwt_pkcs8_generation_documented():
         text = (ROOT / name).read_text()
         assert 'PKCS8' in text and 'SEC1' in text
     assert 'secp521r1' in (ROOT / '.env.example').read_text()
+
+
+def test_f4_real_acceptance_contract_documented():
+    # Live evidence complements the pinned native splitter/compression oracles.
+    for name in ('README.md', 'docs/connecting-storage.md'):
+        text = (ROOT / name).read_text()
+        for phrase in ('40 MiB', '100 MiB', '201 MiB', '12 MiB', 'every matrix row'):
+            assert phrase in text
+    guide = (ROOT / 'docs/connecting-storage.md').read_text()
+    for algorithm in ('HS256', 'HS512', 'ES256', 'ES512'):
+        assert algorithm in guide
+    assert 'COUCHDB_TEST_JWT_ES512_KEY' in guide
+    assert '2026-11-25 — F4 final automated acceptance' in (ROOT / 'docs/superpowers/specs/2026-11-23-settings-parity.md').read_text()
+    assert 'extract_acceptance_vectors.mjs' in (ROOT / 'AGENTS.md').read_text()

@@ -865,3 +865,32 @@ keys used by the initial acceptance were invalid for the plugin too. Retain
 strict parsing, add conversion guidance, and document generation using
 `prime256v1` / `secp521r1` followed by `openssl pkcs8 -topk8 -nocrypt`.
 Tests re-encode committed synthetic oracle keys as SEC1; oracle bytes unchanged.
+
+### 2026-11-25 — F4 final automated acceptance
+
+[DECISION] Preserve the earlier T8a findings above as historical evidence.
+The final F4 artifact supersedes their incomplete acceptance table. Production
+fixes are ebb76a6 (surrogate transaction preflight), 08e69ce (JWT identity and
+typed token errors) and 2517d70 (PKCS8 guidance). No further production changes
+are included in the acceptance extension.
+
+The real-server tests now cover text/binary and plain/newnote/leaf/local
+documents per matrix row; native-oracle 40/100 MiB inputs under a 200 MiB
+policy; 201 MiB refusal without publication; source-preserving oversized
+rename; exact 12 MiB `.json` MCP operations; wipe/epoch cache retention,
+identity quarantine/rebuild and interrupted replay; outgoing headers; real
+compression with committed native vectors; raw device surrogate rejection
+and pre-request peer refusal; all four JWT algorithms and wrong/expired keys.
+Six mandatory in-memory A1/A2 mutations are killed by the named focused tests;
+additional acceptance mutations exercise oracle IDs and fresh binary reads.
+Counts, durations, fixture digest and reproduction are recorded in
+`docs/test-artifacts/2026-11-25-parity-docker/summary.txt`; working logs remain
+in ignored `.superpowers/sdd/2026-11-23-settings-parity/f4/`.
+
+The resumed baseline exposed three stale surrogate-storage expectations, not
+a further production defect. Follow-up 220f4db corrects properties/tags
+refusals and the CouchDB G3 witness; the mutation manifest retains G3 codec
+and journal coverage without claiming CouchDB can persist it. Final combined
+real-server run: 261 passed in 240.73 s; strengthened fresh-reader assertions:
+63 passed in 47.82 s. All six required A1/A2 mutations and two new acceptance
+mutations are killed; both remaining G3 witnesses also kill its encoder flip.

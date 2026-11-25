@@ -82,7 +82,7 @@ are read only for the selected backend. Empty defaults below mean an empty strin
 | `COUCHDB_JWT_ALGORITHM` | empty (Basic auth) | Select JWT mode | HS256, HS512, ES256 or ES512; remove COUCHDB_USER and COUCHDB_PASSWORD |
 | `COUCHDB_JWT_KEY` | none | Required for JWT | Base64 HMAC key or matching PKCS8 EC PEM private key; never reported |
 | `COUCHDB_JWT_SUBJECT` | none | Required for JWT | Plugin JWT Subject (sub), nonblank; original whitespace preserved |
-| `COUCHDB_JWT_KEY_ID` | empty (omit kid) | Optional for JWT | Plugin JWT Key ID (kid); match server key entry |
+| `COUCHDB_JWT_KEY_ID` | empty (omit kid) | Optional for JWT | Plugin JWT Key ID (kid); match server key entry; ES512 acceptance uses a named kid |
 | `COUCHDB_JWT_EXPIRY_MINUTES` | 5 | Optional for JWT | Nonnegative finite minutes; 0 uses the plugin five-minute fallback; explicit empty is refused; cached token refreshes when exp is strictly less than integer current seconds + 10 |
 | `LIVESYNC_S3_URI` | empty | Required unless S3 fields set | `sls://access:secret@endpoint?bucket=…&region=…&prefix=…` connection |
 | `S3_ENDPOINT_URL` | none | Required for S3 fields | S3-compatible endpoint URL |
@@ -171,7 +171,7 @@ combination. [Source inventory and caveats](docs/superpowers/specs/2026-11-23-se
 | `usePathObfuscation` | false / true | Not supported when true | Startup refuses; see issue #4 |
 | `idDerivationVersion`, `idDerivationKey` | 0 legacy / 1 keyed | Identical for unencrypted vaults | Validate version/key configuration; unencrypted IDs follow upstream |
 | `useJWT`, `jwtAlgorithm`, `jwtKey`, `jwtKid`, `jwtSub`, `jwtExpDuration` | HS256 / HS512 / ES256 / ES512 | Identical JWT wire format | Explicit connection env; zero duration uses five minutes; per-backend cached Bearer tokens, raw EC signatures; [setup](docs/connecting-storage.md#couchdb-jwt-authentication) |
-| `enableCompression` | false / true | Identical | CouchDB always reads compressed data; writes follow the vault (absent: false). Non-lossy CR/LF, surrogate and BOM exceptions below; reserved literal prefixes disclose decoded reads or refuse invalid input; journal forces off |
+| `enableCompression` | false / true | Identical | CouchDB always reads compressed data; writes follow the vault (absent: false), verified on real CouchDB. Non-lossy CR/LF, surrogate and BOM exceptions below; reserved literal prefixes disclose decoded reads or refuse invalid input; journal forces off |
 | `suspendParseReplicationResult` | false / true | Deliberate difference | Reads remain available from DB; no filesystem reflection stage |
 | Hidden File Sync / customization sync | `i:`, `ix:` namespaces | Not supported | No local vault folder; hidden ignore files can be read internally |
 | Plugin sync / `usePluginSyncV2` | `ps:` namespace / Boolean | Not supported | Service documents excluded from ordinary tools |
@@ -185,8 +185,9 @@ It does not establish every setting combination on every server.
 
 The 2026-11-25 acceptance run found JWT wrong-key HTTP 400 classified as a
 generic storage error and CouchDB rejecting a lone-surrogate leaf with HTTP 400.
-Both production paths are corrected; the final acceptance is pending.
-Acceptance remains incomplete; see the [recorded results](docs/test-artifacts/2026-11-25-parity-docker/summary.txt).
+Both production paths are corrected; the final automated acceptance covers
+text and binary in every matrix row, 40 MiB and 100 MiB binary round trips,
+a 201 MiB skip and a 12 MiB textual MCP workflow. See the [recorded results](docs/test-artifacts/2026-11-25-parity-docker/summary.txt).
 
 CouchDB 3.5.3 rejects unpaired UTF-16 surrogate JSON escapes, including device
 writes. The peer refuses the complete write before publishing any leaf. V1's

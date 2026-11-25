@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Settings parity
 
+- Complete real-server acceptance for per-row text/binary classes, large files, recovery, wire headers, compression, surrogate refusals and all JWT algorithms; retain native large-file oracle provenance.
+
 - Explain the plugin PKCS8 requirement and provide actionable SEC1 conversion guidance for EC JWT keys.
 
 - Verify JWT session identity at startup and classify invalid-token HTTP 400/401 as typed authorization failures without exposing remote reasons.
