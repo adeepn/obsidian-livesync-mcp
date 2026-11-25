@@ -351,15 +351,18 @@ async def test_legacy_canvas_add_can_update_existing_file(tools):
     assert json.loads(fake.notes["Board.canvas"]["text"])["nodes"][0]["text"] == "hello"
 
 
-async def test_default_lifespan_closes_on_startup_failure(monkeypatch):
+async def test_default_lifespan_closes_on_startup_failure(monkeypatch, caplog):
     fake = FakeBackend()
     fake.errors["startup_check"] = StorageUnavailable()
     monkeypatch.setattr(server, "get_backend", lambda cfg: fake)
-    with pytest.raises(StorageUnavailable):
+    with pytest.raises(RuntimeError, match="Application failed; inspect typed logs") as caught:
         async with server.mcp.settings.lifespan(server.mcp):
             pytest.fail("served after startup failure")
     assert server.backend is None
     assert fake.calls[-1] == ("close", ())
+    assert caught.value.__cause__ is None and caught.value.__suppress_context__
+    assert 'cause: StorageUnavailable' in caplog.text
+    assert all(record.exc_info is None for record in caplog.records)
 
 
 async def test_regex_worker_tool_timeout_and_normal(tools, monkeypatch):
