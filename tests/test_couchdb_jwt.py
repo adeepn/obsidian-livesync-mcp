@@ -57,14 +57,24 @@ def test_refresh_oracle(v):
     assert needs_refresh(v['iat'], v['exp'], v['now']) is v['regenerate']
 
 
-def test_cached_token_boundary():
-    v = FIXTURE['vectors'][0]
+@pytest.mark.parametrize('algorithm', ['HS256', 'HS512', 'ES256', 'ES512'])
+@pytest.mark.parametrize('duration', [0, 5])
+def test_cached_token_boundary(algorithm, duration):
+    # Pinned src/replication/httplib.ts:166-167 applies the zero fallback
+    # before :181-196 evaluates the cached payload expiry (strict < and ~~).
+    # Both durations have native wire/refresh expectations in jwt_upstream.json.
+    v = next(v for v in FIXTURE['vectors']
+             if v['auth']['jwtAlgorithm'] == algorithm
+             and v['auth']['jwtExpDuration'] == duration
+             and v['now'] == 1806000000)
     now = [v['now']]
     g = generator(v, lambda: now[0])
     first = g.token()
-    now[0] += 290.9
-    assert g.token() == first
-    now[0] += 0.1
+    assert first.split('.')[:2] == v['token'].split('.')[:2]
+    for offset in (289, 290, 290.99):
+        now[0] = v['now'] + offset
+        assert g.token() == first
+    now[0] = v['now'] + 291
     assert g.token() != first
 
 
@@ -76,6 +86,7 @@ def test_cached_token_boundary():
     ({'COUCHDB_USER': 'x'}, ['COUCHDB_USER']),
     ({'COUCHDB_PASSWORD': ''}, ['COUCHDB_PASSWORD']),
     ({'COUCHDB_JWT_ALGORITHM': ''}, ['COUCHDB_JWT_ALGORITHM']),
+    ({'COUCHDB_JWT_EXPIRY_MINUTES': ''}, ['COUCHDB_JWT_EXPIRY_MINUTES']),
     ({'COUCHDB_JWT_EXPIRY_MINUTES': 'nan'}, ['COUCHDB_JWT_EXPIRY_MINUTES']),
     ({'COUCHDB_JWT_EXPIRY_MINUTES': 'inf'}, ['COUCHDB_JWT_EXPIRY_MINUTES']),
     ({'COUCHDB_JWT_EXPIRY_MINUTES': '-2'}, ['COUCHDB_JWT_EXPIRY_MINUTES']),

@@ -284,3 +284,5 @@ contract. Code points above U+00FF cannot be sent as such HTTP field values;
 encode those proxy credentials in ASCII (for example the proxy's documented
 base64 token format). These offline tests establish configuration and wire behavior,
 not connectivity to a particular reverse proxy.
+
+JWT expiry input is numeric: an explicit empty `COUCHDB_JWT_EXPIRY_MINUTES` is refused; omit it or use `0` for the five-minute fallback. The upstream literal JSON string `"0"` is truthy and gives a zero-second token; this numeric environment variable cannot represent that string. For numeric 0 and 5, all four algorithms retain the cached token through +290.99 seconds and refresh at +291 seconds (httplib.ts:166-167,181-196).

@@ -360,3 +360,11 @@ def test_reserved_compression_prefix_notice_documented():
     for name in ('docs/outcome-reporting.md','docs/vault-format.md','docs/tools.md'):
         assert 'couchdb_marker_interpreted' in (ROOT / name).read_text()
     assert 'binary attachment path to preserve literal prefix bytes' in ' '.join((ROOT / 'README.md').read_text().split())
+
+
+def test_jwt_empty_and_string_zero_documented():
+    for name in ('README.md', '.env.example', 'docs/connecting-storage.md', 'docs/vault-format.md'):
+        text = (ROOT / name).read_text()
+        assert 'empty' in text and 'refused' in text
+        assert 'zero-second' in text or 'zero seconds' in text
+        assert 'cannot' in text and 'numeric' in text

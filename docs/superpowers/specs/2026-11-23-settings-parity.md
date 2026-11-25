@@ -768,3 +768,7 @@ its own deadline expires first. Neither path echoes the pattern or body.
 ### 2026-11-25 F1 final gate verification
 
 [DECISION] Both independent code/architect reviews converged without new findings across F1-1 through F1-9 and the reserved-prefix ingestion follow-up. Two concurrent exact full suites on dc7e21b each passed 22,899 tests, with 8 skipped and 3 subtests (348.53 s / 349.41 s). The owner-supplied F1 baseline was 20,611 passed, 8 skipped, 3 subtests. All 27 final process-local own mutation variants were caught; effective reviewer mutations were caught with adapted targets where necessary. The historical integer-modulo target was removed, so its original probe is inapplicable rather than claimed killed. Working logs and the detailed report remain ignored in the F1 task directory; no live production/device verification was performed. A final full suite follows this status commit.
+
+### 2026-11-25 F2-7 — JWT cache boundary
+
+[GOTCHA] Numeric zero uses five minutes for both signing and cache expiry; explicit empty expiry is refused. Upstream literal string "0" produces a zero-second token and is outside the numeric environment representation. Regression covers all four algorithms through +290.99 / +291 seconds and detects the raw-zero cache mutant.

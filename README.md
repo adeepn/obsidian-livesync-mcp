@@ -80,7 +80,7 @@ are read only for the selected backend. Empty defaults below mean an empty strin
 | `COUCHDB_JWT_KEY` | none | Required for JWT | Base64 HMAC key or matching PKCS8 EC PEM private key; never reported |
 | `COUCHDB_JWT_SUBJECT` | none | Required for JWT | Plugin JWT Subject (sub), nonblank; original whitespace preserved |
 | `COUCHDB_JWT_KEY_ID` | empty (omit kid) | Optional for JWT | Plugin JWT Key ID (kid); match server key entry |
-| `COUCHDB_JWT_EXPIRY_MINUTES` | 5 | Optional for JWT | Nonnegative finite minutes; 0 uses the plugin five-minute fallback; cached token refreshes when exp is strictly less than integer current seconds + 10 |
+| `COUCHDB_JWT_EXPIRY_MINUTES` | 5 | Optional for JWT | Nonnegative finite minutes; 0 uses the plugin five-minute fallback; explicit empty is refused; cached token refreshes when exp is strictly less than integer current seconds + 10 |
 | `LIVESYNC_S3_URI` | empty | Required unless S3 fields set | `sls://access:secret@endpoint?bucket=…&region=…&prefix=…` connection |
 | `S3_ENDPOINT_URL` | none | Required for S3 fields | S3-compatible endpoint URL |
 | `S3_ACCESS_KEY_ID` | none | Required for S3 fields | Object-storage access key |
@@ -197,6 +197,9 @@ combination. [Source inventory and caveats](docs/superpowers/specs/2026-11-23-se
   attachment path to preserve literal prefix bytes. See
   [compressed document format](docs/vault-format.md#couchdb-compression).
 
+- JWT expiry is numeric: omit it or set `0` for five minutes; an explicit empty value
+  is refused. Upstream literal JSON string `"0"` means zero seconds and cannot be
+  represented by this numeric environment setting.
 - E2EE and obfuscated paths are unsupported; use an unencrypted, unobfuscated
   vault until [#3](https://github.com/adeepn/obsidian-livesync-mcp/issues/3) /
   [#4](https://github.com/adeepn/obsidian-livesync-mcp/issues/4) are implemented.

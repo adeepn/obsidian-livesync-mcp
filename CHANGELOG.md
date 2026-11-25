@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Settings parity
 
+- Pin zero/five-minute JWT cache boundaries across all algorithms and document empty expiry refusal and the upstream string-zero distinction.
+
 - Disclose reserved CouchDB prefix interpretation on text writes, preserve valid marked-piece reuse and refuse undecodable new pieces before publication with binary-path recovery.
 
 - Preserve parameter coercion evaluation order on empty/NaN inputs, numeric array overflow and terminating zero-string additions; expose actionable typed writer refusals through MCP.
