@@ -266,3 +266,78 @@ async def test_real_s3_recovery_cache_identity(minio):
     await reader.refresh(force=True)
     assert (await reader.read_note('rebuilt.md'))['text'] == 'rebuilt remote body'
     assert await reader.read_note('recover.md') is None
+
+
+@pytest.mark.parametrize('mode', ['identical', 'absent', 'different', 'unreadable'])
+async def test_real_s3_lost_conditional_acknowledgement(minio, monkeypatch, mode):
+    """C:MinioStorageAdapter.ts:70-80,132-145 retries native uploads.
+
+    Drop a real accepted PUT response; let SeaweedFS answer the retry. A
+    separate harness client simulates disappearance/replacement after 412.
+    No oracle is claimed for this peer-only uncertainty safety contract.
+    """
+    import boto3
+    from botocore.config import Config as SDKConfig
+    from botocore.exceptions import ReadTimeoutError
+    from urllib.parse import unquote, urlsplit
+    from config import S3Config
+    from object_storage import Boto3ObjectStorage
+    from storage_base import OutcomeUnknown, StorageUnavailable
+    from tests.test_object_storage import MINIO_ENV
+
+    peer, keys, _, _, prefix = minio
+    writer, spy = await peer('retry-writer')
+    cfg = S3Config(endpoint=MINIO_ENV['MINIO_TEST_ENDPOINT'],
+        access_key=MINIO_ENV['MINIO_TEST_KEY'], secret_key=MINIO_ENV['MINIO_TEST_SECRET'],
+        bucket=MINIO_ENV['MINIO_TEST_BUCKET'], region='us-east-1', prefix=prefix,
+        uri='', max_attempts=4)
+    sdk = Boto3ObjectStorage(cfg)
+    # This harness-only client may alter the test object's state, never the peer.
+    admin = boto3.client('s3', endpoint_url=cfg.endpoint,
+        aws_access_key_id=cfg.access_key, aws_secret_access_key=cfg.secret_key,
+        region_name=cfg.region, config=SDKConfig(s3={'addressing_style': 'path'},
+            connect_timeout=5, read_timeout=30, retries={'total_max_attempts': 1}))
+    send = sdk._client._endpoint.http_session.send
+    calls = []
+
+    def lose_response(request):
+        response = send(request)
+        if request.method != 'PUT':
+            return response
+        key = unquote(urlsplit(request.url).path).split('/', 2)[2]
+        calls.append(key)
+        if len(calls) == 1:
+            assert response.status_code == 200
+            raise ReadTimeoutError(endpoint_url='http://synthetic.invalid')
+        assert response.status_code == 412
+        if mode == 'absent':
+            admin.delete_object(Bucket=cfg.bucket, Key=key)
+        elif mode == 'different':
+            admin.put_object(Bucket=cfg.bucket, Key=key, Body=b'different')
+        return response
+
+    monkeypatch.setattr(sdk._client._endpoint.http_session, 'send', lose_response)
+    monkeypatch.setattr('botocore.endpoint.time.sleep', lambda _: None)
+    if mode == 'unreadable':
+        def unreadable(key):
+            raise StorageUnavailable()
+        monkeypatch.setattr(sdk, 'get', unreadable)
+    monkeypatch.setattr(spy, 'put_if_absent', sdk.put_if_absent)
+    before = set(keys())
+    try:
+        if mode == 'identical':
+            await writer.write_note('lost.md', 'synthetic payload', create=True)
+            assert (await writer.read_note('lost.md'))['text'] == 'synthetic payload'
+            assert writer._store.outbound_journals()[0][2] == 1
+        else:
+            with pytest.raises(OutcomeUnknown):
+                await writer.write_note('lost.md', 'synthetic payload', create=True)
+            assert writer._store.outbound_journals()[0][2] == 0
+            assert writer._store.last_sent_key == ''
+        assert len(calls) == 2
+        assert calls[0] == calls[1]
+        assert len(set(keys()) - before) == (0 if mode == 'absent' else 1)
+    finally:
+        sdk._client.close()
+        sdk._write_client.close()
+        admin.close()
