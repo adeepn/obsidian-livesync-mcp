@@ -748,3 +748,7 @@ its own deadline expires first. Neither path echoes the pattern or body.
 ### 2026-11-25 F1-7
 
 [DECISION] Re-resolve the effective milestone size policy at the journal refresh boundary through TextAccessPolicy. Retain explicit size/text overrides. A 300.25 to 350.5 MiB change now raises the automatic text budget from 314834944 to 367525888 bytes without restart; VaultService.ts:73-81 defines the device predicate.
+
+### 2026-11-25 F1-8
+
+[DECISION] Accept zero JWT minutes and apply the five-minute fallback in JWTTokenGenerator, matching httplib.ts:167. Negative durations name the real already-expired-token constraint. Regenerated native WebCrypto oracle includes zero-duration HS/ES vectors at fixed time with integrity-verified published wheels.

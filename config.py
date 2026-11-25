@@ -279,10 +279,10 @@ def _load_couchdb(env: Mapping[str, str]) -> CouchDBConfig:
             raise ConfigError("COUCHDB_JWT_ALGORITHM conflicts with " + ", ".join(conflicts) + "; remove Basic auth variables.")
         try:
             expiry = float(env.get("COUCHDB_JWT_EXPIRY_MINUTES", "5"))
-            if not math.isfinite(expiry) or expiry <= 0:
+            if not math.isfinite(expiry) or expiry < 0:
                 raise ValueError
         except (ValueError, TypeError, OverflowError):
-            raise ConfigError("COUCHDB_JWT_EXPIRY_MINUTES must be a positive finite number; set a valid duration.") from None
+            raise ConfigError("COUCHDB_JWT_EXPIRY_MINUTES must be a nonnegative finite number; zero uses five minutes; negative durations are refused because upstream would mint already-expired tokens.") from None
         cfg = CouchDBConfig(
             url=env.get("COUCHDB_URL", "").strip() or COUCHDB_URL_DEFAULT,
             user="", password="", database=_read(env, "COUCHDB_DATABASE"),

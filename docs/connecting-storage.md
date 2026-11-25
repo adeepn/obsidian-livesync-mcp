@@ -65,7 +65,7 @@ In the pinned plugin's **CouchDB Configuration → Experimental Settings**, enab
 | JWT Key | `COUCHDB_JWT_KEY` | Same private signing material as the device: base64 HMAC bytes, or PKCS8 EC private PEM (P-256 for ES256, P-521 for ES512) |
 | JWT Subject (sub) | `COUCHDB_JWT_SUBJECT` | Same nonblank CouchDB username/subject as the device |
 | JWT Key ID (kid) | `COUCHDB_JWT_KEY_ID` | Same server key identifier; empty omits kid and selects the server default |
-| JWT Expiration Duration (minutes) | `COUCHDB_JWT_EXPIRY_MINUTES` | Same positive finite duration; omit for 5 minutes |
+| JWT Expiration Duration (minutes) | `COUCHDB_JWT_EXPIRY_MINUTES` | Same nonnegative finite duration; omit or use 0 for 5 minutes; negatives refuse because upstream would mint already-expired tokens |
 
 Remove `COUCHDB_USER` and `COUCHDB_PASSWORD` entirely, including empty definitions.
 Do not combine the Basic block with this alternative. Keep the URL and database

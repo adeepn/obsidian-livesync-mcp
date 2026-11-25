@@ -195,3 +195,5 @@ customChunkSize follows `(value || 0) * 1 + 1` and Math.floor exactly for JSON n
 minimumChunkSize remains its original JSON type during the V2 / V2-segmenter adjustment loop (chunks.ts:368-370): [1] becomes "11", and subsequent additions concatenate. Numeric primitives use binary64 repeated addition. V1 has no adjustment loop; V3 uses Math.min/max coercion. The integer shortcut and its invalid array-equivalence proof have been removed.
 
 Legacy Blob.text strips a leading BOM while metadata keeps Blob.size (EntryManagerImpls.ts:280). Incoming reflection.ts:272-283 rejects a nonzero size mismatch unless processSizeMismatchedFiles is enabled. Every successful lossy peer publication now appends typed notices; V3 retains the BOM.
+
+JWT duration follows httplib.ts:167 `(jwtExpDuration || 5) * 60`: COUCHDB_JWT_EXPIRY_MINUTES=0 uses five minutes. Negative durations refuse because the upstream token would already be expired.

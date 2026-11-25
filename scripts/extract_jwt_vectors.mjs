@@ -50,7 +50,7 @@ for(const alg of ['HS256','HS512','ES256','ES512']) {
   key=pem('PRIVATE KEY',await webcrypto.subtle.exportKey('pkcs8',pair.privateKey));
   public_key=pem('PUBLIC KEY',await webcrypto.subtle.exportKey('spki',pair.publicKey));
  }
- for(const [kid,sub,duration,instant] of [['','owner',5,1806000000],['test-id',' café ',0.125,1806000000],['','owner',1e20,1806000000],['','owner',1e308,1806000000],['','owner',5,2200000000]]) {
+ for(const [kid,sub,duration,instant] of [['','owner',5,1806000000],['','owner',0,1806000000],['test-id',' café ',0.125,1806000000],['','owner',1e20,1806000000],['','owner',1e308,1806000000],['','owner',5,2200000000]]) {
   now=instant;
   const auth={type:'jwt',jwtAlgorithm:alg,jwtKey:key,jwtKid:kid,jwtSub:sub,jwtExpDuration:duration};
   const generator=new Generator(), jwt=await generator.getJWT(auth);

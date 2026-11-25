@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Settings parity
 
+- Accept zero CouchDB JWT expiry with the device five-minute fallback; explain negative-duration refusal as already-expired upstream tokens.
+
 - Re-resolve journal size admission and derived text budgets at runtime milestone refresh while preserving explicit overrides.
 
 - Accept device ignore-file name lists without startup refusals; retain JS trim/empty entries, bound lookup to vault notes and warn on unresolved explicit names.

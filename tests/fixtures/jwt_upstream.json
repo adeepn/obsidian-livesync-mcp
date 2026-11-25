@@ -76,7 +76,7 @@
       "auth": {
         "type": "jwt",
         "jwtAlgorithm": "HS256",
-        "jwtKey": "WAPBcs6gQJxQOl4KCeyjH3uvuohoDTzw+FG5x2YIzAfnYsPykk3DQFEh9dz1+wizN7mVOf81ZhNznH++wbzpqQ==",
+        "jwtKey": "YGeKvpjHH3/fL6dx6B8kfGAWPXwHQqOIqEr5xc6WS6nnoxRl0ndBvtCnmMrh9mudWrOgE4mvYZYNGj7LguJBqg==",
         "jwtKid": "",
         "jwtSub": "owner",
         "jwtExpDuration": 5
@@ -84,13 +84,27 @@
       "now": 1806000000,
       "header_json": "{\"alg\":\"HS256\",\"typ\":\"JWT\"}",
       "payload_json": "{\"exp\":1806000300,\"iat\":1806000000,\"sub\":\"owner\",\"_couchdb.roles\":[\"_admin\"]}",
-      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE4MDYwMDAzMDAsImlhdCI6MTgwNjAwMDAwMCwic3ViIjoib3duZXIiLCJfY291Y2hkYi5yb2xlcyI6WyJfYWRtaW4iXX0.3aIjN_h8_yywzeTtUoVeO72ltJMFscx16xTgpmYS5Xw"
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE4MDYwMDAzMDAsImlhdCI6MTgwNjAwMDAwMCwic3ViIjoib3duZXIiLCJfY291Y2hkYi5yb2xlcyI6WyJfYWRtaW4iXX0.AHhnFslnkoA2n1J0-C5LDLq8-WMaXIngrl_gxUFmexQ"
     },
     {
       "auth": {
         "type": "jwt",
         "jwtAlgorithm": "HS256",
-        "jwtKey": "WAPBcs6gQJxQOl4KCeyjH3uvuohoDTzw+FG5x2YIzAfnYsPykk3DQFEh9dz1+wizN7mVOf81ZhNznH++wbzpqQ==",
+        "jwtKey": "YGeKvpjHH3/fL6dx6B8kfGAWPXwHQqOIqEr5xc6WS6nnoxRl0ndBvtCnmMrh9mudWrOgE4mvYZYNGj7LguJBqg==",
+        "jwtKid": "",
+        "jwtSub": "owner",
+        "jwtExpDuration": 0
+      },
+      "now": 1806000000,
+      "header_json": "{\"alg\":\"HS256\",\"typ\":\"JWT\"}",
+      "payload_json": "{\"exp\":1806000300,\"iat\":1806000000,\"sub\":\"owner\",\"_couchdb.roles\":[\"_admin\"]}",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE4MDYwMDAzMDAsImlhdCI6MTgwNjAwMDAwMCwic3ViIjoib3duZXIiLCJfY291Y2hkYi5yb2xlcyI6WyJfYWRtaW4iXX0.AHhnFslnkoA2n1J0-C5LDLq8-WMaXIngrl_gxUFmexQ"
+    },
+    {
+      "auth": {
+        "type": "jwt",
+        "jwtAlgorithm": "HS256",
+        "jwtKey": "YGeKvpjHH3/fL6dx6B8kfGAWPXwHQqOIqEr5xc6WS6nnoxRl0ndBvtCnmMrh9mudWrOgE4mvYZYNGj7LguJBqg==",
         "jwtKid": "test-id",
         "jwtSub": " café ",
         "jwtExpDuration": 0.125
@@ -98,13 +112,13 @@
       "now": 1806000000,
       "header_json": "{\"alg\":\"HS256\",\"typ\":\"JWT\",\"kid\":\"test-id\"}",
       "payload_json": "{\"exp\":1806000007.5,\"iat\":1806000000,\"sub\":\" café \",\"_couchdb.roles\":[\"_admin\"]}",
-      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6InRlc3QtaWQifQ.eyJleHAiOjE4MDYwMDAwMDcuNSwiaWF0IjoxODA2MDAwMDAwLCJzdWIiOiIgY2Fm6SAiLCJfY291Y2hkYi5yb2xlcyI6WyJfYWRtaW4iXX0.sO799u_hzwmK-AgZpe_e77EOiUZm_yZqdNVhOipHs4E"
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6InRlc3QtaWQifQ.eyJleHAiOjE4MDYwMDAwMDcuNSwiaWF0IjoxODA2MDAwMDAwLCJzdWIiOiIgY2Fm6SAiLCJfY291Y2hkYi5yb2xlcyI6WyJfYWRtaW4iXX0.ePruLQc37hDYI4hcAHAysvG06nmA0mlBYT6Vbq6gx1s"
     },
     {
       "auth": {
         "type": "jwt",
         "jwtAlgorithm": "HS256",
-        "jwtKey": "WAPBcs6gQJxQOl4KCeyjH3uvuohoDTzw+FG5x2YIzAfnYsPykk3DQFEh9dz1+wizN7mVOf81ZhNznH++wbzpqQ==",
+        "jwtKey": "YGeKvpjHH3/fL6dx6B8kfGAWPXwHQqOIqEr5xc6WS6nnoxRl0ndBvtCnmMrh9mudWrOgE4mvYZYNGj7LguJBqg==",
         "jwtKid": "",
         "jwtSub": "owner",
         "jwtExpDuration": 100000000000000000000
@@ -112,13 +126,13 @@
       "now": 1806000000,
       "header_json": "{\"alg\":\"HS256\",\"typ\":\"JWT\"}",
       "payload_json": "{\"exp\":6.000000000001806e+21,\"iat\":1806000000,\"sub\":\"owner\",\"_couchdb.roles\":[\"_admin\"]}",
-      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjYuMDAwMDAwMDAwMDAxODA2ZSsyMSwiaWF0IjoxODA2MDAwMDAwLCJzdWIiOiJvd25lciIsIl9jb3VjaGRiLnJvbGVzIjpbIl9hZG1pbiJdfQ.avB_64EJ0qj0HgVLel4V5IDRZrpPeR6yOiw6p__n-EQ"
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjYuMDAwMDAwMDAwMDAxODA2ZSsyMSwiaWF0IjoxODA2MDAwMDAwLCJzdWIiOiJvd25lciIsIl9jb3VjaGRiLnJvbGVzIjpbIl9hZG1pbiJdfQ.XawotTjEPZdjTHPQznAw_XgLIrfmWA7nASGu3frjIss"
     },
     {
       "auth": {
         "type": "jwt",
         "jwtAlgorithm": "HS256",
-        "jwtKey": "WAPBcs6gQJxQOl4KCeyjH3uvuohoDTzw+FG5x2YIzAfnYsPykk3DQFEh9dz1+wizN7mVOf81ZhNznH++wbzpqQ==",
+        "jwtKey": "YGeKvpjHH3/fL6dx6B8kfGAWPXwHQqOIqEr5xc6WS6nnoxRl0ndBvtCnmMrh9mudWrOgE4mvYZYNGj7LguJBqg==",
         "jwtKid": "",
         "jwtSub": "owner",
         "jwtExpDuration": 1e+308
@@ -126,13 +140,13 @@
       "now": 1806000000,
       "header_json": "{\"alg\":\"HS256\",\"typ\":\"JWT\"}",
       "payload_json": "{\"exp\":null,\"iat\":1806000000,\"sub\":\"owner\",\"_couchdb.roles\":[\"_admin\"]}",
-      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOm51bGwsImlhdCI6MTgwNjAwMDAwMCwic3ViIjoib3duZXIiLCJfY291Y2hkYi5yb2xlcyI6WyJfYWRtaW4iXX0.XcFo9vSTjyVWDwsiyDdy2Y1bzkUxFWcCnJrlZ-AQ7kQ"
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOm51bGwsImlhdCI6MTgwNjAwMDAwMCwic3ViIjoib3duZXIiLCJfY291Y2hkYi5yb2xlcyI6WyJfYWRtaW4iXX0.IiiI7L5pVJDuXpZPdCpa2YAIUP6D0OG5YgBKctAJ4W4"
     },
     {
       "auth": {
         "type": "jwt",
         "jwtAlgorithm": "HS256",
-        "jwtKey": "WAPBcs6gQJxQOl4KCeyjH3uvuohoDTzw+FG5x2YIzAfnYsPykk3DQFEh9dz1+wizN7mVOf81ZhNznH++wbzpqQ==",
+        "jwtKey": "YGeKvpjHH3/fL6dx6B8kfGAWPXwHQqOIqEr5xc6WS6nnoxRl0ndBvtCnmMrh9mudWrOgE4mvYZYNGj7LguJBqg==",
         "jwtKid": "",
         "jwtSub": "owner",
         "jwtExpDuration": 5
@@ -140,13 +154,13 @@
       "now": 2200000000,
       "header_json": "{\"alg\":\"HS256\",\"typ\":\"JWT\"}",
       "payload_json": "{\"exp\":-2094966996,\"iat\":-2094967296,\"sub\":\"owner\",\"_couchdb.roles\":[\"_admin\"]}",
-      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOi0yMDk0OTY2OTk2LCJpYXQiOi0yMDk0OTY3Mjk2LCJzdWIiOiJvd25lciIsIl9jb3VjaGRiLnJvbGVzIjpbIl9hZG1pbiJdfQ.ed1CgxmUhY75oTIAmidO60qhQelUFhLCoPb0sJ6XSgY"
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOi0yMDk0OTY2OTk2LCJpYXQiOi0yMDk0OTY3Mjk2LCJzdWIiOiJvd25lciIsIl9jb3VjaGRiLnJvbGVzIjpbIl9hZG1pbiJdfQ.5q_A8PsAJAiX5ELN2Cb37pf0TF0quPGCMlST-wCbFfE"
     },
     {
       "auth": {
         "type": "jwt",
         "jwtAlgorithm": "HS512",
-        "jwtKey": "jQNPX59H1YUhflGkBHcpSque7ZYbZShAcoXi06+X7lKyQAOwvMcOTOCMZRhO8m23HHKLbD3DVuXsoxLe/JxxDg==",
+        "jwtKey": "1c/Ryx4zuqmrzDznQa3VWMysvTNSTA1u+WlwwH4Ikq4hIMSTCkungrPRbDvXePKE2TDpVKJg8M3F32UfF7zzRA==",
         "jwtKid": "",
         "jwtSub": "owner",
         "jwtExpDuration": 5
@@ -154,13 +168,27 @@
       "now": 1806000000,
       "header_json": "{\"alg\":\"HS512\",\"typ\":\"JWT\"}",
       "payload_json": "{\"exp\":1806000300,\"iat\":1806000000,\"sub\":\"owner\",\"_couchdb.roles\":[\"_admin\"]}",
-      "token": "eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE4MDYwMDAzMDAsImlhdCI6MTgwNjAwMDAwMCwic3ViIjoib3duZXIiLCJfY291Y2hkYi5yb2xlcyI6WyJfYWRtaW4iXX0.V3uzbRXjdmlUNmNuggqhlXXKVnryva8CGtD9p7WerPLSbIWxfz0-xf04GnglMIccpco4Lu7Uu-UCKIFpcKw4oQ"
+      "token": "eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE4MDYwMDAzMDAsImlhdCI6MTgwNjAwMDAwMCwic3ViIjoib3duZXIiLCJfY291Y2hkYi5yb2xlcyI6WyJfYWRtaW4iXX0.8YpawFbQfTmP5MIlwje8Ju-YsikVuxJIAXERfelOoAycMwFaISy83EIsq4HKMyZboSiIAFkLHYVIEAbAa8U2bg"
     },
     {
       "auth": {
         "type": "jwt",
         "jwtAlgorithm": "HS512",
-        "jwtKey": "jQNPX59H1YUhflGkBHcpSque7ZYbZShAcoXi06+X7lKyQAOwvMcOTOCMZRhO8m23HHKLbD3DVuXsoxLe/JxxDg==",
+        "jwtKey": "1c/Ryx4zuqmrzDznQa3VWMysvTNSTA1u+WlwwH4Ikq4hIMSTCkungrPRbDvXePKE2TDpVKJg8M3F32UfF7zzRA==",
+        "jwtKid": "",
+        "jwtSub": "owner",
+        "jwtExpDuration": 0
+      },
+      "now": 1806000000,
+      "header_json": "{\"alg\":\"HS512\",\"typ\":\"JWT\"}",
+      "payload_json": "{\"exp\":1806000300,\"iat\":1806000000,\"sub\":\"owner\",\"_couchdb.roles\":[\"_admin\"]}",
+      "token": "eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE4MDYwMDAzMDAsImlhdCI6MTgwNjAwMDAwMCwic3ViIjoib3duZXIiLCJfY291Y2hkYi5yb2xlcyI6WyJfYWRtaW4iXX0.8YpawFbQfTmP5MIlwje8Ju-YsikVuxJIAXERfelOoAycMwFaISy83EIsq4HKMyZboSiIAFkLHYVIEAbAa8U2bg"
+    },
+    {
+      "auth": {
+        "type": "jwt",
+        "jwtAlgorithm": "HS512",
+        "jwtKey": "1c/Ryx4zuqmrzDznQa3VWMysvTNSTA1u+WlwwH4Ikq4hIMSTCkungrPRbDvXePKE2TDpVKJg8M3F32UfF7zzRA==",
         "jwtKid": "test-id",
         "jwtSub": " café ",
         "jwtExpDuration": 0.125
@@ -168,13 +196,13 @@
       "now": 1806000000,
       "header_json": "{\"alg\":\"HS512\",\"typ\":\"JWT\",\"kid\":\"test-id\"}",
       "payload_json": "{\"exp\":1806000007.5,\"iat\":1806000000,\"sub\":\" café \",\"_couchdb.roles\":[\"_admin\"]}",
-      "token": "eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCIsImtpZCI6InRlc3QtaWQifQ.eyJleHAiOjE4MDYwMDAwMDcuNSwiaWF0IjoxODA2MDAwMDAwLCJzdWIiOiIgY2Fm6SAiLCJfY291Y2hkYi5yb2xlcyI6WyJfYWRtaW4iXX0.xadVH4_q0a74NvitiU0D7iKh2w_c2kRyY918iMF7vQb2Y8PaTv5U8dI5H-DNFdgFjwJp8TfSpN-XIqRdRjKWKg"
+      "token": "eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCIsImtpZCI6InRlc3QtaWQifQ.eyJleHAiOjE4MDYwMDAwMDcuNSwiaWF0IjoxODA2MDAwMDAwLCJzdWIiOiIgY2Fm6SAiLCJfY291Y2hkYi5yb2xlcyI6WyJfYWRtaW4iXX0._PXXXw4FerUGsUDgz1uX9LKBc3wsvjo9SrjEdJMqEkDFUKucejfgU1wxAYkxbToVdYSdpupLt-CT-7nYqiSAJQ"
     },
     {
       "auth": {
         "type": "jwt",
         "jwtAlgorithm": "HS512",
-        "jwtKey": "jQNPX59H1YUhflGkBHcpSque7ZYbZShAcoXi06+X7lKyQAOwvMcOTOCMZRhO8m23HHKLbD3DVuXsoxLe/JxxDg==",
+        "jwtKey": "1c/Ryx4zuqmrzDznQa3VWMysvTNSTA1u+WlwwH4Ikq4hIMSTCkungrPRbDvXePKE2TDpVKJg8M3F32UfF7zzRA==",
         "jwtKid": "",
         "jwtSub": "owner",
         "jwtExpDuration": 100000000000000000000
@@ -182,13 +210,13 @@
       "now": 1806000000,
       "header_json": "{\"alg\":\"HS512\",\"typ\":\"JWT\"}",
       "payload_json": "{\"exp\":6.000000000001806e+21,\"iat\":1806000000,\"sub\":\"owner\",\"_couchdb.roles\":[\"_admin\"]}",
-      "token": "eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJleHAiOjYuMDAwMDAwMDAwMDAxODA2ZSsyMSwiaWF0IjoxODA2MDAwMDAwLCJzdWIiOiJvd25lciIsIl9jb3VjaGRiLnJvbGVzIjpbIl9hZG1pbiJdfQ.41R7w1Gf3OhjIOu_5uDoNH1KYdUc95CLlEFVB3Dslsyu-W_ARKfH_0U6wkzfjVUqdvdkdD_4jTtDZgRpwofELg"
+      "token": "eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJleHAiOjYuMDAwMDAwMDAwMDAxODA2ZSsyMSwiaWF0IjoxODA2MDAwMDAwLCJzdWIiOiJvd25lciIsIl9jb3VjaGRiLnJvbGVzIjpbIl9hZG1pbiJdfQ.0ldlnr-g69S7Fof3AYkMEn6X-KdAGvxZ6D1V04DKx01zyREClQeu6ZmjLJ4kuMmTErGEMBoJs8J4Rd52_j8Y2g"
     },
     {
       "auth": {
         "type": "jwt",
         "jwtAlgorithm": "HS512",
-        "jwtKey": "jQNPX59H1YUhflGkBHcpSque7ZYbZShAcoXi06+X7lKyQAOwvMcOTOCMZRhO8m23HHKLbD3DVuXsoxLe/JxxDg==",
+        "jwtKey": "1c/Ryx4zuqmrzDznQa3VWMysvTNSTA1u+WlwwH4Ikq4hIMSTCkungrPRbDvXePKE2TDpVKJg8M3F32UfF7zzRA==",
         "jwtKid": "",
         "jwtSub": "owner",
         "jwtExpDuration": 1e+308
@@ -196,13 +224,13 @@
       "now": 1806000000,
       "header_json": "{\"alg\":\"HS512\",\"typ\":\"JWT\"}",
       "payload_json": "{\"exp\":null,\"iat\":1806000000,\"sub\":\"owner\",\"_couchdb.roles\":[\"_admin\"]}",
-      "token": "eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJleHAiOm51bGwsImlhdCI6MTgwNjAwMDAwMCwic3ViIjoib3duZXIiLCJfY291Y2hkYi5yb2xlcyI6WyJfYWRtaW4iXX0.WrYjm5f25_L3inK4cH4IJ3GEUgNdpYvAV0VQvdAoELZvYld98TONMZbwN3LFokagNGMuvq8VqT08xQyunZ5RYw"
+      "token": "eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJleHAiOm51bGwsImlhdCI6MTgwNjAwMDAwMCwic3ViIjoib3duZXIiLCJfY291Y2hkYi5yb2xlcyI6WyJfYWRtaW4iXX0.RcISDoTy0L5kjdxXdD0UNUNpD_1BrRsQWSqfnAsSdf7Ag4O9Ks6z9GwBoLfVvdn0ksUhbdxe2HdGfXkxirOkeA"
     },
     {
       "auth": {
         "type": "jwt",
         "jwtAlgorithm": "HS512",
-        "jwtKey": "jQNPX59H1YUhflGkBHcpSque7ZYbZShAcoXi06+X7lKyQAOwvMcOTOCMZRhO8m23HHKLbD3DVuXsoxLe/JxxDg==",
+        "jwtKey": "1c/Ryx4zuqmrzDznQa3VWMysvTNSTA1u+WlwwH4Ikq4hIMSTCkungrPRbDvXePKE2TDpVKJg8M3F32UfF7zzRA==",
         "jwtKid": "",
         "jwtSub": "owner",
         "jwtExpDuration": 5
@@ -210,13 +238,13 @@
       "now": 2200000000,
       "header_json": "{\"alg\":\"HS512\",\"typ\":\"JWT\"}",
       "payload_json": "{\"exp\":-2094966996,\"iat\":-2094967296,\"sub\":\"owner\",\"_couchdb.roles\":[\"_admin\"]}",
-      "token": "eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJleHAiOi0yMDk0OTY2OTk2LCJpYXQiOi0yMDk0OTY3Mjk2LCJzdWIiOiJvd25lciIsIl9jb3VjaGRiLnJvbGVzIjpbIl9hZG1pbiJdfQ.Vm8v26AJQFM7aVlZeJE4WnfYGO3F6yLj70rQoOr-u0ZYiuusns9lbSSU8Dp8Bz9zpiOv_nWbQAMf-OY6C7Y3XQ"
+      "token": "eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJleHAiOi0yMDk0OTY2OTk2LCJpYXQiOi0yMDk0OTY3Mjk2LCJzdWIiOiJvd25lciIsIl9jb3VjaGRiLnJvbGVzIjpbIl9hZG1pbiJdfQ.umtrh3bV7fgDa_dTDzIn2-cjMvmC5FfNCBEiwExkoNLlMj-uRiL1ml5X7lEBk7f8kSsBtdA_5tqZNRcIKCXudA"
     },
     {
       "auth": {
         "type": "jwt",
         "jwtAlgorithm": "ES256",
-        "jwtKey": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgqvChZm6srHNky0og1X32RArcFuACZb29kpL+Khzk78KhRANCAAQb4s3fpd94bKw1GNvoeuVDvOjMurqp2KuEH84+Ix5mtQfPSyqHqC36laID2ZSw4DvhAA7A6yDFsEkmG1BvBrJo\n-----END PRIVATE KEY-----",
+        "jwtKey": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgHkgc1QzUSk1hxFH9eHqrPTVznv2kklJrlWQpezb8Lt2hRANCAATgSu3y90w3mWejUk3gOnwPPHlG0JNnfhl9CHZo3TpCofPLuvDbHRoKPhtUmP9CfXce5RdbsbO+Y1JsLmOynNFs\n-----END PRIVATE KEY-----",
         "jwtKid": "",
         "jwtSub": "owner",
         "jwtExpDuration": 5
@@ -224,14 +252,29 @@
       "now": 1806000000,
       "header_json": "{\"alg\":\"ES256\",\"typ\":\"JWT\"}",
       "payload_json": "{\"exp\":1806000300,\"iat\":1806000000,\"sub\":\"owner\",\"_couchdb.roles\":[\"_admin\"]}",
-      "token": "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE4MDYwMDAzMDAsImlhdCI6MTgwNjAwMDAwMCwic3ViIjoib3duZXIiLCJfY291Y2hkYi5yb2xlcyI6WyJfYWRtaW4iXX0.EUsQMIxs92wA_xbi7G5pK8uB-ur2v7-3Z4czHLo_IfaE4tXqdpsmdEgHmk71dVmKzbuRJoNsw9h-738bv6cHUQ",
-      "public_key": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEG+LN36XfeGysNRjb6HrlQ7zozLq6qdirhB/OPiMeZrUHz0sqh6gt+pWiA9mUsOA74QAOwOsgxbBJJhtQbwayaA==\n-----END PUBLIC KEY-----"
+      "token": "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE4MDYwMDAzMDAsImlhdCI6MTgwNjAwMDAwMCwic3ViIjoib3duZXIiLCJfY291Y2hkYi5yb2xlcyI6WyJfYWRtaW4iXX0.VP64uamgcvtILhVB6nKKcFUtl-iI2ggobJX4yCjftDHRtFwF-rsjk0JaHEv_S1xr6Iws_vAGsi0_92TrE1WfvA",
+      "public_key": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE4Ert8vdMN5lno1JN4Dp8Dzx5RtCTZ34ZfQh2aN06QqHzy7rw2x0aCj4bVJj/Qn13HuUXW7GzvmNSbC5jspzRbA==\n-----END PUBLIC KEY-----"
     },
     {
       "auth": {
         "type": "jwt",
         "jwtAlgorithm": "ES256",
-        "jwtKey": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgqvChZm6srHNky0og1X32RArcFuACZb29kpL+Khzk78KhRANCAAQb4s3fpd94bKw1GNvoeuVDvOjMurqp2KuEH84+Ix5mtQfPSyqHqC36laID2ZSw4DvhAA7A6yDFsEkmG1BvBrJo\n-----END PRIVATE KEY-----",
+        "jwtKey": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgHkgc1QzUSk1hxFH9eHqrPTVznv2kklJrlWQpezb8Lt2hRANCAATgSu3y90w3mWejUk3gOnwPPHlG0JNnfhl9CHZo3TpCofPLuvDbHRoKPhtUmP9CfXce5RdbsbO+Y1JsLmOynNFs\n-----END PRIVATE KEY-----",
+        "jwtKid": "",
+        "jwtSub": "owner",
+        "jwtExpDuration": 0
+      },
+      "now": 1806000000,
+      "header_json": "{\"alg\":\"ES256\",\"typ\":\"JWT\"}",
+      "payload_json": "{\"exp\":1806000300,\"iat\":1806000000,\"sub\":\"owner\",\"_couchdb.roles\":[\"_admin\"]}",
+      "token": "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE4MDYwMDAzMDAsImlhdCI6MTgwNjAwMDAwMCwic3ViIjoib3duZXIiLCJfY291Y2hkYi5yb2xlcyI6WyJfYWRtaW4iXX0.FdJNmJN0XmLfmXYVLeb9PNZ3w_8CdJOeX7omd7gS73F4b9TEQlDhmeJPNKE0lUM5L5rKQ_BWyTfzqoKN8BEVvQ",
+      "public_key": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE4Ert8vdMN5lno1JN4Dp8Dzx5RtCTZ34ZfQh2aN06QqHzy7rw2x0aCj4bVJj/Qn13HuUXW7GzvmNSbC5jspzRbA==\n-----END PUBLIC KEY-----"
+    },
+    {
+      "auth": {
+        "type": "jwt",
+        "jwtAlgorithm": "ES256",
+        "jwtKey": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgHkgc1QzUSk1hxFH9eHqrPTVznv2kklJrlWQpezb8Lt2hRANCAATgSu3y90w3mWejUk3gOnwPPHlG0JNnfhl9CHZo3TpCofPLuvDbHRoKPhtUmP9CfXce5RdbsbO+Y1JsLmOynNFs\n-----END PRIVATE KEY-----",
         "jwtKid": "test-id",
         "jwtSub": " café ",
         "jwtExpDuration": 0.125
@@ -239,14 +282,14 @@
       "now": 1806000000,
       "header_json": "{\"alg\":\"ES256\",\"typ\":\"JWT\",\"kid\":\"test-id\"}",
       "payload_json": "{\"exp\":1806000007.5,\"iat\":1806000000,\"sub\":\" café \",\"_couchdb.roles\":[\"_admin\"]}",
-      "token": "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6InRlc3QtaWQifQ.eyJleHAiOjE4MDYwMDAwMDcuNSwiaWF0IjoxODA2MDAwMDAwLCJzdWIiOiIgY2Fm6SAiLCJfY291Y2hkYi5yb2xlcyI6WyJfYWRtaW4iXX0.WKdxgoTSM5WS1uvZ3Y_OlB4UpPdrhy2vzmge66OGeLxofCOOrguCEz4kTKbhJJlkpwOMRljWSjMU8yi_4co2ag",
-      "public_key": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEG+LN36XfeGysNRjb6HrlQ7zozLq6qdirhB/OPiMeZrUHz0sqh6gt+pWiA9mUsOA74QAOwOsgxbBJJhtQbwayaA==\n-----END PUBLIC KEY-----"
+      "token": "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6InRlc3QtaWQifQ.eyJleHAiOjE4MDYwMDAwMDcuNSwiaWF0IjoxODA2MDAwMDAwLCJzdWIiOiIgY2Fm6SAiLCJfY291Y2hkYi5yb2xlcyI6WyJfYWRtaW4iXX0.VUsiB0Qc7izPSnzsDSFPHD1juc31Uiy008LUjdvXNRw8L7e7iipd9Ng1X-igN1D98WW-CfXrsmNfYv_8GyWVEQ",
+      "public_key": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE4Ert8vdMN5lno1JN4Dp8Dzx5RtCTZ34ZfQh2aN06QqHzy7rw2x0aCj4bVJj/Qn13HuUXW7GzvmNSbC5jspzRbA==\n-----END PUBLIC KEY-----"
     },
     {
       "auth": {
         "type": "jwt",
         "jwtAlgorithm": "ES256",
-        "jwtKey": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgqvChZm6srHNky0og1X32RArcFuACZb29kpL+Khzk78KhRANCAAQb4s3fpd94bKw1GNvoeuVDvOjMurqp2KuEH84+Ix5mtQfPSyqHqC36laID2ZSw4DvhAA7A6yDFsEkmG1BvBrJo\n-----END PRIVATE KEY-----",
+        "jwtKey": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgHkgc1QzUSk1hxFH9eHqrPTVznv2kklJrlWQpezb8Lt2hRANCAATgSu3y90w3mWejUk3gOnwPPHlG0JNnfhl9CHZo3TpCofPLuvDbHRoKPhtUmP9CfXce5RdbsbO+Y1JsLmOynNFs\n-----END PRIVATE KEY-----",
         "jwtKid": "",
         "jwtSub": "owner",
         "jwtExpDuration": 100000000000000000000
@@ -254,14 +297,14 @@
       "now": 1806000000,
       "header_json": "{\"alg\":\"ES256\",\"typ\":\"JWT\"}",
       "payload_json": "{\"exp\":6.000000000001806e+21,\"iat\":1806000000,\"sub\":\"owner\",\"_couchdb.roles\":[\"_admin\"]}",
-      "token": "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjYuMDAwMDAwMDAwMDAxODA2ZSsyMSwiaWF0IjoxODA2MDAwMDAwLCJzdWIiOiJvd25lciIsIl9jb3VjaGRiLnJvbGVzIjpbIl9hZG1pbiJdfQ.PM_YfaMZ-zZBCm70_OyeSvyDaoEl6vduRmw71p0XdwTFjkbDkvKuotIGM9ZwIamL-nO-TvhK7CNpLw5raK2MHw",
-      "public_key": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEG+LN36XfeGysNRjb6HrlQ7zozLq6qdirhB/OPiMeZrUHz0sqh6gt+pWiA9mUsOA74QAOwOsgxbBJJhtQbwayaA==\n-----END PUBLIC KEY-----"
+      "token": "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjYuMDAwMDAwMDAwMDAxODA2ZSsyMSwiaWF0IjoxODA2MDAwMDAwLCJzdWIiOiJvd25lciIsIl9jb3VjaGRiLnJvbGVzIjpbIl9hZG1pbiJdfQ.sATC_1jEuogARDzOUk8UmUDuxjq6GidLpEE-OHGZzH8jTFI93J4uO6uSc6AeUjIMDCMzM9afDDR1VPQ86rAZ-Q",
+      "public_key": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE4Ert8vdMN5lno1JN4Dp8Dzx5RtCTZ34ZfQh2aN06QqHzy7rw2x0aCj4bVJj/Qn13HuUXW7GzvmNSbC5jspzRbA==\n-----END PUBLIC KEY-----"
     },
     {
       "auth": {
         "type": "jwt",
         "jwtAlgorithm": "ES256",
-        "jwtKey": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgqvChZm6srHNky0og1X32RArcFuACZb29kpL+Khzk78KhRANCAAQb4s3fpd94bKw1GNvoeuVDvOjMurqp2KuEH84+Ix5mtQfPSyqHqC36laID2ZSw4DvhAA7A6yDFsEkmG1BvBrJo\n-----END PRIVATE KEY-----",
+        "jwtKey": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgHkgc1QzUSk1hxFH9eHqrPTVznv2kklJrlWQpezb8Lt2hRANCAATgSu3y90w3mWejUk3gOnwPPHlG0JNnfhl9CHZo3TpCofPLuvDbHRoKPhtUmP9CfXce5RdbsbO+Y1JsLmOynNFs\n-----END PRIVATE KEY-----",
         "jwtKid": "",
         "jwtSub": "owner",
         "jwtExpDuration": 1e+308
@@ -269,14 +312,14 @@
       "now": 1806000000,
       "header_json": "{\"alg\":\"ES256\",\"typ\":\"JWT\"}",
       "payload_json": "{\"exp\":null,\"iat\":1806000000,\"sub\":\"owner\",\"_couchdb.roles\":[\"_admin\"]}",
-      "token": "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOm51bGwsImlhdCI6MTgwNjAwMDAwMCwic3ViIjoib3duZXIiLCJfY291Y2hkYi5yb2xlcyI6WyJfYWRtaW4iXX0.9GGsWPF0ZExeeIBrtDsJo6IYqb-meGrimXAsJEdBm7hJUBNutDUz9jzPt7YiA9pg9p_vBoGP_Y8iwM3eofcKXQ",
-      "public_key": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEG+LN36XfeGysNRjb6HrlQ7zozLq6qdirhB/OPiMeZrUHz0sqh6gt+pWiA9mUsOA74QAOwOsgxbBJJhtQbwayaA==\n-----END PUBLIC KEY-----"
+      "token": "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOm51bGwsImlhdCI6MTgwNjAwMDAwMCwic3ViIjoib3duZXIiLCJfY291Y2hkYi5yb2xlcyI6WyJfYWRtaW4iXX0.kmhovQEbo7JWTEqwI5rBP69ER_zanJvR40NC-nGB5g3YQvz2jVPy-uDu8qNzd5ttuoWvIdvfMmrppslWhqP_Jw",
+      "public_key": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE4Ert8vdMN5lno1JN4Dp8Dzx5RtCTZ34ZfQh2aN06QqHzy7rw2x0aCj4bVJj/Qn13HuUXW7GzvmNSbC5jspzRbA==\n-----END PUBLIC KEY-----"
     },
     {
       "auth": {
         "type": "jwt",
         "jwtAlgorithm": "ES256",
-        "jwtKey": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgqvChZm6srHNky0og1X32RArcFuACZb29kpL+Khzk78KhRANCAAQb4s3fpd94bKw1GNvoeuVDvOjMurqp2KuEH84+Ix5mtQfPSyqHqC36laID2ZSw4DvhAA7A6yDFsEkmG1BvBrJo\n-----END PRIVATE KEY-----",
+        "jwtKey": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgHkgc1QzUSk1hxFH9eHqrPTVznv2kklJrlWQpezb8Lt2hRANCAATgSu3y90w3mWejUk3gOnwPPHlG0JNnfhl9CHZo3TpCofPLuvDbHRoKPhtUmP9CfXce5RdbsbO+Y1JsLmOynNFs\n-----END PRIVATE KEY-----",
         "jwtKid": "",
         "jwtSub": "owner",
         "jwtExpDuration": 5
@@ -284,14 +327,14 @@
       "now": 2200000000,
       "header_json": "{\"alg\":\"ES256\",\"typ\":\"JWT\"}",
       "payload_json": "{\"exp\":-2094966996,\"iat\":-2094967296,\"sub\":\"owner\",\"_couchdb.roles\":[\"_admin\"]}",
-      "token": "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOi0yMDk0OTY2OTk2LCJpYXQiOi0yMDk0OTY3Mjk2LCJzdWIiOiJvd25lciIsIl9jb3VjaGRiLnJvbGVzIjpbIl9hZG1pbiJdfQ.X9IdcEACbqQuRtSpEK3sIbh6gKizVN65m5u3guLHrtTfgOyiUj6gJd9tGUEarZseTbacyXV4dgZHwpItbR3XrQ",
-      "public_key": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEG+LN36XfeGysNRjb6HrlQ7zozLq6qdirhB/OPiMeZrUHz0sqh6gt+pWiA9mUsOA74QAOwOsgxbBJJhtQbwayaA==\n-----END PUBLIC KEY-----"
+      "token": "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOi0yMDk0OTY2OTk2LCJpYXQiOi0yMDk0OTY3Mjk2LCJzdWIiOiJvd25lciIsIl9jb3VjaGRiLnJvbGVzIjpbIl9hZG1pbiJdfQ.b7RlTGvhNAvk_z0jLaLUX16WY5xDyd31orC9HCebBZ3QVWHY2Qejz1tGYWYrSnTKFTgJbaLlPXEvi4MRdwgrgg",
+      "public_key": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE4Ert8vdMN5lno1JN4Dp8Dzx5RtCTZ34ZfQh2aN06QqHzy7rw2x0aCj4bVJj/Qn13HuUXW7GzvmNSbC5jspzRbA==\n-----END PUBLIC KEY-----"
     },
     {
       "auth": {
         "type": "jwt",
         "jwtAlgorithm": "ES512",
-        "jwtKey": "-----BEGIN PRIVATE KEY-----\nMIHuAgEAMBAGByqGSM49AgEGBSuBBAAjBIHWMIHTAgEBBEIB4px7fh/ER6hV/G9lWHc+BtkfQCQXxlH+4ilPkJ178RrJBdEX6bmUzcUrRIPXe9rFrO3LTptKQ2F0YEMJYHRJKcuhgYkDgYYABAC+u1EF6t3ZICjWiSVAGffRlYokFhUn0Deq41jd2eP9w1c/YsF7bGjmRtGWBySHCZykh1DuPZFklsdD4ODjiP3AZQCzHN3k3s19ILQeOQALnra3zqJockUWqzs0Y8hYfEDRVLHNMGgMx5MEaQdV9Qx8i85lysCcpvnMjdskDErK4IATrg==\n-----END PRIVATE KEY-----",
+        "jwtKey": "-----BEGIN PRIVATE KEY-----\nMIHuAgEAMBAGByqGSM49AgEGBSuBBAAjBIHWMIHTAgEBBEIAgV1HdZ1VM3C58IM6zZOF+5X1d3+LBJZByoh8xdiKioDGvui2B5SimEJ0LynAsNPjjk999cANPTMrjZKDJmJKBWWhgYkDgYYABACixfB9XpprzfWHoJ8QzgC6IZgtyTCgtzyCpFFXYkJkbVKbt2DCGrFce190oSSkVaGusgISuRhNhqqkZhbMchKSGQBOaWitlgFAocNuG60GbDH5yksBZIP2J5YdvsQPwmILDzVuxKKrKD1okHsvyV2buuf5MBGT0Jc2PQlFeIo+K8cGcA==\n-----END PRIVATE KEY-----",
         "jwtKid": "",
         "jwtSub": "owner",
         "jwtExpDuration": 5
@@ -299,14 +342,29 @@
       "now": 1806000000,
       "header_json": "{\"alg\":\"ES512\",\"typ\":\"JWT\"}",
       "payload_json": "{\"exp\":1806000300,\"iat\":1806000000,\"sub\":\"owner\",\"_couchdb.roles\":[\"_admin\"]}",
-      "token": "eyJhbGciOiJFUzUxMiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE4MDYwMDAzMDAsImlhdCI6MTgwNjAwMDAwMCwic3ViIjoib3duZXIiLCJfY291Y2hkYi5yb2xlcyI6WyJfYWRtaW4iXX0.ATJwd-82BpoAr_NtsySuXRsjnop5x8jiUtpDbsPt6cTa5Uyzq94UQu-AdvsLCmg851aPOdzshhPWAoO4GoBBETrAAEeXl05gZqglfg4KdYnwhnakBP8A4mOdqjjBsFy6kRFP6pN4SRdTUxaF7VhJZEwtSYSIR5SJ7XPRjWNdeO0quGC1",
-      "public_key": "-----BEGIN PUBLIC KEY-----\nMIGbMBAGByqGSM49AgEGBSuBBAAjA4GGAAQAvrtRBerd2SAo1oklQBn30ZWKJBYVJ9A3quNY3dnj/cNXP2LBe2xo5kbRlgckhwmcpIdQ7j2RZJbHQ+Dg44j9wGUAsxzd5N7NfSC0HjkAC562t86iaHJFFqs7NGPIWHxA0VSxzTBoDMeTBGkHVfUMfIvOZcrAnKb5zI3bJAxKyuCAE64=\n-----END PUBLIC KEY-----"
+      "token": "eyJhbGciOiJFUzUxMiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE4MDYwMDAzMDAsImlhdCI6MTgwNjAwMDAwMCwic3ViIjoib3duZXIiLCJfY291Y2hkYi5yb2xlcyI6WyJfYWRtaW4iXX0.AP3o_tz7dpxT0Z3ZpssJuN9mi2mg8cXfPOKkBWRI0L5xQ5rri11Ne4OpH3XK6t39p45FZawfRCMVjvVai_6b9M7WAaV6T3X6_VHScPDTd6hKPrpsGZKix3hKU6hB3z06JetXUvcxQAzGY0qU1ZfJw_mav0Pm9Io-MwrntUuum_Ny2hX6",
+      "public_key": "-----BEGIN PUBLIC KEY-----\nMIGbMBAGByqGSM49AgEGBSuBBAAjA4GGAAQAosXwfV6aa831h6CfEM4AuiGYLckwoLc8gqRRV2JCZG1Sm7dgwhqxXHtfdKEkpFWhrrICErkYTYaqpGYWzHISkhkATmlorZYBQKHDbhutBmwx+cpLAWSD9ieWHb7ED8JiCw81bsSiqyg9aJB7L8ldm7rn+TARk9CXNj0JRXiKPivHBnA=\n-----END PUBLIC KEY-----"
     },
     {
       "auth": {
         "type": "jwt",
         "jwtAlgorithm": "ES512",
-        "jwtKey": "-----BEGIN PRIVATE KEY-----\nMIHuAgEAMBAGByqGSM49AgEGBSuBBAAjBIHWMIHTAgEBBEIB4px7fh/ER6hV/G9lWHc+BtkfQCQXxlH+4ilPkJ178RrJBdEX6bmUzcUrRIPXe9rFrO3LTptKQ2F0YEMJYHRJKcuhgYkDgYYABAC+u1EF6t3ZICjWiSVAGffRlYokFhUn0Deq41jd2eP9w1c/YsF7bGjmRtGWBySHCZykh1DuPZFklsdD4ODjiP3AZQCzHN3k3s19ILQeOQALnra3zqJockUWqzs0Y8hYfEDRVLHNMGgMx5MEaQdV9Qx8i85lysCcpvnMjdskDErK4IATrg==\n-----END PRIVATE KEY-----",
+        "jwtKey": "-----BEGIN PRIVATE KEY-----\nMIHuAgEAMBAGByqGSM49AgEGBSuBBAAjBIHWMIHTAgEBBEIAgV1HdZ1VM3C58IM6zZOF+5X1d3+LBJZByoh8xdiKioDGvui2B5SimEJ0LynAsNPjjk999cANPTMrjZKDJmJKBWWhgYkDgYYABACixfB9XpprzfWHoJ8QzgC6IZgtyTCgtzyCpFFXYkJkbVKbt2DCGrFce190oSSkVaGusgISuRhNhqqkZhbMchKSGQBOaWitlgFAocNuG60GbDH5yksBZIP2J5YdvsQPwmILDzVuxKKrKD1okHsvyV2buuf5MBGT0Jc2PQlFeIo+K8cGcA==\n-----END PRIVATE KEY-----",
+        "jwtKid": "",
+        "jwtSub": "owner",
+        "jwtExpDuration": 0
+      },
+      "now": 1806000000,
+      "header_json": "{\"alg\":\"ES512\",\"typ\":\"JWT\"}",
+      "payload_json": "{\"exp\":1806000300,\"iat\":1806000000,\"sub\":\"owner\",\"_couchdb.roles\":[\"_admin\"]}",
+      "token": "eyJhbGciOiJFUzUxMiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE4MDYwMDAzMDAsImlhdCI6MTgwNjAwMDAwMCwic3ViIjoib3duZXIiLCJfY291Y2hkYi5yb2xlcyI6WyJfYWRtaW4iXX0.AUTzsqc6ncjluKPZXN-V_qpwnOZza1FzaUOj9AlIdBYP8AmQlBrIUU3TtQ20sA6tOXKzVBKrP_S66_6GwUbpYLOAAEmiXBgPgHx6SNDov-pGhpGCXSG6zmDmOPZ6lyGbolInqBG9Nv_iCm-J-weLfQr9WOrmmAnSD4ojv1WvEqSFwLhR",
+      "public_key": "-----BEGIN PUBLIC KEY-----\nMIGbMBAGByqGSM49AgEGBSuBBAAjA4GGAAQAosXwfV6aa831h6CfEM4AuiGYLckwoLc8gqRRV2JCZG1Sm7dgwhqxXHtfdKEkpFWhrrICErkYTYaqpGYWzHISkhkATmlorZYBQKHDbhutBmwx+cpLAWSD9ieWHb7ED8JiCw81bsSiqyg9aJB7L8ldm7rn+TARk9CXNj0JRXiKPivHBnA=\n-----END PUBLIC KEY-----"
+    },
+    {
+      "auth": {
+        "type": "jwt",
+        "jwtAlgorithm": "ES512",
+        "jwtKey": "-----BEGIN PRIVATE KEY-----\nMIHuAgEAMBAGByqGSM49AgEGBSuBBAAjBIHWMIHTAgEBBEIAgV1HdZ1VM3C58IM6zZOF+5X1d3+LBJZByoh8xdiKioDGvui2B5SimEJ0LynAsNPjjk999cANPTMrjZKDJmJKBWWhgYkDgYYABACixfB9XpprzfWHoJ8QzgC6IZgtyTCgtzyCpFFXYkJkbVKbt2DCGrFce190oSSkVaGusgISuRhNhqqkZhbMchKSGQBOaWitlgFAocNuG60GbDH5yksBZIP2J5YdvsQPwmILDzVuxKKrKD1okHsvyV2buuf5MBGT0Jc2PQlFeIo+K8cGcA==\n-----END PRIVATE KEY-----",
         "jwtKid": "test-id",
         "jwtSub": " café ",
         "jwtExpDuration": 0.125
@@ -314,14 +372,14 @@
       "now": 1806000000,
       "header_json": "{\"alg\":\"ES512\",\"typ\":\"JWT\",\"kid\":\"test-id\"}",
       "payload_json": "{\"exp\":1806000007.5,\"iat\":1806000000,\"sub\":\" café \",\"_couchdb.roles\":[\"_admin\"]}",
-      "token": "eyJhbGciOiJFUzUxMiIsInR5cCI6IkpXVCIsImtpZCI6InRlc3QtaWQifQ.eyJleHAiOjE4MDYwMDAwMDcuNSwiaWF0IjoxODA2MDAwMDAwLCJzdWIiOiIgY2Fm6SAiLCJfY291Y2hkYi5yb2xlcyI6WyJfYWRtaW4iXX0.AFl05MM1RQEVa99ti7Aw4JnUVms7qYc6pCGs17jzWsoG5xfU_d-L1yZJ4XIRCucSom_Is6JG9lfZIeGS-nKotT-1ATfDjvrthjV1vXPArlniN-OktllvVbLuX4P-Z3GhCg-UHsSJqw2PuuFRkfM-ZJgILx1lasjlqI4qJkZByiuYLFI_",
-      "public_key": "-----BEGIN PUBLIC KEY-----\nMIGbMBAGByqGSM49AgEGBSuBBAAjA4GGAAQAvrtRBerd2SAo1oklQBn30ZWKJBYVJ9A3quNY3dnj/cNXP2LBe2xo5kbRlgckhwmcpIdQ7j2RZJbHQ+Dg44j9wGUAsxzd5N7NfSC0HjkAC562t86iaHJFFqs7NGPIWHxA0VSxzTBoDMeTBGkHVfUMfIvOZcrAnKb5zI3bJAxKyuCAE64=\n-----END PUBLIC KEY-----"
+      "token": "eyJhbGciOiJFUzUxMiIsInR5cCI6IkpXVCIsImtpZCI6InRlc3QtaWQifQ.eyJleHAiOjE4MDYwMDAwMDcuNSwiaWF0IjoxODA2MDAwMDAwLCJzdWIiOiIgY2Fm6SAiLCJfY291Y2hkYi5yb2xlcyI6WyJfYWRtaW4iXX0.AWS2XqLM58dek-pldKDI_kSS96tS8LteLyTpT2q9RAGT8xMld7_3Kt_-N2fD40Zj1WdqEYq4MrO2ZXvXOcoYZZcFAJu0u9Jty0lJIMeyBBS9NdbUsIcuqfUqZaMJ9lJBumN0ZhSR6tqHxtE8AIXnFwMyCnQHlw2MAV5Z5TmhaZrYBRwm",
+      "public_key": "-----BEGIN PUBLIC KEY-----\nMIGbMBAGByqGSM49AgEGBSuBBAAjA4GGAAQAosXwfV6aa831h6CfEM4AuiGYLckwoLc8gqRRV2JCZG1Sm7dgwhqxXHtfdKEkpFWhrrICErkYTYaqpGYWzHISkhkATmlorZYBQKHDbhutBmwx+cpLAWSD9ieWHb7ED8JiCw81bsSiqyg9aJB7L8ldm7rn+TARk9CXNj0JRXiKPivHBnA=\n-----END PUBLIC KEY-----"
     },
     {
       "auth": {
         "type": "jwt",
         "jwtAlgorithm": "ES512",
-        "jwtKey": "-----BEGIN PRIVATE KEY-----\nMIHuAgEAMBAGByqGSM49AgEGBSuBBAAjBIHWMIHTAgEBBEIB4px7fh/ER6hV/G9lWHc+BtkfQCQXxlH+4ilPkJ178RrJBdEX6bmUzcUrRIPXe9rFrO3LTptKQ2F0YEMJYHRJKcuhgYkDgYYABAC+u1EF6t3ZICjWiSVAGffRlYokFhUn0Deq41jd2eP9w1c/YsF7bGjmRtGWBySHCZykh1DuPZFklsdD4ODjiP3AZQCzHN3k3s19ILQeOQALnra3zqJockUWqzs0Y8hYfEDRVLHNMGgMx5MEaQdV9Qx8i85lysCcpvnMjdskDErK4IATrg==\n-----END PRIVATE KEY-----",
+        "jwtKey": "-----BEGIN PRIVATE KEY-----\nMIHuAgEAMBAGByqGSM49AgEGBSuBBAAjBIHWMIHTAgEBBEIAgV1HdZ1VM3C58IM6zZOF+5X1d3+LBJZByoh8xdiKioDGvui2B5SimEJ0LynAsNPjjk999cANPTMrjZKDJmJKBWWhgYkDgYYABACixfB9XpprzfWHoJ8QzgC6IZgtyTCgtzyCpFFXYkJkbVKbt2DCGrFce190oSSkVaGusgISuRhNhqqkZhbMchKSGQBOaWitlgFAocNuG60GbDH5yksBZIP2J5YdvsQPwmILDzVuxKKrKD1okHsvyV2buuf5MBGT0Jc2PQlFeIo+K8cGcA==\n-----END PRIVATE KEY-----",
         "jwtKid": "",
         "jwtSub": "owner",
         "jwtExpDuration": 100000000000000000000
@@ -329,14 +387,14 @@
       "now": 1806000000,
       "header_json": "{\"alg\":\"ES512\",\"typ\":\"JWT\"}",
       "payload_json": "{\"exp\":6.000000000001806e+21,\"iat\":1806000000,\"sub\":\"owner\",\"_couchdb.roles\":[\"_admin\"]}",
-      "token": "eyJhbGciOiJFUzUxMiIsInR5cCI6IkpXVCJ9.eyJleHAiOjYuMDAwMDAwMDAwMDAxODA2ZSsyMSwiaWF0IjoxODA2MDAwMDAwLCJzdWIiOiJvd25lciIsIl9jb3VjaGRiLnJvbGVzIjpbIl9hZG1pbiJdfQ.AI8yY-qeJNw0DIG5nKfLEeJkAe6LwK_fWIXpULSU3wXqjFMy4n2hJ6oedwqi_FTFBB5FP5kR5_C9n_SESHPqqLErAC6JZSBvJ5mciFwqCii36JtZOFWUP97j1cbTK8rn6CV5Z6YftLptMqpKKNrTMZ5q5b2aaEj3N6XsjX5lmay0KmlT",
-      "public_key": "-----BEGIN PUBLIC KEY-----\nMIGbMBAGByqGSM49AgEGBSuBBAAjA4GGAAQAvrtRBerd2SAo1oklQBn30ZWKJBYVJ9A3quNY3dnj/cNXP2LBe2xo5kbRlgckhwmcpIdQ7j2RZJbHQ+Dg44j9wGUAsxzd5N7NfSC0HjkAC562t86iaHJFFqs7NGPIWHxA0VSxzTBoDMeTBGkHVfUMfIvOZcrAnKb5zI3bJAxKyuCAE64=\n-----END PUBLIC KEY-----"
+      "token": "eyJhbGciOiJFUzUxMiIsInR5cCI6IkpXVCJ9.eyJleHAiOjYuMDAwMDAwMDAwMDAxODA2ZSsyMSwiaWF0IjoxODA2MDAwMDAwLCJzdWIiOiJvd25lciIsIl9jb3VjaGRiLnJvbGVzIjpbIl9hZG1pbiJdfQ.AcZKcR5nyHcyv80Uups-d7L3rAmIeKRojODWiX-clxMkEdLKfdSBJX7fkY4_LPvg_XbwRAs1xbumIj8NCf5brHlEAOaibg8XxH4DuXWsET5_qBVjQ4IfhhfGNP3qNnrzYH75vg5EsU1yWh4oE3cmi5pQ7xk2WhiBFB7IAqA1rkvGnkb4",
+      "public_key": "-----BEGIN PUBLIC KEY-----\nMIGbMBAGByqGSM49AgEGBSuBBAAjA4GGAAQAosXwfV6aa831h6CfEM4AuiGYLckwoLc8gqRRV2JCZG1Sm7dgwhqxXHtfdKEkpFWhrrICErkYTYaqpGYWzHISkhkATmlorZYBQKHDbhutBmwx+cpLAWSD9ieWHb7ED8JiCw81bsSiqyg9aJB7L8ldm7rn+TARk9CXNj0JRXiKPivHBnA=\n-----END PUBLIC KEY-----"
     },
     {
       "auth": {
         "type": "jwt",
         "jwtAlgorithm": "ES512",
-        "jwtKey": "-----BEGIN PRIVATE KEY-----\nMIHuAgEAMBAGByqGSM49AgEGBSuBBAAjBIHWMIHTAgEBBEIB4px7fh/ER6hV/G9lWHc+BtkfQCQXxlH+4ilPkJ178RrJBdEX6bmUzcUrRIPXe9rFrO3LTptKQ2F0YEMJYHRJKcuhgYkDgYYABAC+u1EF6t3ZICjWiSVAGffRlYokFhUn0Deq41jd2eP9w1c/YsF7bGjmRtGWBySHCZykh1DuPZFklsdD4ODjiP3AZQCzHN3k3s19ILQeOQALnra3zqJockUWqzs0Y8hYfEDRVLHNMGgMx5MEaQdV9Qx8i85lysCcpvnMjdskDErK4IATrg==\n-----END PRIVATE KEY-----",
+        "jwtKey": "-----BEGIN PRIVATE KEY-----\nMIHuAgEAMBAGByqGSM49AgEGBSuBBAAjBIHWMIHTAgEBBEIAgV1HdZ1VM3C58IM6zZOF+5X1d3+LBJZByoh8xdiKioDGvui2B5SimEJ0LynAsNPjjk999cANPTMrjZKDJmJKBWWhgYkDgYYABACixfB9XpprzfWHoJ8QzgC6IZgtyTCgtzyCpFFXYkJkbVKbt2DCGrFce190oSSkVaGusgISuRhNhqqkZhbMchKSGQBOaWitlgFAocNuG60GbDH5yksBZIP2J5YdvsQPwmILDzVuxKKrKD1okHsvyV2buuf5MBGT0Jc2PQlFeIo+K8cGcA==\n-----END PRIVATE KEY-----",
         "jwtKid": "",
         "jwtSub": "owner",
         "jwtExpDuration": 1e+308
@@ -344,14 +402,14 @@
       "now": 1806000000,
       "header_json": "{\"alg\":\"ES512\",\"typ\":\"JWT\"}",
       "payload_json": "{\"exp\":null,\"iat\":1806000000,\"sub\":\"owner\",\"_couchdb.roles\":[\"_admin\"]}",
-      "token": "eyJhbGciOiJFUzUxMiIsInR5cCI6IkpXVCJ9.eyJleHAiOm51bGwsImlhdCI6MTgwNjAwMDAwMCwic3ViIjoib3duZXIiLCJfY291Y2hkYi5yb2xlcyI6WyJfYWRtaW4iXX0.AcWxMjb__YXamBCOeMqtzESKnspXgwrvurR4K_25mOaSUEJqE4pGnKBYU0drwP47mw77gGzXDtZmpVk0TKiEWcr2AGt6vRTx9zIzE7U5KNVTFF2CvzNtJtNConUvb3F4g5G5cVJsEY8X8issC15UBwZUQDXoeu089vRSBe9qlg3L2Xo8",
-      "public_key": "-----BEGIN PUBLIC KEY-----\nMIGbMBAGByqGSM49AgEGBSuBBAAjA4GGAAQAvrtRBerd2SAo1oklQBn30ZWKJBYVJ9A3quNY3dnj/cNXP2LBe2xo5kbRlgckhwmcpIdQ7j2RZJbHQ+Dg44j9wGUAsxzd5N7NfSC0HjkAC562t86iaHJFFqs7NGPIWHxA0VSxzTBoDMeTBGkHVfUMfIvOZcrAnKb5zI3bJAxKyuCAE64=\n-----END PUBLIC KEY-----"
+      "token": "eyJhbGciOiJFUzUxMiIsInR5cCI6IkpXVCJ9.eyJleHAiOm51bGwsImlhdCI6MTgwNjAwMDAwMCwic3ViIjoib3duZXIiLCJfY291Y2hkYi5yb2xlcyI6WyJfYWRtaW4iXX0.ACsOPtU_RrFcrJYv-zDzr8N9nXF4lvynRHJIo7ba6aeEaxmFqBxm7FmjfrioUsxal4glVZjX1-z8Uxj4Mzm95RbCAfHLFjXi8qJ492uJk_61TOot2P7Kh4XvGc6qpDsXCYyMgdHeOkANgJ4qZpin3aeI7RDPZBQhKaJscECFUGbTmS1Q",
+      "public_key": "-----BEGIN PUBLIC KEY-----\nMIGbMBAGByqGSM49AgEGBSuBBAAjA4GGAAQAosXwfV6aa831h6CfEM4AuiGYLckwoLc8gqRRV2JCZG1Sm7dgwhqxXHtfdKEkpFWhrrICErkYTYaqpGYWzHISkhkATmlorZYBQKHDbhutBmwx+cpLAWSD9ieWHb7ED8JiCw81bsSiqyg9aJB7L8ldm7rn+TARk9CXNj0JRXiKPivHBnA=\n-----END PUBLIC KEY-----"
     },
     {
       "auth": {
         "type": "jwt",
         "jwtAlgorithm": "ES512",
-        "jwtKey": "-----BEGIN PRIVATE KEY-----\nMIHuAgEAMBAGByqGSM49AgEGBSuBBAAjBIHWMIHTAgEBBEIB4px7fh/ER6hV/G9lWHc+BtkfQCQXxlH+4ilPkJ178RrJBdEX6bmUzcUrRIPXe9rFrO3LTptKQ2F0YEMJYHRJKcuhgYkDgYYABAC+u1EF6t3ZICjWiSVAGffRlYokFhUn0Deq41jd2eP9w1c/YsF7bGjmRtGWBySHCZykh1DuPZFklsdD4ODjiP3AZQCzHN3k3s19ILQeOQALnra3zqJockUWqzs0Y8hYfEDRVLHNMGgMx5MEaQdV9Qx8i85lysCcpvnMjdskDErK4IATrg==\n-----END PRIVATE KEY-----",
+        "jwtKey": "-----BEGIN PRIVATE KEY-----\nMIHuAgEAMBAGByqGSM49AgEGBSuBBAAjBIHWMIHTAgEBBEIAgV1HdZ1VM3C58IM6zZOF+5X1d3+LBJZByoh8xdiKioDGvui2B5SimEJ0LynAsNPjjk999cANPTMrjZKDJmJKBWWhgYkDgYYABACixfB9XpprzfWHoJ8QzgC6IZgtyTCgtzyCpFFXYkJkbVKbt2DCGrFce190oSSkVaGusgISuRhNhqqkZhbMchKSGQBOaWitlgFAocNuG60GbDH5yksBZIP2J5YdvsQPwmILDzVuxKKrKD1okHsvyV2buuf5MBGT0Jc2PQlFeIo+K8cGcA==\n-----END PRIVATE KEY-----",
         "jwtKid": "",
         "jwtSub": "owner",
         "jwtExpDuration": 5
@@ -359,8 +417,8 @@
       "now": 2200000000,
       "header_json": "{\"alg\":\"ES512\",\"typ\":\"JWT\"}",
       "payload_json": "{\"exp\":-2094966996,\"iat\":-2094967296,\"sub\":\"owner\",\"_couchdb.roles\":[\"_admin\"]}",
-      "token": "eyJhbGciOiJFUzUxMiIsInR5cCI6IkpXVCJ9.eyJleHAiOi0yMDk0OTY2OTk2LCJpYXQiOi0yMDk0OTY3Mjk2LCJzdWIiOiJvd25lciIsIl9jb3VjaGRiLnJvbGVzIjpbIl9hZG1pbiJdfQ.Aa3IAMM-t0-WBUIlTa4dVv1ldPcMLav0pVqCTTk6xaZGIYGAeQO1_8C5c3aZB5C7OAdnN2q4OyWJA_VQehHakwBcAfIljLd1cuOOLRgCEV8UM43KcZjePPW0lN0Sf-TOnyq7MThqgHH6P1sxscYJHhZNja3E7E7pkvlzcBIxJunNotnU",
-      "public_key": "-----BEGIN PUBLIC KEY-----\nMIGbMBAGByqGSM49AgEGBSuBBAAjA4GGAAQAvrtRBerd2SAo1oklQBn30ZWKJBYVJ9A3quNY3dnj/cNXP2LBe2xo5kbRlgckhwmcpIdQ7j2RZJbHQ+Dg44j9wGUAsxzd5N7NfSC0HjkAC562t86iaHJFFqs7NGPIWHxA0VSxzTBoDMeTBGkHVfUMfIvOZcrAnKb5zI3bJAxKyuCAE64=\n-----END PUBLIC KEY-----"
+      "token": "eyJhbGciOiJFUzUxMiIsInR5cCI6IkpXVCJ9.eyJleHAiOi0yMDk0OTY2OTk2LCJpYXQiOi0yMDk0OTY3Mjk2LCJzdWIiOiJvd25lciIsIl9jb3VjaGRiLnJvbGVzIjpbIl9hZG1pbiJdfQ.ACsEW9O7VHNnL7Zhs_4adib4CKk8ik8MiMQ6kMeYCws7XP1W9UWf524JAsOuDScYAveWxFv3_43fwfDmMzSeh042ABz8VUeAJwnsQMhY-EHtT-YeYR_mXLYajbB-tnb5d-Fzx5x-gvjuQw90hVjyd7zUkDRx6bKB13CU5E-UqPeLYD1H",
+      "public_key": "-----BEGIN PUBLIC KEY-----\nMIGbMBAGByqGSM49AgEGBSuBBAAjA4GGAAQAosXwfV6aa831h6CfEM4AuiGYLckwoLc8gqRRV2JCZG1Sm7dgwhqxXHtfdKEkpFWhrrICErkYTYaqpGYWzHISkhkATmlorZYBQKHDbhutBmwx+cpLAWSD9ieWHb7ED8JiCw81bsSiqyg9aJB7L8ldm7rn+TARk9CXNj0JRXiKPivHBnA=\n-----END PUBLIC KEY-----"
     }
   ],
   "refresh": [
@@ -384,6 +442,24 @@
     },
     {
       "iat": 1806000000,
+      "exp": 1806000300,
+      "now": 1806000289,
+      "regenerate": false
+    },
+    {
+      "iat": 1806000000,
+      "exp": 1806000300,
+      "now": 1806000290,
+      "regenerate": false
+    },
+    {
+      "iat": 1806000000,
+      "exp": 1806000300,
+      "now": 1806000291,
+      "regenerate": true
+    },
+    {
+      "iat": 1806000000,
       "exp": 1806000007.5,
       "now": 1805999996,
       "regenerate": false
@@ -398,6 +474,24 @@
       "iat": 1806000000,
       "exp": 1806000007.5,
       "now": 1805999998,
+      "regenerate": true
+    },
+    {
+      "iat": 1806000000,
+      "exp": 1806000300,
+      "now": 1806000289,
+      "regenerate": false
+    },
+    {
+      "iat": 1806000000,
+      "exp": 1806000300,
+      "now": 1806000290,
+      "regenerate": false
+    },
+    {
+      "iat": 1806000000,
+      "exp": 1806000300,
+      "now": 1806000291,
       "regenerate": true
     },
     {
@@ -456,6 +550,24 @@
     },
     {
       "iat": 1806000000,
+      "exp": 1806000300,
+      "now": 1806000289,
+      "regenerate": false
+    },
+    {
+      "iat": 1806000000,
+      "exp": 1806000300,
+      "now": 1806000290,
+      "regenerate": false
+    },
+    {
+      "iat": 1806000000,
+      "exp": 1806000300,
+      "now": 1806000291,
+      "regenerate": true
+    },
+    {
+      "iat": 1806000000,
       "exp": 1806000007.5,
       "now": 1805999996,
       "regenerate": false
@@ -470,6 +582,24 @@
       "iat": 1806000000,
       "exp": 1806000007.5,
       "now": 1805999998,
+      "regenerate": true
+    },
+    {
+      "iat": 1806000000,
+      "exp": 1806000300,
+      "now": 1806000289,
+      "regenerate": false
+    },
+    {
+      "iat": 1806000000,
+      "exp": 1806000300,
+      "now": 1806000290,
+      "regenerate": false
+    },
+    {
+      "iat": 1806000000,
+      "exp": 1806000300,
+      "now": 1806000291,
       "regenerate": true
     },
     {

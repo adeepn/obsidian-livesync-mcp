@@ -342,3 +342,9 @@ def test_ignore_name_warning_documented():
 def test_runtime_journal_size_policy_documented():
     assert 'Journal refresh re-resolves' in (ROOT / 'README.md').read_text()
     assert 'every unthrottled refresh' in (ROOT / 'docs/size-policy.md').read_text()
+
+
+def test_jwt_zero_expiry_documented():
+    assert '0 uses the plugin five-minute fallback' in (ROOT / 'README.md').read_text()
+    assert 'zero uses the plugin five-minute fallback' in (ROOT / '.env.example').read_text()
+    assert 'already-expired tokens' in (ROOT / 'docs/connecting-storage.md').read_text()

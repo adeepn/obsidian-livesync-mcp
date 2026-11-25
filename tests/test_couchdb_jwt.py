@@ -78,7 +78,6 @@ def test_cached_token_boundary():
     ({'COUCHDB_JWT_ALGORITHM': ''}, ['COUCHDB_JWT_ALGORITHM']),
     ({'COUCHDB_JWT_EXPIRY_MINUTES': 'nan'}, ['COUCHDB_JWT_EXPIRY_MINUTES']),
     ({'COUCHDB_JWT_EXPIRY_MINUTES': 'inf'}, ['COUCHDB_JWT_EXPIRY_MINUTES']),
-    ({'COUCHDB_JWT_EXPIRY_MINUTES': '0'}, ['COUCHDB_JWT_EXPIRY_MINUTES']),
     ({'COUCHDB_JWT_EXPIRY_MINUTES': '-2'}, ['COUCHDB_JWT_EXPIRY_MINUTES']),
     ({'COUCHDB_JWT_KEY': 'PRIVATE KEY INVALID'}, ['COUCHDB_JWT_KEY']),
 ])
@@ -294,3 +293,18 @@ def test_upstream_key_import(v):
             generator(vector)
     else:
         assert generator(vector).token() == v['token']
+
+
+@pytest.mark.parametrize('algorithm',['HS256','HS512','ES256','ES512'])
+def test_zero_expiry_matches_upstream_five_minute_fallback(algorithm):
+    # httplib.ts:167: (source.jwtExpDuration || 5) * 60, before caching.
+    zero=next(v for v in FIXTURE['vectors'] if v['auth']['jwtAlgorithm']==algorithm and v['auth']['jwtExpDuration']==0)
+    five=next(v for v in FIXTURE['vectors'] if v['auth']['jwtAlgorithm']==algorithm and v['auth']['jwtExpDuration']==5 and v['now']==zero['now'])
+    actual=generator(zero).token()
+    assert actual.split('.')[:2]==five['token'].split('.')[:2]
+    if algorithm.startswith('HS'):assert actual==five['token']
+
+
+def test_negative_expiry_names_the_real_auth_constraint():
+    with pytest.raises(ConfigError,match='upstream would mint already-expired tokens'):
+        load_config({**env_for(),'COUCHDB_JWT_EXPIRY_MINUTES':'-1'})

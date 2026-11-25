@@ -113,7 +113,8 @@ class JWTTokenGenerator:
             _segment({'sub': self._subject})
         except UnicodeEncodeError:
             raise JWTConfigError('COUCHDB_JWT_SUBJECT and COUCHDB_JWT_KEY_ID must fit the plugin Latin-1 encoder; configure matching Latin-1 identifiers in the plugin and server.') from None
-        self._duration = cfg.jwt_expiry_minutes
+        # httplib.ts:167: (jwtExpDuration || 5) * 60; zero is five minutes.
+        self._duration = cfg.jwt_expiry_minutes or 5
         self._clock = clock
         self._cached = None
         self._iat = 0
