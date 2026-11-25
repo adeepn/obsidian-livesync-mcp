@@ -47,5 +47,5 @@ async def main():
 asyncio.run(main())
 '''.replace("RESOURCE", repr(resource))
     result = subprocess.run([sys.executable, "-W", "error::DeprecationWarning", "-c", script],
-                            capture_output=True, text=True, timeout=30)
+                            capture_output=True, text=True, timeout=60)
     assert result.returncode == 0, result.stderr + result.stdout

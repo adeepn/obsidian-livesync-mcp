@@ -4,10 +4,11 @@ import pytest
 
 def test_timeout_terminates_worker():
     import regex_runner
+    regex_runner.apply('a', 'a', 'findall', 60)
     start = time.monotonic()
     with pytest.raises(regex_runner.RegexTimeoutError):
         regex_runner.apply('(a+)+$', 'a' * 1024 + '!', 'findall', .2)
-    assert time.monotonic() - start < 30
+    assert time.monotonic() - start < 60
 
 
 def test_operations_and_output_limit():

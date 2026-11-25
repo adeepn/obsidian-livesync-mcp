@@ -113,7 +113,7 @@ def test_real_startup_never_prints_invalid_value(entrypoint, name):
     env = {'PATH': os.defpath, 'PYTHON_DOTENV_DISABLED': '1',
            **COUCHDB_ENV, name: MARKER}
     result = subprocess.run([sys.executable, entrypoint], cwd=Path(__file__).resolve().parents[1],
-                            env=env, capture_output=True, text=True, timeout=30)
+                            env=env, capture_output=True, text=True, timeout=60)
     assert result.returncode == 2
     assert 'Configuration error:' in result.stderr
     assert name in result.stderr

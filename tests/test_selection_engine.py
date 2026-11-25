@@ -71,3 +71,18 @@ async def test_engine_failure_denies_without_mutation(backend, monkeypatch, caus
     assert cause in str(error.value)
     assert 'private payload' not in str(error.value)
     assert mutations() == before
+
+
+def test_capability_probe_has_scheduler_margin(monkeypatch):
+    """Integration startup is not a five-second scheduling benchmark.
+
+    Native targetFilter.ts:132-149 has no subprocess deadline. Production
+    configurable deadline behavior remains covered by test_transport_limits.
+    """
+    from selection_engine import capability_version_check
+    def run(args, **kwargs):
+        assert args == ['node', '--version']
+        assert kwargs['timeout'] >= 60
+        return SimpleNamespace(stdout='v26.13.1', returncode=0)
+    monkeypatch.setattr(subprocess, 'run', run)
+    capability_version_check()

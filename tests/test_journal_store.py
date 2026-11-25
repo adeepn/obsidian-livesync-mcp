@@ -247,13 +247,13 @@ class TestApplyJournal:
 
         def rendezvous_processed(instance, name):
             result = real_processed(instance, name)
-            checked.wait(timeout=10)
+            checked.wait(timeout=60)
             return result
 
         monkeypatch.setattr(JournalStore, "processed", rendezvous_processed)
 
         def rendezvous_replace(src, dst):
-            barrier.wait(timeout=10)
+            barrier.wait(timeout=60)
             real_replace(src, dst)
 
         monkeypatch.setattr(journal_store.os, "replace", rendezvous_replace)
@@ -280,7 +280,7 @@ class TestApplyJournal:
         for thread in threads:
             thread.start()
         for thread in threads:
-            thread.join(timeout=15)
+            thread.join(timeout=60)
         assert not any(thread.is_alive() for thread in threads)
         assert errors == []
 

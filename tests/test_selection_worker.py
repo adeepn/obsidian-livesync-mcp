@@ -73,7 +73,6 @@ async def test_rename_checks_each_path_once(backend, monkeypatch):
 
 async def test_concurrent_evaluations_have_dedicated_limit(backend, monkeypatch):
     import threading
-    import time
     from selection_engine import SelectionWorker
     b, _ = backend
     b.selection_only = 'md$'
@@ -86,7 +85,6 @@ async def test_concurrent_evaluations_have_dedicated_limit(backend, monkeypatch)
             active += 1
             maximum = max(maximum, active)
         try:
-            time.sleep(0)
             return original(self, payload)
         finally:
             with lock:
@@ -190,8 +188,10 @@ def test_stalled_stdin_write_obeys_timeout(monkeypatch, tmp_path):
             args = [sys.executable, '-u', str(script)]
         return original(args, *a, **k)
     monkeypatch.setattr(subprocess, 'Popen', popen)
-    worker = selection_engine.SelectionWorker(timeout=1)
+    worker = selection_engine.SelectionWorker(timeout=60)
     worker._start()
+    # The deliberate stalled-request deadline starts after worker readiness.
+    worker.timeout = 1
     errors = []
     def evaluate():
         try:

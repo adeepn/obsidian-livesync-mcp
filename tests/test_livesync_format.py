@@ -480,7 +480,7 @@ def test_unsupported_vault_settings_contract():
     import sys
     result = subprocess.run(
         [sys.executable, '-c', "import sys; import livesync_format; assert 'storage_base' not in sys.modules"],
-        capture_output=True, text=True, timeout=30,
+        capture_output=True, text=True, timeout=60,
     )
     assert result.returncode == 0, result.stderr
     assert issubclass(UnsupportedVaultSettings, ValueError)

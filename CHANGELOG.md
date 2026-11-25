@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+- Keep Node capability probes out of short integration deadlines and widen subprocess/rendezvous scheduler margins in tests.
+
 - Bound expanded frontmatter string and key bytes before property serialization; expose LIVESYNC_FRONTMATTER_MAX_BYTES with a 4 MiB default and raw-note recovery.
 
 - Lower the default frontmatter projection budget to 20,000 expanded nodes.

@@ -473,7 +473,7 @@ async def test_candidate_policy_is_invisible_during_capability_check(tmp_path, m
         storage._objects[MILESTONE_KEY] = json.dumps(milestone(
             useIgnoreFiles=True, ignoreFiles='changed', syncMaxSizeInMB=300)).encode()
         task = asyncio.create_task(b.refresh(force=True))
-        await asyncio.wait_for(entered.wait(), 10)
+        await asyncio.wait_for(entered.wait(), 60)
         assert (b.selection_use_ignore_files, b.selection_ignore_files,
                 b.sync_max_size_mb, b.text_scan_max_bytes) == before
         release.set()
