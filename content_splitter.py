@@ -239,11 +239,12 @@ class ContentSplitter:
         self.normalized_settings = dict(settings)
         # ContentSplitterBase.ts:71 passes minimumChunkSize without validation.
         self.minimum_chunk_size = settings.get('minimumChunkSize', 20)
-        custom = self._number(settings, 'customChunkSize', 0)
-        try:
-            self.absolute_max_piece_size = math.floor(102400 * (custom + 1))
-        except (OverflowError, ValueError) as exc:
-            raise ValueError('invalid customChunkSize') from exc
+        # ContentSplitterBase.ts:68: Math.floor(MAX_DOC_SIZE_BIN *
+        # ((settings.customChunkSize || 0) * 1 + 1)); arrays/objects are truthy.
+        custom = settings.get('customChunkSize', 0)
+        custom = _minimum_number(custom if _js_truthy(custom) else 0)
+        maximum = 102400 * (custom + 1)
+        self.absolute_max_piece_size = math.floor(maximum) if math.isfinite(maximum) else maximum
         if settings.get('encrypt'):
             raise ValueError('encrypted chunk IDs are unsupported')
         unsupported = []
@@ -286,22 +287,6 @@ class ContentSplitter:
                                        if any(item.startswith(key + '=') for item in unsupported))
             error.setting_issues = tuple(setting_issues)
             raise error
-
-    @staticmethod
-    def _number(settings: dict, key: str, default: int) -> float:
-        value = settings.get(key, default)
-        try:
-            valid = (not isinstance(value, bool) and isinstance(value, (int, float))
-                     and math.isfinite(value))
-        except (OverflowError, ValueError) as exc:
-            error = ValueError(f'invalid {key}')
-            error.setting_keys = (key,)
-            raise error from exc
-        if not valid:
-            error = ValueError(f'invalid {key}')
-            error.setting_keys = (key,)
-            raise error
-        return value
 
     def chunk_id_for_piece(self, piece: bytes | str) -> str:
         return chunk_id_for_piece(piece, hash_alg=self.hash_alg)
@@ -378,9 +363,9 @@ class RabinKarpSplitter(_Splitter):
             else:
                 while len(raw) / (unit * 4) > 500:
                     unit += 32
-        maximum = min(unit * 16 if plain else 4 * 1024 * 1024,
-                      max(self.absolute_max_piece_size, 30 * 1024))
-        gap = max(1, maximum // 4)
+        maximum = min(max(self.absolute_max_piece_size, 30 * 1024),
+                      unit * 16 if plain else 4 * 1024 * 1024)
+        gap = max(maximum // 4, 1)
         # chunks.ts:535-545: Math.min/max propagate NaN; place the setting
         # first so Python min/max preserve it rather than discarding it.
         minimum = min(max(_minimum_number(self.minimum_chunk_size), unit * 2 if plain else gap), maximum)
@@ -420,6 +405,7 @@ def _from_units(text: str) -> str:
 
 def _capped(text: str, maximum: int, preserve_pairs: bool = True, *, v1_plain=False):
     # chunks.ts:218-254,296-323. V1 non-plain intentionally splits pairs.
+    maximum = min(maximum, len(text))  # substring(+Infinity) clamps to length.
     start = 0
     while True:
         # chunks.ts:234-240: charCodeAt(-1)=NaN != undefined, so V1
@@ -499,17 +485,23 @@ class V2Splitter(_Splitter):
                 # or flushed newline tail) grows end forever, not just once.
                 raise _loop_refusal('customChunkSize', 'customChunkSize=0 (positive pieceSize)')
             return [_from_units(text)]
+        # chunks.ts:297: strLen > NaN is false; yield the whole source.
+        if math.isnan(self.absolute_max_piece_size):
+            return [_from_units(text)]
         return list(_capped(text, self.absolute_max_piece_size))
 
     def _binary(self, data: bytes, path: str):
         if not data:
             return []
+        if math.isnan(self.absolute_max_piece_size):
+            # chunks.ts:418-432: slice(i, NaN) emits nothing and loses bytes.
+            raise ValueError("customChunkSize would discard binary data; use customChunkSize=0 or another numeric value")
         if self.absolute_max_piece_size <= 0:
             # chunks.ts:418-432: i = splitEnd <= i.
             raise _loop_refusal('customChunkSize', 'customChunkSize=0 (positive pieceSize)')
         delimiter = b'/' if path.endswith('.pdf') else b',' if path.endswith('.json') else b'\0'
         minimum = _binary_minimum(len(data), path)
-        maximum = self.absolute_max_piece_size
+        maximum = min(self.absolute_max_piece_size, len(data))
         pieces = []
         offset = 0
         # Cache next search positions: upstream searches the entire suffix each
@@ -537,7 +529,7 @@ class LegacySplitter(_Splitter):
     def split(self, data, *, path='', plain_split=False):
         maximum = self.absolute_max_piece_size
         if isinstance(data, bytes) and not isinstance(data, _TextBlob):
-            if data and maximum <= 0:
+            if data and (maximum <= 0 or math.isnan(maximum)):
                 # chunks.ts:473-491: i += piece.length stays zero.
                 raise _loop_refusal('customChunkSize', 'customChunkSize=0 (positive pieceSize)')
             if not data:
@@ -559,7 +551,7 @@ class LegacySplitter(_Splitter):
         raw = _js_utf8(data) if isinstance(data, str) else data
         text = _unit_string(raw.decode('utf-8-sig', errors='replace'))
         # chunks.ts:234-250: substring clamps negative offsets to zero.
-        if text and (maximum < 0 or (not plain_split and maximum == 0)):
+        if text and (math.isnan(maximum) or maximum < 0 or (not plain_split and maximum == 0)):
             raise _loop_refusal('customChunkSize',
                                 'customChunkSize=0 (zero pieceSize also works for V1 plain text)')
         if not text:

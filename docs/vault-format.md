@@ -189,3 +189,5 @@ for text/JSON forms, validation, typed count diagnostics and secret handling.
 Upstream: `LiveSyncReplicator.ts:2071-2098`, `diagnostics/couchdb.ts:45`.
 
 Journal within-publication collisions compare TextEncoder-projected data; identical projected pieces retain all original child IDs. CouchDB preflights distinct colliding pieces before any mutation; configure a positive customChunkSize or a collision-free hashAlg such as sha1.
+
+customChunkSize follows `(value || 0) * 1 + 1` and Math.floor exactly for JSON numbers, numeric/radix/exponent strings, booleans, null, arrays and objects. Nonnumeric caps are admitted where text/V3 splitting terminates; a V1 loop or V2 binary data loss refuses with guidance to set customChunkSize=0 or another numeric value.

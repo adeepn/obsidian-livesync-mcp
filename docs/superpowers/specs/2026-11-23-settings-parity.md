@@ -724,3 +724,7 @@ its own deadline expires first. Neither path echoes the pattern or body.
 ### 2026-11-25 F1-1
 
 [DECISION] Compare journal publication collisions after transport projection; preflight lossless CouchDB collisions and name setting-level recovery. Upstream: journalRecords.ts:69-108; EntryManagerImpls.ts:133-159; DatabaseWriteLayer.ts:24-49.
+
+### 2026-11-25 F1-2
+
+[DECISION] Execute ContentSplitterBase.ts:68 coercion for every JSON type; retain V1 loop protection and V2 binary NaN data-loss refusal. Coercion oracle records real splitter/hash dependencies and source hashes.

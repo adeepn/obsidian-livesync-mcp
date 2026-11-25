@@ -314,3 +314,8 @@ def test_collision_recovery_documented():
     text = (ROOT / 'README.md').read_text()
     assert 'Distinct colliding CouchDB pieces refuse before publication' in text
     assert 'Journal within-publication collisions compare TextEncoder-projected data' in (ROOT / 'docs/vault-format.md').read_text()
+
+
+def test_custom_coercion_documented():
+    assert 'JavaScript truthiness/ToNumber coercion' in (ROOT / 'README.md').read_text()
+    assert 'V2 binary data loss' in (ROOT / 'docs/vault-format.md').read_text()
