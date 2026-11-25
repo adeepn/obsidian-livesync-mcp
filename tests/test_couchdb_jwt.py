@@ -157,6 +157,8 @@ async def test_bearer_all_http_classes():
     transport, log = make_fake_couchdb({})
     seen = []
     async def handle(req):
+        if req.url.path == "/_session":
+            return httpx.Response(200, json={"userCtx": {"name": c.jwt_subject}})
         seen.append((req.method, req.url.path))
         assert req.headers['Authorization'].startswith('Bearer ')
         assert 'Basic ' not in req.headers['Authorization']

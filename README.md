@@ -185,6 +185,7 @@ It does not establish every setting combination on every server.
 
 The 2026-11-25 acceptance run found JWT wrong-key HTTP 400 classified as a
 generic storage error and CouchDB rejecting a lone-surrogate leaf with HTTP 400.
+Both production paths are corrected; the final acceptance is pending.
 Acceptance remains incomplete; see the [recorded results](docs/test-artifacts/2026-11-25-parity-docker/summary.txt).
 
 CouchDB 3.5.3 rejects unpaired UTF-16 surrogate JSON escapes, including device
@@ -199,6 +200,10 @@ TextEncoder replacement and device chunk IDs remain unchanged.
   Non-Latin-1 identifiers cannot be encoded by the plugin either; configure
   matching Latin-1 identifiers on the server and device. Vault stats expose only
   `auth_mode` (`basic` or `jwt`) and `jwt_algorithm`, never keys or subjects.
+  JWT startup verifies `/_session` returns the configured subject. Failed tokens
+  receive typed authorization guidance for key, algorithm, key ID, subject and
+  clock. A later HTTP 400 is an auth error only if the same token fails this
+  session check; ordinary bad requests retain their original classification.
 
 - CouchDB compression uses Python zlib raw deflate level 8; bytes may differ
   from device fflate output, but devices read either stream. The peer preserves

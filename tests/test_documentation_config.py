@@ -432,3 +432,10 @@ def test_couchdb_surrogate_constraint_documented():
         assert 'CouchDB 3.5.3' in text
         assert 'v3' in text
         assert 'surrogate' in text
+
+
+def test_jwt_session_auth_documented():
+    for name in ('README.md', 'docs/connecting-storage.md', '.env.example'):
+        text = (ROOT / name).read_text()
+        assert '/_session' in text
+        assert 'subject' in text

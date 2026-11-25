@@ -245,6 +245,8 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
         *,
         params: dict[str, str] | None = None,
         json_body: object | None = None,
+        _checking_auth: bool = False,
+        _jwt_token: str | None = None,
     ) -> httpx.Response:
         """Perform a request; the single error-mapping point (audit C7).
 
@@ -271,7 +273,8 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
             # RemoteService.ts:360-369 uses Headers.append, including auth
             # and Content-Type. Fetch headers are case-insensitive ByteStrings.
             headers = httpx.Headers(body.pop("headers", {}), encoding="latin-1")
-            headers["Authorization"] = "Bearer " + self._jwt.token() if self._jwt else self._auth_header
+            token = (_jwt_token if _jwt_token is not None else self._jwt.token()) if self._jwt else None
+            headers["Authorization"] = "Bearer " + token if self._jwt else self._auth_header
             for key, value in self._custom_headers.items():
                 value = value.strip(" \t")
                 if key in headers:
@@ -295,7 +298,16 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
             if not self._custom_headers and not self._jwt:
                 unsafe_debug(logger, response.text)
             logger.warning('CouchDB %s status: %s', operation_field(method), numeric_field(code))
-            reason = (DiagnosticCode.COUCHDB_DATABASE_NOT_FOUND if code == 404 else
+            # CouchDB 3.5.3 returns bad-signature 400 and expired-token 401.
+            # Never parse/echo reason text. Probe the SAME token to distinguish
+            # ordinary bad-request 400 from failed authentication (F4 live).
+            jwt_failure = self._jwt is not None and (
+                code == 401 or (code == 400 and (
+                    _checking_auth or not await self._jwt_authenticated(token)
+                ))
+            )
+            reason = (DiagnosticCode.COUCHDB_JWT_AUTHORIZATION_ERROR if jwt_failure else
+                      DiagnosticCode.COUCHDB_DATABASE_NOT_FOUND if code == 404 else
                       DiagnosticCode.COUCHDB_AUTHORIZATION_ERROR if code in {401, 403} else
                       DiagnosticCode.THE_NOTE_WAS_CHANGED_CONCURRENTLY_RE_READ_IT_AND_RETRY if code == 409 else
                       DiagnosticCode.COUCHDB_UNAVAILABLE if code >= 500 else DiagnosticCode.FAILED)
@@ -306,6 +318,24 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
                 raise OutcomeUnknown(public) from None
             raise StorageUnavailable(public) from None
         return response
+
+    async def _jwt_authenticated(self, token: str | None = None) -> bool:
+        # RemoteService.ts:479-485 checks db.info after connecting. Preserve
+        # that intent but explicitly prove identity: anonymous access to an
+        # open database must not disguise JWT misconfiguration.
+        try:
+            response = await self._request('GET', '_session', _checking_auth=True, _jwt_token=token)
+        except StorageUnavailable as error:
+            if error.diagnostic.code == DiagnosticCode.COUCHDB_JWT_AUTHORIZATION_ERROR:
+                return False
+            raise
+        try:
+            body = response.json()
+        except ValueError:
+            return False
+        user = body.get('userCtx') if isinstance(body, dict) else None
+        return (response.status_code == 200 and isinstance(user, dict)
+                and user.get('name') == self._jwt._subject)
 
     async def _db_info(self) -> dict:
         response = await self._request("GET", self._db_path)
@@ -512,6 +542,8 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
     # -- StorageBackend: lifecycle -------------------------------------------
 
     async def startup_check(self) -> None:
+        if self._jwt is not None and not await self._jwt_authenticated():
+            raise StorageUnavailable(PublicDiagnostic(DiagnosticCode.COUCHDB_JWT_AUTHORIZATION_ERROR))
         self._text_verdicts.clear()
         self._tweak_assessment = {"status": "OK", "differing_keys": []}
         self._writer_unsupported_reason = None

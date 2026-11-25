@@ -844,3 +844,14 @@ V1 non-plain UTF-16 cuts (`chunks.ts:243-252`) can produce these pieces; v3 text
 boundaries are protected (`chunks.ts:698-699`). The typed refusal advises v3
 or avoiding the note. This equals the device outcome; journal bytes, cuts, IDs
 and all committed upstream expectations remain unchanged. Acceptance pending.
+
+
+### 2026-11-25 — F4 A2: prove JWT identity and classify token failures
+
+[DECISION] Mirror RemoteService.ts:479-485 connection verification intent with
+an explicit `/_session` subject check before other startup work. An open
+database must not disguise an anonymous or different JWT identity. CouchDB
+3.5.3 returns HTTP 400 for bad HMAC and 401 for expiry. Later 400 probes the
+same token's session; only failed authentication becomes the typed JWT auth
+reason. Ordinary 400 remains generic. No remote reason text is inspected or
+exposed. Guidance names key, algorithm, key ID, subject, clock and expiry.

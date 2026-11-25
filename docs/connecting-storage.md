@@ -67,6 +67,13 @@ In the pinned plugin's **CouchDB Configuration → Experimental Settings**, enab
 | JWT Key ID (kid) | `COUCHDB_JWT_KEY_ID` | Same server key identifier; empty omits kid and selects the server default |
 | JWT Expiration Duration (minutes) | `COUCHDB_JWT_EXPIRY_MINUTES` | Same nonnegative finite duration; omit or use 0 for 5 minutes; negatives refuse because upstream would mint already-expired tokens |
 
+Startup explicitly checks `GET /_session`: `userCtx.name` must equal
+`COUCHDB_JWT_SUBJECT`. Anonymous or different subjects fail with typed
+authorization guidance naming key, algorithm, key ID, subject and clock/expiry.
+Later HTTP 401 is an authorization error; a later HTTP 400 probes `/_session`
+with the same token so ordinary malformed requests are not misclassified.
+Remote reason text is never used in diagnostics, even with unsafe debug enabled.
+
 Remove `COUCHDB_USER` and `COUCHDB_PASSWORD` entirely, including empty definitions.
 Do not combine the Basic block with this alternative. Keep the URL and database
 name separate, and add the shared MCP authentication block above:
