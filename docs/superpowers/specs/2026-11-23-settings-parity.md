@@ -808,3 +808,7 @@ its own deadline expires first. Neither path echoes the pattern or body.
 ### 2026-11-25 F2-5 recovery — restored active policy
 
 [GOTCHA] A rejected candidate retains the old checked tuple, so returning to that tuple must still retry capability validation after failure. Otherwise successful force refresh leaves stale unsupported stats until a write restarts the worker. An independent probe and failing-first regression establish recovery before another write.
+
+### 2026-11-25 F3-1 — iterative scalar arrays
+
+[DECISION] Replace recursive array coercion with active-path iterative join shared by size admission and splitter parameters. Native fixtures cover depths 480/500/1000/5000, null/undefined, cycles and shared arrays. JSON decoder capacity and journal depth admission remain separate documented constraints; depth-5000 oracle execution records its enlarged Node stack.

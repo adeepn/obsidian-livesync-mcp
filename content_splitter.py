@@ -188,10 +188,42 @@ def _js_truthy(value) -> bool:
 
 
 def _splitter_property_key(value, *, setting='chunkSplitterVersion') -> str:
+    """Native array ToString with an explicit stack and active-path cycle handling.
+
+    Already decoded scalars have no coercion depth limit. Journal metadata's
+    configured JSON-depth budget and the JSON decoder's recursion capacity are
+    separate ingress constraints; this conversion neither bypasses nor adds to
+    them. Cyclic Python arrays join as empty fields, matching native Array.join.
+    """
     # Only relevant for malformed JSON setting values: JS == / `in` coerce
     # arrays to comma-joined strings and plain objects to [object Object].
     if isinstance(value, list):
-        return ','.join('' if item is None else _splitter_property_key(item, setting=setting) for item in value)
+        # ContentSplitterBase.ts:68 and string_and_binary/chunks.ts:368-370
+        # invoke native ToPrimitive/Array.join. Use an explicit stack so already
+        # decoded settings have no Python call-stack ceiling. Journal JSON-depth
+        # admission/decoder capacity is separate and runs before this conversion.
+        # Native join emits an empty field for null/undefined or an array already
+        # on the active path; shared but noncyclic arrays must be expanded again.
+        parts = []
+        active = {id(value)}
+        stack = [(value, 0)]
+        while stack:
+            array, index = stack[-1]
+            if index == len(array):
+                active.remove(id(array))
+                stack.pop()
+                continue
+            stack[-1] = (array, index + 1)
+            if index:
+                parts.append(',')
+            item = array[index]
+            if isinstance(item, list):
+                if id(item) not in active:
+                    active.add(id(item))
+                    stack.append((item, 0))
+            elif item is not None:
+                parts.append(_splitter_property_key(item, setting=setting))
+        return ''.join(parts)
     if isinstance(value, dict):
         # ECMAScript OrdinaryToPrimitive: JSON own toString is noncallable;
         # inherited valueOf returns the object, so no primitive can be produced.

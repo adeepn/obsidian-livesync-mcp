@@ -111,7 +111,7 @@ are read only for the selected backend. Empty defaults below mean an empty strin
 | `LIVESYNC_SYNC_IGNORE_REGEX` | `empty` | Optional | Local ignore regex list |
 | `LIVESYNC_USE_IGNORE_FILES` | `empty` | Optional boolean | Empty/unset derives useIgnoreFiles from vault settings; true/false overrides |
 | `LIVESYNC_IGNORE_FILES` | `empty` | Optional | Empty/unset derives ignoreFiles; non-empty uses JS-trimmed comma names including empty entries; unresolved explicit names warn |
-| `LIVESYNC_SYNC_MAX_SIZE_MB` | `empty` | Finite number or empty | Strict operator override; vault data uses JavaScript numeric coercion; <=0 disables |
+| `LIVESYNC_SYNC_MAX_SIZE_MB` | `empty` | Finite number or empty | Strict operator override; vault data uses iterative JavaScript numeric coercion; <=0 disables |
 | `LIVESYNC_DISABLE_CHECKING_CONFIG_MISMATCH` | `false` | Boolean | Bypass ordinary tweak differences, never identity/E2EE guards; CouchDB compression follows the vault independently |
 | `LIVESYNC_AUTO_ACCEPT_COMPATIBLE_TWEAK` | `true` | Boolean | Align fully advertised compatible-lossy tweaks |
 | `LIVESYNC_JOURNAL_MAX_LINE_BYTES` | `268435456` | Positive integer <2**63 | UTF-8 record bytes |
@@ -158,7 +158,7 @@ combination. [Source inventory and caveats](docs/superpowers/specs/2026-11-23-se
 | `hashAlg` | xxhash64, xxhash32, mixed-purejs, sha1, empty | Identical | Upstream UTF-16 length and hash semantics |
 | `customChunkSize` | JSON value; number >=0 in UI (default 0) | Identical wherever the plugin terminates | JavaScript truthiness/ToNumber coercion; V1 plain cap zero advances one UTF-16 unit; V3 clamps; see [loop refusals](docs/vault-format.md#invalid-writer-parameters) |
 | `minimumChunkSize` | JSON value; numeric in UI (default 20) | Identical wherever the plugin terminates | Original JSON values retain JavaScript ToPrimitive/addition (including array/string concatenation); negative, empty, null and NaN follow upstream coercion; only V2 nonempty plain minima whose addition preserves positive zero loop |
-| `syncMaxSizeInMB` | Any JSON type; JavaScript numeric coercion; default 50 | Identical | Device write admission and automatic text access budget resolution; textual files remain scan-eligible independent of extension; aggregate caps default unlimited; oversized rename refuses to protect source |
+| `syncMaxSizeInMB` | Any JSON type; iterative JavaScript numeric coercion; default 50 | Identical | Device write admission and automatic text access budget resolution; textual files remain scan-eligible independent of extension; aggregate caps default unlimited; oversized rename refuses to protect source |
 | `syncOnlyRegEx`, `syncIgnoreRegEx` | ECMAScript pattern lists | Identical when configured | Set local env explicitly; never inferred from milestone |
 | `useIgnoreFiles` | Any JSON type; JavaScript truthiness | Identical | Derived from vault settings unless overridden; active policy requires Node.js 22+ |
 | `ignoreFiles` | Filename list | Identical | Derived from vault settings unless overridden; exact comma split/JS trim; missing or unusable names add no rules; explicit unresolved names warn |
@@ -219,6 +219,8 @@ combination. [Source inventory and caveats](docs/superpowers/specs/2026-11-23-se
   can limit size; `true` means 1 MiB, while null, false and nonnumeric values
   disable size admission. Ignore enablement uses truthiness, including truthy
   empty arrays/objects and strings. Operator overrides keep strict validation.
+  Array conversion is iterative; it adds no coercion depth limit after JSON admission.
+  Cyclic Python arrays use native empty-field cycle handling.
   Device maps refuse only when effective policies disagree; an object whose
   toString prevents numeric conversion needs correction in the vault.
 - Ignore-file selection derives from vault settings unless independently overridden.

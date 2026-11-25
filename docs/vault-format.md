@@ -209,3 +209,5 @@ JWT expiry input is numeric: an explicit empty `COUCHDB_JWT_EXPIRY_MINUTES` is r
 The V2 minimum-concatenation oracle includes the 401-line `abcd\n` witness with minimumChunkSize=[1], plus boundary neighbours through the fourth adjustment. Exact native pieces and IDs protect repeated string addition, not only the initial [1] to "11" conversion.
 
 Existing shared journal content is checked in both compact chunk files and full-JSON leaves before publication. Conflicting or encrypted leaves refuse without replacing data: inspect and resolve the conflicting leaf in Obsidian, or coordinate an alternate hashAlg or a positive customChunkSize before retrying. Diagnostics contain fixed recovery text and no note bytes or remote values.
+
+Splitter parameter arrays use the shared iterative scalar conversion, including native null/undefined empty fields and active-path cycle handling; JSON admission and decoder capacity remain separate ingress constraints. See [size policy](size-policy.md).

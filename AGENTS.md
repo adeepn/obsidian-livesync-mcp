@@ -190,3 +190,5 @@ shapes and the incomplete-index pagination caveat.
 `scripts/extract_minimum_concatenation_vectors.mjs` records native V2 array-minimum repeated-concatenation neighbours through the fourth adjustment using the integrity-verified splitter harness; `tests/test_coercion_cells.py` consumes its exact pieces and IDs.
 
 `scripts/extract_scalar_policy_vectors.mjs` executes the pinned VaultService size method and targetFilter truthiness gate with Node builtins only; `tests/fixtures/scalar_policy_upstream.json.gz` records source hashes and native predicate/equivalence vectors consumed by tweak and backend selection tests.
+
+`scripts/extract_deep_scalar_vectors.mjs` executes pinned size/cap/adjustment expressions with native JS builtins and records source hashes and Node stack flags. `tests/test_deep_scalar.py` covers deep scalar coercion, cyclic/shared arrays, both backend startups and journal refresh.

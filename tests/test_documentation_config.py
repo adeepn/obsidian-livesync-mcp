@@ -404,3 +404,13 @@ def test_candidate_selection_capability_documented():
         assert 'While that check awaits' in text
         assert 'without committing the candidate' in text
         assert 'revalidates a restored previously active policy' in text
+
+
+def test_iterative_scalar_depth_documented():
+    for name in ('README.md', '.env.example', 'docs/size-policy.md'):
+        text = (ROOT / name).read_text()
+        assert 'iterative' in text and 'JSON admission' in text
+        assert 'no coercion depth limit' in text
+    text = (ROOT / 'docs/size-policy.md').read_text()
+    assert 'cycles' in text and '1000/5000' in text
+    assert 'Node --stack-size=16384' in text
