@@ -10,7 +10,6 @@ See docs/superpowers/specs/2026-11-23-settings-parity.md sections а/б.
 from __future__ import annotations
 
 from diagnostic_hygiene import invalid_setting, SettingIssue, PublicDiagnostic, DiagnosticCode
-from storage_base import WriterParameterRefused
 
 import base64
 import hashlib
@@ -24,6 +23,13 @@ from wire_encoding import js_number_string
 
 class UnsupportedWriterMode(ValueError):
     """Readable vault settings whose writer is not implemented yet."""
+
+
+class SplitterRefusal(ValueError):
+    """Codec-owned refusal; storage maps the typed diagnostic at its boundary."""
+    def __init__(self, diagnostic: PublicDiagnostic):
+        self.diagnostic = diagnostic
+        super().__init__(diagnostic.format())
 
 
 def _js_utf8(text: str) -> bytes:
@@ -190,7 +196,7 @@ def _splitter_property_key(value, *, setting='chunkSplitterVersion') -> str:
         # ECMAScript OrdinaryToPrimitive: JSON own toString is noncallable;
         # inherited valueOf returns the object, so no primitive can be produced.
         if 'toString' in value:
-            raise WriterParameterRefused(PublicDiagnostic(DiagnosticCode.SPLITTER_PRIMITIVE, keys=(setting,)))
+            raise SplitterRefusal(PublicDiagnostic(DiagnosticCode.SPLITTER_PRIMITIVE, keys=(setting,)))
         return '[object Object]'
     if value is None:
         return 'null'
@@ -254,7 +260,7 @@ class ContentSplitter:
         self._parameter_refusal = None
         try:
             custom = _minimum_number(custom if _js_truthy(custom) else 0, setting='customChunkSize')
-        except WriterParameterRefused as error:
+        except SplitterRefusal as error:
             # getParamsFor evaluates on writes, not startup/read access.
             self._parameter_refusal = error
             custom = math.nan
@@ -360,7 +366,7 @@ def _js_add(left, right):
 def _loop_refusal(setting, remedy):
     codes = {'customChunkSize': DiagnosticCode.SPLITTER_CUSTOM_LOOP,
              'minimumChunkSize': DiagnosticCode.SPLITTER_MINIMUM_LOOP}
-    error = WriterParameterRefused(PublicDiagnostic(codes[setting]))
+    error = SplitterRefusal(PublicDiagnostic(codes[setting]))
     error.setting_keys = (setting,)
     return error
 
@@ -523,7 +529,7 @@ class V2Splitter(_Splitter):
             return []
         if math.isnan(self.absolute_max_piece_size):
             # chunks.ts:418-432: slice(i, NaN) emits nothing and loses bytes.
-            raise WriterParameterRefused(PublicDiagnostic(DiagnosticCode.SPLITTER_BINARY_LOSS))
+            raise SplitterRefusal(PublicDiagnostic(DiagnosticCode.SPLITTER_BINARY_LOSS))
         if self.absolute_max_piece_size <= 0:
             # chunks.ts:418-432: i = splitEnd <= i.
             raise _loop_refusal('customChunkSize', 'customChunkSize=0 (positive pieceSize)')

@@ -182,3 +182,5 @@ shapes and the incomplete-index pagination caveat.
 `tests/regex_doubles.py` injects typed tool-level request deadlines without timing process startup. Real worker timeout/reap/restart remains covered separately. Concurrency tests use event rendezvous; performance smoke tests use generous scheduler margins. Normal suites run serially; gate F1 additionally verifies two independent suite processes in parallel with separate logs/temp state.
 
 `scripts/extract_chunk_parameter_vectors.mjs` directly executes the pinned cap expression plus native JSON ToPrimitive/ToNumber/addition probes, retaining lexical overflow inputs. Coercion cell generator modes INCLUDE_MINIMUM, COERCION_EDGES, CROSS_EDGES, INGRESS_EDGES, OVERFLOW_EDGES and ZERO_EDGES cover parameter types, evaluation order and true loops.
+
+`content_splitter.SplitterRefusal` is a codec-owned ValueError with a typed diagnostic; storage backends map it to WriterParameterRefused before publication. Codec modules retain their storage-independent boundary.

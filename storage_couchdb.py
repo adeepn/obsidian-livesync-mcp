@@ -66,7 +66,7 @@ import base64
 
 import httpx
 
-from content_splitter import ContentSplitter, chunk_id_for_piece
+from content_splitter import ContentSplitter, SplitterRefusal, chunk_id_for_piece
 from livesync_format import (
     ForbiddenPathError, EncryptedInlineChunk,
     clone_metadata, extract_inline_chunks, legacy_body,
@@ -88,6 +88,7 @@ from livesync_format import (
     validate_vault_path,
 )
 from storage_base import (
+    WriterParameterRefused,
     check_file_size,
     WriteSkipped,
     RenameRefused,
@@ -1129,7 +1130,11 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
         if not live and not create:
             raise NoteNotFound(PublicDiagnostic(DiagnosticCode.NOT_FOUND, paths=(DiagnosticPath(path, remote=False),)))
 
-        pieces = [piece for piece in self._splitter.split(content, path=canonical_path(path)) if piece]
+        try:
+            pieces = [piece for piece in self._splitter.split(content, path=canonical_path(path)) if piece]
+        except SplitterRefusal as error:
+            # Keep codec modules storage-independent; project only typed fields.
+            raise WriterParameterRefused(error.diagnostic) from None
         # P-10 / EntryManagerImpls.ts:280: retain ingested Blob.size even
         # when a legacy splitter's Blob.text() removes an initial BOM.
         # EntryManagerImpls.ts:133-159 retains all references, while

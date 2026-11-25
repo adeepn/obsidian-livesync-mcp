@@ -66,7 +66,7 @@ from journal_codec import (
     serialize_journal,
 )
 from journal_store import EncryptedNoteError, JournalStore, parse_rev
-from content_splitter import ContentSplitter, chunk_id_for_piece
+from content_splitter import ContentSplitter, SplitterRefusal, chunk_id_for_piece
 from livesync_format import (
     PATH_IDENTITY_LEGACY,
     ForbiddenPathError,
@@ -89,6 +89,7 @@ from livesync_format import (
 from replay_limits import ReplayLimits, ReplayBudgetExceeded
 from object_storage import JournalObjectStorage, ObjectSizeLimit, MAX_OBJECT_BYTES
 from storage_base import (
+    WriterParameterRefused,
     check_file_size,
     WriteSkipped,
     RenameRefused,
@@ -1230,7 +1231,11 @@ class JournalBackend(TextAccessPolicy, DeviceSelection):
             raise NoteExists(f"note already exists: {path}")
         if not live and not create:
             raise NoteNotFound(f"note not found: {path}")
-        pieces = [piece for piece in self._splitter.split(content, path=canonical_path(path)) if piece]
+        try:
+            pieces = [piece for piece in self._splitter.split(content, path=canonical_path(path)) if piece]
+        except SplitterRefusal as error:
+            # Keep codec modules storage-independent; project only typed fields.
+            raise WriterParameterRefused(error.diagnostic) from None
         # P-10 / EntryManagerImpls.ts:280: retain ingested Blob.size even
         # when a legacy splitter's Blob.text() removes an initial BOM.
         children = [chunk_id_for_piece(piece, hash_alg=self._splitter.hash_alg) for piece in pieces]

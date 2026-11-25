@@ -29,8 +29,7 @@ import math
 import unicodedata
 from copy import deepcopy
 
-from storage_base import WriterParameterRefused
-from content_splitter import ContentSplitter, UnsupportedWriterMode, chunk_id_for_piece
+from content_splitter import ContentSplitter, UnsupportedWriterMode, SplitterRefusal, chunk_id_for_piece
 
 # Upstream isPlainText (path.ts): extensions stored as plain text chunks.
 TEXT_EXTENSIONS = frozenset(
@@ -569,7 +568,7 @@ def resolve_content_splitter(milestone_settings: dict) -> ContentSplitter:
         error.setting_keys = getattr(exc, "setting_keys", ())
         error.setting_issues = getattr(exc, "setting_issues", ())
         raise error from exc
-    except WriterParameterRefused as exc:
+    except SplitterRefusal as exc:
         raise UnsupportedVaultSettings(exc.diagnostic) from exc
     except ValueError as exc:
         error = UnsupportedVaultSettings(str(exc))
