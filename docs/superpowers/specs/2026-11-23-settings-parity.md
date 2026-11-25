@@ -1046,3 +1046,9 @@ remain in upstream-pin.md.
 Historical plans now link to scan-policy.md rather than the removed README
 anchor. Selection worker documentation names LIVESYNC_SELECTION_TIMEOUT_SECONDS
 beside the default deadline. Local-link inventory covers all Markdown pages.
+
+### 2026-11-25 — F9-1 HTTP ingress
+
+[DECISION] Explicit 1 GiB memory-held HTTP body policy, configurable through
+LIVESYNC_MAX_REQUEST_BYTES; 0 unlimited, HTTP 413 actionable via configuration.
+OAuth form cap remains separate. Installed SDK argument verified from source.

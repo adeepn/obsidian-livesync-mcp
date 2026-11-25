@@ -489,6 +489,7 @@ def test_startup_configuration_error_policy_is_documented():
 # The paths below map consumers to their returned fields; defaults and validation
 # expectations come from the published configuration table, not a second value table.
 CONFIG_PATHS = {
+    'LIVESYNC_MAX_REQUEST_BYTES': 'max_request_bytes',
     'LIVESYNC_FRONTMATTER_MAX_BYTES': 'frontmatter_max_bytes',
     'LIVESYNC_FRONTMATTER_MAX_NODES': 'frontmatter_max_nodes',
     'LIVESYNC_FRONTMATTER_MAX_DEPTH': 'frontmatter_max_depth',
@@ -1001,3 +1002,11 @@ def test_selection_deadline_override_and_historical_scan_links():
         text = (ROOT / 'docs/superpowers/plans' / name).read_text()
         assert '../../scan-policy.md#text-scan-eligibility' in text
         assert 'README.md#text-scan-eligibility' not in text
+
+
+def test_http_body_policy_documentation():
+    for name in ("README.md", "docs/configuration.md", "docs/peer-limitations.md", ".env.example"):
+        assert "LIVESYNC_MAX_REQUEST_BYTES" in (ROOT / name).read_text()
+    text = (ROOT / "docs/configuration.md").read_text()
+    for term in ("1 GiB", "68 MiB", "held in memory", "HTTP 413", "OAuth", "0 (unlimited"):
+        assert term in text

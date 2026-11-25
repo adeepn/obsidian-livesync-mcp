@@ -102,6 +102,7 @@ and [source and live evidence](docs/upstream-pin.md).
 | Deletion retention and conflict automation | Deliberate differences | [Policies](docs/peer-limitations.md#deletion-and-conflict-policies) |
 | Reflection, hidden/customization/plugin sync | Outside ordinary-tool scope | [Full scope](docs/peer-limitations.md#supported-vault-settings) |
 | YAML aliases and properties | Supported with configurable projection budgets | [Properties](docs/frontmatter-properties.md) |
+| HTTP request bodies | Configurable local policy | 1 GiB default, 0 unlimited; `LIVESYNC_MAX_REQUEST_BYTES`; [HTTP 413 recovery](docs/configuration.md#http-request-bodies) |
 | Device request/cache/concurrency tuning | Local peer policies | [Operational bounds](docs/peer-limitations.md#operational-and-tool-bounds) |
 
 ## How the peer differs from a device

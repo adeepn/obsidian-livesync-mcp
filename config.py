@@ -129,6 +129,7 @@ class Config:
     frontmatter_max_nodes: int = 20_000
     frontmatter_max_depth: int = 200
     frontmatter_max_bytes: int = 4 * 1024**2
+    max_request_bytes: int = 1024**3
     scan_max_notes: int = 0
     scan_max_bytes: int = 0
     scan_max_seconds: float = 20.0
@@ -492,6 +493,15 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
             raise ValueError
     except ValueError:
         raise ConfigError('LIVESYNC_SYNC_MAX_SIZE_MB must be a finite number or empty') from None
+    request_raw = env.get("LIVESYNC_MAX_REQUEST_BYTES", 1024**3)
+    try:
+        if type(request_raw) not in (str, int):
+            raise ValueError
+        max_request_bytes = int(request_raw)
+        if max_request_bytes < 0:
+            raise ValueError
+    except (ValueError, TypeError):
+        raise ConfigError("LIVESYNC_MAX_REQUEST_BYTES must be a nonnegative integer; 0 is unlimited") from None
     scan_limits = []
     for key, default in (("LIVESYNC_SCAN_MAX_NOTES", 0),
                          ("LIVESYNC_SCAN_MAX_BYTES", 0),
@@ -581,6 +591,7 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
         frontmatter_max_nodes=_positive_transport(env, "LIVESYNC_FRONTMATTER_MAX_NODES", 20_000, integer=True),
         frontmatter_max_bytes=_positive_transport(env, "LIVESYNC_FRONTMATTER_MAX_BYTES", 4 * 1024**2, integer=True),
         frontmatter_max_depth=_positive_transport(env, "LIVESYNC_FRONTMATTER_MAX_DEPTH", 200, integer=True),
+        max_request_bytes=max_request_bytes,
         scan_max_notes=scan_limits[0],
         scan_max_bytes=scan_limits[1],
         scan_max_seconds=scan_max_seconds,

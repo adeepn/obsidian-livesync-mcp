@@ -357,3 +357,8 @@ regex output cap. Device write-size admission still applies after edits.
 Journal candidate validation includes the Node selection capability check. While that check awaits, effective selection, size and text limits remain the previous tuple; a missing/unusable Node refusal records a typed failure without committing the candidate. Install Node.js 22+ in the service PATH, then force refresh or restart to recover.
 
 After a failed candidate, force refresh also revalidates a restored previously active policy, so recovered backend/vault stats clear stale Node capability failures before another write.
+
+HTTP ingress: `LIVESYNC_MAX_REQUEST_BYTES` defaults to 1 GiB; 0 is unlimited.
+HTTP 413 means raise the request-body policy (and any proxy limit) and restart.
+The body is held in memory; this is separate from device file-size admission
+and the OAuth form cap. See [configuration](configuration.md#http-request-bodies).

@@ -17,6 +17,7 @@ are read only for the selected backend. Empty defaults below mean an empty strin
 
 | Variable | Default | Requirement | Purpose |
 | --- | --- | --- | --- |
+| `LIVESYNC_MAX_REQUEST_BYTES` | `1073741824` | Nonnegative integer | HTTP request body bytes; 0 unlimited; HTTP 413 before tools when exceeded; held in memory |
 | `LIVESYNC_BACKEND` | none | Required | Select `couchdb` or `s3` |
 | `COUCHDB_CUSTOM_HEADERS` | empty | Optional | Plugin Custom Headers lines or JSON object; credential values; see [connection examples](connecting-storage.md#reverse-proxies-and-auth-proxies) |
 | `COUCHDB_CONNECT_TIMEOUT_SECONDS` | `5` | Optional | Positive finite seconds for CouchDB connection |
@@ -79,3 +80,12 @@ are read only for the selected backend. Empty defaults below mean an empty strin
 | `LIVESYNC_JOURNAL_MAX_REFRESH_BYTES` | `68719476736` | Positive integer <2**63 | Downloaded bytes per refresh |
 | `LIVESYNC_JOURNAL_MAX_REFRESH_SECONDS` | `3600` | Positive finite number <2**63 | Elapsed seconds, fractions accepted |
 | `LIVESYNC_UNSAFE_DEBUG` | `unset` | Set to 1 plus DEBUG logging | Unsafe last-line diagnostic sink; keep disabled |
+
+## HTTP request bodies
+
+`LIVESYNC_MAX_REQUEST_BYTES` defaults to 1 GiB. A base64 upload at the default
+50 MiB vault policy needs about 68 MiB plus JSON overhead; raised vault policies
+need proportionally more. The body is held in memory. Raise this variable or
+set 0 (unlimited within Python addressable memory) and restart after HTTP 413.
+Reverse proxies may have their own body limits. The OAuth authorization form
+has its separate 4 MiB cap; changing this setting does not change that cap.

@@ -177,6 +177,10 @@ def create_app(cfg: Config) -> FastMCP:
         "instructions": "MCP server for Obsidian vault via CouchDB/LiveSync",
         "host": cfg.host,
         "port": cfg.port,
+        # Installed mcp 1.30.0 fastmcp/server.py:179,985 passes this to
+        # transport_security.py:147-211. SDK requires positive bytes;
+        # sys.maxsize covers every body representable by Python when unlimited.
+        "max_request_body_size": cfg.max_request_bytes or sys.maxsize,
         "lifespan": lifespan,
         "transport_security": TransportSecuritySettings(
             enable_dns_rebinding_protection=False,
