@@ -170,3 +170,5 @@ keyed CouchDB index progress. Regex worker lifecycle coverage lives in
 `tests/test_regex_runner.py`. Scan documentation/default contracts are pinned in
 `tests/test_documentation_config.py`; see `docs/scan-policy.md` for response
 shapes and the incomplete-index pagination caveat.
+
+`scripts/extract_collision_vector.mjs` executes pinned splitting, hashing and journal transport with integrity-verified dependencies; `tests/test_publication_collision.py` checks projected equality and lossless preflight.

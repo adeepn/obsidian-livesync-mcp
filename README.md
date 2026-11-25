@@ -153,7 +153,7 @@ combination. [Source inventory and caveats](docs/superpowers/specs/2026-11-23-se
 | `forcePathStyle` | Boolean, default true | Identical for configured endpoints | S3_FORCE_PATH_STYLE=true/false; SDK addressing rules still apply |
 | `pathNormalizationVersion` | 0 legacy / 1 NFC | Identical | Both, independently of filename case; collisions refuse |
 | `handleFilenameCaseSensitive` | false / true | Identical | Legacy, NFC, case-sensitive and NFC+case-sensitive identities |
-| `chunkSplitterVersion` | v1, v2, v2-segmenter, v3-rabin-karp, legacy empty | Identical | All writers; legacy split-surrogate pieces retain device IDs and transport encoding; v2-segmenter equals v2 at this pin |
+| `chunkSplitterVersion` | v1, v2, v2-segmenter, v3-rabin-karp, legacy empty | Identical | All writers; legacy split-surrogate pieces retain device IDs and transport encoding; journal collisions compare projected bytes; v2-segmenter equals v2 at this pin |
 | `enableChunkSplitterV2`, `useSegmenter` | false / true (legacy migration) | Identical | One-pass migration of empty version; unknown version normalization follows upstream |
 | `hashAlg` | xxhash64, xxhash32, mixed-purejs, sha1, empty | Identical | Upstream UTF-16 length and hash semantics |
 | `customChunkSize` | Number >=0 in UI (default 0) | Identical wherever the plugin terminates | V1 plain cap zero advances one UTF-16 unit; V3 clamps; see [loop refusals](docs/vault-format.md#invalid-writer-parameters) |
@@ -220,6 +220,9 @@ combination. [Source inventory and caveats](docs/superpowers/specs/2026-11-23-se
   connection fields and choose CouchDB Basic or JWT authentication.
   Ordinary tools reserve service prefixes/names and dot-prefixed paths;
   [path admission](docs/vault-format.md#path-admission) lists the exact exclusions.
+- Distinct colliding CouchDB pieces refuse before publication: configure a positive
+  `customChunkSize` or a collision-free `hashAlg` such as `sha1`. Journal pieces
+  with identical TextEncoder bytes share the original ID and report replacements.
 - Refuse only inputs on which the plugin itself does not terminate: V1
   nonempty binary/non-plain text with nonpositive caps, V1 nonempty plain text
   with negative caps, V2 nonempty binary with nonpositive caps, V2 text groups

@@ -1219,9 +1219,10 @@ class JournalBackend(TextAccessPolicy, DeviceSelection):
         children = [chunk_id_for_piece(piece, hash_alg=self._splitter.hash_alg) for piece in pieces]
         unique = {}
         for chunk_id, piece in zip(children, pieces):
-            if chunk_id in unique and unique[chunk_id] != piece:
+            # journalRecords.ts:69-74: leaf equality is after TextEncoder projection.
+            if chunk_id in unique and text_encoder_string(unique[chunk_id]) != text_encoder_string(piece):
                 raise StorageError('content chunks with the same id hold different data')
-            unique[chunk_id] = piece
+            unique.setdefault(chunk_id, piece)
         chunks = list(unique.items())
         for chunk_id, piece in chunks:
             self._validate_chunk_reuse(chunk_id, piece)

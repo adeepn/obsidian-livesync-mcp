@@ -187,3 +187,5 @@ Headers do not change the
 stored vault format. See [proxy configuration](connecting-storage.md#reverse-proxies-and-auth-proxies)
 for text/JSON forms, validation, typed count diagnostics and secret handling.
 Upstream: `LiveSyncReplicator.ts:2071-2098`, `diagnostics/couchdb.ts:45`.
+
+Journal within-publication collisions compare TextEncoder-projected data; identical projected pieces retain all original child IDs. CouchDB preflights distinct colliding pieces before any mutation; configure a positive customChunkSize or a collision-free hashAlg such as sha1.

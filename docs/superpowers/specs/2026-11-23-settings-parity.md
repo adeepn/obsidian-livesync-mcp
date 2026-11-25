@@ -720,3 +720,7 @@ cache capacity defaults to 65536. No upstream wire-format fixture changes.
 regex before any note is admitted. Return a resumable empty time page when
 the aggregate clock expired; retain the regex-specific timeout refusal when
 its own deadline expires first. Neither path echoes the pattern or body.
+
+### 2026-11-25 F1-1
+
+[DECISION] Compare journal publication collisions after transport projection; preflight lossless CouchDB collisions and name setting-level recovery. Upstream: journalRecords.ts:69-108; EntryManagerImpls.ts:133-159; DatabaseWriteLayer.ts:24-49.

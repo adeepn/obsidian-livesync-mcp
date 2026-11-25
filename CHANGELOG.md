@@ -167,3 +167,5 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Docs
 
 - Clarified that the built-in OAuth client is pre-configured for Claude only; added instructions for registering additional clients
+
+- Preflight lossless CouchDB chunk collisions and admit journal collisions whose projected bytes agree, retaining IDs and replacement reporting.

@@ -308,3 +308,9 @@ def test_complete_scan_defaults_and_documented_pagination():
                   'persistent', 'total_lines', 'returned_lines'):
         assert token in policy
     assert '2026-11-25 — G4b' in (ROOT / 'docs/superpowers/specs/2026-11-23-settings-parity.md').read_text()
+
+
+def test_collision_recovery_documented():
+    text = (ROOT / 'README.md').read_text()
+    assert 'Distinct colliding CouchDB pieces refuse before publication' in text
+    assert 'Journal within-publication collisions compare TextEncoder-projected data' in (ROOT / 'docs/vault-format.md').read_text()

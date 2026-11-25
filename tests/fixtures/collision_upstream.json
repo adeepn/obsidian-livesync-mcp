@@ -1,0 +1,101 @@
+{
+  "settings": {
+    "chunkSplitterVersion": "v1",
+    "customChunkSize": -1,
+    "minimumChunkSize": -1,
+    "hashAlg": "xxhash64"
+  },
+  "input": "🙂�",
+  "path": "gate.md",
+  "status": "defined",
+  "pieces": [
+    "\ud83d",
+    "\ude42",
+    "�"
+  ],
+  "children": [
+    "h:3io3gbx5oks9x",
+    "h:3io3gbx5oks9x",
+    "h:3io3gbx5oks9x"
+  ],
+  "split_pieces": [
+    0,
+    1,
+    2
+  ],
+  "split_children": [
+    "h:3io3gbx5oks9x",
+    "h:3io3gbx5oks9x",
+    "h:3io3gbx5oks9x"
+  ],
+  "strings": [
+    "\ud83d",
+    "\ude42",
+    "�"
+  ],
+  "source_sha256": {
+    "package/dist/hash/purejs.js": "09bc77348cb96f592fbb18b5b7a61f4b747cc91f12d5ea0b29b3b2609e0cca7c",
+    "package/dist/binary/base64.js": "0675e7a75edeb8eabc7f867ac18a44bd50bf4f493a5356d3760fb2b167fa82bc",
+    "package/dist/common/logger.js": "cc929b9b9a685fb060c6c382f53a3e61e67b05a4ae299fe846966a6d7332f58f",
+    "package/dist/binary/encodedUTF16.tables.internal.js": "17432ddd36cb745ab82a42d269736b954f3841070da54d5152a6be246b3a40d4",
+    "package/dist/binary/hex.js": "e9544562fc02c0df659dd27550d553ade49959ad546ba6b88f236c6274ccb9e6",
+    "common/models/setting.const.ts": "a3c3ae6df58a2c6aeb67a546eba90799f556d855fad50da60efb15026e548c04",
+    "common/models/shared.const.behabiour.ts": "72a60cdb46d46deec169bc18da86c89f9ef2e14ba33aa33aea547348f382894e",
+    "common/models/setting.const.defaults.ts": "7a49ac7546318e447e5541882532ca8993649bc66fc08eff75501e76b82eb48d",
+    "string_and_binary/path.ts": "5deb06668cae485345c3904072c537791294ff7f374bd16066f3b2da6a9ffdde",
+    "string_and_binary/convert.ts": "c473660a9b8d3b0f450b2d471f88186af5be113c038cd3fafbfe5a6ed65b363d",
+    "string_and_binary/chunks.ts": "8cccf58cd8306d8504bcc41d5e2c303361936f8691abebf40764856805cf54aa",
+    "ContentSplitter/ContentSplitterBase.ts": "495f5884048e6ab7192afcefcfe871cd853154230655f1602dd0b344a1952276",
+    "ContentSplitter/ContentSplitterV1.ts": "de1b394d87d94b2cb2ad5a713c5341d589c8c69bc636fe7d5e18df5f424ddb08",
+    "ContentSplitter/ContentSplitterV2.ts": "eaa0ab49060407436be403d3aff0d35c7700f952ef1b9174a99a6fe03bbf82fb",
+    "ContentSplitter/ContentSplitterRabinKarp.ts": "f1befeaac960bc5753d104e86c905643d34b7af74e13cb522452fa6b9485d987",
+    "ContentSplitter/ContentSplitters.ts": "520be1f0745494fd835010d963e350433dceff205fc35c72d90acdc2a66116a9",
+    "managers/HashManager/XXHashHashManager.ts": "24c192b549e7b3dd486432e572800ce9a77102a27ad152a9e66e209005df726a",
+    "managers/HashManager/PureJSHashManager.ts": "b2298e9bb0ae2c3abaefa0a13ff75ba1129a3fc33125cc23105937a8d3668be2",
+    "services/base/SettingService.ts": "6e3bb59f1aac22e86b8a92681bdaeddf7f1d1fb9dc7eca5d31c46e3b9d536b69",
+    "common/utils.ts": "162d7416ff00469d98e38a8be62854cc62eaba689605889937f37cf9243c3fed",
+    "replication/journal/journalRecords.ts": "0066d86b2a6bda5ba4599f54fbef382ce6501f10e53cfe4cc2e86a0c6ee13460"
+  },
+  "decoder_dependency": {
+    "package": "octagonal-wheels",
+    "version": "0.1.57",
+    "integrity": "sha512-CijSXOtflv60HaqrsyHxJ7jBwE/8v+RX5JjIDnJaibXM8qgG5IV1RJAHFEKDyqA/nhJb46TZf+eVa+2LBRf2vQ==",
+    "source_sha256": {
+      "package/dist/binary/base64.js": "0675e7a75edeb8eabc7f867ac18a44bd50bf4f493a5356d3760fb2b167fa82bc",
+      "package/dist/common/logger.js": "cc929b9b9a685fb060c6c382f53a3e61e67b05a4ae299fe846966a6d7332f58f",
+      "package/dist/binary/blob.js": "21ef13f0c43ecaf20fa4875395d849dab74f1046a676b769586feeef91e9270d",
+      "package/dist/binary/typedArray.js": "a6af3f42ca6d4b8cdd79947dca8719d220d97595cdf0be7a948a8404ad5e0f58"
+    }
+  },
+  "wasm_dependency": {
+    "package": "xxhash-wasm",
+    "version": "1.1.0",
+    "source": "https://registry.npmjs.org/xxhash-wasm/-/xxhash-wasm-1.1.0.tgz",
+    "integrity": "sha512-147y/6YNh+tlp6nd/2pWq38i9h6mz/EuQ6njIrmW8D1BS5nCqs0P6DG+m6zTGnNz5I+uhZ0SHxBs9BsPrwcKDA==",
+    "module_sha256": "e3be9143c10d60a015448de1ceef383b8f2ea1fd2773a5a5c69973ed52d8325a"
+  },
+  "upstream_commit": "484c164450d61deb2e301582b60cb9b5f9fa977f",
+  "wasm_sha256": "e3be9143c10d60a015448de1ceef383b8f2ea1fd2773a5a5c69973ed52d8325a",
+  "node": "v26.13.1",
+  "decoded": [
+    {
+      "_id": "h:3io3gbx5oks9x",
+      "data": "�",
+      "type": "leaf",
+      "_rev": ""
+    },
+    {
+      "_id": "h:3io3gbx5oks9x",
+      "data": "�",
+      "type": "leaf",
+      "_rev": ""
+    },
+    {
+      "_id": "h:3io3gbx5oks9x",
+      "data": "�",
+      "type": "leaf",
+      "_rev": ""
+    }
+  ],
+  "frame_b64": "fmg6M2lvM2dieDVva3M5eB/vv70Kfmg6M2lvM2dieDVva3M5eB/vv70Kfmg6M2lvM2dieDVva3M5eB/vv70K"
+}

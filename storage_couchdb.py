@@ -1128,6 +1128,18 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
         pieces = [piece for piece in self._splitter.split(content, path=canonical_path(path)) if piece]
         # P-10 / EntryManagerImpls.ts:280: retain ingested Blob.size even
         # when a legacy splitter's Blob.text() removes an initial BOM.
+        # EntryManagerImpls.ts:133-159 retains all references, while
+        # DatabaseWriteLayer.ts:24-49 accepts duplicate 409s. Lossless leaves
+        # cannot represent distinct data under one id: preflight before PUTs.
+        unique = {}
+        for piece in pieces:
+            chunk_id = self._splitter.chunk_id_for_piece(piece)
+            if chunk_id in unique and unique[chunk_id] != piece:
+                raise StorageError(
+                    'content chunks with the same id hold different data; '
+                    'configure a positive customChunkSize or a collision-free hashAlg such as sha1'
+                )
+            unique[chunk_id] = piece
         children = [await self._write_chunk(path, piece) for piece in pieces]
         new_mtime = _now_ms() if mtime is None else mtime
         if doc is None:
