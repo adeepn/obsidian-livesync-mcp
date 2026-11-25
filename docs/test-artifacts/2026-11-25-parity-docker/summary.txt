@@ -1,76 +1,118 @@
 T8a automated acceptance — 2026-11-25
-Status: INCOMPLETE; existing real-server acceptance gate failed.
-Code under test: 8277293
+Status: INCOMPLETE; stopped on a confirmed production diagnostic defect.
+Supersedes the stale-expectation report in commit 0709bc9.
+Production code under test: 8277293 (unchanged by this task).
 Credentials: <redacted>; no credential values recorded.
 
-Server health (one call per server):
+Server health (one call per server, before tests):
 SeaweedFS S3: GET / -> HTTP 403 (controller-defined healthy response).
 CouchDB: GET / -> HTTP 200; reported version 3.5.3.
-SeaweedFS version: NOT DONE; not exposed by the health response.
-Image digests: see below (controller-provided PARITY_IMAGE_DIGESTS).
-No containers were started, stopped or reconfigured.
-Only existing integration-test scratch prefixes/databases were used.
+SeaweedFS version: NOT DONE; not exposed by the health response; no extra
+server queries after the production-defect stop.
+No containers started, stopped or reconfigured. Only fixture-owned random
+it/ prefixes and mcp_test_<random> databases used; no livetest/ access.
+Image digests: controller-provided PARITY_IMAGE_DIGESTS below.
 
-Existing gated acceptance: 4 passed, 2 failed; pytest duration 1.41 s.
-PASS S3 roundtrip (1)
-FAIL S3 wipe/epoch (1)
-PASS S3 interrupted replay (1)
-PASS S3 sibling writers (1)
-PASS storage spy offline contract (1)
-FAIL CouchDB lifecycle final leaf audit (1)
+Results (separate invocations, not one combined final real-server run):
+Part 0 before: 4 passed, 2 failed, 4.27 s; stale expectations reproduced.
+Part 0 after: 6 passed, 1.56 s (includes one offline spy contract).
+- PASS independent hashlib epoch fingerprint expectation.
+- PASS resolved-splitter persistence audit, with every checkpoint draining
+  _changes, collecting metadata-revision children, and verifying live leaf
+  data and revision generation 1. Final distinct leaf IDs match exact pieces.
+New matrix/surrogate run: 121 passed, 1 failed, 64.67 s.
+- PASS S3 pairwise: 60 rows; create/read/update/copy/rename/soft delete;
+  fresh-reader replay, exact committed-oracle pieces and ordered child IDs,
+  growing keys and spy checks rejecting overwrites.
+- PASS CouchDB pairwise: 60 rows; same lifecycle; raw leaf/type/size/children
+  and soft-delete assertions; B1/B2 audit and fresh-backend read equality.
+- PASS S3 native V1 surrogate witness: fresh replay, U+FFFD pieces, exact
+  oracle IDs and integer transport_replacements outcome.
+- FAIL CouchDB V1 surrogate witness: HTTP 400 on PUT of a lone-surrogate
+  leaf; expected successful storage and exact read-back were not achieved.
+  Raw escaped-body/read-back assertions were not reached.
+JWT run: 1 passed, 2 failed, 1.23 s.
+- PASS HS256 startup, write, read with JWT-only backend configuration.
+- FAIL ES256 setup: supplied EC key is readable by cryptography but rejected
+  by peer PKCS8 validation. No ES256 server operation ran. Environment format
+  mismatch is unresolved; it is not evidence of an ES256 signing defect.
+- FAIL wrong-key diagnostic: first probe had an incorrect test attribute;
+  corrected probe below establishes the production finding.
+Corrected wrong-key probe: 1 failed, 1.08 s.
+  Server rejects JWT with HTTP 400. StorageUnavailable has DiagnosticCode.FAILED
+  instead of COUCHDB_AUTHORIZATION_ERROR. No key material appears in its public
+  message. Source: storage_couchdb.py:275-288 classifies only 401/403 as auth.
+  The separately running matrix finished while this finding was confirmed.
+  No further real-server scenarios were started after confirmation.
 
-FINDING 1: tests/test_integration_minio.py:196
-Assertion: info["epoch"] == "3:salt-a"
-Actual: "sha256:5f75eb2417b770ae"
-Source: storage_journal.py:510 fingerprints the public epoch.
-Existing offline expectation: tests/test_storage_journal.py:241,273,533.
-The integration assertion predates the typed diagnostic representation.
-No assertion was relaxed; no production change was made.
-
-FINDING 2: tests/test_integration_couchdb.py:264
-Assertion: datas == {body_v1, body_v2}
-Actual leaf set:
-  "integration smoke line one\n"
-  "updated second revision\n"
-Expected leaf set:
-  "integration smoke line one\n"
-  "integration smoke line one\nupdated second revision\n"
-All earlier lifecycle assertions, including updated note read-back, passed.
-Source: storage_couchdb.py:1138,1172 publishes the splitter's pieces.
-Pinned commonlib src/string_and_binary/chunks.ts:218-231 splits plain text
-by newline in V1. This inspection is not a new executed oracle or proof
-that the entire stored partition matches upstream.
-The failure alone does not establish a production data-loss defect.
-No assertion was relaxed; no production change was made.
-
-Requested new T8a scenarios: NOT DONE after failed existing acceptance gate.
-1 S3 pairwise/full settings matrix: NOT DONE; subset size 0 executed.
-2 Large binary/text MCP lifecycle and size policy: NOT DONE.
-3 Expanded recovery/identity scenarios: NOT DONE (existing replay test passed).
-4 New concurrency coverage: NOT DONE (existing sibling test passed).
-5 S3 surrogate witness and notice: NOT DONE.
-6 S3 signed-request custom headers: NOT DONE.
-7 CouchDB settings matrix and expanded B1/B2: NOT DONE.
-8 Compression: NOT DONE.
-9 CouchDB surrogate witness: NOT DONE.
-10 JWT algorithms and wrong-key refusal: NOT DONE.
-11 CouchDB request-class custom headers: NOT DONE.
+Requested scenario accounting:
+1 PARTIAL: pairwise rows pass; each row uses its own document kind. Additional
+  text AND binary lifecycle in every row NOT DONE. Full supplemental mode is
+  implemented but NOT RUN (MINIO_TEST_MATRIX=full).
+2 NOT DONE: 40/100/201 MiB, oversized rename and 12 MiB real MCP tools.
+3 PARTIAL: existing wipe/epoch and interrupted-replay tests pass; expanded
+  cache/chunk and identity-quarantine assertions NOT DONE.
+4 PASS: existing two concurrent writers retain two objects/revisions and a
+  deterministic third-peer winner; no overwrite.
+5 PASS: real S3 native surrogate witness and transport_replacements.
+6 NOT DONE: signed-request custom-header capture and addressing assertion.
+7 PARTIAL: 60-row real CouchDB lifecycle/audits pass; extra document kinds
+  in each row NOT DONE, as in scenario 1.
+8 NOT DONE: compression and pre-seeded native compressed documents.
+9 FAIL: real CouchDB rejects lone-surrogate leaf PUT with HTTP 400.
+10 PARTIAL/FAIL: HS256 passes; ES256 configuration fails; wrong-key error is
+   safely redacted but has the wrong diagnostic category.
+11 NOT DONE: real CouchDB custom-header request-class capture.
+Reason for incomplete scenarios: binding stop-on-production-defect rule.
 Large files generated: none; large-file SHA256: NOT DONE.
-New fixtures/generators/tests: none; oracle changes: none.
-Mutation check: NOT DONE; no new tests were written.
-Documentation expansion: NOT DONE; no implementation was added.
-Baseline offline (controller supplied): 25051 passed, 8 skipped, 3 subtests.
-Final offline run: retained separately in ignored t8a working evidence.
 
-Reproduction (from worktree root; credentials supplied only by shell):
+Oracle provenance:
+No fixture changed and no new oracle output was generated. Matrix expectations
+come from tests/settings_oracle.py and its committed compressed fixture,
+produced by scripts/extract_settings_oracle.mjs with integrity-verified published
+wheels/WASM dependencies. Surrogate expectations come from the committed
+native journal/splitter vectors and their generator. Fixture metadata retains
+source hashes, dependency versions and integrity. No expected splitter values
+were computed by production Python in the new acceptance suites.
+The Part 0 persistence-only audit intentionally uses the resolved splitter,
+whose parity is independently established by the offline oracle suites.
+Upstream: commonlib 484c164450d61deb2e301582b60cb9b5f9fa977f;
+plugin 5070b67beae3b60e3a79132386a08da3f1ef213a.
+Citations read: src/string_and_binary/chunks.ts:218-252;
+src/replication/journal/journalRecords.ts:69-108;
+src/replication/journal/journalCompatibility.ts:60-75;
+src/replication/httplib.ts:110-196;
+src/replication/journal/objectstore/MinioStorageAdapter.ts:54-100;
+src/services/base/VaultService.ts:73-81; src/pouchdb/compress.ts:49-71.
+
+Mutation verification (in memory, no servers, no production files modified):
+New S3 matrix and surrogate tests pass with FakeObjectStorage control runs.
+Changing the journal chunk-ID function to return a different ID is caught by
+exact oracle children. Changing transport_replacements to zero is caught by
+the surrogate outcome assertion. Both activated mutants KILLED.
+Remaining mutation coverage (CouchDB/JWT acceptance): NOT DONE after stop.
+Documentation contract: 64 passed, 0.17 s; new scope test failed before docs.
+Offline gating check: 64 passed, 125 skipped, 1.13 s.
+Baseline offline (controller): 25051 passed, 8 skipped, 3 subtests.
+Full offline runs and final hygiene: see final task report; working evidence
+stays in ignored .superpowers/sdd/2026-11-23-settings-parity/t8a/.
+
+Reproduction (from the parity worktree; supply secrets only in shell):
 export MINIO_TEST_ENDPOINT=<endpoint> MINIO_TEST_KEY=<redacted>
 export MINIO_TEST_SECRET=<redacted> MINIO_TEST_BUCKET=<scratch-bucket>
 export COUCHDB_TEST_URL=<endpoint> COUCHDB_TEST_USER=<redacted>
 export COUCHDB_TEST_PASSWORD=<redacted>
+export COUCHDB_TEST_JWT_URL=<endpoint> COUCHDB_TEST_JWT_SUBJECT=<redacted>
+export COUCHDB_TEST_JWT_HS_KEY=<redacted> COUCHDB_TEST_JWT_ES_KEY=<redacted>
 ./venv/bin/python -m pytest tests/test_integration_minio.py tests/test_integration_couchdb.py -q --tb=short
-# Offline: unset all MINIO_TEST_* and COUCHDB_TEST_* variables first.
+./venv/bin/python -m pytest tests/test_integration_parity_s3.py tests/test_integration_parity_couchdb.py -q --tb=short
+# Optional full supplemental rows: export MINIO_TEST_MATRIX=full
+# Offline: unset MINIO_TEST_* and COUCHDB_TEST_* variables first.
 ./venv/bin/python -m pytest tests/ -q
 
+Reused fixture settings_oracle_upstream.json.gz SHA256: 8567dc71e08b61ee7b9143ff3fae4efa45f3eb9ef1854cdb1d310a5ab3156a85
+
+Reused fixture surrogate_wire_upstream.json SHA256: 13e807b68562a09514e2cc6476d2e30f991aec1a25932ca67ad4d1e4a45fbb92
+
 Controller-provided image digests:
-chrislusf/seaweedfs@sha256:4b42c212543a0acd4c0e675215ecdcaf62a186ef98def76c7e12701871222d15
-couchdb@sha256:907eab5b7e55ab7cfd241d39b90b2a335ea40bef82acee5a37388c08bf201dda
+seaweedfs=chrislusf/seaweedfs@sha256:4b42c212543a0acd4c0e675215ecdcaf62a186ef98def76c7e12701871222d15 couchdb=couchdb@sha256:907eab5b7e55ab7cfd241d39b90b2a335ea40bef82acee5a37388c08bf201dda
