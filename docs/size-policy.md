@@ -106,4 +106,5 @@ the equally newest devices disagree, or no device has a positive timestamp. The
 resolution order, the tie rule and the typed ambiguity refusal are defined once in
 [Tweak compatibility](tweak-compatibility.md#recommendation-only-writer-policy).
 `backend_info` and `obsidian_vault_stats` report where the value came from under
-`recommendation_policy`; a nonfinite unlimited size is reported as JSON null.
+`recommendation_policy`. The value is a finite non-negative number or JSON null:
+a device's +Infinity and a negative override, both meaning unlimited, are reported as null.

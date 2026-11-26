@@ -321,8 +321,9 @@ def recommendation_fields(value):
             policy = entry.get('value')
             valid = (type(policy) is bool if key == 'useIgnoreFiles' else
                      type(policy) in (int, float))
-            # Native +Infinity represents an unlimited device predicate. Keep
-            # strict JSON and mark this representation explicitly with null.
-            projected['value'] = policy if valid and (type(policy) is bool or math.isfinite(policy)) else None
+            # A device's +Infinity and a negative override both mean unlimited.
+            # Keep strict JSON and a non-negative domain: report both as null.
+            projected['value'] = policy if valid and (type(policy) is bool or
+                                                      (math.isfinite(policy) and policy >= 0)) else None
         result[key] = projected
     return result

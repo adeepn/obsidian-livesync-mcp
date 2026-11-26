@@ -278,9 +278,31 @@ def test_override_metadata_retains_negative_unlimited():
     policies = fmt.resolve_writer_policy(live(), size_override=-1,
         use_override=False, names_override=('private',))
     projected = recommendation_fields(fmt.writer_policy_summary(policies))
-    assert projected['syncMaxSizeInMB'] == dict(value=-1, source='override', device_count=1, disagree=False)
+    # The override keeps its meaning inside the peer; the published value
+    # stays a non-negative number or null.
+    assert policies[0].value == -1
+    assert projected['syncMaxSizeInMB'] == dict(value=None, source='override', device_count=1, disagree=False)
     assert projected['useIgnoreFiles']['source'] == 'override'
     assert projected['ignoreFiles']['source'] == 'override'
+
+
+@pytest.mark.parametrize('kind', ['couchdb', 's3'])
+@pytest.mark.parametrize('override', [-1, 0, 60])
+async def test_size_overrides_cross_the_same_boundary(tmp_path, kind, override, monkeypatch):
+    import server
+    m = live()
+    m['tweak_values']['private-device-id']['syncMaxSizeInMB'] = {'toString': 5}
+    async with vault(tmp_path, kind, m) as (b, writes):
+        b.sync_max_size_mb_override = override
+        await b.startup_check()
+        assert b.sync_max_size_mb == override
+        want = {60: 60, 0: 0, -1: None}[override]
+        policy = (await b.backend_info())['recommendation_policy']
+        assert policy['syncMaxSizeInMB'] == dict(value=want, source='override', device_count=1, disagree=False)
+        monkeypatch.setattr(server, 'backend', b)
+        stats = json.loads(await server.obsidian_vault_stats(), parse_constant=lambda token: pytest.fail(token))
+        assert stats['recommendation_policy'] == policy
+        assert not writes()
 
 
 @pytest.mark.parametrize('kind', ['couchdb', 's3'])

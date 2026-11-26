@@ -99,8 +99,9 @@ by these three setting names. Each entry contains `source` (`override`,
 `device`, or `preferred`), integer `device_count`, and boolean `disagree`.
 Size and use-ignore entries expose the resolved numeric/boolean `value`;
 ignore names expose only integer `name_count`. These two values are the only settings
-values in tool output, and each is closed: a finite number or a boolean, never text
-from a setting. A nonfinite unlimited size is
-reported as JSON null rather than a nonstandard numeric token. Device IDs and names are never
+values in tool output, and each is closed: a finite non-negative number or a boolean,
+never text from a setting. A size outside that domain is reported as JSON null rather
+than as a number: a device's +Infinity and a negative override, both meaning unlimited.
+Device IDs and names are never
 exposed. `preferred` also labels the default when nothing advertises a key.
 The legacy selection source fields retain their `explicit`/`vault` vocabulary.
