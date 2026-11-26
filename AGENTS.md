@@ -271,3 +271,9 @@ stream raw bytes, bound incremental gzip/deflate output, and remove consumed
 encoding headers before exposing responses. `tests/test_couchdb_http_budget.py`
 covers every endpoint shape, raw/decoded boundaries, early abort, encoding
 refusals, fragmented streams, batch headroom and default maximum-sized pieces.
+
+
+F11 response outcome coverage lives in `tests/test_couchdb_response_outcome.py`:
+committed document/bulk/local/delete/leaf acknowledgements, public append retry
+warnings, move source retirement, read refusals and connection send boundaries.
+The HTTP body diagnostic retains closed typed recovery across outcome wrapping.

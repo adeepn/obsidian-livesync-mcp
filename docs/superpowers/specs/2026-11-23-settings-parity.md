@@ -1151,3 +1151,16 @@ Content-Length, Transfer-Encoding, hop-by-hop and Proxy-* fields are refused
 with value-free configuration errors. Mark both custom-header inventory rows as
 a transport-safety difference. Preserve README/connection guidance and state
 the same restriction explicitly in the JWT guide.
+
+
+## 2026-11-26 — F11 committed-response outcome classification
+
+[DECISION] Unreadable CouchDB PUT/POST/DELETE acknowledgements use OutcomeUnknown,
+retaining typed HTTP byte budget or encoding recovery. GET/HEAD refusals remain
+typed. Leaf publication itself is uncertain; note publication remains not applied
+when `_write_chunk` stops before metadata. Move source-removal context retains
+response recovery. Accept-Encoding identity and streaming caps are unchanged.
+Synthetic committed-response tests cover document, bulk, local, delete, leaf,
+public append, source retirement and connection send boundaries. No oracle fixture,
+configuration default or LiveSync format changed. No real-server acceptance was
+performed for F11; transport faults run against the HTTP-level CouchDB double.

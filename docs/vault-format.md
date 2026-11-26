@@ -267,3 +267,28 @@ control responses, and tightly configured overrides may need a larger budget.
 Raise the named variable and restart for legitimate larger responses. After a
 refused write acknowledgement, re-read the note before retrying: the server
 may already have committed it. These resource caps do not change file admission.
+
+### Unreadable write acknowledgements
+
+An unreadable PUT/POST/DELETE response is outcome unknown, including document,
+`_bulk_docs`, `_local`, delete and leaf requests: the change MAY have been applied.
+Re-read before retrying; append is NON-IDEMPOTENT. This applies to wire/decoded
+budget overflow, unsupported Content-Encoding, corrupt/truncated compression and
+connection loss after sending. Budget errors retain the typed byte limit and
+LIVESYNC_COUCHDB_MAX_INFLATED_BYTES raise/restart guidance; encoding errors name
+Content-Encoding and advise configuring the server/proxy for identity encoding.
+No remote header/body values are exposed. GET/HEAD keep typed refusals; connection,
+connect-timeout and pool-timeout failures before sending remain unavailability.
+All POST responses are conservatively classified at this shared request boundary.
+
+The leaf PUT itself is outcome unknown if its acknowledgement cannot be read.
+At the note boundary, `_write_chunk` converts this to MutationNotApplied: metadata
+publication has not begun, the note remains unchanged, and an orphan leaf may
+exist. It never claims that the leaf was not published. If a move has published
+the destination, an unreadable source-retirement acknowledgement retains both
+source-removal uncertainty and the typed response recovery details.
+
+This is the peer's data-protection outcome contract, not a new vault restriction
+or plugin wire format. The pin's RemoteService.ts:135–159,373–381 observes failures
+of body readers after fetch has settled. Accept-Encoding: identity and both
+streaming caps remain in force.

@@ -12,7 +12,7 @@ import httpx
 import pytest
 
 from couchdb_compression import CouchDBInflateBudgetExceeded
-from storage_base import StorageError
+from storage_base import StorageError, OutcomeUnknown
 from storage_couchdb import CouchDBBackend
 
 LIMIT = 4096
@@ -66,7 +66,7 @@ async def test_every_response_enforces_decoded_boundary(method, path, encoding, 
     peer, stream = backend(pack(data, encoding), encoding)
     try:
         if extra:
-            with pytest.raises(CouchDBInflateBudgetExceeded) as caught:
+            with pytest.raises(OutcomeUnknown if method in {"PUT", "POST", "DELETE"} else CouchDBInflateBudgetExceeded) as caught:
                 await peer._request(method, path)
             assert 'LIVESYNC_COUCHDB_MAX_INFLATED_BYTES' in caught.value.format()
             assert 'restart' in caught.value.format()
@@ -87,7 +87,7 @@ async def test_raw_cap_independent_of_decoded_cap(method, path, extra):
     peer, stream = backend(wire, 'gzip')
     try:
         if extra:
-            with pytest.raises(CouchDBInflateBudgetExceeded):
+            with pytest.raises(OutcomeUnknown if method in {"PUT", "POST", "DELETE"} else CouchDBInflateBudgetExceeded):
                 await peer._request(method, path)
         else:
             assert (await peer._request(method, path)).content == b'ok'
@@ -188,7 +188,7 @@ async def test_truncated_encoding_is_typed(encoding):
 async def test_oversized_write_acknowledgement_requires_confirmation(encoding):
     peer, _ = backend(pack(b'a' * (LIMIT + 1), encoding), encoding)
     try:
-        with pytest.raises(CouchDBInflateBudgetExceeded) as caught:
+        with pytest.raises(OutcomeUnknown) as caught:
             await peer._request('PUT', 'vault/h:leaf', json_body={'data': 'hello'})
         assert 're-read' in caught.value.format()
     finally:
@@ -226,7 +226,7 @@ async def test_deflate_raw_boundary_below_decoded_cap(method, path, extra):
     peer, stream = backend(wire, 'deflate')
     try:
         if extra:
-            with pytest.raises(CouchDBInflateBudgetExceeded):
+            with pytest.raises(OutcomeUnknown if method in {'PUT', 'POST', 'DELETE'} else CouchDBInflateBudgetExceeded):
                 await peer._request(method, path)
         else:
             assert (await peer._request(method, path)).content == data

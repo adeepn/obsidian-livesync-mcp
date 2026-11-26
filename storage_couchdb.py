@@ -43,6 +43,7 @@ from diagnostic_hygiene import (writer_diagnostic, diagnostic, settings_exceptio
 
 from collections import OrderedDict, deque
 import asyncio
+from dataclasses import dataclass
 from device_selection import DeviceSelection
 
 import json
@@ -138,6 +139,21 @@ class CouchDBHTTPEncodingRefused(StorageError):
         return ('CouchDB HTTP Content-Encoding is unsupported or malformed; '
                 'configure the server/proxy to return identity encoding and retry; '
                 'if publishing, re-read the note before retrying')
+
+
+@dataclass(frozen=True)
+class _HTTPBodyDiagnostic(PublicDiagnostic):
+    """Closed response recovery fields survive source-removal reclassification."""
+
+    budget_bytes: int | None = None
+
+    def format(self):
+        text = super().format()
+        if self.cause is CouchDBHTTPBudgetExceeded:
+            text += '; ' + CouchDBHTTPBudgetExceeded(self.budget_bytes).format()
+        elif self.cause is CouchDBHTTPEncodingRefused:
+            text += '; ' + CouchDBHTTPEncodingRefused().format()
+        return text
 
 
 async def _bounded_http_body(response: httpx.Response, limit: int) -> bytes:
@@ -391,9 +407,20 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
                     content=content, request=streamed.request,
                     extensions=streamed.extensions,
                 )
+        except (CouchDBHTTPBudgetExceeded, CouchDBHTTPEncodingRefused) as exc:
+            # C:services/base/RemoteService.ts:135-159,373-381 observes body
+            # failures after fetch settles. An unreadable acknowledgement cannot
+            # prove non-publication. Apply the peer uncertainty contract to all writes,
+            # including bulk/local/leaf PUTs; reads retain the typed refusal.
+            if method in {"PUT", "POST", "DELETE"}:
+                raise OutcomeUnknown(_HTTPBodyDiagnostic(
+                    operation=method, transport='CouchDB', cause=type(exc),
+                    budget_bytes=exc.limit if type(exc) is CouchDBHTTPBudgetExceeded else None,
+                )) from None
+            raise
         except httpx.HTTPError as exc:
             logger.warning('CouchDB <omitted> <omitted> failed: <omitted>; cause: %s', cause_name(type(exc)))
-            if method in {"PUT", "DELETE"} and not isinstance(
+            if method in {"PUT", "POST", "DELETE"} and not isinstance(
                 exc, (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout)
             ):
                 raise OutcomeUnknown(PublicDiagnostic(operation=method, transport='CouchDB', cause=type(exc))) from None

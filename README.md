@@ -68,6 +68,10 @@ Restart after changing configuration.
 
 See the [complete environment reference](docs/configuration.md).
 
+| Variable | Default | Recovery |
+| --- | --- | --- |
+| `LIVESYNC_COUCHDB_MAX_INFLATED_BYTES` | Splitter-derived, 32 MiB floor | Raise and restart for legitimate larger HTTP/document responses; an unreadable write acknowledgement is outcome unknown: re-read before retrying. |
+
 ## Backends
 
 ### CouchDB
@@ -97,7 +101,7 @@ and [source and live evidence](docs/upstream-pin.md).
 | Chunk hashes, Eden, long-line threshold | Identical at pin | [Full settings table](docs/peer-limitations.md#supported-vault-settings) |
 | File size and ignore-file selection | Identical admission; local overrides | [Size](docs/size-policy.md), [selection](docs/selection-filters.md) |
 | Headers, JWT and addressing | Explicit local connection settings | [Connection setup](docs/connecting-storage.md) |
-| CouchDB compression | Device-compatible; transformations disclosed; bounded reads | [Compression](docs/vault-format.md#couchdb-compression) |
+| CouchDB compression | Device-compatible; transformations disclosed; bounded reads; unreadable write acknowledgement is outcome unknown | [Compression](docs/vault-format.md#couchdb-compression) |
 | E2EE and path obfuscation | Unsupported | [Recovery choices](docs/peer-limitations.md#supported-vault-settings) |
 | Deletion retention and conflict automation | Deliberate differences | [Policies](docs/peer-limitations.md#deletion-and-conflict-policies) |
 | Reflection, hidden/customization/plugin sync | Outside ordinary-tool scope | [Full scope](docs/peer-limitations.md#supported-vault-settings) |
@@ -124,7 +128,8 @@ refusal conditions and recovery instructions. The main practical differences:
   [Exact guards and remedies](docs/peer-limitations.md#how-the-peer-differs-from-a-device).
 - Compression preserves CR/LF and leading BOM; CouchDB refuses unpaired surrogates.
   [Transport and compression](docs/peer-limitations.md#how-the-peer-differs-from-a-device).
-- Successful lossy writes disclose typed notices; ambiguous writes require re-reading.
+- Successful lossy writes disclose typed notices. Unreadable write acknowledgements
+  are outcome unknown; re-read before retrying, especially non-idempotent append.
   [Publication and outcomes](docs/peer-limitations.md#how-the-peer-differs-from-a-device).
 - Replay has configurable resource budgets; runtime decoder/SQLite capacity also applies.
   [Limits and recovery](docs/peer-limitations.md#operational-and-tool-bounds).
@@ -200,6 +205,11 @@ This includes Content-Type, Host and Origin validation and resource/prompt error
 CouchDB decompression has a per-document operational budget, derived from the
 resolved splitter with a 32 MiB floor; override LIVESYNC_COUCHDB_MAX_INFLATED_BYTES
 and restart for larger valid pieces. This is separate from device file admission.
+An unreadable PUT/POST/DELETE acknowledgement is outcome unknown: the change
+MAY have been applied. Re-read before retrying; append is NON-IDEMPOTENT.
+Budget/encoding recovery details accompany the warning. Read refusals remain
+ordinary typed refusals. An uncertain leaf PUT may leave an orphan; the note
+remains unchanged until metadata publication. See [response outcomes](docs/vault-format.md#unreadable-write-acknowledgements).
 
 Custom headers deliberately differ from the plugin for transport safety:
 Content-Length, Transfer-Encoding, Host, Connection, Keep-Alive, TE, Trailer,

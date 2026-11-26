@@ -1105,3 +1105,20 @@ def test_header_parity_claim_names_transport_safety_difference():
             if line.startswith('| `couchDB_CustomHeaders`') or line.startswith('| `bucketCustomHeaders`')]
     assert len(rows) == 2
     assert all('Transport-safety difference' in row for row in rows)
+
+
+def test_unreadable_write_outcome_recovery_documented():
+    # RemoteService.ts:135-159,373-381 observes post-fetch body-reader failures;
+    # the peer must retain its data-protection outcome/retry contract.
+    for name in ('README.md', 'docs/vault-format.md'):
+        text = (ROOT / name).read_text()
+        for term in ('MAY have been applied', 'NON-IDEMPOTENT', 'outcome unknown',
+                     'LIVESYNC_COUCHDB_MAX_INFLATED_BYTES', 'orphan'):
+            assert term in text
+    text = (ROOT / 'docs/vault-format.md').read_text()
+    for term in ('PUT/POST/DELETE', 'GET/HEAD', '_bulk_docs', '_local',
+                 'Content-Encoding', 'identity', 'MutationNotApplied', 'source-removal'):
+        assert term in text
+    for name in ('.env.example', 'docs/configuration.md'):
+        text = (ROOT / name).read_text()
+        assert 'outcome unknown' in text and 're-read before retrying' in text

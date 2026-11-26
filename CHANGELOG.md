@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Settings parity
 
+- Classify unreadable CouchDB PUT/POST/DELETE acknowledgements as outcome unknown
+  with typed budget/encoding recovery and non-idempotent retry guidance. Preserve
+  read refusals, uncertain orphan-leaf handling and move source-removal context.
+
 - Match source-audited ordinary-file identities and writes at plugin 1.0.52 /
   commonlib 484c164: legacy/NFC and case-sensitive/insensitive paths, all V1/V2/
   V2-segmenter/V3 splitters, legacy migration, five chunk hash modes and Eden.
