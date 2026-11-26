@@ -1182,10 +1182,14 @@ def test_recommendation_only_policy_documentation():
         assert '## Recommendation-only writer policy' in text, name
         assert f']({link})' in text, name
         assert 'Only maps advertising the individual key vote' not in text, name
-    for name in ('README.md', 'docs/peer-limitations.md', 'docs/selection-filters.md', 'docs/size-policy.md',
-                 'docs/tweak-compatibility.md'):
+    assert 'no device has a positive timestamp' in normative
+    # Each summary keeps the distinctions of the rule: agreement needs no timestamp,
+    # timestamps arbitrate disagreement only, a missing key has a default, and only an
+    # unresolved disagreement refuses. test_summary_claims_match_resolution runs them.
+    for name in ('README.md', 'docs/peer-limitations.md', 'docs/selection-filters.md', 'docs/size-policy.md'):
         text = ' '.join((ROOT / name).read_text().split())
-        assert 'no device has a positive timestamp' in text, name
+        for phrase in ('without any timestamp', 'newest device', 'device default', 'unresolved disagreement'):
+            assert phrase in text, (name, phrase)
     assert 'P-48' not in normative  # internal ruling identifiers stay out of the documentation
     assert 'Device-derived recommendation-only policy' in (ROOT / 'README.md').read_text()
     assert 'device maps precede PREFERRED' in (ROOT / '.env.example').read_text()

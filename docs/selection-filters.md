@@ -128,11 +128,13 @@ and restart; changing vault settings cannot repair installed code.
 
 `useIgnoreFiles` and `ignoreFiles` follow the devices, not PREFERRED: an operator
 override (`LIVESYNC_USE_IGNORE_FILES`, `LIVESYNC_IGNORE_FILES`) wins, then the device
-maps that advertise the key. PREFERRED is used only when the devices cannot decide:
-none advertises the key, the equally newest devices disagree, or no device has a
-positive timestamp. If PREFERRED does not advertise the key either, the peer refuses
-with a typed ambiguity reason that names the override. The resolution order and the
-tie rule are defined once in
+maps that advertise the key. Devices that agree give their common value without any
+timestamp. Only a disagreement looks at timestamps: the newest device wins, and
+equally newest devices that agree give their common value. A disagreement without a
+winner goes to PREFERRED, and so does a key that no device advertises; if PREFERRED
+is silent too, the key takes its device default, and only the unresolved
+disagreement becomes a typed ambiguity refusal that names the override. The
+resolution order and the tie rule are defined once in
 [Tweak compatibility](tweak-compatibility.md#recommendation-only-writer-policy).
 `backend_info` and `obsidian_vault_stats` report where each value came from under
 `recommendation_policy`; for ignore names they expose only `name_count`.

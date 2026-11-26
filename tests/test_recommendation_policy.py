@@ -333,3 +333,23 @@ async def test_agreeing_newest_devices_override_older_disagreement(tmp_path, kin
         assert info['source'] == 'device'
         assert info['device_count'] == 3 and info['disagree'] is True
         assert not writes()
+
+
+@pytest.mark.parametrize('key,old,new,env', KEYS)
+def test_summary_claims_match_resolution(key, old, new, env):
+    # The order that the README and the three short policy sections state.
+    base = {'pathNormalizationVersion': 0}
+    default = {'syncMaxSizeInMB': 50, 'useIgnoreFiles': False, 'ignoreFiles': '.gitignore'}[key]
+    entries = {'a': {**base, key: new}, 'b': {**base, key: new}}
+    assert resolve({'tweak_values': entries}, key) == new  # agreement needs no timestamp
+    entries['c'] = {**base, key: old, 'tweakModified': 5}
+    assert resolve({'tweak_values': entries}, key) == old  # a disagreement goes to the newest
+    entries.pop('c')
+    entries['d'] = {**base, key: old}
+    with pytest.raises(fmt.UnsupportedVaultSettings, match=env):  # unresolved without PREFERRED
+        resolve({'tweak_values': entries}, key)
+    entries['PREFERRED'] = {**base, key: old}
+    assert resolve({'tweak_values': entries}, key) == old  # PREFERRED decides the disagreement
+    unadvertised = {'tweak_values': {'PREFERRED': {**base, key: old}, 'x': dict(base)}}
+    assert resolve(unadvertised, key) == old  # nobody advertises: PREFERRED
+    assert resolve({'tweak_values': {'x': dict(base)}}, key) == default  # then the device default

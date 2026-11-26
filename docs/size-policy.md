@@ -101,9 +101,13 @@ Array scalar conversion is iterative and adds no coercion depth limit after JSON
 
 `syncMaxSizeInMB` follows the devices, not PREFERRED: an operator override
 (`LIVESYNC_SYNC_MAX_SIZE_MB`) wins, then the device maps that advertise the key.
-PREFERRED is used only when the devices cannot decide: none advertises the key,
-the equally newest devices disagree, or no device has a positive timestamp. The
-resolution order, the tie rule and the typed ambiguity refusal are defined once in
+Devices that agree give their common value without any timestamp. Only a
+disagreement looks at timestamps: the newest device wins, and equally newest
+devices that agree give their common value. A disagreement without a winner goes
+to PREFERRED, and so does a key that no device advertises; if PREFERRED is silent
+too, the key takes its device default, and only the unresolved disagreement
+becomes a typed ambiguity refusal that names the override. The resolution order
+and the tie rule are defined once in
 [Tweak compatibility](tweak-compatibility.md#recommendation-only-writer-policy).
 `backend_info` and `obsidian_vault_stats` report where the value came from under
 `recommendation_policy`. The value is a finite non-negative number or JSON null:
