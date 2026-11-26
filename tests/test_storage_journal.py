@@ -1832,7 +1832,15 @@ def test_identity_paths_have_no_unconditional_lowercase():
                 # helper is identity-aware and covered by four-mode tests.
                 allowed = ({"_without_md", "_comparison_key"} if name == "links.py"
                            else {"_matches_extension"})
-                assert function in allowed, (name, node.lineno, function)
+                # RemoteService.ts:360-369 uses case-insensitive Fetch Headers.
+                # HTTP field names/encoding tokens are case-insensitive;
+                # these exact transport expressions never normalize paths.
+                http_header = name == "storage_couchdb.py" and (
+                    (function == "_bounded_http_body" and ast.unparse(node.func.value)
+                     == "response.headers.get('content-encoding', 'identity').strip()")
+                    or (function == "_request" and ast.unparse(node.func.value) == "key")
+                )
+                assert function in allowed or http_header, (name, node.lineno, function)
             for child in ast.iter_child_nodes(node):
                 inspect(child, function)
 
