@@ -45,8 +45,9 @@ defects the run found and the limits of the evidence. It shows:
   the invalid bytes (15 bytes on disk, 21 stored);
 - 40 MiB and 100 MiB client-written binaries and a peer-written 40 MiB binary
   applied by the client;
-- peer-written create, update, rename and soft delete applied by the client with
-  the peer's revision ids, nothing sent back;
+- peer-written create, update, rename and soft delete applied by the client; the
+  revision prefixes the client printed match the bucket's revision trees; nothing
+  sent back;
 - a `.md` file with invalid UTF-8 ingested by the client as plain text, each
   invalid sequence replaced by U+FFFD (15 bytes became 21), matching the peer;
 - a 50 MiB + 1 byte upload skipped and the rename of an oversized file refused,

@@ -1,6 +1,6 @@
 Listing of the disposable test bucket, read-only (ListObjectsV2)
 ===============================================================
-Taken 2026-11-26 16:41:10 MSK, after the owner's last sync at 16:20:30.
+Taken 2026-11-26 16:49:00 MSK, after the owner's last sync at 16:20:30.
 Bucket plan-b-it, prefix livetest/. Server: container parity-s3-live,
 image chrislusf/seaweedfs@sha256:4b42c212543a0acd4c0e675215ecdcaf62a186ef98def76c7e12701871222d15, image id sha256:4b42c212543a0acd4c0e675215ecdcaf62a186ef98def76c7e12701871222d15, container created 2026-11-25T18:41:04.425235555Z.
 Total: 11 objects, 29,106 bytes.

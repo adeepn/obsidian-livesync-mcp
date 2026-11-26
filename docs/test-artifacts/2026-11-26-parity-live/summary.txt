@@ -30,12 +30,12 @@ B100 | Maximum file size set to 100 (edits 11:32:42 and 11:32:49), sync 11:33:05
 B | Three files placed in the vault 11:34, sync 11:46:50 | prepare-size 11:34, reconnect 11:48, verify-visible 11:49 | PASS: device-40m.bin 40 MiB, 410 pieces; exact.bin 100 MiB, 1024 pieces; byte-identical, ids equal. above.bin (100 MiB + 1 byte) not sent by the client (its log). | B-prepared.json, B-visible-device-files.json, B-reconnect-before-fix.json, client-logs.md, checks.txt
 B-size | - | verify-size --limit-mib 100, 11:47 | FAIL on 3d812ff: "resolved vault size limit differs from expected owner setting". The reports show the device at 100 and PREFERRED at 50, and the reconnect of 11:48 excluded exact.bin (100 MiB) as oversized: defect 1. PASS on 37f63b0 at 13:16. | B-size.json, checks.txt, F-size-100.json
 B-upload | Sync 12:19:42 | write-large 12:18:59, verify-visible 12:20 | PASS: the client applied the peer-written 40 MiB file (410 pieces) and sent nothing back (its log). | B-upload.json, B-visible.json, client-logs.md, checks.txt
-C | Sync 12:24:23 | write-phase 12:23:41, verify-visible 12:24 | PASS: the client applied the peer-written create, update, rename and soft delete and sent nothing back. Every revision it printed is in the bucket's revision tree. | C-write.json, C-visible.json, C-client-log.md, revision-prefixes.json
+C | Sync 12:24:23 | write-phase 12:23:41, verify-visible 12:24 | PASS: the client applied the peer-written create, update, rename and soft delete and sent nothing back. Every revision prefix it printed matches a revision in the bucket's tree. | C-write.json, C-visible.json, C-client-log.md, revision-prefixes.json
 D | Three unusual files placed in the vault 12:25, sync 12:45:17 | prepare-decoding 12:25, inspect-decoding 12:45 | PASS, 5 checks: the client stored invalid.md as plain text with U+FFFD in place of each invalid sequence (15 bytes became 21), text.png and upper.MD as newnote with their raw bytes. The peer's ingestion of the same bytes gives the same type, size, piece bytes and ids. | D-prepared.json, D-device-decoding.json, client-logs.md, journal-inventory.txt
 F | - | verify-size 13:16 on 37f63b0, reconnect 13:53 on 2cb6eee | A reconnect between the two (controller: about 13:20, on 37f63b0) stopped on invalid.md: defect 2, helper only; no transcript kept. PASS, 20 checks, 15 files: 14 byte-identical, invalid.md equal to the client-ingested text. | F-size-100.json, F-reconnect.json, checks.txt
 B50 | Maximum file size set back to 50 (edits 15:22:18 and 15:22:20), sync 15:22:27 | reconnect 15:23 | PASS, 19 checks: 13 files byte-identical, invalid.md equal to the client-ingested text; exact.bin and above.bin excluded, as the client skipped exact.bin (its log). | B50-reconnect.json, client-logs.md, checks.txt
 B-refusals | - | oversize 16:18:12 | PASS, 4 checks: upload of 50 MiB + 1 byte skipped without publication; rename of exact.bin refused; source revision and bytes intact. The bucket was not changed: the controller's listing of about 16:19 showed the milestone last written 15:39:02. | B-refusals.json, checks.txt, bucket-listing.txt
-after B-refusals | Sync 16:20:30 | reconnect 16:21, listings 16:40 | PASS, 19 checks, 13 files byte-identical, invalid.md equal to the client-ingested text. On disk the folder holds the same eight files; their modification times predate the refusal step; skipped.bin and refused-move.bin are absent. The bucket holds 11 objects; only the milestone changed, written at 16:20:30, the time of the client's sync. | B-refusals-reconnect.json, disk-listing.txt, bucket-listing.txt, client-logs.md
+after B-refusals | Sync 16:20:30 | reconnect 16:21, listings 16:49 | PASS, 19 checks, 13 files byte-identical, invalid.md equal to the client-ingested text. On disk the folder holds the same eight files; their modification times predate the refusal step; skipped.bin and refused-move.bin are absent. The bucket holds 11 objects; only the milestone changed, written at 16:20:30, the time of the client's sync. | B-refusals-reconnect.json, disk-listing.txt, bucket-listing.txt, client-logs.md
 7.1, 7.2, E | - | - | Additional scenarios: not executed. | -
 8 | - | - | Cleanup of the acceptance files from the test vault: not executed; it needs a separate owner confirmation. The eight files remain in parity-live.
 
@@ -76,9 +76,11 @@ Limits of this record
 - The lossless legacy cut (fea689f) has no live evidence: the vault uses V3.
 - Obsidian's file explorer hides .bin files by default. The owner could not see them and
   asked the controller to check; disk-listing.txt is that check.
-- What remains of the test vault: file names, sizes, SHA-256 digests and short revision
-  prefixes, and the names of the six notes that were in the vault before this run. No text
-  of those six notes.
+- What remains of the test vault: file names, sizes, SHA-256 digests, short revision
+  prefixes and the names of the six notes that were in the vault before this run; no text of
+  those six notes. The text of the synthetic acceptance notes is retained: the body the peer
+  wrote (C-write.json) and the fixed input bytes and stored pieces of the three unusual files
+  (D-device-decoding.json).
 
 Final state of the test bucket
 ------------------------------
@@ -120,9 +122,12 @@ B-refusals.json             oversize upload and rename refused
 B-refusals-reconnect.json   all 14 admitted files after the last sync
 
 The JSON reports are the helper's output: paths, sizes, SHA-256 digests, piece counts,
-booleans and typed setting values. checks.txt, bucket-listing.txt and journal-inventory.txt
-hold tool output. revision-prefixes.json and disk-listing.txt were produced by a controller
-script that read the bucket and the disk. The controller states that credentials were
-sourced only inside its commands; no credential value is in this directory.
-Not included: SQLite state, the chunk cache, raw journals, record content, revision ids
-beyond six hex digits, device ids and credentials.
+booleans and typed setting values, plus the text of the synthetic acceptance notes named
+above. checks.txt and journal-inventory.txt hold tool output. bucket-listing.txt is a tool
+listing of the final state, followed by an earlier listing transcribed by the controller and
+by the controller's attribution of the writers. revision-prefixes.json and disk-listing.txt
+were produced by a controller script that read the bucket and the disk. The controller
+states that credentials were sourced only inside its commands; no credential value is in
+this directory.
+Not included: SQLite state, the chunk cache, raw journals, record content other than those
+synthetic notes, revision ids beyond six hex digits, device ids and credentials.

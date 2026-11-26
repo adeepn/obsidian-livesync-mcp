@@ -1,6 +1,6 @@
 Inventory of the nine journals in the test bucket, read-only
 ===========================================================
-Taken 2026-11-26 16:41:10 MSK. Each object was read, inflated and parsed with the repository's
+Taken 2026-11-26 16:49:00 MSK. Each object was read, inflated and parsed with the repository's
 journal_codec (the same parsing the peer uses). Record counts, piece sizes and document
 paths only: no record content, no ids, no revisions.
 

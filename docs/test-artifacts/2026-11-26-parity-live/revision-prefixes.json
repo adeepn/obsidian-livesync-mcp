@@ -1,5 +1,5 @@
 {
-  "taken": "2026-11-26 16:41:11",
+  "taken": "2026-11-26 16:49:00",
   "source": "Revision prefixes that the client printed while processing a file, compared with the revisions stored in the test bucket (read-only replay into a scratch state directory).",
   "note": "The client prints the first three hex digits of a revision. Storage values are cut to six digits here. rev_in_storage_tree says whether the revision is in the document's revision tree.",
   "files": [
