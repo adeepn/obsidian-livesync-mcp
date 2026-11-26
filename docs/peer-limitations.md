@@ -209,8 +209,9 @@ Caller-provided lone units retain Blob ingress replacement with
   empty arrays/objects and strings. Operator overrides keep strict validation.
   Array conversion is iterative; it adds no coercion depth limit after JSON admission.
   Cyclic Python arrays use native empty-field cycle handling.
-  Device maps refuse only when effective policies disagree; an object whose
-  toString prevents numeric conversion needs correction in the vault.
+  Device maps refuse when effective policies disagree without a decidable winner;
+  an object whose own toString prevents numeric conversion of `syncMaxSizeInMB`
+  needs correction in the vault or `LIVESYNC_SYNC_MAX_SIZE_MB`.
 - Ignore-file selection derives from advertising device maps before PREFERRED unless independently overridden.
   Active selection requires Node.js 22+, including vault useIgnoreFiles=true.
   LIVESYNC_USE_IGNORE_FILES=false is allowed, but devices drop peer writes to

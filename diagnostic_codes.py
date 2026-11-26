@@ -40,6 +40,8 @@ class DiagnosticCode(str, Enum):
     S3_BUCKET_MUST_BE_A_NON_EMPTY_STRING = 'S3 bucket must be a non-empty string'
     CONFLICTING_CHUNK_SPLITTER_SETTINGS = 'conflicting chunk splitter settings'
     CONFLICTING_SYNCMAXSIZEINMB_SETTINGS = 'conflicting syncMaxSizeInMB settings after JavaScript coercion; align the device settings or set LIVESYNC_SYNC_MAX_SIZE_MB explicitly'
+    SYNCMAXSIZE_PRIMITIVE = ('the plugin cannot convert this JSON object to a primitive; remove its toString field, '
+                             'use a primitive value for syncMaxSizeInMB, or set LIVESYNC_SYNC_MAX_SIZE_MB explicitly')
     CONTENT_CHUNKS_WITH_THE_SAME_ID_HOLD_DIFFERENT_DATA = 'content chunks with the same id hold different data'
     CORRUPT_NOTE_TIMESTAMP_EXPECTED_A_FINITE_NUMBER = 'corrupt note timestamp: expected a finite number'
     CORRUPT_NOTE_TIMESTAMP_EXPECTED_A_NON_NEGATIVE_NUMBER = 'corrupt note timestamp: expected a non-negative number'

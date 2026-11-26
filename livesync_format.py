@@ -513,9 +513,10 @@ class RecommendationPolicy:
 def _size_policy_value(raw):
     try:
         value = _minimum_number(raw, setting='syncMaxSizeInMB')
-    except SplitterRefusal as exc:
-        error = UnsupportedVaultSettings(DiagnosticCode.SPLITTER_PRIMITIVE.value)
-        error.diagnostic = exc.diagnostic
+    except SplitterRefusal:
+        # The splitter diagnostic names no operator override; the size policy has one.
+        error = UnsupportedVaultSettings(DiagnosticCode.SYNCMAXSIZE_PRIMITIVE.value)
+        error.diagnostic = PublicDiagnostic(DiagnosticCode.SYNCMAXSIZE_PRIMITIVE, keys=('syncMaxSizeInMB',))
         raise error from None
     return value if value > 0 else 0
 

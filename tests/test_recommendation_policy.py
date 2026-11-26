@@ -163,6 +163,23 @@ async def test_public_policy_rejects_untyped_fields(monkeypatch):
     assert 'secret' not in json.dumps(recommendation_fields(bad))
 
 
+@pytest.mark.parametrize('kind', ['couchdb', 's3'])
+async def test_unconvertible_device_size_names_the_override(tmp_path, kind):
+    m = live()
+    m['tweak_values']['private-device-id']['syncMaxSizeInMB'] = {'toString': 5}
+    async with vault(tmp_path, kind, m) as (b, writes):
+        with pytest.raises(UnsupportedVault, match='LIVESYNC_SYNC_MAX_SIZE_MB') as caught:
+            await b.startup_check()
+        assert 'syncMaxSizeInMB' in str(caught.value)
+        assert 'private-device-id' not in str(caught.value)
+        assert not writes()
+        # An operator override bypasses the remote conversion.
+        b.sync_max_size_mb_override = 60
+        await b.startup_check()
+        assert b.sync_max_size_mb == 60
+        assert not writes()
+
+
 async def test_capability_rejection_preserves_complete_policy(tmp_path, monkeypatch):
     from storage_base import WriterUnsupported
     from diagnostic_hygiene import PublicDiagnostic, DiagnosticCode
