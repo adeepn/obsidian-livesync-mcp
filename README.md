@@ -71,7 +71,7 @@ See the [complete environment reference](docs/configuration.md).
 | --- | --- | --- |
 | `LIVESYNC_COUCHDB_MAX_INFLATED_BYTES` | Splitter-derived, 32 MiB floor | Raise and restart for legitimate larger HTTP/document responses; read-only POST remains a typed refusal; an unreadable write acknowledgement is outcome unknown: re-read before retrying. |
 
-Legacy lossless text cuts are always enabled, without an environment variable.
+Legacy lossless text cuts and read-only reconnect ingestion comparison need no new environment variable.
 They extend a cut one UTF-16 unit and reset the next piece to its full nominal size.
 
 ## Backends
@@ -99,7 +99,7 @@ and [source and live evidence](docs/upstream-pin.md).
 | Settings | Status | Details |
 |---|---|---|
 | Path normalization and filename case | Identical | Legacy/NFC, insensitive/sensitive identities |
-| Splitter versions and legacy migration | Lossless text cuts; otherwise identical where terminating and lossless | [Exact coercion and guards](docs/vault-format.md#invalid-writer-parameters) |
+| Splitter versions and legacy migration | Reconnect compares device-ingested bodies; lossless text cuts; otherwise identical where terminating and lossless | [Exact coercion and guards](docs/vault-format.md#invalid-writer-parameters) |
 | Chunk hashes, Eden, long-line threshold | Identical at pin | [Full settings table](docs/peer-limitations.md#supported-vault-settings) |
 | File size and ignore-file selection | Device-derived recommendation-only policy; local overrides | [Size](docs/size-policy.md), [selection](docs/selection-filters.md) |
 | Headers, JWT and addressing | Explicit local connection settings | [Connection setup](docs/connecting-storage.md) |
@@ -147,7 +147,7 @@ refusal conditions and recovery instructions. The main practical differences:
 - Properties/tags have expanded YAML node, byte and depth budgets; raw text remains available.
   [Projection limits](docs/peer-limitations.md#how-the-peer-differs-from-a-device).
 - Transport/selection deadlines, retries, auth and headers are configured locally.
-  [Defaults and connection constraints](docs/peer-limitations.md#how-the-peer-differs-from-a-device).
+  [Defaults and connection constraints](docs/peer-limitations.md#how-the-peer-differs-from-a-device). The read-only reconnect helper compares device-ingested bodies, types and Blob sizes. It reports `ingestion_transformed`, with `invalid_bytes_replaced` for malformed plain UTF-8 or `splitter_projection` for changes such as legacy BOM removal; local and remote sizes/SHA-256 remain visible. Non-plain files compare byte-exact. A per-file failure reports its cause class and continues. See the [live checklist](docs/live-check-parity-checklist.md).
 
 ## Outcome reporting
 

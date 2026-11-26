@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Settings parity
 
+- Compare reconnect files with device-ingested text, type and Blob size; report
+  typed transformations and isolate file failures while retaining raw digests.
+
 - Resolve recommendation-only size and ignore-file policies from advertising
   devices before stale PREFERRED; arbitrate disagreements by positive numeric
   tweakModified, then PREFERRED or a typed ambiguity with operator recovery.

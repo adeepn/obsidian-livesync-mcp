@@ -123,34 +123,58 @@ async def verify(backend, vault, paths, *, partitions=True):
     if not paths:
         return check(False, 'no ordinary vault files'), records
     for path in paths:
-        validate_vault_path(path)
-        local = vault / path
-        note = await backend.read_note(path)
-        raw = local.read_bytes() if local.is_file() else None
-        byte_match = raw is not None and note is not None and raw == note_bytes(note)
-        body, expected_type, blob_size = (prepare_file_content(path, raw) if raw is not None
-                                         else (None, None, None))
-        doc = await raw_doc(backend, path)
-        kind, metadata_size = safe_metadata(doc)
-        metadata_match = type(metadata_size) is int and metadata_size == blob_size
-        type_match = kind == expected_type
-        children = doc.get('children', []) if doc else []
-        piece_match = None
-        if partitions and byte_match:
-            pieces = backend._splitter.split(body, path=path)
-            expected = [backend._splitter.chunk_id_for_piece(piece) for piece in pieces if piece != '']
-            piece_match = expected == children
-        matches = byte_match and metadata_match and type_match and (piece_match is not False)
-        records.append({'path': path, 'byte_exact': bool(byte_match),
-                        'remote_present': note is not None,
-                        'remote_size': len(note_bytes(note)) if note is not None else None,
-                        'remote_sha256': hashlib.sha256(note_bytes(note)).hexdigest() if note is not None else None,
-                        'size': len(raw) if raw is not None else None,
-                        'ingested_blob_size': blob_size, 'metadata_size': metadata_size,
-                        'metadata_size_matches': metadata_match, 'type': kind, 'type_matches': type_match,
-                        'piece_count': len(children), 'piece_ids_match': piece_match,
-                        'sha256': hashlib.sha256(raw).hexdigest() if raw is not None else None})
-        good = check(matches, f'bytes + Blob metadata + piece IDs {escape_path(path)} pieces={len(children)}') and good
+        try:
+            validate_vault_path(path)
+            local = vault / path
+            note = await backend.read_note(path)
+            raw = local.read_bytes() if local.is_file() else None
+            body, expected_type, blob_size = (prepare_file_content(path, raw, lossy_text=True) if raw is not None
+                                             else (None, None, None))
+            # C:serviceModules/FileAccessBase.ts:201-206 selects host text reads;
+            # C:managers/EntryManager/EntryManagerImpls.ts:253-280 stores Blob size.
+            # Host invalid-byte replacement: owner plugin 1.0.50 observation,
+            # 2026-11-26 (tests/fixtures/device_decoding_observed.json), not an oracle.
+            # C:string_and_binary/chunks.ts:252,357,445 decodes legacy text Blobs;
+            # compare the splitter projection (including BOM removal), not disk bytes.
+            pieces = (backend._splitter.split(body, path=path)
+                      if raw is not None and (partitions or expected_type == 'plain') else [])
+            expected_bytes = (''.join(pieces).encode('utf-8') if expected_type == 'plain' else raw)
+            transformed = raw is not None and expected_bytes != raw
+            invalid = False
+            if expected_type == 'plain' and raw is not None:
+                try:
+                    raw.decode('utf-8')
+                except UnicodeDecodeError:
+                    invalid = True
+            byte_match = raw is not None and note is not None and expected_bytes == note_bytes(note)
+            doc = await raw_doc(backend, path)
+            kind, metadata_size = safe_metadata(doc)
+            metadata_match = type(metadata_size) is int and metadata_size == blob_size
+            type_match = kind == expected_type
+            children = doc.get('children', []) if doc else []
+            piece_match = None
+            if partitions and byte_match:
+                expected = [backend._splitter.chunk_id_for_piece(piece) for piece in pieces if piece != '']
+                piece_match = expected == children
+            matches = byte_match and metadata_match and type_match and (piece_match is not False)
+            records.append({'path': path, 'byte_exact': bool(byte_match),
+                            'ingestion_transformed': transformed,
+                            'ingestion_reason': ('invalid_bytes_replaced' if invalid else
+                                                 'splitter_projection' if transformed else None),
+                            'remote_present': note is not None,
+                            'remote_size': len(note_bytes(note)) if note is not None else None,
+                            'remote_sha256': hashlib.sha256(note_bytes(note)).hexdigest() if note is not None else None,
+                            'size': len(raw) if raw is not None else None,
+                            'ingested_blob_size': blob_size, 'metadata_size': metadata_size,
+                            'metadata_size_matches': metadata_match, 'type': kind, 'type_matches': type_match,
+                            'piece_count': len(children), 'piece_ids_match': piece_match,
+                            'sha256': hashlib.sha256(raw).hexdigest() if raw is not None else None})
+            good = check(matches, f'bytes + Blob metadata + piece IDs {escape_path(path)} pieces={len(children)}') and good
+        except Exception as cause:
+            records.append({'path': path, 'cause': type(cause).__name__,
+                            'byte_exact': False, 'remote_present': None,
+                            'metadata_size_matches': False, 'type_matches': False})
+            good = check(False, f'file {escape_path(path)} cause={type(cause).__name__}') and good
     return good, records
 
 
@@ -163,34 +187,42 @@ async def reconnect_files(backend, vault):
     """
     if not vault.is_dir():
         return check(False, 'vault directory missing'), {'cause': 'vault_directory_missing'}
-    expected, excluded = [], {}
+    expected, excluded, failures = [], {}, []
     for local in sorted(vault.rglob('*')):
         path = local.relative_to(vault).as_posix()
-        if not local.is_file() or any(p.startswith('.') for p in Path(path).parts):
-            continue
-        verdict = await backend.selection_for(path)
-        if not verdict.writer_supported:
-            raise WriterUnsupported(backend._selection_diagnostic or verdict.reason)
-        rule = verdict.rule
-        if verdict.allowed:
-            try:
-                check_file_size(path, local.stat().st_size, backend.sync_max_size_mb)
-            except WriteSkipped:
-                rule = 'syncMaxSizeInMB'
-        if rule:
-            excluded[rule] = excluded.get(rule, 0) + 1
-        else:
-            expected.append(path)
+        try:
+            if not local.is_file() or any(p.startswith('.') for p in Path(path).parts):
+                continue
+            verdict = await backend.selection_for(path)
+            if not verdict.writer_supported:
+                raise WriterUnsupported(backend._selection_diagnostic or verdict.reason)
+            rule = verdict.rule
+            if verdict.allowed:
+                try:
+                    check_file_size(path, local.stat().st_size, backend.sync_max_size_mb)
+                except WriteSkipped:
+                    rule = 'syncMaxSizeInMB'
+            if rule:
+                excluded[rule] = excluded.get(rule, 0) + 1
+            else:
+                expected.append(path)
+        except Exception as cause:
+            failures.append({'path': path, 'cause': type(cause).__name__,
+                             'byte_exact': False, 'remote_present': None,
+                             'metadata_size_matches': False, 'type_matches': False})
+            check(False, f'file {escape_path(path)} cause={type(cause).__name__}')
     good, records = await verify(backend, vault, expected) if expected else (True, [])
+    records.extend(failures)
+    good = good and not failures
     missing, mismatch = 0, 0
     for row in records:
-        if not row['remote_present']:
+        if row['remote_present'] is False:
             missing += 1
         elif not row['byte_exact'] or not row['metadata_size_matches'] or not row['type_matches']:
             mismatch += 1
-    check(True, f'policy: expected={len(expected)} excluded={sum(excluded.values())} '
+    check(True, f'policy: expected={len(expected) + len(failures)} excluded={sum(excluded.values())} '
                 f'missing={missing} size_or_hash_mismatch={mismatch}')
-    return good, {'files': records, 'expected': len(expected),
+    return good, {'files': records, 'expected': len(expected) + len(failures),
                   'excluded_by_policy': excluded, 'missing': missing,
                   'size_or_hash_mismatch': mismatch}
 

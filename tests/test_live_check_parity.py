@@ -194,7 +194,8 @@ async def test_metadata_uses_ingested_bom_size_even_if_legacy_bytes_differ(tmp_p
         (vault / 'bom.md').write_bytes(raw)
         await backend.write_note('bom.md', raw, create=True)
         good, rows = await live.verify(backend, vault, ['bom.md'])
-        assert not good and not rows[0]['byte_exact']
+        assert good and rows[0]['byte_exact']
+        assert rows[0]['ingestion_reason'] == 'splitter_projection'
         assert rows[0]['metadata_size_matches'] is True
         assert rows[0]['ingested_blob_size'] == 6
 
@@ -409,3 +410,101 @@ def test_owner_python_commands_compile_and_growth_is_valid_text(tmp_path):
     raw = (vault / 'parity-live/growth.md').read_bytes()
     assert len(raw) == 1048576
     assert raw.decode('utf-8') == 'x' * 1048576
+
+
+@pytest.mark.parametrize('kind', ['couchdb', 'journal'])
+async def test_reconnect_device_ingestion_and_per_file_failures(tmp_path, kind, monkeypatch):
+    """FileAccessBase.ts:201-206 selects host text reads; EntryManagerImpls.ts:253-280
+    records Blob type/size. Host replacement is an owner observation, NOT an oracle.
+    Catch strict ingress, raw-byte comparison, lost type checks and per-file aborts.
+    """
+    import base64
+    import hashlib
+    observed = json.loads((Path(__file__).parent / 'fixtures/device_decoding_observed.json').read_text())['result']
+    settings = {'chunkSplitterVersion': 'v3-rabin-karp', 'hashAlg': 'xxhash64', 'pathNormalizationVersion': 0}
+    async with matrix_vault(tmp_path, kind, settings) as (backend, *_):
+        await backend.startup_check()
+        vault = tmp_path / 'disk'; vault.mkdir()
+        for path, row in observed.items():
+            local = vault / path; local.parent.mkdir(exist_ok=True)
+            raw = base64.b64decode(row['disk_input_b64'])
+            local.write_bytes(raw)
+            # Seed independently from the observed device output, not peer ingestion.
+            remote = (''.join(row['chunk_data']).encode() if row['type'] == 'plain'
+                      else base64.b64decode(''.join(row['chunk_data'])))
+            assert hashlib.sha256(remote).hexdigest() == row['observed_sha256']
+            await backend.write_attachment(path, remote, create=True)
+        (vault / 'invalid.png').write_bytes(live.DECODING['invalid.md'])
+        await backend.write_attachment('invalid.png', live.DECODING['invalid.md'], create=True)
+        good, report = await live.reconnect_files(backend, vault)
+        assert good
+        rows = {r['path']: r for r in report['files']}
+        transformed = rows['parity-live/invalid.md']
+        assert transformed['ingestion_transformed'] is True
+        assert transformed['ingestion_reason'] == 'invalid_bytes_replaced'
+        assert transformed['size'] == 15 and transformed['remote_size'] == 21
+        assert transformed['remote_sha256'] == observed['parity-live/invalid.md']['observed_sha256']
+        assert transformed['sha256'] == hashlib.sha256(live.DECODING['invalid.md']).hexdigest()
+        assert rows['invalid.png']['ingestion_transformed'] is False
+        assert rows['invalid.png']['byte_exact']
+        await backend.write_note('parity-live/invalid.md', 'wrong remote')
+        good, report = await live.reconnect_files(backend, vault)
+        assert not good and report['size_or_hash_mismatch'] == 1
+        await backend.write_note('parity-live/invalid.md', ''.join(observed['parity-live/invalid.md']['chunk_data']))
+        original = live.raw_doc
+        async def wrong_type(b, path):
+            doc = await original(b, path)
+            return {**doc, 'type': 'newnote'} if path.endswith('invalid.md') else doc
+        monkeypatch.setattr(live, 'raw_doc', wrong_type)
+        good, report = await live.reconnect_files(backend, vault)
+        assert not good and report['size_or_hash_mismatch'] == 1
+        monkeypatch.setattr(live, 'raw_doc', original)
+        read_note = backend.read_note
+        async def broken(path):
+            if path == 'invalid.png':
+                raise OSError('private remote material')
+            return await read_note(path)
+        monkeypatch.setattr(backend, 'read_note', broken)
+        good, report = await live.reconnect_files(backend, vault)
+        assert not good and len(report['files']) == 4
+        assert report['files'][0]['cause'] == 'OSError'
+        assert all(r['byte_exact'] for r in report['files'][1:])
+        assert 'private remote material' not in json.dumps(report)
+        monkeypatch.setattr(backend, 'read_note', read_note)
+        selection_for = backend.selection_for
+        async def bad_selection(path):
+            if path == 'invalid.png':
+                raise OSError('private selection material')
+            return await selection_for(path)
+        monkeypatch.setattr(backend, 'selection_for', bad_selection)
+        good, report = await live.reconnect_files(backend, vault)
+        assert not good and report['expected'] == 4
+        assert len(report['files']) == 4
+        assert report['files'][-1]['cause'] == 'OSError'
+        assert all(r['byte_exact'] for r in report['files'][:-1])
+        assert 'private selection material' not in json.dumps(report)
+
+
+@pytest.mark.parametrize('kind', ['couchdb', 'journal'])
+@pytest.mark.parametrize('version', ['v1', 'v2', 'v2-segmenter', 'v3-rabin-karp'])
+async def test_reconnect_bom_classification_uses_native_partitions(tmp_path, kind, version):
+    # Native chunks.ts:252,357,445 Blob decoding; existing integrity-pinned oracle.
+    import base64
+    import zlib
+    from tests.test_splitter_decoding import DECODING
+    vector = next(v for v in DECODING['vectors'] if v['version'] == version and v['name'] == 'leading-0')
+    raw = zlib.decompress(base64.b64decode(vector['input_deflate_b64']))
+    expected = ''.join(vector['pieces']).encode()
+    settings = {'chunkSplitterVersion': version, 'hashAlg': 'xxhash64', 'pathNormalizationVersion': 0}
+    async with matrix_vault(tmp_path, kind, settings) as (backend, *_):
+        await backend.startup_check()
+        vault = tmp_path / 'disk'; vault.mkdir()
+        (vault / 'bom.md').write_bytes(raw)
+        await backend.write_attachment('bom.md', raw, create=True)
+        assert live.note_bytes(await backend.read_note('bom.md')) == expected
+        good, report = await live.reconnect_files(backend, vault)
+        assert good
+        row = report['files'][0]
+        assert row['ingestion_transformed'] == (raw != expected)
+        assert row['ingestion_reason'] == ('splitter_projection' if raw != expected else None)
+        assert row['metadata_size_matches'] and row['piece_ids_match']

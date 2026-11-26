@@ -1161,3 +1161,12 @@ def test_recommendation_only_policy_documentation():
             assert term in text, (name, term)
     assert 'Device-derived recommendation-only policy' in (ROOT / 'README.md').read_text()
     assert 'device maps precede PREFERRED' in (ROOT / '.env.example').read_text()
+
+
+def test_reconnect_ingestion_documentation():
+    for name in ('README.md', 'docs/live-check-parity-checklist.md'):
+        text = (ROOT / name).read_text()
+        assert 'ingestion_transformed' in text
+        assert 'invalid_bytes_replaced' in text
+        assert 'splitter_projection' in text
+    assert 'F15-1' in (ROOT / 'docs/superpowers/specs/2026-11-23-settings-parity.md').read_text()

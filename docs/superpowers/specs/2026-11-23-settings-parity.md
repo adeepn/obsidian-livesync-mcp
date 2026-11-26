@@ -1232,3 +1232,12 @@ were caught; successful refresh assertions were added for two initial survivors.
 Two independent reviewers converged with no new findings. Committed-tree
 parallel-suite results and live-acceptance limits are recorded in ignored F14
 evidence; no real-client rerun is claimed here.
+
+### 2026-11-26 — F15-1 reconnect ingestion
+
+The helper compares replacement-decoded plain text and splitter-projected bodies
+(including legacy BOM removal) with remote bodies, type, Blob metadata and IDs.
+Raw local/remote digests remain available; per-file failures continue with typed
+cause classes. The three device decoding outputs are retained as explicitly
+labelled owner observations, not native upstream oracle evidence. Production
+write policy is unchanged. No new environment variable is introduced.

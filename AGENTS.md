@@ -298,3 +298,9 @@ and the plugin matched early-return branch with Node builtins only, recording
 source hashes and no npm dependencies in `tests/fixtures/recommendation_upstream.json`.
 `tests/test_recommendation_policy.py` covers P-48 arbitration and backend lifecycle.
 Regenerate with `node --experimental-vm-modules scripts/extract_recommendation_vectors.mjs /tmp/settings-parity-commonlib /tmp/settings-parity-plugin tests/fixtures/recommendation_upstream.json`.
+
+F15 reconnect coverage in `tests/test_live_check_parity.py` compares device-ingested
+text and splitter projections while isolating per-file failures.
+`tests/fixtures/device_decoding_observed.json` is the supplied 2026-11-26 plugin
+1.0.50 observation, not a generated upstream oracle; BOM expectations reuse the
+integrity-pinned decoder fixture. No generator or production module is added.

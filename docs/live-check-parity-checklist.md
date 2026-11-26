@@ -368,3 +368,22 @@ native-capture, state и отчёты сохранять до архивиров
    Это не очистка удалённого хранилища. Возврат Maximum file size к исходному
    значению — тем же путём Selector → Normal Files → Maximum file size,
    с повторной синхронизацией и подтверждением владельца.
+
+## Reconnect ingestion comparison (F15-1)
+
+Reconnect compares the device-ingested body, document type and pre-split Blob
+metadata size, then checks piece IDs. It reports `ingestion_transformed: true`
+and `invalid_bytes_replaced` when malformed UTF-8 in a plain-suffix file is
+replaced with U+FFFD, following the observed plugin 1.0.50 host behaviour
+(2026-11-26). That host observation is not an upstream parser oracle.
+`splitter_projection` identifies other body changes, including leading BOM
+removal by legacy splitters; metadata still includes that BOM. Non-plain files,
+including `text.png` and `upper.MD`, retain byte-exact comparison.
+
+Each record retains local `size` / `sha256` and remote `remote_size` /
+`remote_sha256`; `byte_exact` means equality with the expected device body.
+A transformed body only passes when the remote body, type, metadata and piece
+IDs agree. A per-file exception produces FAIL with a cause class, continues
+with the other files and makes the overall reconnect fail. Inspect that file,
+repair the local read/storage problem or resync a mismatching device file,
+then rerun reconnect. No new configuration or remote write is introduced.
