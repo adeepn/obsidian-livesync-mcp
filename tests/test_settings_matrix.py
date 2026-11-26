@@ -218,13 +218,14 @@ async def size_and_outcomes(backend, doc, reader, storage, monkeypatch, writes, 
                 raise StorageUnavailable('injected lost acknowledgement')
             patch.setattr(storage, 'put_if_absent', lost)
         else:
-            request = backend._client.request
-            async def lost(method, path, **kwargs):
-                result = await request(method, path, **kwargs)
+            request = backend._client._transport.handle_async_request
+            async def lost(req):
+                method, path = req.method, req.url.path
+                result = await request(req)
                 if method == 'PUT' and path.endswith('/uncertain.md'):
                     raise httpx.ReadError('injected lost acknowledgement')
                 return result
-            patch.setattr(backend._client, 'request', lost)
+            patch.setattr(backend._client._transport, 'handle_async_request', lost)
         with pytest.raises(OutcomeUnknown) as caught:
             await backend.write_note('uncertain.md', 'accepted', create=True)
         response = server._storage_message(caught.value)

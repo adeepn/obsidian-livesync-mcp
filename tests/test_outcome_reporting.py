@@ -57,9 +57,11 @@ async def test_couchdb_mutation_transport_outcomes(operation, failure, monkeypat
     from tests.test_storage_couchdb import fake_backend
     async with fake_backend() as (backend, log):
         await backend.write_note('only.md', 'old', create=True)
-        original = backend._client.request
+        # Inject at the wire boundary used by streaming and eager clients.
+        original = backend._client._transport.handle_async_request
         target = 'only.md' if operation in ('delete', 'overwrite') else 'target.md'
-        async def request(method, path, **kwargs):
+        async def request(req):
+            method, path = req.method, req.url.path
             if method == 'PUT' and path.endswith('/' + target):
                 if failure == 'before':
                     raise httpx.ConnectError('before send')
@@ -69,11 +71,11 @@ async def test_couchdb_mutation_transport_outcomes(operation, failure, monkeypat
                     raise httpx.PoolTimeout('before send')
                 if isinstance(failure, int):
                     return httpx.Response(failure, json={'error': 'refused'})
-                await original(method, path, **kwargs)
+                await original(req)
                 error = {'accepted': httpx.ReadError, 'accepted_timeout': httpx.ReadTimeout, 'accepted_reset': httpx.WriteError}[failure]
                 raise error('response lost after acceptance')
-            return await original(method, path, **kwargs)
-        monkeypatch.setattr(backend._client, 'request', request)
+            return await original(req)
+        monkeypatch.setattr(backend._client._transport, 'handle_async_request', request)
         calls = {
             'delete': lambda: backend.delete_note('only.md'),
             'overwrite': lambda: backend.write_note('only.md', 'new'),
@@ -236,13 +238,14 @@ async def test_couchdb_accepted_write_with_malformed_ack_is_unknown(monkeypatch)
     from storage_base import OutcomeUnknown
     from tests.test_storage_couchdb import fake_backend
     async with fake_backend() as (backend, log):
-        original = backend._client.request
-        async def request(method, path, **kwargs):
-            response = await original(method, path, **kwargs)
+        original = backend._client._transport.handle_async_request
+        async def request(req):
+            method, path = req.method, req.url.path
+            response = await original(req)
             if method == 'PUT' and path.endswith('/new.md'):
                 return httpx.Response(201, json={})
             return response
-        monkeypatch.setattr(backend._client, 'request', request)
+        monkeypatch.setattr(backend._client._transport, 'handle_async_request', request)
         with pytest.raises(OutcomeUnknown):
             await backend.write_note('new.md', 'new', create=True)
         assert (await backend.read_note('new.md'))['text'] == 'new'
@@ -306,13 +309,14 @@ async def test_rename_source_retirement_response_lost_stays_unknown(monkeypatch)
     from tests.test_storage_couchdb import fake_backend
     async with fake_backend() as (backend, log):
         await backend.write_note('only.md', 'old', create=True)
-        original = backend._client.request
-        async def request(method, path, **kwargs):
-            response = await original(method, path, **kwargs)
+        original = backend._client._transport.handle_async_request
+        async def request(req):
+            method, path = req.method, req.url.path
+            response = await original(req)
             if method == 'PUT' and path.endswith('/only.md'):
                 raise httpx.ReadError('source deletion response lost')
             return response
-        monkeypatch.setattr(backend._client, 'request', request)
+        monkeypatch.setattr(backend._client._transport, 'handle_async_request', request)
         import server
         monkeypatch.setattr(server, 'backend', backend)
         result = await server.obsidian_move_note('only.md', 'target.md')
@@ -337,12 +341,13 @@ async def test_metadata_publication_uncertainty_boundary(monkeypatch, operation,
         path = 'only.pdf' if operation == 'attachment' else 'only.md'
         await peer.write_note(path, b'old' if operation == 'attachment' else 'old', create=True)
         before = await peer.read_note(path)
-        original = peer._client.request
+        original = peer._client._transport.handle_async_request
         puts = []
-        async def lost(method, url, **kwargs):
-            response = await original(method, url, **kwargs)
+        async def lost(req):
+            method = req.method
+            response = await original(req)
             if method == 'PUT':
-                body = json.loads(kwargs['content'])
+                body = json.loads(req.content)
                 puts.append(body)
                 hit = (body.get('type') == 'leaf' if phase == 'chunk' else
                        bool(body.get('deleted')) if phase == 'retirement' else
@@ -350,7 +355,7 @@ async def test_metadata_publication_uncertainty_boundary(monkeypatch, operation,
                 if hit:
                     raise httpx.ReadError('accepted; response lost')
             return response
-        monkeypatch.setattr(peer._client, 'request', lost)
+        monkeypatch.setattr(peer._client._transport, 'handle_async_request', lost)
         calls = {
             'write': lambda: peer.write_note(path, 'replacement'),
             'attachment': lambda: peer.write_attachment(path, b'replacement'),
@@ -576,13 +581,14 @@ async def test_structured_outcomes_name_affected_paths(backend, monkeypatch, out
                 raise OutcomeUnknown()
             monkeypatch.setattr(backend._object_storage, 'put_if_absent', lost)
         else:
-            request = backend._client.request
-            async def lost(method, path, **kwargs):
-                response = await request(method, path, **kwargs)
-                if method == 'PUT' and json.loads(kwargs['content']).get('type') != 'leaf':
+            request = backend._client._transport.handle_async_request
+            async def lost(req):
+                method = req.method
+                response = await request(req)
+                if method == 'PUT' and json.loads(req.content).get('type') != 'leaf':
                     raise httpx.ReadError('accepted; response lost')
                 return response
-            monkeypatch.setattr(backend._client, 'request', lost)
+            monkeypatch.setattr(backend._client._transport, 'handle_async_request', lost)
     else:
         backend.sync_max_size_mb_override = 1 / 1048576
         backend.sync_max_size_mb = 1 / 1048576
