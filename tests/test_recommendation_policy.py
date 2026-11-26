@@ -7,6 +7,7 @@ file with device=100/1795681969510 and PREFERRED=50/1795001730894.
 """
 import copy
 import json
+import math
 import pytest
 import livesync_format as fmt
 from tests.test_tweak_startup import vault
@@ -178,6 +179,28 @@ async def test_unconvertible_device_size_names_the_override(tmp_path, kind):
         await b.startup_check()
         assert b.sync_max_size_mb == 60
         assert not writes()
+
+
+# The resolved size and the ignore switch are the only settings values in tool
+# output; each is a finite number or a boolean, never text from a device.
+DEVICE_VALUES = ['private-text', ['private-text'], {'valueOf': 'private-text'}, '  ', '0x1F', True,
+                 None, -5, 1e308, 'Infinity', '', [50], [[['60']]], ' 1e3 ']
+
+
+@pytest.mark.parametrize('kind', ['couchdb', 's3'])
+@pytest.mark.parametrize('raw', DEVICE_VALUES)
+async def test_public_policy_values_are_closed_numbers_or_booleans(tmp_path, kind, raw):
+    m = live()
+    m['tweak_values']['private-device-id'].update(syncMaxSizeInMB=raw, useIgnoreFiles=raw)
+    async with vault(tmp_path, kind, m) as (b, writes):
+        await b.startup_check()
+        policy = (await b.backend_info())['recommendation_policy']
+        text = json.dumps(policy, allow_nan=False)
+        size = policy['syncMaxSizeInMB']['value']
+        assert size is None or (type(size) in (int, float) and 0 <= size < math.inf)
+        assert type(policy['useIgnoreFiles']['value']) is bool
+        assert 'private-text' not in text
+        assert 'private-device-id' not in text
 
 
 async def test_capability_rejection_preserves_complete_policy(tmp_path, monkeypatch):
