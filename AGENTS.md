@@ -264,3 +264,10 @@ F8 documentation contracts read the environment table in `docs/configuration.md`
 README is the practical entry point and `docs/peer-limitations.md` holds the
 complete setting/difference inventory. `docs/couchdb-jwt.md` holds JWT provisioning;
 `docs/developer-acceptance.md` holds automated real-server acceptance.
+
+
+F10 HTTP response protection lives at `storage_couchdb.py:_request`: force identity,
+stream raw bytes, bound incremental gzip/deflate output, and remove consumed
+encoding headers before exposing responses. `tests/test_couchdb_http_budget.py`
+covers every endpoint shape, raw/decoded boundaries, early abort, encoding
+refusals, fragmented streams, batch headroom and default maximum-sized pieces.

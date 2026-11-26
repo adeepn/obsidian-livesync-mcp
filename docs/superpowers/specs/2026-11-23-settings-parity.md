@@ -1124,3 +1124,14 @@ is pending; audited plugin 1.0.52 has not been exercised live.
 [GOTCHA] Independent architect review found installed Uvicorn AccessFormatter
 unpacks five raw access arguments. Typed logs now adapt those handlers before
 emission, including handlers installed after application construction.
+
+
+### 2026-11-26 — F10-1 HTTP decoding budget
+
+[GOTCHA] Eager HTTPX content decoding bypassed document inflation protection.
+Force identity on every CouchDB request and cap raw/decoded streaming bodies
+before JSON; preserve the existing positive override and splitter-derived floor.
+Document batches use their locally requested key count. Unsupported/malformed
+encodings direct the operator to identity; refused write responses require a
+re-read before retry. Synthetic transport tests are defence evidence, not a
+fabricated native plugin decoder oracle.

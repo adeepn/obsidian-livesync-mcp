@@ -1072,3 +1072,12 @@ def test_current_live_acceptance_status_is_explicit():
             assert term in text
         assert 'final live acceptance pending' in text
         assert '1.0.52 has not been exercised live' in text
+
+
+def test_couchdb_http_decoding_policy_documented():
+    for name in ('docs/peer-limitations.md', 'docs/vault-format.md'):
+        text = (ROOT / name).read_text()
+        for required in ('Accept-Encoding: identity', 'wire', 'decoded',
+                         'LIVESYNC_COUCHDB_MAX_INFLATED_BYTES', '_bulk_docs'):
+            assert required in text
+    assert 'HTTP' in (ROOT / '.env.example').read_text().split('LIVESYNC_COUCHDB_MAX_INFLATED_BYTES=')[0][-250:]

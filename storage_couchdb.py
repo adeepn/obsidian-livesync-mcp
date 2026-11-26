@@ -48,6 +48,7 @@ from device_selection import DeviceSelection
 import json
 import logging
 import time
+import zlib
 import urllib.parse
 from typing import AsyncIterator, Callable
 from config import validate_transport_headers, CouchDBConfig
@@ -60,7 +61,7 @@ from text_eligibility import (TextProjection, DEFAULT_TEXT_SCAN_MAX_BYTES,
                               DEFAULT_TEXT_VERDICT_CACHE_ENTRIES)
 
 from couchdb_compression import (compress_doc, decompress_doc, decompress_data,
-                                 CompressedDataError, MARK_SHIFT_COMPRESSED, resolved_inflate_budget)
+                                 CompressedDataError, CouchDBInflateBudgetExceeded, MARK_SHIFT_COMPRESSED, resolved_inflate_budget)
 from wire_encoding import json_stringify
 
 import base64
@@ -120,6 +121,88 @@ _TEXT_WINDOW_SIZE = 50
 # answers with reason "missing" instead); conflating the two turns a
 # dead database into apparent note absence.
 _DB_MISSING_REASON = "no_db_file"
+
+
+class CouchDBHTTPBudgetExceeded(CouchDBInflateBudgetExceeded):
+    """HTTP budget refusal, including possibly committed write responses."""
+
+    def format(self):
+        return (super().format() + '; HTTP wire/decoded response budget; '
+                'if publishing, re-read the note before retrying')
+
+
+class CouchDBHTTPEncodingRefused(StorageError):
+    """Closed transport diagnostic; never echo a remote encoding or body."""
+
+    def format(self):
+        return ('CouchDB HTTP Content-Encoding is unsupported or malformed; '
+                'configure the server/proxy to return identity encoding and retry; '
+                'if publishing, re-read the note before retrying')
+
+
+async def _bounded_http_body(response: httpx.Response, limit: int) -> bytes:
+    """Bound wire input and zlib output *before* retaining decoded bytes.
+
+    RemoteService.ts:340-380 delegates to fetch; these are peer operational
+    protections, not device format limits. aiter_raw bypasses HTTPX decoders.
+    No flush() is used: its output allocation cannot be length-bounded.
+    """
+    encoding = response.headers.get('content-encoding', 'identity').strip().lower()
+    if encoding not in {'identity', 'gzip', 'deflate'}:
+        raise CouchDBHTTPEncodingRefused()
+    # In-memory MockTransport responses may already have been consumed by
+    # their constructor. Real streaming HTTP transports never take this path.
+    if response.is_stream_consumed:
+        if len(response.content) > limit:
+            raise CouchDBHTTPBudgetExceeded(limit)
+        return response.content
+    decoder = None if encoding == 'identity' else zlib.decompressobj(
+        31 if encoding == 'gzip' else 15)
+    raw_size = 0
+    decoded = bytearray()
+    first_deflate = True
+    deflate_prefix = bytearray()
+    try:
+        async for block in response.aiter_raw():
+            raw_size += len(block)
+            if raw_size > limit:
+                raise CouchDBHTTPBudgetExceeded(limit)
+            if decoder is None:
+                decoded.extend(block)
+                if len(decoded) > limit:
+                    raise CouchDBHTTPBudgetExceeded(limit)
+                continue
+            # HTTP deflate can use either RFC1950 or raw RFC1951 (HTTPX
+            # DeflateDecoder does the same). Detect from the two-byte header
+            # without replaying an arbitrarily large first compressed block.
+            if encoding == 'deflate' and first_deflate:
+                used = min(len(block), 2 - len(deflate_prefix))
+                deflate_prefix.extend(block[:used])
+                # Hold a one-byte initial block until the header is available.
+                if len(deflate_prefix) < 2:
+                    continue
+                cmf, flg = deflate_prefix
+                wrapped = (cmf & 15 == 8 and cmf >> 4 <= 7 and
+                           (cmf * 256 + flg) % 31 == 0)
+                decoder = zlib.decompressobj(15 if wrapped else -15)
+                block = bytes(deflate_prefix) + block[used:]
+                first_deflate = False
+            pending = block
+            while pending:
+                if decoder.eof:
+                    if encoding != 'gzip':
+                        raise CouchDBHTTPEncodingRefused()
+                    decoder = zlib.decompressobj(31)  # concatenated gzip members
+                piece = decoder.decompress(pending, min(65536, limit - len(decoded) + 1))
+                decoded.extend(piece)
+                if len(decoded) > limit:
+                    raise CouchDBHTTPBudgetExceeded(limit)
+                pending = decoder.unused_data if decoder.eof else decoder.unconsumed_tail
+        if decoder is not None and not decoder.eof:
+            raise CouchDBHTTPEncodingRefused()
+    except zlib.error:
+        raise CouchDBHTTPEncodingRefused() from None
+    return bytes(decoded)
 
 
 def _is_db_missing(response: httpx.Response) -> bool:
@@ -285,9 +368,29 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
                 if key in headers:
                     value = headers[key] + ", " + value
                 headers[key] = value
-            response = await self._client.request(
+            # Transport-owned even when supplied through custom headers.
+            headers["Accept-Encoding"] = "identity"
+            limit = self.inflated_budget_bytes
+            # _all_docs batches contain independently bounded documents. No
+            # untrusted response count can enlarge the budget. Control reads,
+            # attachments and write acknowledgements use one document budget.
+            if (path == f"{self._db_path}/_all_docs" and isinstance(json_body, dict)
+                    and json_body.get('include_docs') is True
+                    and isinstance(json_body.get('keys'), list)):
+                limit *= max(1, len(json_body['keys']))
+            async with self._client.stream(
                 method, path, params=params, headers=headers, auth=None, **body
-            )
+            ) as streamed:
+                content = await _bounded_http_body(streamed, limit)
+                # Already decoded. Prevent a second HTTPX decode, including
+                # when callers access .json(), .text or .content later.
+                response = httpx.Response(
+                    streamed.status_code,
+                    headers=[(key, value) for key, value in streamed.headers.raw
+                             if key.lower() not in {b'content-encoding', b'content-length'}],
+                    content=content, request=streamed.request,
+                    extensions=streamed.extensions,
+                )
         except httpx.HTTPError as exc:
             logger.warning('CouchDB <omitted> <omitted> failed: <omitted>; cause: %s', cause_name(type(exc)))
             if method in {"PUT", "DELETE"} and not isinstance(

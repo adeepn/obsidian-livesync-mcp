@@ -32,6 +32,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   shorter-only compression under enableCompression while preserving CR/LF and BOM
   bytes. Bound inflation before read projection or reserved-prefix publication;
   LIVESYNC_COUCHDB_MAX_INFLATED_BYTES overrides a splitter-derived 32 MiB floor.
+  Force HTTP identity encoding and bound streamed wire/decoded response bytes
+  before JSON parsing; refuse unsupported encodings with recovery guidance.
 - Use device JSON/TextEncoder wire encodings and retain original chunk IDs.
   Report BOM removal, invalid UTF-8/surrogate replacement, reserved compression
   prefix interpretation and journal transport_replacements through typed notices

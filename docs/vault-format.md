@@ -237,3 +237,33 @@ or restore a corrupt document from a healthy device. Incremental inflation
 bounds each output block and retained output before UTF-8 projection or base64
 expansion; projected output also must fit. This is per-document, not an aggregate
 batch memory envelope, and is distinct from device file-size admission.
+
+
+### HTTP response decoding
+
+All CouchDB requests force `Accept-Encoding: identity`, including when custom
+headers request compression. This transport-safety policy differs from the
+plugin fetch delegation (`C:services/base/RemoteService.ts:340-380`). A server
+that still compresses is read through raw HTTPX streaming, with independent wire
+and decoded byte caps. gzip (including concatenated members) and deflate (zlib
+or raw) use incremental, output-bounded zlib calls; HTTPX never eagerly inflates
+the network response. Unknown/stacked encodings, including brotli, and malformed
+streams refuse with a typed instruction to configure identity responses.
+
+Each response uses the existing LIVESYNC_COUCHDB_MAX_INFLATED_BYTES budget (or
+its splitter-derived default). This includes the entire JSON envelope, not only
+`data`. Document/attachment responses, `_local`, `_session`, database info,
+`_changes`, id-only `_all_docs`, errors and `_bulk_docs` acknowledgements all
+use one budget. `_all_docs` with `include_docs=true` and an explicit local keys
+list receives one budget per requested key; remote counts cannot enlarge it.
+No `_bulk_docs`, `_changes` or direct attachment endpoint is currently called
+by the backend, but the same request boundary protects them.
+
+Default V3 maximum pieces (4 MiB+3), their base64 JSON envelopes and direct
+attachments fit the 32 MiB floor; larger finite splitter caps increase the
+default as above. Files are transported in chunks, so a 50 MiB file does not
+require a single 50 MiB response. Arbitrary legacy pieces, large metadata or
+control responses, and tightly configured overrides may need a larger budget.
+Raise the named variable and restart for legitimate larger responses. After a
+refused write acknowledgement, re-read the note before retrying: the server
+may already have committed it. These resource caps do not change file admission.
