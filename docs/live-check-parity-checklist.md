@@ -57,6 +57,9 @@ sequence.
 <!-- C:src/serviceFeatures/remoteConfig.ts:388-435,458-470 registers exact command
 and selection title, applies selected configuration and calls replicate(true). -->
 
+Имена и байты файлов `.bin` проверяет контроллер на диске: Obsidian по умолчанию
+не показывает такие файлы в дереве. Владелец проверяет в дереве только заметки.
+
 Все проверки без разрешающих флагов только читают удалённое хранилище.
 `prepare-*` создают новые файлы локально эксклюзивно: существующий файл — FAIL,
 перезаписи нет. Obsidian может автоматически отправить эти локальные файлы,
@@ -120,8 +123,9 @@ LiveSyncProvisionalMessages.ts:273-291; translation.ts:70-91. -->
    тестовое хранилище». После этого контроллер:
    `./venv/bin/python scripts/live_check_parity.py write-large --state-dir "$state" --vault "$vault" --output "$work/B-upload.json" --allow-remote-write --confirm-target plan-b-it/livetest/`.
    Ожидается PASS проверки прочитанных обратно 40 MiB.
-6. Владелец выполняет синхронизацию, в дереве файлов открывает папку
-   `parity-live`, видит `peer-40m.bin`; сообщает «B-upload вижу».
+6. Владелец выполняет синхронизацию и присылает хвост лога. Контроллер проверяет
+   на диске `parity-live/peer-40m.bin` (размер, время изменения, байты) и передаёт
+   результат: Obsidian не показывает `.bin` в дереве файлов.
    Контроллер: `./venv/bin/python scripts/live_check_parity.py verify-visible --state-dir "$state" --vault "$vault" --output "$work/B-visible.json" --path parity-live/peer-40m.bin`.
    Передать `B-upload.json`, `B-visible.json` после проверки секретов.
 7. Владелец тем же путём Selector → Normal Files → Maximum file size вводит
@@ -132,8 +136,10 @@ LiveSyncProvisionalMessages.ts:273-291; translation.ts:70-91. -->
    Контроллер: `./venv/bin/python scripts/live_check_parity.py oversize --state-dir "$state" --vault "$vault" --output "$work/B-refusals.json" --source parity-live/exact.bin --limit-mib 50 --allow-remote-write --allow-remote-delete --confirm-target plan-b-it/livetest/`.
    Ожидается PASS: загрузка 50 MiB + 1 пропущена, переименование отказано;
    исходные байты и версия сохранены, `skipped.bin` и `refused-move.bin` отсутствуют.
-9. Владелец выполняет синхронизацию, проверяет эти имена в дереве файлов,
-   сообщает «B без изменений»; контроллер передаёт `B-refusals.json`.
+9. Владелец выполняет синхронизацию и присылает хвост лога. Контроллер проверяет
+   на диске, что `skipped.bin` и `refused-move.bin` отсутствуют, а `exact.bin` не
+   изменился, и передаёт `B-refusals.json` с результатом; владелец отвечает
+   «B без изменений».
 
 ## 4. Создание, изменение, переименование и удаление (C)
 
@@ -230,8 +236,9 @@ MiB = 1 048 576 байт. Время — ориентир при локальн�
    оба окна командой §1, выбирая одинаковое отдельное тестовое подключение.
 3. Контроллер в первом каталоге эксклюзивно создаёт файл 60 MiB:
    `./venv/bin/python -c 'from pathlib import Path; import sys; from scripts.live_check_parity import local_prepare; raise SystemExit(0 if local_prepare(Path(sys.argv[1]), {"receive-60m.bin": 60*1048576}) else 1)' "$vault"`.
-   Владелец синхронизирует первое окно, затем второе; на втором в дереве файлов
-   `parity-live/receive-60m.bin` отсутствует. Сообщить «B3 при 50 файла нет».
+   Владелец синхронизирует первое окно, затем второе и сообщает «B3 при 50
+   синхронизировано»; отсутствие `parity-live/receive-60m.bin` на втором устройстве
+   контроллер проверяет на диске (в дереве файлов Obsidian `.bin` не виден).
 4. Контроллер читает удалённый файл, сравнивая с первым локальным каталогом:
    `./venv/bin/python scripts/live_check_parity.py verify-visible --state-dir "$state" --vault "$vault" --output "$work/B3-remote.json" --path parity-live/receive-60m.bin`.
    Ожидается PASS. Connection-флаги здесь должны указывать на отдельный B3
