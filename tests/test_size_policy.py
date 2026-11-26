@@ -105,7 +105,7 @@ async def test_40_mib_complete_on_both_backends(backend):
 
 
 @pytest.mark.parametrize('settings,want', [
-    ({'tweak_values': {'PREFERRED': {'syncMaxSizeInMB': .5}, 'device': {'syncMaxSizeInMB': 100}}}, .5),
+    ({'tweak_values': {'PREFERRED': {'syncMaxSizeInMB': .5}, 'device': {'syncMaxSizeInMB': 100}}}, 100),
     ({'tweak_values': {'device': {'syncMaxSizeInMB': 100}}}, 100),
     ({'syncMaxSizeInMB': 0}, 0),
     ({'pathNormalizationVersion': 0}, 50),

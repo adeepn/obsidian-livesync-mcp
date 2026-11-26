@@ -291,3 +291,10 @@ full next-piece caps, both backend lifecycles, lone units and unchanged reads.
 `scripts/extract_decoder_vectors.mjs` also retains native decoder partitions
 and lossless partitions/IDs; its final two arguments are the verified WASM ESM
 and tarball paths. `tests/test_splitter_decoding.py` pins both source views.
+
+F14 recommendation-only policy lives in `livesync_format.py:resolve_writer_policy`.
+`scripts/extract_recommendation_vectors.mjs` executes pinned native assessment
+and the plugin matched early-return branch with Node builtins only, recording
+source hashes and no npm dependencies in `tests/fixtures/recommendation_upstream.json`.
+`tests/test_recommendation_policy.py` covers P-48 arbitration and backend lifecycle.
+Regenerate with `node --experimental-vm-modules scripts/extract_recommendation_vectors.mjs /tmp/settings-parity-commonlib /tmp/settings-parity-plugin tests/fixtures/recommendation_upstream.json`.

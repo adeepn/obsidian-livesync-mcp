@@ -1,6 +1,7 @@
 # Tweak compatibility at startup
 
-Both backends read `tweak_values.PREFERRED` from the LiveSync milestone.
+For compatibility-compared keys, both backends read
+`tweak_values.PREFERRED` from the LiveSync milestone.
 CouchDB uses `_local/obsydian_livesync_milestone`; S3 uses its milestone object.
 Without PREFERRED the peer retains the existing device-settings fallback and
 checks all advertised devices against that baseline. Startup compares the peer's
@@ -37,3 +38,47 @@ policy, not values inferred from milestone tweaks. Restart after changing them.
 
 Source semantics and the deliberately read-only remote alignment policy are
 recorded in the [parity specification](superpowers/specs/2026-11-23-settings-parity.md#tweak-compatibility-and-peer-startup-requirements).
+
+The pinned recommendation template also includes recommendation-only
+`useCustomRequestHandler`, `batch_size`, `batches_limit`, `useTimeouts`,
+`readChunksOnline`, `hashCacheMaxCount`, `hashCacheMaxAmount`,
+`concurrencyOfReadChunksOnline`, and `minimumIntervalOfReadChunksOnline`.
+These are device transport/cache scheduling preferences, not peer writer-policy
+inputs. The peer does not derive them from the milestone. Other template keys
+also in TweakCompatibilityRules remain compatibility-compared.
+
+Source: C:common/models/tweak.definition.ts:24-67,116-135;
+C:common/models/tweak.compatibility.ts:153-201;
+P:modules/coreFeatures/ModuleResolveMismatchedTweaks.ts:120-132,403-405.
+The native witness in `tests/fixtures/recommendation_upstream.json` executes
+these comparisons and the matched early-return branch. Multi-device arbitration
+is the owner's P-48 peer policy, not an invented upstream device oracle.
+
+## Recommendation-only writer policy
+
+`syncMaxSizeInMB`, `useIgnoreFiles`, and `ignoreFiles` resolve independently
+from device maps advertising that key, before consulting PREFERRED. An explicit
+operator override always wins. Equal effective device policies use that value;
+disagreement uses the greatest positive numeric `tweakModified`. If disagreeing
+newest devices tie, or no device has a positive timestamp, use PREFERRED when
+it advertises the key. Otherwise refuse with the setting name and its override:
+`LIVESYNC_SYNC_MAX_SIZE_MB`, `LIVESYNC_USE_IGNORE_FILES`, or
+`LIVESYNC_IGNORE_FILES`. When no device advertises a key, use PREFERRED, then
+the device default. JavaScript size coercion, boolean truthiness and comma-name
+splitting still apply. Only maps advertising the individual key vote.
+
+This follows recommendation-only device behavior, not the compatibility
+baseline: required and compatible-lossy settings retain their existing
+PREFERRED-based assessment. Journal refresh validates the selection, size,
+derived text budget and provenance before installing the complete candidate.
+Rejected candidates preserve the previous effective snapshot. The peer never
+registers a device or publishes PREFERRED.
+
+`backend_info` and `obsidian_vault_stats` expose `recommendation_policy`, keyed
+by these three setting names. Each entry contains `source` (`override`,
+`device`, or `preferred`), integer `device_count`, and boolean `disagree`.
+Size and use-ignore entries expose the resolved numeric/boolean `value`;
+ignore names expose only integer `name_count`. A nonfinite unlimited size is
+reported as JSON null rather than a nonstandard numeric token. Device IDs and names are never
+exposed. `preferred` also labels the default when nothing advertises a key.
+The legacy selection source fields retain their `explicit`/`vault` vocabulary.

@@ -1214,3 +1214,21 @@ F13 regenerated fixture SHA256 ledger (Node 26.13.1):
 | `settings_oracle_upstream.json.gz` | `dab416d7051e08688671bdb7918926f0b7ce86e88af9c9eaca0963f721192789` |
 | `splitter_decoding_upstream.json` | `08ff49436c4f07f39910d71b0d42c40be4d343f9b4ad69644a8c4dfa33067c9f` |
 | `surrogate_wire_upstream.json` | `a39b137d900f4cb70072918eb203effa12e831191866026d9e486adcd6cc2244` |
+
+### 2026-11-26 — F14 recommendation-only policy
+
+Implement P-48 for syncMaxSizeInMB/useIgnoreFiles/ignoreFiles: devices first,
+newest positive numeric timestamp on disagreement, PREFERRED on unresolved ties,
+otherwise typed override guidance. Preserve compatibility-compared policy and
+invisible-writer behavior. Journal refresh installs policy, text budget and
+provenance atomically. Native recommendation witness is distinct from the
+owner-reported plugin 1.0.50 live observation (device 100 / PREFERRED 50 and
+successful device 100 MiB upload). Verification evidence is kept in ignored F14
+working artifacts; this dated note does not alter historical acceptance claims.
+
+F14 precommit offline verification: 27,842 passed, 267 skipped, 3 subtests
+passed (owner-provided baseline: 27,795 passed). Eleven in-memory mutations
+were caught; successful refresh assertions were added for two initial survivors.
+Two independent reviewers converged with no new findings. Committed-tree
+parallel-suite results and live-acceptance limits are recorded in ignored F14
+evidence; no real-client rerun is claimed here.

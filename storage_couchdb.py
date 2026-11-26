@@ -37,7 +37,7 @@ from __future__ import annotations
 
 from publication_notices import complete_publication, ingress_notices, split_notices
 
-from diagnostic_hygiene import (writer_diagnostic, diagnostic, settings_exception_diagnostic, PublicDiagnostic, DiagnosticPath, setting_key,
+from diagnostic_hygiene import (recommendation_fields, writer_diagnostic, diagnostic, settings_exception_diagnostic, PublicDiagnostic, DiagnosticPath, setting_key,
     DiagnosticCode, assessment_fields, setting_value, fingerprint, unsafe_debug,
     cause_name, operation_field, numeric_field)
 
@@ -78,7 +78,7 @@ from livesync_format import (
     assemble_text,
     canonical_path,
     resolve_content_splitter, resolve_tweak_startup,
-    resolve_sync_max_size, resolve_enable_compression,
+    resolve_writer_policy, writer_policy_summary, resolve_enable_compression,
     prepare_file_content,
     new_metadata_doc,
     identity_path2id,
@@ -788,6 +788,9 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
             if _is_db_missing(milestone):
                 raise StorageUnavailable(PublicDiagnostic(DiagnosticCode.COUCHDB_DATABASE_NOT_FOUND, status=404, operation=milestone.request.method, transport='CouchDB', cause=httpx.HTTPStatusError))
             self.resolve_selection_settings({'pathNormalizationVersion': 0})
+            self._recommendation_policy = writer_policy_summary(resolve_writer_policy(
+                {'pathNormalizationVersion': 0}, size_override=self.sync_max_size_mb_override,
+                use_override=self._selection_overrides[0], names_override=self._selection_overrides[1]))
             await self.selection_startup()
             await self.refresh_selection_files()
             return  # no milestone document: pre-E2EE or fresh vault
@@ -799,8 +802,10 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
         try:
             self.enable_compression = resolve_enable_compression(body)
             self.resolve_selection_settings(body)
-            if self.sync_max_size_mb_override is None:
-                resolve_sync_max_size(body)  # retain all-device fallback guards
+            policies = resolve_writer_policy(body, size_override=self.sync_max_size_mb_override,
+                use_override=self._selection_overrides[0], names_override=self._selection_overrides[1])
+            self.sync_max_size_mb = policies[0].value
+            self._recommendation_policy = writer_policy_summary(policies)
             resolved = resolve_tweak_startup(body, couchdb_mode=True,
                 disable_checking_config_mismatch=getattr(self, 'disable_checking_config_mismatch', False),
                 auto_accept_compatible_tweak=getattr(self, 'auto_accept_compatible_tweak', True))
@@ -809,8 +814,6 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
                 logger.info("tweak alignment: %s; keys: %s", side if side in ("CURRENT", "REMOTE") else "<value hidden>", ", ".join(setting_key(k) for k in resolved.differing_keys))
             body = dict(resolved.settings)
             self._path_identity = resolve_path_identity(body)
-            self.sync_max_size_mb = (resolve_sync_max_size(body)
-                if self.sync_max_size_mb_override is None else self.sync_max_size_mb_override)
             self._splitter = resolve_content_splitter(body)
         except UnsupportedWriterSettings as exc:
             self._splitter = None
@@ -845,6 +848,7 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
         return {
             **selection,
             **self.text_limits(),
+            "recommendation_policy": recommendation_fields(getattr(self, "_recommendation_policy", {})),
             "tweak_assessment": assessment_fields(self._tweak_assessment),
             "writer_supported": self._writer_unsupported_reason is None and selection["selection_writer_supported"],
             "writer_unsupported_reason": writer_diagnostic(self._writer_unsupported_reason or selection["selection_unsupported_reason"]),

@@ -1,6 +1,6 @@
 """Obsidian MCP Server — remote MCP server for Obsidian via CouchDB/LiveSync."""
 
-from diagnostic_hygiene import (escape_path, DiagnosticPath, path_field, assessment_fields, PublicDiagnostic, DiagnosticCode, cause_name)
+from diagnostic_hygiene import (escape_path, DiagnosticPath, path_field, recommendation_fields, assessment_fields, PublicDiagnostic, DiagnosticCode, cause_name)
 
 import json
 import inspect
@@ -1602,6 +1602,8 @@ async def obsidian_vault_stats(cursor: str = "", limit: int = 0) -> str:
                 f"local peer state exceeds {threshold} MB; "
                 "see README 'Local cache' for monitoring and reset"
             )
+    if 'recommendation_policy' in info:
+        local_state['recommendation_policy'] = recommendation_fields(info['recommendation_policy'])
     # Public selection observability is a closed projection, never arbitrary
     # backend settings or exception text (P-19/P-21/P-22).
     for field in ('selection_only_source', 'selection_ignore_source',

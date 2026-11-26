@@ -296,3 +296,33 @@ def silence_transport_logging():
             target = logging.getLogger(name)
             if not any(isinstance(f, _NoTransportDiagnostics) for f in target.filters):
                 target.addFilter(_NoTransportDiagnostics())
+
+
+def recommendation_fields(value):
+    """Closed P-48 projection; no remote strings, names, IDs or extra fields."""
+    if type(value) is not dict:
+        return {}
+    result = {}
+    for key in ('syncMaxSizeInMB', 'useIgnoreFiles', 'ignoreFiles'):
+        entry = value.get(key)
+        if type(entry) is not dict:
+            continue
+        source = entry.get('source')
+        projected = dict(source=source if type(source) is str and source in {
+            'override', 'device', 'preferred'} else None)
+        count = entry.get('device_count')
+        projected['device_count'] = count if type(count) is int and 0 <= count < 2**63 else 0
+        disagree = entry.get('disagree')
+        projected['disagree'] = disagree if type(disagree) is bool else False
+        if key == 'ignoreFiles':
+            count = entry.get('name_count')
+            projected['name_count'] = count if type(count) is int and 0 <= count < 2**63 else 0
+        else:
+            policy = entry.get('value')
+            valid = (type(policy) is bool if key == 'useIgnoreFiles' else
+                     type(policy) in (int, float))
+            # Native +Infinity represents an unlimited device predicate. Keep
+            # strict JSON and mark this representation explicitly with null.
+            projected['value'] = policy if valid and (type(policy) is bool or math.isfinite(policy)) else None
+        result[key] = projected
+    return result

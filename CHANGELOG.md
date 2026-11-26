@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Settings parity
 
+- Resolve recommendation-only size and ignore-file policies from advertising
+  devices before stale PREFERRED; arbitrate disagreements by positive numeric
+  tweakModified, then PREFERRED or a typed ambiguity with operator recovery.
+  Refresh journal policy, text budget and typed provenance atomically.
+
 - Keep valid surrogate pairs together in V1 non-plain and plain zero-cap text
   writes by extending the cut one UTF-16 unit and resetting the next nominal
   size. Recompute moved-piece IDs; preserve safe partitions, binary splits,

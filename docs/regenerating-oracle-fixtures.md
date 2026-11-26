@@ -262,3 +262,11 @@ The generator uses the same verified native harness and dependencies as the
 settings oracle. Raw upstream partitions stay separate from the independent JS
 lossless projection; pinned native managers hash every projected piece.
 Validation: `./venv/bin/python -m pytest tests/test_lossless_legacy.py -q`.
+
+### Recommendation-only witness
+
+`node --experimental-vm-modules scripts/extract_recommendation_vectors.mjs /tmp/settings-parity-commonlib /tmp/settings-parity-plugin tests/fixtures/recommendation_upstream.json`
+
+Pinned source hashes, built-in-only dependencies and native comparison/retention
+outputs are stored in the fixture; validated by `tests/test_recommendation_policy.py`.
+The owner live device=100 / PREFERRED=50 observation is separate acceptance evidence.

@@ -26,7 +26,7 @@ sys.path.insert(0, str(ROOT))
 
 from content_splitter import _wheels_read_string
 from config import S3Config
-from diagnostic_hygiene import escape_path
+from diagnostic_hygiene import escape_path, recommendation_fields
 from livesync_format import (TWEAK_COMPATIBILITY_RULES, _TWEAK_TEMPLATE_KEYS,
                              _RECOGNIZED_TWEAK_KEYS, ForbiddenPathError, extract_inline_chunks, prepare_file_content,
                              validate_vault_path, split_ignore_names)
@@ -230,7 +230,9 @@ async def verify_size(backend, vault, limit_mib):
     good, records = await verify(backend, vault, [f'{PREFIX}/device-40m.bin', f'{PREFIX}/exact.bin'])
     above = await backend.read_note(f'{PREFIX}/above.bin')
     good = check(above is None, 'device did not publish above-limit file') and good
-    return good, {'files': records, 'physical_files': physical, 'limit_mib': limit_mib}
+    return good, {'files': records, 'physical_files': physical, 'limit_mib': limit_mib,
+                  'recommendation_policy': recommendation_fields(
+                      (await backend.backend_info()).get('recommendation_policy', {}))}
 
 
 def local_prepare(vault, payloads):

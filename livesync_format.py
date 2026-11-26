@@ -481,52 +481,133 @@ def selection_lookup_path(path: str) -> str | None:
     return normalized
 
 
+# C:common/models/tweak.definition.ts:116-135 recommends these writer policies;
+# C:common/models/tweak.compatibility.ts:153-201 never compares them.
+# P:modules/coreFeatures/ModuleResolveMismatchedTweaks.ts:403-405 keeps the
+# device's current settings when matched. Multi-device arbitration is P-48.
+_RECOMMENDATION_POLICIES = {
+    'syncMaxSizeInMB': (50, 'LIVESYNC_SYNC_MAX_SIZE_MB',
+                      DiagnosticCode.CONFLICTING_SYNCMAXSIZEINMB_SETTINGS),
+    'useIgnoreFiles': (False, 'LIVESYNC_USE_IGNORE_FILES', DiagnosticCode.IGNORE_USE_CONFLICT),
+    'ignoreFiles': ('.gitignore', 'LIVESYNC_IGNORE_FILES', DiagnosticCode.IGNORE_NAMES_CONFLICT),
+}
+
+
+@dataclass(frozen=True)
+class RecommendationPolicy:
+    value: object
+    source: str
+    device_count: int
+    disagree: bool
+
+    def summary(self, key):
+        # Names and device IDs are remote text, never public policy fields.
+        result = dict(source=self.source, device_count=self.device_count, disagree=self.disagree)
+        if key == 'ignoreFiles':
+            result['name_count'] = len(self.value)
+        else:
+            result['value'] = self.value
+        return result
+
+
+def _size_policy_value(raw):
+    try:
+        value = _minimum_number(raw, setting='syncMaxSizeInMB')
+    except SplitterRefusal as exc:
+        error = UnsupportedVaultSettings(DiagnosticCode.SPLITTER_PRIMITIVE.value)
+        error.diagnostic = exc.diagnostic
+        raise error from None
+    return value if value > 0 else 0
+
+
+def _size_policy_threshold(value):
+    product = value * 1024 * 1024
+    return math.floor(product) if math.isfinite(product) and value > 0 else None
+
+
+def resolve_recommendation_policy(milestone, key, *, override=None, active=True):
+    default, _, conflict = _RECOMMENDATION_POLICIES[key]
+    # Validate the container using the unchanged legacy/required setting rules.
+    _milestone_setting_maps(milestone)
+    entries = milestone.get('tweak_values')
+    if entries is None and 'tweak_values' not in milestone:
+        devices = [milestone] if key in milestone else []
+        preferred = milestone
+    else:
+        devices = [v for k, v in entries.items()
+                   if k != _PREFERRED_DEVICE_ID and isinstance(v, dict) and key in v]
+        preferred = entries.get(_PREFERRED_DEVICE_ID, {})
+
+    def coerce(raw):
+        if key == 'syncMaxSizeInMB':
+            return _size_policy_value(raw)
+        if key == 'useIgnoreFiles':
+            # C:serviceFeatures/targetFilter.ts:134: native JS truthiness.
+            return _js_truthy(raw)
+        if not isinstance(raw, str):
+            if not active:
+                return ()  # targetFilter.ts:129-131: inactive names are not used.
+            error = UnsupportedVaultSettings(DiagnosticCode.IGNORE_STRING.value)
+            error.diagnostic = PublicDiagnostic(DiagnosticCode.IGNORE_STRING)
+            raise error
+        # C:serviceFeatures/targetFilter.ts:93-97: split/trim, retain empties.
+        return split_ignore_names(raw)
+
+    def comparable(value):
+        return _size_policy_threshold(value) if key == 'syncMaxSizeInMB' else value
+
+    # Overrides bypass remote coercion/refusals. Counts and disagreement remain
+    # observable for well-formed remote policies without exposing their values.
+    try:
+        values = [coerce(device[key]) for device in devices]
+    except UnsupportedVaultSettings:
+        if override is None:
+            raise
+        values = []
+    disagree = bool(values) and any(comparable(v) != comparable(values[0]) for v in values[1:])
+    if override is not None:
+        return RecommendationPolicy(override, 'override', len(devices), disagree)
+    if values and not disagree:
+        return RecommendationPolicy(values[0], 'device', len(devices), False)
+    if disagree:
+        # Use the same JS-number timestamp rule as the upstream newer-side
+        # selector (P:ModuleResolveMismatchedTweaks.ts:120-132), not JSON strings.
+        winner = devices[0]
+        for device in devices[1:]:
+            if select_newer_tweak_side(device, winner) == 'CURRENT':
+                winner = device
+        positive = select_newer_tweak_side(winner, {}) == 'CURRENT'
+        newest = [i for i, device in enumerate(devices)
+                  if select_newer_tweak_side(winner, device) == 'REMOTE'] if positive else []
+        if newest and all(comparable(values[i]) == comparable(values[newest[0]]) for i in newest):
+            return RecommendationPolicy(values[newest[0]], 'device', len(devices), True)
+        if key not in preferred:
+            error = UnsupportedVaultSettings(conflict.value)
+            error.diagnostic = PublicDiagnostic(conflict)
+            raise error
+    return RecommendationPolicy(coerce(preferred.get(key, default)), 'preferred', len(devices), disagree)
+
+
 def resolve_ignore_settings(
     milestone_settings: dict, *, use_override: bool | None = None,
     names_override: tuple[str, ...] | None = None,
 ) -> tuple[bool, tuple[str, ...]]:
-    """Resolve independent operator overrides, otherwise PREFERRED/all devices.
-
-    C:common/models/tweak.definition.ts:116-149 advertises both settings.
-    C:common/models/setting.const.defaults.ts:140-141 supplies missing defaults.
-    C:serviceFeatures/targetFilter.ts:95 splits commas and trims each name.
-    Regex lists are absent from the template and remain operator-only.
-    """
-    maps = None
-
-    def values(key, default, expected, invalid, conflict):
-        nonlocal maps
-        if maps is None:
-            maps = _milestone_setting_maps(milestone_settings)
-        result = [m.get(key, default) for m in maps]
-        if any(type(v) is not expected for v in result):
-            raise UnsupportedVaultSettings(invalid.value)
-        if any(v != result[0] for v in result[1:]):
-            raise UnsupportedVaultSettings(conflict.value)
-        return result[0]
-    if use_override is not None:
-        use = use_override
-    else:
-        # C:serviceFeatures/targetFilter.ts:134 uses plain JS truthiness,
-        # including truthy empty arrays/objects and the string "false".
-        uses = [_js_truthy(m.get('useIgnoreFiles', False))
-                for m in _milestone_setting_maps(milestone_settings)]
-        if any(v != uses[0] for v in uses[1:]):
-            raise UnsupportedVaultSettings(DiagnosticCode.IGNORE_USE_CONFLICT.value)
-        use = uses[0]
-    if names_override is not None:
-        names = names_override
-    else:
-        if use:
-            raw = values('ignoreFiles', '.gitignore', str,
-                         DiagnosticCode.IGNORE_STRING, DiagnosticCode.IGNORE_NAMES_CONFLICT)
-        else:
-            # targetFilter.ts:129-131: inactive settings never affect admission.
-            # Keep string split/trim for observability, without validation/gates.
-            raw = _milestone_setting_maps(milestone_settings)[0].get('ignoreFiles', '.gitignore')
-            raw = raw if isinstance(raw, str) else ''
-        names = split_ignore_names(raw)
+    use = resolve_recommendation_policy(milestone_settings, 'useIgnoreFiles', override=use_override).value
+    names = resolve_recommendation_policy(milestone_settings, 'ignoreFiles',
+        override=names_override, active=use).value
     return use, names
+
+
+def resolve_writer_policy(milestone, *, size_override=None, use_override=None, names_override=None):
+    size = resolve_recommendation_policy(milestone, 'syncMaxSizeInMB', override=size_override)
+    use = resolve_recommendation_policy(milestone, 'useIgnoreFiles', override=use_override)
+    names = resolve_recommendation_policy(milestone, 'ignoreFiles',
+        override=names_override, active=use.value)
+    return size, use, names
+
+
+def writer_policy_summary(policies):
+    return {key: policy.summary(key) for key, policy in zip(_RECOMMENDATION_POLICIES, policies)}
 
 
 def resolve_enable_compression(milestone_settings: dict) -> bool:
@@ -545,33 +626,9 @@ def resolve_enable_compression(milestone_settings: dict) -> bool:
     return values[0]
 
 
-def resolve_sync_max_size(milestone_settings: dict) -> float:
-    """Use the identity settings resolution; ambiguous device values fail closed.
-
-    C:common/models/setting.const.defaults.ts:147 supplies missing value 50.
-    C:services/base/VaultService.ts:73-81 defines the predicate, not a cap.
-    """
-    values = []
-    thresholds = []
-    for settings in _milestone_setting_maps(milestone_settings):
-        try:
-            # C:services/base/VaultService.ts:75-77: > and * apply ToNumber
-            # to every JSON type, just as the splitter's numeric operators do.
-            value = _minimum_number(settings.get('syncMaxSizeInMB', 50),
-                                    setting='syncMaxSizeInMB')
-        except SplitterRefusal as exc:
-            error = UnsupportedVaultSettings(DiagnosticCode.SPLITTER_PRIMITIVE.value)
-            error.diagnostic = exc.diagnostic
-            raise error from None
-        value = value if value > 0 else 0
-        product = value * 1024 * 1024
-        # Admission compares integer byte sizes. Disagreement exists only if
-        # some integer size is admitted by one map and refused by another.
-        thresholds.append(math.floor(product) if math.isfinite(product) and value > 0 else None)
-        values.append(value)
-    if any(v != thresholds[0] for v in thresholds[1:]):
-        raise UnsupportedVaultSettings(DiagnosticCode.CONFLICTING_SYNCMAXSIZEINMB_SETTINGS.value)
-    return values[0]
+def resolve_sync_max_size(milestone_settings: dict, *, override=None) -> float:
+    """C:services/base/VaultService.ts:73-81 admission; P-48 arbitration."""
+    return resolve_recommendation_policy(milestone_settings, 'syncMaxSizeInMB', override=override).value
 
 
 def resolve_content_splitter(milestone_settings: dict) -> ContentSplitter:

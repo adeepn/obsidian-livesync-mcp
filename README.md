@@ -4,8 +4,7 @@ A Python MCP peer for an Obsidian [Self-hosted LiveSync](https://github.com/vrtm
 vault in CouchDB or S3 journals. It uses device-identical path identities,
 splitters, chunk IDs and file-size admission at the [audited upstream pin](docs/upstream-pin.md),
 with the explicit differences below. No Obsidian app or local vault folder is
-needed on the server. Read, edit, search, manage properties/tags, links and canvas
-from an MCP client; see the [tool overview](docs/tools.md).
+needed on the server. Read, edit, search, manage properties/tags, links and canvas from an MCP client; see the [tool overview](docs/tools.md).
 
 [Install and start](#quick-start) · [clients and authentication](docs/clients-and-authentication.md) ·
 [connection recipes](docs/connecting-storage.md)
@@ -102,7 +101,7 @@ and [source and live evidence](docs/upstream-pin.md).
 | Path normalization and filename case | Identical | Legacy/NFC, insensitive/sensitive identities |
 | Splitter versions and legacy migration | Lossless text cuts; otherwise identical where terminating and lossless | [Exact coercion and guards](docs/vault-format.md#invalid-writer-parameters) |
 | Chunk hashes, Eden, long-line threshold | Identical at pin | [Full settings table](docs/peer-limitations.md#supported-vault-settings) |
-| File size and ignore-file selection | Identical admission; local overrides | [Size](docs/size-policy.md), [selection](docs/selection-filters.md) |
+| File size and ignore-file selection | Device-derived recommendation-only policy; local overrides | [Size](docs/size-policy.md), [selection](docs/selection-filters.md) |
 | Headers, JWT and addressing | Explicit local connection settings | [Connection setup](docs/connecting-storage.md) |
 | CouchDB compression | Device-compatible; transformations disclosed; bounded reads; unreadable write acknowledgement is outcome unknown | [Compression](docs/vault-format.md#couchdb-compression) |
 | E2EE and path obfuscation | Unsupported | [Recovery choices](docs/peer-limitations.md#supported-vault-settings) |
@@ -122,6 +121,7 @@ refusal conditions and recovery instructions. The main practical differences:
   [Scope and alternatives](docs/peer-limitations.md#supported-vault-settings).
 - Hidden files, customization and plugin namespaces are excluded from ordinary tools.
   [Path and reflection scope](docs/peer-limitations.md#how-the-peer-differs-from-a-device).
+- Size/ignore policies follow devices before PREFERRED; overrides win. See [arbitration and provenance](docs/tweak-compatibility.md#recommendation-only-writer-policy).
 - The peer is an invisible writer: no device registration or PREFERRED publication.
   [Tweak policy](docs/peer-limitations.md#how-the-peer-differs-from-a-device).
 - Deletions retain body/chunk history; no timed purge or automatic conflict merging.

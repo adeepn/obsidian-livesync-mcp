@@ -1,11 +1,10 @@
 # Device file selection
 
-Ignore-file settings derive from vault milestone/PREFERRED tweaks unless each
-variable is independently overridden. PREFERRED wins when present; otherwise
-all readable device maps must agree on effective active settings after coercion. Missing useIgnoreFiles
-defaults to false, and missing ignoreFiles defaults to `.gitignore`. Invalid
-active ignoreFiles types or disagreeing effective maps refuse startup and name the override
-to set. Inactive ignore names are never validated. Names are split on commas
+Ignore-file settings derive independently from advertising device maps using
+the recommendation-only policy below, unless explicitly overridden. Missing
+settings fall back to PREFERRED and then false / `.gitignore`. Invalid active
+ignoreFiles types refuse with correction guidance. Inactive ignore names are
+not type-validated. Names are split on commas
 and JavaScript-trimmed with empty entries retained; names have no startup
 admission gate. Unusable names contribute no rules at bounded storage lookup.
 Regex lists stay env-only because syncOnlyRegEx and syncIgnoreRegEx are not
@@ -108,7 +107,7 @@ command before making any storage changes, preserving its only copy.
 
 ## Ignore-name lookup and warnings
 
-Both vault-derived and explicit comma-separated names use exact JavaScript trim and retain empty entries (targetFilter.ts:95-145). Empty, repeated-comma, absolute-looking, traversal-looking and backslash-containing names never refuse startup. Inactive useIgnoreFiles=false never validates or reads names. Missing, unreadable or unusable names contribute no rule. Storage lookup normalizes separators inside the vault-note namespace; escaping paths and service IDs are absent, never host-file reads. Backend info and vault_stats expose integer `selection_unresolved_ignore_names`: explicit names unresolved by the latest root/ancestor lookup; 0 while inactive or vault-derived. Correct the explicit name or publish its ignore file if this count is nonzero. Reads bypass filters.
+Both vault-derived and explicit comma-separated names use exact JavaScript trim and retain empty entries (targetFilter.ts:95-145). Empty, repeated-comma, absolute-looking, traversal-looking and backslash-containing names never refuse startup. Inactive useIgnoreFiles=false never type-validates or reads names; recommendation-policy ambiguity still requires PREFERRED or an override. Missing, unreadable or unusable names contribute no rule. Storage lookup normalizes separators inside the vault-note namespace; escaping paths and service IDs are absent, never host-file reads. Backend info and vault_stats expose integer `selection_unresolved_ignore_names`: explicit names unresolved by the latest root/ancestor lookup; 0 while inactive or vault-derived. Correct the explicit name or publish its ignore file if this count is nonzero. Reads bypass filters.
 
 Inactive device maps may contain conflicting or non-string ignoreFiles values. Both backends start and perform zero ignore-name storage reads while useIgnoreFiles is false.
 
@@ -124,3 +123,32 @@ Installed vendor bytes and the worker are verified against
 `vendor/selection/installed-sha256.json` before Node launch/import. A
 `provenance-mismatch` refusal means restore or regenerate the verified installation
 and restart; changing vault settings cannot repair installed code.
+
+## Recommendation-only writer policy
+
+`syncMaxSizeInMB`, `useIgnoreFiles`, and `ignoreFiles` resolve independently
+from device maps advertising that key, before consulting PREFERRED. An explicit
+operator override always wins. Equal effective device policies use that value;
+disagreement uses the greatest positive numeric `tweakModified`. If disagreeing
+newest devices tie, or no device has a positive timestamp, use PREFERRED when
+it advertises the key. Otherwise refuse with the setting name and its override:
+`LIVESYNC_SYNC_MAX_SIZE_MB`, `LIVESYNC_USE_IGNORE_FILES`, or
+`LIVESYNC_IGNORE_FILES`. When no device advertises a key, use PREFERRED, then
+the device default. JavaScript size coercion, boolean truthiness and comma-name
+splitting still apply. Only maps advertising the individual key vote.
+
+This follows recommendation-only device behavior, not the compatibility
+baseline: required and compatible-lossy settings retain their existing
+PREFERRED-based assessment. Journal refresh validates the selection, size,
+derived text budget and provenance before installing the complete candidate.
+Rejected candidates preserve the previous effective snapshot. The peer never
+registers a device or publishes PREFERRED.
+
+`backend_info` and `obsidian_vault_stats` expose `recommendation_policy`, keyed
+by these three setting names. Each entry contains `source` (`override`,
+`device`, or `preferred`), integer `device_count`, and boolean `disagree`.
+Size and use-ignore entries expose the resolved numeric/boolean `value`;
+ignore names expose only integer `name_count`. A nonfinite unlimited size is
+reported as JSON null rather than a nonstandard numeric token. Device IDs and names are never
+exposed. `preferred` also labels the default when nothing advertises a key.
+The legacy selection source fields retain their `explicit`/`vault` vocabulary.

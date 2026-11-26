@@ -32,7 +32,7 @@ def test_absent_defaults_and_preferred():
     assert fmt.resolve_ignore_settings(milestone()) == (False, ('.gitignore',))
     m = milestone(useIgnoreFiles=True)
     m['tweak_values']['device'] = {'useIgnoreFiles': False}
-    assert fmt.resolve_ignore_settings(m) == (True, ('.gitignore',))
+    assert fmt.resolve_ignore_settings(m) == (False, ('.gitignore',))
 
 
 @pytest.mark.parametrize('key,value,message', [
@@ -373,10 +373,11 @@ async def test_failed_policy_refresh_preserves_effective_tuple(tmp_path):
 
 
 @pytest.mark.parametrize('kind', ['couchdb', 's3'])
-@pytest.mark.parametrize('names', [('rules-a', 'rules-b'), (False, {'private': 'value'}),
+@pytest.mark.parametrize('names', [('rules-a', 'rules-a'), (False, {'private': 'value'}),
                                   (None, [1])])
 async def test_inactive_device_names_never_validate_or_read(tmp_path, kind, names, monkeypatch):
     # targetFilter.ts:134-136 returns immediately for inactive settings.
+    # P-48 still arbitrates conflicting names: equal names need no fallback.
     settings = {'tweak_values': {key: {'pathNormalizationVersion': 0,
         'useIgnoreFiles': False, 'ignoreFiles': value}
         for key, value in zip(('a', 'b'), names)}}

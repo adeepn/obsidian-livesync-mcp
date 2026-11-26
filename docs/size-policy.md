@@ -4,8 +4,8 @@ Ordinary writes in **both backends**, including text edits and attachment upload
 follow the device's `syncMaxSizeInMB`: skip only when `max > 0`, `size > 0`, and
 `size > max * 1024 * 1024`. Equality is admitted; fractions work; zero/negative
 disables the check. Raising 50 to 100 admits files through 100 MiB. Settings
-resolve from milestone `tweak_values.PREFERRED`, otherwise the device maps
-(conflicting limits refuse startup), with device default 50 when absent.
+resolve from advertising device maps using the recommendation-only policy
+below, with PREFERRED/default 50 as fallback.
 A blank/unset `LIVESYNC_SYNC_MAX_SIZE_MB` uses this vault value; an explicit
 finite number overrides it. CouchDB resolves at startup; journal peers re-resolve at every unthrottled
 refresh. Other selection policies still apply.
@@ -89,10 +89,39 @@ Journal peers re-resolve the effective size policy at every unthrottled refresh 
 
 Journal refresh validates the complete selection, size and derived text policy before committing any effective setting. A refused candidate preserves the previous effective tuple, records a typed failure and blocks writes until the milestone is repaired and refreshed.
 
-Vault-derived syncMaxSizeInMB uses the native JavaScript numeric coercion predicate for every JSON type (VaultService.ts:73-81). Numeric strings and single/nested numeric arrays work; true means a 1 MiB limit. Null, false, nonnumeric strings/arrays/ordinary objects, zero and negative values disable the predicate. Infinity or an overflowing product is unlimited. Objects with an own noncallable toString that cannot produce a primitive refuse with instructions to correct that field. Device maps agree when their coerced integer-byte admission policies agree; conflicting policies require alignment or LIVESYNC_SYNC_MAX_SIZE_MB. The operator override remains a strict finite number.
+Vault-derived syncMaxSizeInMB uses the native JavaScript numeric coercion predicate for every JSON type (VaultService.ts:73-81). Numeric strings and single/nested numeric arrays work; true means a 1 MiB limit. Null, false, nonnumeric strings/arrays/ordinary objects, zero and negative values disable the predicate. Infinity or an overflowing product is unlimited. Objects with an own noncallable toString that cannot produce a primitive refuse with instructions to correct that field. Device maps agree when their coerced integer-byte admission policies agree; conflicting policies use the newer-device/PREFERRED arbitration below; unresolved ambiguity requires alignment or LIVESYNC_SYNC_MAX_SIZE_MB. The operator override remains a strict finite number.
 
 Journal candidate validation includes the Node selection capability check. While that check awaits, effective selection, size and text limits remain the previous tuple; a missing/unusable Node refusal records a typed failure without committing the candidate. Install Node.js 22+ in the service PATH, then force refresh or restart to recover.
 
 After a failed candidate, force refresh also revalidates a restored previously active policy, so recovered backend/vault stats clear stale Node capability failures before another write.
 
 Array scalar conversion is iterative and adds no coercion depth limit after JSON admission, for size settings and splitter parameters alike. Null/undefined elements and active-path cycles contribute empty fields, as in JavaScript Array.join; repeated noncyclic arrays expand again. Cycles cannot arrive in JSON but self-referential Python inputs follow that native cycle handling. Depths 480/500 exercise real backend startup and journal refresh; depths 1000/5000 exercise already decoded scalars, beyond the standard Python JSON decoder capacity described above. The depth-5000 native oracle uses Node --stack-size=16384 because the default Node call stack also exhausts during native join; the peer does not impose that runtime stack limit.
+
+## Recommendation-only writer policy
+
+`syncMaxSizeInMB`, `useIgnoreFiles`, and `ignoreFiles` resolve independently
+from device maps advertising that key, before consulting PREFERRED. An explicit
+operator override always wins. Equal effective device policies use that value;
+disagreement uses the greatest positive numeric `tweakModified`. If disagreeing
+newest devices tie, or no device has a positive timestamp, use PREFERRED when
+it advertises the key. Otherwise refuse with the setting name and its override:
+`LIVESYNC_SYNC_MAX_SIZE_MB`, `LIVESYNC_USE_IGNORE_FILES`, or
+`LIVESYNC_IGNORE_FILES`. When no device advertises a key, use PREFERRED, then
+the device default. JavaScript size coercion, boolean truthiness and comma-name
+splitting still apply. Only maps advertising the individual key vote.
+
+This follows recommendation-only device behavior, not the compatibility
+baseline: required and compatible-lossy settings retain their existing
+PREFERRED-based assessment. Journal refresh validates the selection, size,
+derived text budget and provenance before installing the complete candidate.
+Rejected candidates preserve the previous effective snapshot. The peer never
+registers a device or publishes PREFERRED.
+
+`backend_info` and `obsidian_vault_stats` expose `recommendation_policy`, keyed
+by these three setting names. Each entry contains `source` (`override`,
+`device`, or `preferred`), integer `device_count`, and boolean `disagree`.
+Size and use-ignore entries expose the resolved numeric/boolean `value`;
+ignore names expose only integer `name_count`. A nonfinite unlimited size is
+reported as JSON null rather than a nonstandard numeric token. Device IDs and names are never
+exposed. `preferred` also labels the default when nothing advertises a key.
+The legacy selection source fields retain their `explicit`/`vault` vocabulary.

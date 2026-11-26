@@ -67,9 +67,9 @@ are read only for the selected backend. Empty defaults below mean an empty strin
 | `LIVESYNC_TEXT_VERDICT_CACHE_ENTRIES` | `65536` | Positive integer | Negative verdict LRU bound |
 | `LIVESYNC_SYNC_ONLY_REGEX` | `empty` | Optional | Local allow regex list, literal `|[]|` separators |
 | `LIVESYNC_SYNC_IGNORE_REGEX` | `empty` | Optional | Local ignore regex list |
-| `LIVESYNC_USE_IGNORE_FILES` | `empty` | Optional boolean | Empty/unset derives useIgnoreFiles from vault settings; true/false overrides |
-| `LIVESYNC_IGNORE_FILES` | `empty` | Optional | Empty/unset derives ignoreFiles; non-empty uses JS-trimmed comma names including empty entries; unresolved explicit names warn |
-| `LIVESYNC_SYNC_MAX_SIZE_MB` | `empty` | Finite number or empty | Strict operator override; vault data uses iterative JavaScript numeric coercion; <=0 disables |
+| `LIVESYNC_USE_IGNORE_FILES` | `empty` | Optional boolean | Empty/unset derives useIgnoreFiles from device maps before PREFERRED; true/false overrides |
+| `LIVESYNC_IGNORE_FILES` | `empty` | Optional | Empty/unset derives ignoreFiles from device maps before PREFERRED; non-empty uses JS-trimmed comma names including empty entries; unresolved explicit names warn |
+| `LIVESYNC_SYNC_MAX_SIZE_MB` | `empty` | Finite number or empty | Strict operator override; unset follows advertising devices before PREFERRED, with iterative JavaScript numeric coercion; <=0 disables |
 | `LIVESYNC_DISABLE_CHECKING_CONFIG_MISMATCH` | `false` | Boolean | Bypass ordinary tweak differences, never identity/E2EE guards; CouchDB compression follows the vault independently |
 | `LIVESYNC_AUTO_ACCEPT_COMPATIBLE_TWEAK` | `true` | Boolean | Align fully advertised compatible-lossy tweaks |
 | `LIVESYNC_JOURNAL_MAX_LINE_BYTES` | `268435456` | Positive integer <2**63 | UTF-8 record bytes |

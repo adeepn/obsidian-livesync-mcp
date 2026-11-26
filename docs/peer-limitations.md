@@ -51,7 +51,7 @@ memory or that every server permits that input.
 | Refusal family | Pinned behaviour and peer reason | Remedy |
 | --- | --- | --- |
 | E2EE, obfuscated paths, encrypted chunks | Plugin supports encryption; peer does not implement it (`livesync_format.py:validate_vault_settings`; upstream encryption/identity sources inventoried in [the specification](superpowers/specs/2026-11-23-settings-parity.md)). | Use an unencrypted/unobfuscated test vault until issues #3/#4 are implemented. Do not disable encryption on a working vault just to connect this peer. |
-| Missing/unreadable/disagreeing effective identity, size, splitter, ignore or tweak snapshots | Peer cannot choose a safe writer policy without an authoritative or agreeing map (`livesync_format.py:resolve_*`; upstream tweak checks `C:common/models/tweak.definition.ts:1-138`, identity `C:services/base/PathService.ts:86-105`). | Align devices/PREFERRED or use the named documented override; refresh/restart. Inactive unusable ignore names do not refuse; explicit unresolved names only warn. |
+| Missing/unreadable/disagreeing effective identity, size, splitter, ignore or tweak snapshots | Peer cannot choose a safe writer policy without an authoritative or agreeing map (`livesync_format.py:resolve_*`; upstream tweak checks `C:common/models/tweak.definition.ts:1-138`, identity `C:services/base/PathService.ts:86-105`). | Align devices/PREFERRED or use the named documented override; refresh/restart. Inactive unusable ignore name types do not refuse; unresolved recommendation-policy ambiguity still refuses; explicit unresolved names only warn. |
 | Invalid/unknown hash/derivation configuration | `content_splitter.py:SplitterConfig`; exact upstream algorithms and migration in `C:string_and_binary/chunks.ts:13-72,350-432,527-545`. Unknown splitter version normalization follows upstream; unsupported identity/hash combinations refuse rather than invent IDs. | Correct the named vault settings on devices and refresh. No extra finite cap on scalar coercion after JSON admission. |
 | Proven splitter loops; V2 binary data loss | `content_splitter.py` guards measured nontermination or actual discarded bytes; upstream loop/addition boundaries in `C:string_and_binary/chunks.ts:224-252,350-432`. | Use positive piece size and a positive V2 plain minimum as the typed reason directs. Empty inputs, terminating zero/negative cells and V3 retain native outcomes. [Cell boundaries](vault-format.md#invalid-writer-parameters). |
 | True chunk/path collisions, shared-leaf replacement | Both backends preflight IDs and data; upstream computes content IDs in `C:string_and_binary/chunks.ts:13-72`. Refusing protects another document sharing the ID. | Resolve the conflicting leaf in Obsidian or coordinate a different hash/positive chunk size. Journal compares TextEncoder-projected bytes; equal projected data is not a false collision. |
@@ -89,10 +89,10 @@ combination. [Source inventory and caveats](superpowers/specs/2026-11-23-setting
 | `hashAlg` | xxhash64, xxhash32, mixed-purejs, sha1, empty | Identical | Upstream UTF-16 length and hash semantics |
 | `customChunkSize` | JSON value; number >=0 in UI (default 0) | Device coercion; loops/data loss refuse | JavaScript truthiness/ToNumber coercion; V1 plain cap zero advances one UTF-16 unit; V3 clamps; see [loop refusals](vault-format.md#invalid-writer-parameters) |
 | `minimumChunkSize` | JSON value; numeric in UI (default 20) | Identical wherever the plugin terminates | Original JSON values retain JavaScript ToPrimitive/addition (including array/string concatenation); negative, empty, null and NaN follow upstream coercion; only V2 nonempty plain minima whose addition preserves positive zero loop |
-| `syncMaxSizeInMB` | Any JSON type; iterative JavaScript numeric coercion; default 50 | Identical | Device write admission and automatic text access budget resolution; textual files remain scan-eligible independent of extension; aggregate caps default unlimited; oversized rename refuses to protect source |
+| `syncMaxSizeInMB` | Any JSON type; iterative JavaScript numeric coercion; default 50 | Identical | Advertising device policy before PREFERRED; device write admission and automatic text access budget resolution; textual files remain scan-eligible independent of extension; aggregate caps default unlimited; oversized rename refuses to protect source |
 | `syncOnlyRegEx`, `syncIgnoreRegEx` | ECMAScript pattern lists | Identical when configured | Set local env explicitly; never inferred from milestone |
-| `useIgnoreFiles` | Any JSON type; JavaScript truthiness | Identical | Derived from vault settings unless overridden; active policy requires Node.js 22+ |
-| `ignoreFiles` | Filename list | Identical | Derived from vault settings unless overridden; exact comma split/JS trim; missing or unusable names add no rules; explicit unresolved names warn |
+| `useIgnoreFiles` | Any JSON type; JavaScript truthiness | Identical | Derived from advertising device maps before PREFERRED unless overridden; active policy requires Node.js 22+ |
+| `ignoreFiles` | Filename list | Identical | Derived from advertising device maps before PREFERRED unless overridden; exact comma split/JS trim; missing or unusable names add no rules; explicit unresolved names warn |
 | `useEden` and count/length/age controls | Boolean / numbers | Identical | Current upstream writes empty Eden regardless; historical inline chunks readable |
 | `longLineThreshold` | Numeric (default 250) | Identical | Unused by dispatched algorithms at this pin |
 | `encrypt`, `E2EEAlgorithm`, `useDynamicIterationCount`, `encryptInternalMetadata` | E2EE options | Not supported for E2EE | Encrypted vaults fail startup; no encryption/decryption |
@@ -211,7 +211,7 @@ Caller-provided lone units retain Blob ingress replacement with
   Cyclic Python arrays use native empty-field cycle handling.
   Device maps refuse only when effective policies disagree; an object whose
   toString prevents numeric conversion needs correction in the vault.
-- Ignore-file selection derives from vault settings unless independently overridden.
+- Ignore-file selection derives from advertising device maps before PREFERRED unless independently overridden.
   Active selection requires Node.js 22+, including vault useIgnoreFiles=true.
   LIVESYNC_USE_IGNORE_FILES=false is allowed, but devices drop peer writes to
   ignored paths. Reads bypass all filters, including explicitly configured filters;
@@ -388,3 +388,32 @@ CouchDB response outcomes use an explicit endpoint-purpose table: read-only POST
 `_all_docs`/`_changes` refusals carry no publication uncertainty. Undeclared
 operations refuse before sending with upgrade guidance; write and orphan-leaf
 recovery is unchanged. [Endpoint inventory](vault-format.md#unreadable-write-acknowledgements).
+
+## Recommendation-only writer policy
+
+`syncMaxSizeInMB`, `useIgnoreFiles`, and `ignoreFiles` resolve independently
+from device maps advertising that key, before consulting PREFERRED. An explicit
+operator override always wins. Equal effective device policies use that value;
+disagreement uses the greatest positive numeric `tweakModified`. If disagreeing
+newest devices tie, or no device has a positive timestamp, use PREFERRED when
+it advertises the key. Otherwise refuse with the setting name and its override:
+`LIVESYNC_SYNC_MAX_SIZE_MB`, `LIVESYNC_USE_IGNORE_FILES`, or
+`LIVESYNC_IGNORE_FILES`. When no device advertises a key, use PREFERRED, then
+the device default. JavaScript size coercion, boolean truthiness and comma-name
+splitting still apply. Only maps advertising the individual key vote.
+
+This follows recommendation-only device behavior, not the compatibility
+baseline: required and compatible-lossy settings retain their existing
+PREFERRED-based assessment. Journal refresh validates the selection, size,
+derived text budget and provenance before installing the complete candidate.
+Rejected candidates preserve the previous effective snapshot. The peer never
+registers a device or publishes PREFERRED.
+
+`backend_info` and `obsidian_vault_stats` expose `recommendation_policy`, keyed
+by these three setting names. Each entry contains `source` (`override`,
+`device`, or `preferred`), integer `device_count`, and boolean `disagree`.
+Size and use-ignore entries expose the resolved numeric/boolean `value`;
+ignore names expose only integer `name_count`. A nonfinite unlimited size is
+reported as JSON null rather than a nonstandard numeric token. Device IDs and names are never
+exposed. `preferred` also labels the default when nothing advertises a key.
+The legacy selection source fields retain their `explicit`/`vault` vocabulary.

@@ -35,7 +35,7 @@ from publication_notices import complete_publication, ingress_notices, split_not
 
 from wire_encoding import text_encoder_string, surrogate_count
 
-from diagnostic_hygiene import (writer_diagnostic, diagnostic, settings_exception_diagnostic, PublicDiagnostic, setting_key,
+from diagnostic_hygiene import (recommendation_fields, writer_diagnostic, diagnostic, settings_exception_diagnostic, PublicDiagnostic, setting_key,
     DiagnosticCode, assessment_fields, setting_value, fingerprint, cause_name)
 
 from text_eligibility import TextAccessPolicy, project_note, scan_text
@@ -75,7 +75,7 @@ from livesync_format import (
     assemble_binary,
     canonical_path,
     resolve_content_splitter, resolve_tweak_startup,
-    resolve_sync_max_size, resolve_ignore_settings,
+    resolve_writer_policy, writer_policy_summary, resolve_ignore_settings,
     clone_metadata,
     prepare_file_content,
     is_note_document,
@@ -276,6 +276,9 @@ class JournalBackend(TextAccessPolicy, DeviceSelection):
                 )
             logger.warning('journal bucket has no milestone and no journal files; treating it as a fresh vault with legacy path identity')
             self.resolve_selection_settings({'pathNormalizationVersion': 0})
+            self._recommendation_policy = writer_policy_summary(resolve_writer_policy(
+                {'pathNormalizationVersion': 0}, size_override=self.sync_max_size_mb_override,
+                use_override=self._selection_overrides[0], names_override=self._selection_overrides[1]))
             identity = PATH_IDENTITY_LEGACY
             self._splitter = ContentSplitter()
             self.sync_max_size_mb = (50 if self.sync_max_size_mb_override is None
@@ -285,8 +288,10 @@ class JournalBackend(TextAccessPolicy, DeviceSelection):
                 logger.warning('vault milestone has advisory locked: true flag; remote marked as rebuilt; peer performs full replay')
             try:
                 self.resolve_selection_settings(milestone)
-                if self.sync_max_size_mb_override is None:
-                    resolve_sync_max_size(milestone)  # retain all-device fallback guards
+                policies = resolve_writer_policy(milestone, size_override=self.sync_max_size_mb_override,
+                    use_override=self._selection_overrides[0], names_override=self._selection_overrides[1])
+                self.sync_max_size_mb = policies[0].value
+                self._recommendation_policy = writer_policy_summary(policies)
                 resolved = resolve_tweak_startup(milestone,
                     disable_checking_config_mismatch=getattr(self, 'disable_checking_config_mismatch', False),
                     auto_accept_compatible_tweak=getattr(self, 'auto_accept_compatible_tweak', True))
@@ -295,8 +300,6 @@ class JournalBackend(TextAccessPolicy, DeviceSelection):
                     logger.info("tweak alignment: %s; keys: %s", side if side in ("CURRENT", "REMOTE") else "<value hidden>", ", ".join(setting_key(k) for k in resolved.differing_keys))
                 milestone = dict(resolved.settings)
                 identity = resolve_path_identity(milestone)
-                self.sync_max_size_mb = (resolve_sync_max_size(milestone)
-                    if self.sync_max_size_mb_override is None else self.sync_max_size_mb_override)
                 self._splitter = resolve_content_splitter(milestone)
             except UnsupportedWriterSettings as exc:
                 self._splitter = None
@@ -378,16 +381,16 @@ class JournalBackend(TextAccessPolicy, DeviceSelection):
             # VaultService.ts:73-81 and targetFilter.ts:132-137 consume the
             # same realised snapshot. Validate the complete tuple before any
             # effective field is installed, including the derived text budget.
-            candidate_size = self.sync_max_size_mb_override
-            if candidate_size is None:
-                if milestone is None:
-                    candidate_size = 50
-                else:
-                    resolve_sync_max_size(milestone)  # retain all-device guards
-                    resolved = resolve_tweak_startup(milestone,
-                        disable_checking_config_mismatch=getattr(self, 'disable_checking_config_mismatch', False),
-                        auto_accept_compatible_tweak=getattr(self, 'auto_accept_compatible_tweak', True))
-                    candidate_size = resolve_sync_max_size(dict(resolved.settings))
+            policies = resolve_writer_policy(candidate_milestone,
+                size_override=self.sync_max_size_mb_override,
+                use_override=overrides[0], names_override=overrides[1])
+            if milestone is not None and self.sync_max_size_mb_override is None:
+                # Preserve the existing compatibility gate; its selected map
+                # must not replace the independently resolved recommendations.
+                resolve_tweak_startup(milestone,
+                    disable_checking_config_mismatch=getattr(self, 'disable_checking_config_mismatch', False),
+                    auto_accept_compatible_tweak=getattr(self, 'auto_accept_compatible_tweak', True))
+            candidate_size = policies[0].value
             candidate_text = TextAccessPolicy()
             candidate_text._text_budget_override = self._text_budget_override
             candidate_text.sync_max_size_mb = candidate_size
@@ -406,6 +409,7 @@ class JournalBackend(TextAccessPolicy, DeviceSelection):
             raise UnsupportedVault(self._selection_resolution_diagnostic) from exc
         self._selection_overrides = overrides
         self.selection_use_ignore_files, self.selection_ignore_files = candidate_selection
+        self._recommendation_policy = writer_policy_summary(policies)
         self._sync_max_size_mb = candidate_size
         self._effective_text_budget = candidate_text.text_scan_max_bytes
         self._selection_resolution_diagnostic = None
@@ -496,6 +500,7 @@ class JournalBackend(TextAccessPolicy, DeviceSelection):
         return {
             **selection,
             **self.text_limits(),
+            "recommendation_policy": recommendation_fields(getattr(self, "_recommendation_policy", {})),
             "tweak_assessment": assessment_fields(self._tweak_assessment),
             "writer_supported": self._writer_unsupported_reason is None and selection["selection_writer_supported"],
             "writer_unsupported_reason": writer_diagnostic(self._writer_unsupported_reason or selection["selection_unsupported_reason"]),

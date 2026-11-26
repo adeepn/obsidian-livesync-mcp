@@ -187,7 +187,7 @@ def test_vault_ignore_derivation_documentation_contract():
     for setting in ('useIgnoreFiles', 'ignoreFiles'):
         row = next(line for line in readme.splitlines() if line.startswith('| `' + setting + '` |'))
         assert '| Identical |' in row
-        assert 'Derived from vault settings unless overridden' in row
+        assert 'Derived from advertising device maps before PREFERRED unless overridden' in row
     focused = (ROOT / 'docs/selection-filters.md').read_text()
     assert 'Reads bypass all selection filters, including explicitly configured filters.' in focused
     assert 'Missing or unreadable ignore files are treated as absent, matching upstream.' in focused
@@ -1149,3 +1149,15 @@ def test_lossless_legacy_boundary_contract():
     assert 'Lossless text boundaries' in (ROOT / 'docs/vault-format.md').read_text()
     assert 'extract_lossless_vectors.mjs' in (ROOT / 'AGENTS.md').read_text()
     assert '2026-11-26 — F13' in (ROOT / 'docs/superpowers/specs/2026-11-23-settings-parity.md').read_text()
+
+
+def test_recommendation_only_policy_documentation():
+    for name in ('docs/tweak-compatibility.md', 'docs/peer-limitations.md',
+                 'docs/selection-filters.md', 'docs/size-policy.md'):
+        text = (ROOT / name).read_text()
+        for term in ('Recommendation-only writer policy', 'device_count', 'disagree',
+                     'name_count', 'tweakModified', 'LIVESYNC_SYNC_MAX_SIZE_MB',
+                     'LIVESYNC_USE_IGNORE_FILES', 'LIVESYNC_IGNORE_FILES'):
+            assert term in text, (name, term)
+    assert 'Device-derived recommendation-only policy' in (ROOT / 'README.md').read_text()
+    assert 'device maps precede PREFERRED' in (ROOT / '.env.example').read_text()
