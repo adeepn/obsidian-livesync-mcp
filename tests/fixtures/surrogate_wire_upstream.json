@@ -34,20 +34,20 @@
     {
       "version": "v2",
       "pieces": [
-        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa🙂",
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa�",
         "z"
       ]
     },
     {
       "version": "v2-segmenter",
       "pieces": [
-        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa🙂",
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa�",
         "z"
       ]
     }
   ],
   "witness": {
-    "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa🙂z",
+    "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\ud83dz",
     "path": "witness.MD",
     "settings": {
       "chunkSplitterVersion": "v1",
@@ -57,11 +57,11 @@
     },
     "pieces": [
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\ud83d",
-      "\ude42z"
+      "z"
     ],
     "ids": [
       "h:MFIsViFjIWfbAEOR3gMXH5HVWB8=",
-      "h:uAJXulJ01jiaDA8xMaFQJL21A0s="
+      "h:C8sEOqf41XxnZ4wTjOw2mU0lheU="
     ]
   },
   "vectors": [
@@ -75,14 +75,14 @@
           "_rev": ""
         },
         {
-          "_id": "h:uAJXulJ01jiaDA8xMaFQJL21A0s=",
-          "data": "\ude42z",
+          "_id": "h:C8sEOqf41XxnZ4wTjOw2mU0lheU=",
+          "data": "z",
           "type": "leaf",
           "_rev": ""
         }
       ],
-      "transport_replacements": 2,
-      "frame_b64": "fmg6TUZJc1ZpRmpJV2ZiQUVPUjNnTVhINUhWV0I4PR9hYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWHvv70Kfmg6dUFKWHVsSjAxamlhREE4eE1hRlFKTDIxQTBzPR/vv716Cg==",
+      "transport_replacements": 1,
+      "frame_b64": "fmg6TUZJc1ZpRmpJV2ZiQUVPUjNnTVhINUhWV0I4PR9hYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWHvv70Kfmg6QzhzRU9xZjQxWHhuWjR3VGpPdzJtVTBsaGVVPR96Cg==",
       "decoded": [
         {
           "_id": "h:MFIsViFjIWfbAEOR3gMXH5HVWB8=",
@@ -91,15 +91,15 @@
           "_rev": ""
         },
         {
-          "_id": "h:uAJXulJ01jiaDA8xMaFQJL21A0s=",
-          "data": "�z",
+          "_id": "h:C8sEOqf41XxnZ4wTjOw2mU0lheU=",
+          "data": "z",
           "type": "leaf",
           "_rev": ""
         }
       ],
       "couchdb_json": [
         "{\"_id\":\"h:MFIsViFjIWfbAEOR3gMXH5HVWB8=\",\"data\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\\ud83d\",\"type\":\"leaf\",\"_rev\":\"\"}",
-        "{\"_id\":\"h:uAJXulJ01jiaDA8xMaFQJL21A0s=\",\"data\":\"\\ude42z\",\"type\":\"leaf\",\"_rev\":\"\"}"
+        "{\"_id\":\"h:C8sEOqf41XxnZ4wTjOw2mU0lheU=\",\"data\":\"z\",\"type\":\"leaf\",\"_rev\":\"\"}"
       ]
     },
     {

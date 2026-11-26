@@ -55,7 +55,7 @@ memory or that every server permits that input.
 | Invalid/unknown hash/derivation configuration | `content_splitter.py:SplitterConfig`; exact upstream algorithms and migration in `C:string_and_binary/chunks.ts:13-72,350-432,527-545`. Unknown splitter version normalization follows upstream; unsupported identity/hash combinations refuse rather than invent IDs. | Correct the named vault settings on devices and refresh. No extra finite cap on scalar coercion after JSON admission. |
 | Proven splitter loops; V2 binary data loss | `content_splitter.py` guards measured nontermination or actual discarded bytes; upstream loop/addition boundaries in `C:string_and_binary/chunks.ts:224-252,350-432`. | Use positive piece size and a positive V2 plain minimum as the typed reason directs. Empty inputs, terminating zero/negative cells and V3 retain native outcomes. [Cell boundaries](vault-format.md#invalid-writer-parameters). |
 | True chunk/path collisions, shared-leaf replacement | Both backends preflight IDs and data; upstream computes content IDs in `C:string_and_binary/chunks.ts:13-72`. Refusing protects another document sharing the ID. | Resolve the conflicting leaf in Obsidian or coordinate a different hash/positive chunk size. Journal compares TextEncoder-projected bytes; equal projected data is not a false collision. |
-| Invalid UTF-8 plain attachment input; surrogate/Blob/BOM transformations | Plain paths require text; binary paths preserve bytes. Device splitting/Blob conversion may remove BOM or replace invalid code units (`C:string_and_binary/chunks.ts:224-252,350-432`; journal encoding `C:replication/journal/journalRecords.ts:69-77`). | Use a binary attachment path or explicitly opt into `lossy_text=true`; inspect typed publication notices. CouchDB 3.5.3 rejects lone-surrogate JSON: peer preflight refuses without leaf publication; choose v3 or another surrogate-safe splitter. |
+| Invalid UTF-8 plain attachment input; surrogate/Blob/BOM transformations | Plain paths require text; binary paths preserve bytes. Device splitting/Blob conversion may remove BOM or replace invalid code units (`C:string_and_binary/chunks.ts:224-252,350-432`; journal encoding `C:replication/journal/journalRecords.ts:69-77`). | Use a binary attachment path or explicitly opt into `lossy_text=true`; inspect typed publication notices. CouchDB 3.5.3 rejects lone-surrogate JSON: peer preflight refuses without leaf publication; restore raw lone-unit leaves from a healthy device or supply valid text. Valid astral cuts are protected automatically. |
 | Compression markers/corruption | Upstream compression interprets reserved markers (`C:pouchdb/compress.ts:9-71`); peer reads them and refuses malformed compressed data or a lossy publication collision. | Restore corrupt content from a healthy device/backup; use a binary attachment path to preserve literal prefix bytes. CR/LF and BOM-preserving writes deliberately stay uncompressed. [Compression](vault-format.md#couchdb-compression). |
 | Note/path/revision preconditions; excluded/oversized rename | Existing/missing note, stale revision, hidden/service namespace and corrupt chunk/reference checks prevent overwrite or protocol damage. Plugin move admission may delete the synced source after moving its retained disk file (`C:managers/StorageEventManager/admission.ts:78-108,124-130`). | Re-read latest revision, choose intended overwrite/create operation, admitted path/size and ordinary namespace. Peer refuses a dangerous rename because it has no destination disk copy. Service tools are out of scope, not fundamentally impossible. |
 | Remote wipe/epoch/identity changes; unavailable storage; ambiguous publication | Peer retains local revisions/chunks, quarantines incompatible identity state, and does not silently retry uncertain writes. Upstream journal sync parameters/control flow: `C:replication/journal/JournalSyncCore.ts:168-229,895-920`. | Refresh/rebuild as guided; inspect local-only survivors; re-read affected paths after outcome unknown. Never reset state or republish survivors without an explicit retention decision. |
@@ -84,7 +84,7 @@ combination. [Source inventory and caveats](superpowers/specs/2026-11-23-setting
 | `forcePathStyle` | Boolean, default true | Identical for configured endpoints | S3_FORCE_PATH_STYLE=true/false; SDK addressing rules still apply |
 | `pathNormalizationVersion` | 0 legacy / 1 NFC | Identical | Both, independently of filename case; collisions refuse |
 | `handleFilenameCaseSensitive` | false / true | Identical | Legacy, NFC, case-sensitive and NFC+case-sensitive identities |
-| `chunkSplitterVersion` | v1, v2, v2-segmenter, v3-rabin-karp, legacy empty | Identical | All writers; legacy split-surrogate pieces retain device IDs; CouchDB refuses unpaired units as devices do; journal collisions compare projected bytes; v2-segmenter equals v2 at this pin |
+| `chunkSplitterVersion` | v1, v2, v2-segmenter, v3-rabin-karp, legacy empty | Lossless text boundary exception | All writers; V1 non-plain and plain zero-cap cuts extend one UTF-16 unit and reset the next nominal size; moved pieces get new IDs; safe cuts, binary splits and reads are identical; journal collisions compare projected bytes; v2-segmenter equals v2 at this pin |
 | `enableChunkSplitterV2`, `useSegmenter` | false / true (legacy migration) | Identical | One-pass migration of empty version; unknown version normalization follows upstream |
 | `hashAlg` | xxhash64, xxhash32, mixed-purejs, sha1, empty | Identical | Upstream UTF-16 length and hash semantics |
 | `customChunkSize` | JSON value; number >=0 in UI (default 0) | Device coercion; loops/data loss refuse | JavaScript truthiness/ToNumber coercion; V1 plain cap zero advances one UTF-16 unit; V3 clamps; see [loop refusals](vault-format.md#invalid-writer-parameters) |
@@ -138,11 +138,14 @@ writes. Unconditional fallback PUT always uses one attempt, even then. See
 
 [Dated acceptance corrections](upstream-pin.md#2026-11-25-acceptance-corrections).
 
-CouchDB 3.5.3 rejects unpaired UTF-16 surrogate JSON escapes, including device
-writes. The peer refuses the complete write before publishing any leaf. V1's
-non-plain text splitter can cut inside an emoji pair; use a vault splitter with
-surrogate protection such as v3, or avoid synchronizing that note. Journal
-TextEncoder replacement and device chunk IDs remain unchanged.
+The peer extends a legacy text cut one UTF-16 unit to keep a valid surrogate
+pair together, then resets the next piece to its full nominal size. This applies
+to V1 non-plain text and V1 plain zero caps; all other safe partitions/IDs remain
+identical. Binary cuts and reads are unchanged. There is no switch.
+CouchDB 3.5.3 rejects lone-surrogate leaves before publication; journal TextEncoder
+still replaces lone units with U+FFFD and reports `transport_replacements`.
+Caller-provided lone units retain Blob ingress replacement with
+`input_surrogates_replaced` on both backends. See [lossless boundaries](vault-format.md#lossless-text-boundaries).
 
 - CouchDB auth is explicit local configuration: choose Basic credentials or the
   JWT environment group, independently of MCP client auth. JWT requires PKCS8 EC keys for ES256/ES512 (SEC1 is rejected);

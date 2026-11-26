@@ -76,7 +76,7 @@ async def test_real_couchdb_matrix(raw_client, scratch_database, case):
         await b.close()
 
 
-async def test_real_couchdb_surrogate(raw_client, scratch_database):
+async def test_real_couchdb_surrogate(raw_client, scratch_database, monkeypatch):
     # chunks.ts:243-252 cuts UTF-16; real CouchDB 3.5.3 rejects lone escapes.
     from storage_base import WriterParameterRefused
     from diagnostic_codes import DiagnosticCode
@@ -87,10 +87,11 @@ async def test_real_couchdb_surrogate(raw_client, scratch_database):
         requests.append(request.method)
     try:
         await b.startup_check()
+        monkeypatch.setattr(b._splitter, 'split', lambda *a, **kw: W['pieces'])
         b._client.event_hooks['request'].append(capture)
         before = (await raw_client.get(scratch_database)).json()['update_seq']
         with pytest.raises(WriterParameterRefused) as caught:
-            await b._write_content(W['path'], W['input'], len(W['input'].encode()), 'plain', create=True, overwrite=False)
+            await b._write_content(W['path'], W['input'].encode('utf-8', 'surrogatepass'), len(W['input'].encode('utf-8', 'surrogatepass')), 'plain', create=True, overwrite=False)
         assert caught.value.diagnostic.code == DiagnosticCode.COUCHDB_SURROGATE_REFUSED
         assert requests == []
         assert (await raw_client.get(scratch_database)).json()['update_seq'] == before

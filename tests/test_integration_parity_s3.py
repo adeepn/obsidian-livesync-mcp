@@ -70,12 +70,13 @@ async def test_real_s3_matrix(minio, case):
     published_keys(spy)
 
 
-async def test_real_s3_surrogate(minio):
+async def test_real_s3_surrogate(minio, monkeypatch):
     # Native journalRecords.ts:69-108 replaces lone units with U+FFFD.
     peer, _, _, _, _ = minio
     await seed_settings(peer, W['settings'])
     writer, spy = await peer('writer')
-    result = await writer._write_content(W['path'], W['input'], len(W['input'].encode()), 'plain', create=True, overwrite=False)
+    monkeypatch.setattr(writer._splitter, 'split', lambda *a, **kw: W['pieces'])
+    result = await writer._write_content(W['path'], W['input'].encode('utf-8', 'surrogatepass'), len(W['input'].encode('utf-8', 'surrogatepass')), 'plain', create=True, overwrite=False)
     assert result['transport_replacements'] == REPLACEMENTS
     reader, _ = await peer('reader')
     await reader.refresh(force=True)

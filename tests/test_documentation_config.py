@@ -1134,3 +1134,18 @@ def test_couchdb_request_purpose_documented():
                  'write-leaf', 'CouchDBRequestPurposeRefused', '_design', '_view',
                  '_find', 'upgrade', 'before sending'):
         assert term in text
+
+
+def test_lossless_legacy_boundary_contract():
+    for name in ('README.md','.env.example','docs/vault-format.md',
+                 'docs/peer-limitations.md','docs/s3-journal.md','CHANGELOG.md'):
+        text = (ROOT / name).read_text()
+        assert 'UTF-16 unit' in text, name
+        assert 'nominal size' in text or 'nominal' in text, name
+    outcomes = (ROOT / 'docs/outcome-reporting.md').read_text()
+    assert 'never creates these from valid astral text' in outcomes
+    assert 'input_surrogates_replaced' in outcomes
+    assert 'transport_replacements' in outcomes
+    assert 'Lossless text boundaries' in (ROOT / 'docs/vault-format.md').read_text()
+    assert 'extract_lossless_vectors.mjs' in (ROOT / 'AGENTS.md').read_text()
+    assert '2026-11-26 — F13' in (ROOT / 'docs/superpowers/specs/2026-11-23-settings-parity.md').read_text()

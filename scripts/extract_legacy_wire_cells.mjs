@@ -29,7 +29,12 @@ for (const vector of oracle.grid.filter(v=>v.payload==='g3-surrogate')) {
     const frame=Buffer.concat(docs.map(doc=>Buffer.from(ctx.serializeDoc(doc))));
     const decoded=ctx.decodeJournalRecords(new Uint8Array(frame));
     if (!decoded.ok) throw Error('Upstream journal decode');
-    rows.push({id:vector.id,pieces:decoded.docs.map(d=>d.data),children:decoded.docs.map(d=>d._id),frame_base64:frame.toString('base64')});
+    const losslessDocs=vector.lossless_pieces.map((index,i)=>({_id:vector.lossless_children[i],data:oracle.pieces[index],type:'leaf',_rev:''}));
+    const losslessFrame=Buffer.concat(losslessDocs.map(doc=>Buffer.from(ctx.serializeDoc(doc))));
+    const losslessDecoded=ctx.decodeJournalRecords(new Uint8Array(losslessFrame));
+    if (!losslessDecoded.ok) throw Error('Upstream lossless journal decode');
+    rows.push({id:vector.id,pieces:decoded.docs.map(d=>d.data),children:decoded.docs.map(d=>d._id),frame_base64:frame.toString('base64'),
+        lossless_pieces:losslessDecoded.docs.map(d=>d.data),lossless_children:losslessDecoded.docs.map(d=>d._id),lossless_frame_base64:losslessFrame.toString('base64')});
 }
 fs.writeFileSync(output,JSON.stringify({upstream_commit:pin,node:process.version,source_sha256:sources,
     inputs_sha256:sha(fs.readFileSync(input)),splitter_dependency:oracle.decoder_dependency,

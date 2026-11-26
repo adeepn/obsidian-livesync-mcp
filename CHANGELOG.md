@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Settings parity
 
+- Keep valid surrogate pairs together in V1 non-plain and plain zero-cap text
+  writes by extending the cut one UTF-16 unit and resetting the next nominal
+  size. Recompute moved-piece IDs; preserve safe partitions, binary splits,
+  reads and caller lone-unit ingestion/wire handling.
+
 - Classify CouchDB response failures by endpoint purpose: read-only POST remains
   a typed refusal; write acknowledgements retain uncertainty and recovery.
   Refuse undeclared operations before sending with upgrade guidance.

@@ -72,6 +72,9 @@ See the [complete environment reference](docs/configuration.md).
 | --- | --- | --- |
 | `LIVESYNC_COUCHDB_MAX_INFLATED_BYTES` | Splitter-derived, 32 MiB floor | Raise and restart for legitimate larger HTTP/document responses; read-only POST remains a typed refusal; an unreadable write acknowledgement is outcome unknown: re-read before retrying. |
 
+Legacy lossless text cuts are always enabled, without an environment variable.
+They extend a cut one UTF-16 unit and reset the next piece to its full nominal size.
+
 ## Backends
 
 ### CouchDB
@@ -97,7 +100,7 @@ and [source and live evidence](docs/upstream-pin.md).
 | Settings | Status | Details |
 |---|---|---|
 | Path normalization and filename case | Identical | Legacy/NFC, insensitive/sensitive identities |
-| Splitter versions and legacy migration | Identical where terminating and lossless | [Exact coercion and guards](docs/vault-format.md#invalid-writer-parameters) |
+| Splitter versions and legacy migration | Lossless text cuts; otherwise identical where terminating and lossless | [Exact coercion and guards](docs/vault-format.md#invalid-writer-parameters) |
 | Chunk hashes, Eden, long-line threshold | Identical at pin | [Full settings table](docs/peer-limitations.md#supported-vault-settings) |
 | File size and ignore-file selection | Identical admission; local overrides | [Size](docs/size-policy.md), [selection](docs/selection-filters.md) |
 | Headers, JWT and addressing | Explicit local connection settings | [Connection setup](docs/connecting-storage.md) |
@@ -127,7 +130,10 @@ refusal conditions and recovery instructions. The main practical differences:
   [Selection and size behavior](docs/peer-limitations.md#how-the-peer-differs-from-a-device).
 - Native nontermination, data loss, unsafe renames and chunk collisions refuse before publication.
   [Exact guards and remedies](docs/peer-limitations.md#how-the-peer-differs-from-a-device).
-- Compression preserves CR/LF and leading BOM; CouchDB refuses unpaired surrogates.
+- Legacy text cuts keep valid astral characters together by extending the piece
+  one UTF-16 unit; the next piece uses its full nominal size. Binary cuts and reads
+  are unchanged. Compression preserves CR/LF and leading BOM; CouchDB refuses
+  lone-surrogate leaves. Caller-provided lone units retain Blob ingress replacement.
   [Transport and compression](docs/peer-limitations.md#how-the-peer-differs-from-a-device).
 - Successful lossy writes disclose typed notices. Unreadable write acknowledgements
   are outcome unknown; re-read before retrying, especially non-idempotent append.

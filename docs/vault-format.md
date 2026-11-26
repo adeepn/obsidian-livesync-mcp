@@ -89,11 +89,9 @@ The following guards refuse actual upstream nontermination. Separate data-loss a
 
 Empty Blobs retain the tested primitive-parameter behavior; a noncallable own toString can throw during required coercion. V2 text groups containing
 a single code point (including a surrogate pair) terminate with a finite
-nonpositive cap. V1 plain zero-cap splitting emits
-one UTF-16 unit per piece, intentionally splitting surrogate pairs. Different
-lone surrogates can share an xxhash ID after TextEncoder replacement; the
-existing collision guard protects shared data. Use a collision-free hash mode
-(such as SHA1 for the committed surrogate witness) or a positive pieceSize.
+nonpositive cap. The plugin's V1 plain zero-cap splitter emits one UTF-16 unit
+per piece. The peer instead keeps each valid pair together; lone units are
+not paired with unrelated characters. See the lossless text boundary rule below.
 
 These rules follow commonlib@484c164 `chunks.ts:234-250,297-313,350-371,
 418-432,473-491,527-545`. `scripts/extract_legacy_cells.mjs` commits all 864
@@ -123,11 +121,31 @@ characters, matching PouchDB HTTP adapter 9.0.0 `lib/index.es.js:765-773`
 but CouchDB 3.5.3 rejects that document with HTTP 400, “invalid UTF-8 JSON”.
 The peer therefore refuses a complete publication containing such a unit
 before sending any leaf; a device-shaped request is rejected by that server too.
-Legacy V1 can split an emoji pair (`chunks.ts:243-252`); choose a surrogate-safe
-splitter such as v3 rather than expecting later leaf joining to repair the
-server rejection. Chunk IDs are unchanged. No replacement publication occurs
-and CouchDB has no `transport_replacements` count. The journal instead mirrors
-TextEncoder replacement; see [surrogate wire encoding](s3-journal.md#surrogate-wire-encoding).
+The peer's own valid astral text never creates lone-surrogate leaves. Caller
+lone units undergo the existing Blob USVString ingress replacement and
+`input_surrogates_replaced` notice; raw lone-unit leaves still refuse in CouchDB.
+CouchDB has no `transport_replacements` count. Journal wire projection remains
+unchanged; see [surrogate wire encoding](s3-journal.md#surrogate-wire-encoding).
+
+## Lossless text boundaries
+
+The peer extends a nominal text cut by one UTF-16 unit when it falls inside a valid surrogate pair, then starts the next piece at its full nominal size.
+This deliberate lossless difference affects V1 non-plain text (`chunks.ts:243-252`)
+and V1 plain text with a zero cap (`:234-240`, effective cap one). Grouping,
+empty tails and binary partitions are unchanged. Pieces and IDs are byte-identical
+to upstream wherever upstream does not split a pair; moved cuts are hashed anew.
+V1 positive-cap plain text already protects pairs. V2 and V2-segmenter route both
+text paths through `chunkStringGenerator` (`:297-313,350-379`); V3 rejects cuts
+before UTF-8 continuation bytes (`:555-556,617-633`). Reads retain stored children
+and data, including historical plugin corruption; no repair or re-chunking occurs.
+There is no setting or environment switch for this rule.
+
+`scripts/extract_settings_oracle.mjs` and `scripts/extract_lossless_vectors.mjs`
+retain raw upstream pieces/IDs alongside independent JS `lossless_pieces` and
+`lossless_children` hashed by pinned upstream managers. The compressed
+`tests/fixtures/lossless_upstream.json.gz` crosses both text paths, all five hash
+modes, zero caps, safe cuts, groups and lone units with source/dependency provenance.
+
 
 
 ## CouchDB compression
@@ -162,9 +180,10 @@ text: upstream's binary path silently removes line breaks. Without CR/LF the
 base64/text decision matches upstream. CouchDB 3.5.3 rejects lone-surrogate JSON escapes with HTTP 400
 `{"error":"bad_request","reason":"invalid UTF-8 JSON"}` (verified 2026-11-25).
 The backend checks every document string before publication and refuses the
-whole write with `WriterParameterRefused`. V1 non-plain cuts can isolate UTF-16
-units (`chunks.ts:243-252`); use v3's protected text boundaries
-(`chunks.ts:698-699`) or avoid synchronizing the note. Devices fail too.
+whole write with `WriterParameterRefused`. The plugin's V1 non-plain cuts can
+isolate UTF-16 units (`chunks.ts:243-252`); the peer extends those cuts to keep
+valid pairs together. Raw lone-unit leaves still refuse; restore them from a
+healthy device or provide valid text.
 Paired JSON escapes and ordinary UTF-8 emoji are accepted. Journal leaves still
 use the upstream TextEncoder replacement; JSON serialization is unchanged. Leading-BOM text is also uncompressed, since Blob.text()
 would strip that BOM on read. Every device accepts these uncompressed values.

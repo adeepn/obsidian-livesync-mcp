@@ -147,8 +147,8 @@
     "id": "N4",
     "owner": "module",
     "function": "_capped",
-    "source": "if (preserve_pairs and maximum > 0 and end < len(text)",
-    "mutation": "if (False and maximum > 0 and end < len(text)",
+    "source": "if (end < len(text)",
+    "mutation": "if (False and end < len(text)",
     "nodes": [
       "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=surrogate:102399]",
       "tests/test_settings_matrix.py::test_settings_text_partition[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=surrogate:102399-couchdb]",
@@ -666,8 +666,8 @@
     "source": "len(units) > 128",
     "mutation": "len(units) >= 128",
     "nodes": [
-      "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v1-hash=sha1-custom=-0.9987841796875-minimum=5-limit=default-document=encoder-exact128]",
-      "tests/test_settings_matrix.py::test_settings_persisted_equality_witness[identity=legacy-splitter=v1-hash=sha1-custom=-0.9987841796875-minimum=5-limit=default-document=encoder-exact128-journal]"
+      "tests/test_splitter_helpers_oracle.py::test_helpers_match_published_dependency",
+      "tests/test_surrogate_wire.py::test_witness_publication_and_fresh_reader[journal]"
     ]
   },
   {
@@ -727,7 +727,7 @@
     "function": "_groups",
     "source": "index < count",
     "mutation": "index <= count",
-    "line": 648,
+    "line": 649,
     "nodes": [
       "tests/test_settings_differential.py::test_settings_splitter_differential[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=fence-only]",
       "tests/test_settings_matrix.py::test_settings_persisted_equality_witness[identity=legacy-splitter=v1-hash=xxhash64-custom=0-minimum=5-limit=default-document=fence-only-couchdb]",
@@ -817,5 +817,116 @@
       "tests/test_legacy_cells.py::test_cell_backend_lifecycle[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=-0.0-limit=default-document=g3-plain-couchdb]",
       "tests/test_legacy_cells.py::test_cell_backend_lifecycle[identity=legacy-splitter=v2-hash=xxhash64-custom=0-minimum=-0.0-limit=default-document=g3-plain-journal]"
     ]
+  },
+  {
+    "id": "F13-nonplain",
+    "owner": "LegacySplitter",
+    "function": "split",
+    "source": "return list(_capped(text, maximum))",
+    "mutation": "return [_from_units(text[i:i+maximum]) for i in range(0, len(text), maximum)]",
+    "nodes": [
+      "tests/test_lossless_legacy.py::test_exact_lossless_partition[v1:cut.MD:sha1:cut]"
+    ]
+  },
+  {
+    "id": "F13-zero",
+    "owner": "module",
+    "function": "_capped",
+    "source": "if (end < len(text)",
+    "mutation": "if (maximum != 0 and end < len(text)",
+    "nodes": [
+      "tests/test_lossless_legacy.py::test_exact_lossless_partition[v1:cut.md:sha1:zero]"
+    ]
+  },
+  {
+    "id": "F13-backward",
+    "owner": "module",
+    "function": "_capped",
+    "source": "end += 1",
+    "mutation": "end -= 1",
+    "nodes": [
+      "tests/test_lossless_legacy.py::test_exact_lossless_partition[v1:cut.MD:sha1:cut]"
+    ]
+  },
+  {
+    "id": "F13-lone",
+    "owner": "module",
+    "function": "_capped",
+    "source": "and 0xdc00 <= ord(text[end]) <= 0xdfff",
+    "mutation": "and True",
+    "nodes": [
+      "tests/test_lossless_legacy.py::test_lone_unit_does_not_extend_cut[row0]"
+    ]
+  },
+  {
+    "id": "F13-carry-cap",
+    "owner": "module",
+    "function": "_capped",
+    "source": "end += 1",
+    "mutation": "end += 1\n            maximum += 1",
+    "nodes": [
+      "tests/test_lossless_legacy.py::test_exact_lossless_partition[v1:cut.MD:sha1:cut]"
+    ]
+  },
+  {
+    "id": "F13-rewind",
+    "owner": "module",
+    "function": "_capped",
+    "source": "start = end",
+    "mutation": "start = end - 1 if end < len(text) else end",
+    "nodes": [
+      "tests/test_lossless_legacy.py::test_exact_lossless_partition[v1:cut.MD:sha1:cut]"
+    ]
+  },
+  {
+    "id": "F13-stale-ids",
+    "owner": "ContentSplitter",
+    "function": "chunk_id_for_piece",
+    "source": "return chunk_id_for_piece(piece, hash_alg=self.hash_alg)",
+    "mutation": "return chunk_id_for_piece(_unit_string(piece)[:-1] if piece and ord(piece[-1]) > 0xffff else piece, hash_alg=self.hash_alg)",
+    "nodes": [
+      "tests/test_lossless_legacy.py::test_exact_lossless_partition[v1:cut.MD:sha1:cut]"
+    ]
+  },
+  {
+    "id": "F13-drop-tail",
+    "owner": "module",
+    "function": "_capped",
+    "source": "yield _from_units(text[start:end])",
+    "mutation": "yield _from_units(text[start:end - 1])",
+    "nodes": [
+      "tests/test_lossless_legacy.py::test_exact_lossless_partition[v1:cut.MD:sha1:cut]"
+    ]
+  },
+  {
+    "id": "F13-all-cuts",
+    "owner": "module",
+    "function": "_capped",
+    "source": "if (end < len(text) and 0xd800 <= ord(text[end - 1]) <= 0xdbff\n                and 0xdc00 <= ord(text[end]) <= 0xdfff):",
+    "mutation": "if end < len(text):",
+    "nodes": [
+      "tests/test_lossless_legacy.py::test_exact_lossless_partition[v1:cut.MD:sha1:safe]"
+    ]
+  },
+  {
+    "id": "F13-plain",
+    "owner": "LegacySplitter",
+    "function": "split",
+    "source": "_capped(group, maximum, v1_plain=True)",
+    "mutation": "(_from_units(group[i:i+maximum]) for i in range(0, len(group), maximum))",
+    "nodes": [
+      "tests/test_lossless_legacy.py::test_exact_lossless_partition[v1:cut.md:sha1:cut]"
+    ]
+  },
+  {
+    "id": "F13-read-repair",
+    "owner": "module",
+    "function": "assemble_text",
+    "source": "\"\".join(chunk_datas)",
+    "mutation": "\"\".join(chunk_datas).replace(\"\\ufffd\\ufffd\", \"\ud83d\ude42\")",
+    "nodes": [
+      "tests/test_lossless_legacy.py::test_historical_journal_cuts_are_not_repaired_on_read"
+    ],
+    "module": "livesync_format"
   }
 ]

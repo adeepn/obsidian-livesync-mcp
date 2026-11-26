@@ -9,9 +9,11 @@ from tests.test_settings_matrix import matrix_vault
 V = json.loads((Path(__file__).parent / 'fixtures/collision_upstream.json').read_text())
 
 @pytest.mark.parametrize('kind', ['journal', 'couchdb'])
-async def test_transport_collision(tmp_path, kind):
+async def test_transport_collision(tmp_path, kind, monkeypatch):
     async with matrix_vault(tmp_path, kind, V['settings']) as (backend, doc, chunks, log, storage):
         await backend.startup_check()
+        # Native lone-unit leaves bypass Blob projection to test wire equality.
+        monkeypatch.setattr(backend._splitter, 'split', lambda *a, **kw: V['pieces'])
         before = await chunks()
         if kind == 'couchdb':
             with pytest.raises(StorageError, match='unpaired UTF-16 surrogate'):
@@ -39,12 +41,13 @@ async def test_different_projected_collision_refuses(tmp_path, monkeypatch):
             await backend.write_note('gate.md', 'AB', create=True)
         assert await chunks() == before
 
-async def test_literal_replacement_before_surrogates_still_reports(tmp_path):
+async def test_literal_replacement_before_surrogates_still_reports(tmp_path, monkeypatch):
     # Same upstream partition/ID multiset, reversed input order; TextEncoder
     # changes the surrogate pieces regardless of which raw piece dedupes first.
     async with matrix_vault(tmp_path,'journal',V['settings']) as (backend,*_):
         await backend.startup_check()
-        result=await backend.write_note('permuted.md','\ufffd🙂',create=True)
+        monkeypatch.setattr(backend._splitter, 'split', lambda *a, **kw: list(reversed(V['pieces'])))
+        result=await backend.write_note('permuted.md','\ufffd\ud83d',create=True)
         assert result['transport_replacements']==1
         assert {'code':'journal_surrogates_replaced','count':1} in result['notices']
         assert (await backend.read_note('permuted.md'))['text']==''.join(d['data'] for d in V['decoded'])
@@ -57,12 +60,14 @@ async def test_literal_replacement_before_surrogates_still_reports(tmp_path):
     ('journal',{'chunkSplitterVersion':'v2','customChunkSize':'PRIVATE_CAP'},'gate.png',b'PRIVATE_INPUT','customChunkSize=0'),
     ('journal',{'chunkSplitterVersion':'v2','minimumChunkSize':0},'gate.md','PRIVATE_INPUT','minimumChunkSize=20'),
 ])
-async def test_mcp_refusal_keeps_typed_recovery(tmp_path,kind,settings,path,data,expected):
+async def test_mcp_refusal_keeps_typed_recovery(tmp_path,kind,settings,path,data,expected,monkeypatch):
     import server
     settings={'pathNormalizationVersion':0,'handleFilenameCaseSensitive':False,**settings}
     async with matrix_vault(tmp_path,kind,settings) as (backend,doc,chunks,*_):
         await backend.startup_check()
         before=await chunks()
+        if data == V['input']:
+            monkeypatch.setattr(backend._splitter, 'split', lambda *a, **kw: V['pieces'])
         token=server._active_backend.set(backend)
         @server._tool_errors(writer=True)
         async def publish():

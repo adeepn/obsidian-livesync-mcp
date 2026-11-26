@@ -75,12 +75,14 @@ and unpaired surrogates become lowercase six-character `\udXXX` escapes.
 The reader remains a fatal UTF-8 decoder (`journalRecords.ts:79-108`).
 Compression wraps these exact frame bytes in raw DEFLATE.
 
-Legacy non-plain V1 cuts can separate an emoji's surrogate pair
-(`src/string_and_binary/chunks.ts:243-252`). V2 `chunkStringGenerator` protects
-pairs at `:307-310`; it does not produce this V1 witness cut.
-The journal transport then stores two U+FFFD characters in its place on every
-device. The peer preserves the original pieces' IDs and follows that same
-transport behavior. Its successful write metadata includes the integer
+The plugin's legacy V1 non-plain and plain zero-cap cuts can separate an
+emoji's surrogate pair (`chunks.ts:234-252`), causing two U+FFFD characters on
+other devices. The peer's own writes extend such cuts one UTF-16 unit and reset
+the next nominal size, preserving valid astral characters and recomputing IDs.
+V2/V2-segmenter/V3 already protect their text cuts. Reads do not repair old
+plugin corruption. Caller-provided lone units still undergo Blob ingress
+replacement (`input_surrogates_replaced`). Wire-level lone-unit handling remains
+unchanged: successful write metadata includes the integer
 `transport_replacements` only when its publication replaced units; tool text adds:
 “The LiveSync journal transport replaces unpaired surrogate units with U+FFFD;
 the note is stored exactly as devices would store it.” Counts refer to emitted

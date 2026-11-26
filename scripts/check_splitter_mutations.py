@@ -18,7 +18,9 @@ MANIFEST = ROOT / 'tests/splitter_mutations.json'
 
 
 def mutated_source(definition):
-    source = (ROOT / 'content_splitter.py').read_text()
+    module_name = definition.get('module', 'content_splitter')
+    assert module_name in ('content_splitter', 'livesync_format')
+    source = (ROOT / (module_name + '.py')).read_text()
     tree = ast.parse(source)
     owner = tree if definition['owner'] == 'module' else next(
         n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == definition['owner'])
@@ -67,10 +69,12 @@ def main():
         definition = next(d for d in definitions if d['id'] == sys.argv[2])
         # Install before collection, so immediate callers import the mutated
         # functions/classes too. No on-disk module or worktree is rewritten.
-        module = types.ModuleType('content_splitter')
-        module.__file__ = str(ROOT / 'content_splitter.py')
+        module_name = definition.get('module', 'content_splitter')
+        module = types.ModuleType(module_name)
+        module.__file__ = str(ROOT / (module_name + '.py'))
+        # Dataclass annotation resolution needs its namespace during execution.
+        sys.modules[module_name] = module
         exec(compile(mutated_source(definition), module.__file__, 'exec'), module.__dict__)
-        sys.modules['content_splitter'] = module
         return pytest.main(definition['nodes'] + ['-q', '--tb=short', '-p', 'no:cacheprovider'],
                            plugins=[Campaign(definition, Path(sys.argv[3]))])
     if len(sys.argv) != 2:

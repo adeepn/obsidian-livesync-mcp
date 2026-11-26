@@ -140,9 +140,9 @@
     "mutation": "len(units) >= 128",
     "citation": "octagonal-wheels@0.1.57 dist/binary/base64.js:198-240; managers/HashManager/PureJSHashManager.ts:86-87",
     "witness": {
-      "kind": "grid",
-      "id": "identity=legacy-splitter=v1-hash=sha1-custom=-0.9987841796875-minimum=5-limit=default-document=encoder-exact128",
-      "storage_scope": "Journal only; CouchDB 3.5.3 refuses the unpaired-surrogate pieces before publication"
+      "kind": "helper",
+      "family": "encoder",
+      "index": 55
     }
   },
   {
@@ -709,7 +709,7 @@
     }
   },
   {
-    "line": 482,
+    "line": 483,
     "column": 24,
     "function": "_capped",
     "source": "maximum == 0",
@@ -722,21 +722,8 @@
     }
   },
   {
-    "line": 486,
-    "column": 31,
-    "function": "_capped",
-    "source": "maximum > 0",
-    "operator": 0,
-    "mutation": "maximum >= 0",
-    "citation": "commonlib@484c164 chunks.ts:66,234-250,279,297-313,350-371,418-432,473-491,527-545; ContentSplitterBase.ts:67-71",
-    "witness": {
-      "kind": "grid",
-      "id": "identity=legacy-splitter=v1-hash=sha1-custom=-1-minimum=20-limit=default-document=g3-surrogate"
-    }
-  },
-  {
-    "line": 486,
-    "column": 47,
+    "line": 487,
+    "column": 12,
     "function": "_capped",
     "source": "end < len(text)",
     "operator": 0,
@@ -746,8 +733,8 @@
     "proof": "At end == text.length no following unit exists to complete a pair. Blob.text() replaces unpaired units; hence a high/low pair cannot straddle EOF."
   },
   {
-    "line": 486,
-    "column": 67,
+    "line": 487,
+    "column": 32,
     "function": "_capped",
     "source": "0xd800 <= ord(text[end - 1]) <= 0xdbff",
     "operator": 0,
@@ -759,8 +746,8 @@
     }
   },
   {
-    "line": 486,
-    "column": 67,
+    "line": 487,
+    "column": 32,
     "function": "_capped",
     "source": "0xd800 <= ord(text[end - 1]) <= 0xdbff",
     "operator": 1,
@@ -772,7 +759,7 @@
     }
   },
   {
-    "line": 487,
+    "line": 488,
     "column": 20,
     "function": "_capped",
     "source": "0xdc00 <= ord(text[end]) <= 0xdfff",
@@ -785,7 +772,7 @@
     }
   },
   {
-    "line": 487,
+    "line": 488,
     "column": 20,
     "function": "_capped",
     "source": "0xdc00 <= ord(text[end]) <= 0xdfff",
@@ -798,7 +785,7 @@
     }
   },
   {
-    "line": 491,
+    "line": 492,
     "column": 11,
     "function": "_capped",
     "source": "start >= len(text)",
@@ -811,7 +798,7 @@
     }
   },
   {
-    "line": 499,
+    "line": 500,
     "column": 10,
     "function": "_binary_minimum",
     "source": "w > 10",
@@ -824,7 +811,7 @@
     }
   },
   {
-    "line": 525,
+    "line": 526,
     "column": 20,
     "function": "V2Splitter.split",
     "source": "minimum == 0",
@@ -837,7 +824,7 @@
     }
   },
   {
-    "line": 525,
+    "line": 526,
     "column": 37,
     "function": "V2Splitter.split",
     "source": "math.copysign(1, minimum) > 0",
@@ -853,7 +840,7 @@
     "operator": 0,
     "mutation": "False",
     "citation": "ContentSplitterBase.ts:68; chunks.ts:297-313; ECMAScript OrdinaryToPrimitive/ToNumber at these sourced call sites",
-    "line": 528,
+    "line": 529,
     "column": 15,
     "witness": {
       "kind": "coercion",
@@ -861,7 +848,7 @@
     }
   },
   {
-    "line": 530,
+    "line": 531,
     "column": 14,
     "function": "V2Splitter.split",
     "source": "adjusted > 0",
@@ -874,7 +861,7 @@
     }
   },
   {
-    "line": 530,
+    "line": 531,
     "column": 31,
     "function": "V2Splitter.split",
     "source": "len(text) / adjusted > 100",
@@ -887,7 +874,7 @@
     }
   },
   {
-    "line": 537,
+    "line": 538,
     "column": 15,
     "function": "V2Splitter.split",
     "source": "end - start > adjusted",
@@ -900,7 +887,7 @@
     }
   },
   {
-    "line": 548,
+    "line": 549,
     "column": 11,
     "function": "V2Splitter._cap",
     "source": "self.absolute_max_piece_size <= 0",
@@ -913,7 +900,7 @@
     }
   },
   {
-    "line": 549,
+    "line": 550,
     "column": 59,
     "function": "V2Splitter._cap",
     "source": "len(_from_units(text)) > 1",
@@ -926,7 +913,7 @@
     }
   },
   {
-    "line": 549,
+    "line": 550,
     "column": 103,
     "function": "V2Splitter._cap",
     "source": "self.absolute_max_piece_size < 0",
@@ -939,7 +926,7 @@
     }
   },
   {
-    "line": 565,
+    "line": 566,
     "column": 11,
     "function": "V2Splitter._binary",
     "source": "self.absolute_max_piece_size <= 0",
@@ -952,7 +939,7 @@
     }
   },
   {
-    "line": 577,
+    "line": 578,
     "column": 14,
     "function": "V2Splitter._binary",
     "source": "offset < len(data)",
@@ -965,7 +952,7 @@
     }
   },
   {
-    "line": 579,
+    "line": 580,
     "column": 15,
     "function": "V2Splitter._binary",
     "source": "preferred != -1",
@@ -976,7 +963,7 @@
     "proof": "At preferred == search, inclusive indexOf from that matching index returns the same offset. At sentinel -1, repeating the failed suffix search cannot find a match in a suffix of a suffix with no delimiter."
   },
   {
-    "line": 579,
+    "line": 580,
     "column": 35,
     "function": "V2Splitter._binary",
     "source": "preferred < search",
@@ -987,7 +974,7 @@
     "proof": "At preferred == search, inclusive indexOf from that matching index returns the same offset. At sentinel -1, repeating the failed suffix search cannot find a match in a suffix of a suffix with no delimiter."
   },
   {
-    "line": 582,
+    "line": 583,
     "column": 15,
     "function": "V2Splitter._binary",
     "source": "found == -1",
@@ -1000,7 +987,7 @@
     }
   },
   {
-    "line": 583,
+    "line": 584,
     "column": 19,
     "function": "V2Splitter._binary",
     "source": "newline != -1",
@@ -1011,7 +998,7 @@
     "proof": "At newline == search inclusive indexOf returns the same LF offset. At sentinel -1 a suffix of a suffix without LF still has no LF, so repeating the search is indistinguishable."
   },
   {
-    "line": 583,
+    "line": 584,
     "column": 37,
     "function": "V2Splitter._binary",
     "source": "newline < search",
@@ -1022,7 +1009,7 @@
     "proof": "At newline == search inclusive indexOf returns the same LF offset. At sentinel -1 a suffix of a suffix without LF still has no LF, so repeating the search is indistinguishable."
   },
   {
-    "line": 586,
+    "line": 587,
     "column": 50,
     "function": "V2Splitter._binary",
     "source": "found != -1",
@@ -1035,7 +1022,7 @@
     }
   },
   {
-    "line": 598,
+    "line": 599,
     "column": 25,
     "function": "LegacySplitter.split",
     "source": "maximum <= 0",
@@ -1046,7 +1033,7 @@
     "proof": "Nonpositive cap can leave the upstream offset unchanged on nonempty input; guard prevents nontermination."
   },
   {
-    "line": 610,
+    "line": 611,
     "column": 19,
     "function": "LegacySplitter.split",
     "source": "found != -1",
@@ -1059,7 +1046,7 @@
     }
   },
   {
-    "line": 615,
+    "line": 616,
     "column": 19,
     "function": "LegacySplitter.split",
     "source": "offset >= len(data)",
@@ -1072,7 +1059,7 @@
     }
   },
   {
-    "line": 620,
+    "line": 621,
     "column": 44,
     "function": "LegacySplitter.split",
     "source": "maximum < 0",
@@ -1085,7 +1072,7 @@
     }
   },
   {
-    "line": 620,
+    "line": 621,
     "column": 80,
     "function": "LegacySplitter.split",
     "source": "maximum == 0",
@@ -1098,7 +1085,7 @@
     }
   },
   {
-    "line": 646,
+    "line": 647,
     "column": 35,
     "function": "LegacySplitter._groups.take",
     "source": "index < count",
@@ -1111,7 +1098,7 @@
     }
   },
   {
-    "line": 648,
+    "line": 649,
     "column": 14,
     "function": "LegacySplitter._groups",
     "source": "index < count",
@@ -1124,7 +1111,7 @@
     }
   },
   {
-    "line": 653,
+    "line": 654,
     "column": 22,
     "function": "LegacySplitter._groups",
     "source": "index < count",
@@ -1137,7 +1124,7 @@
     }
   },
   {
-    "line": 655,
+    "line": 656,
     "column": 23,
     "function": "LegacySplitter._groups",
     "source": "index == count",
@@ -1150,7 +1137,7 @@
     }
   },
   {
-    "line": 658,
+    "line": 659,
     "column": 47,
     "function": "LegacySplitter._groups",
     "source": "len(pre) > 2048",
@@ -1163,7 +1150,7 @@
     }
   },
   {
-    "line": 659,
+    "line": 660,
     "column": 19,
     "function": "LegacySplitter._groups",
     "source": "index < count",
@@ -1176,7 +1163,7 @@
     }
   },
   {
-    "line": 673,
+    "line": 674,
     "column": 20,
     "function": "LegacySplitter._groups",
     "source": "length >= _minimum_number(self.minimum_chunk_size)",
@@ -1189,7 +1176,7 @@
     }
   },
   {
-    "line": 673,
+    "line": 674,
     "column": 74,
     "function": "LegacySplitter._groups",
     "source": "index == count",
@@ -1202,7 +1189,7 @@
     }
   },
   {
-    "line": 674,
+    "line": 675,
     "column": 27,
     "function": "LegacySplitter._groups",
     "source": "lines[index] == '#'",

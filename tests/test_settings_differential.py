@@ -28,7 +28,7 @@ def test_settings_splitter_differential(name, settings, kind, monkeypatch):
     pieces = splitter.split(data, path=grid_path(kind), text_blob=is_text_blob(kind))
     children = [splitter.chunk_id_for_piece(p) for p in pieces]
     assert_partition(pieces, children, {
-        'pieces': vector['split_pieces'], 'children': vector['split_children']})
+        'pieces': vector['lossless_split_pieces'], 'children': vector['lossless_split_children']})
 
 
 @pytest.mark.parametrize('case', SWEEP_CASES, ids=case_id)
@@ -41,7 +41,7 @@ def test_v3_minimum_boundary_sweep(case):
     splitter = ContentSplitter(settings)
     pieces = splitter.split(grid_payload(kind)[1], path=grid_path(kind))
     assert_partition(pieces, [splitter.chunk_id_for_piece(p) for p in pieces], {
-        'pieces': vector['split_pieces'], 'children': vector['split_children']})
+        'pieces': vector['lossless_split_pieces'], 'children': vector['lossless_split_children']})
 
 
 def test_upstream_scalar_minimum_boundaries():

@@ -1,4 +1,4 @@
-"""Regression coverage for the real Blob.text/readString decoder boundary."""
+"""Native chunks.ts:224-252,297-313,617-633 decoder and F13 boundary vectors."""
 import base64
 import json
 from pathlib import Path
@@ -40,4 +40,19 @@ def test_real_published_decoder_differential(vector):
     pieces = ContentSplitter({'chunkSplitterVersion': vector['version']}).split(
         raw, text_blob=True, path=vector['path'])
     assert [p.encode('utf-16-le', errors='surrogatepass') for p in pieces] == [
-        zlib.decompress(base64.b64decode(p)) for p in vector['expected_utf16_deflate_b64']]
+        zlib.decompress(base64.b64decode(p)) for p in vector['lossless_expected_utf16_deflate_b64']]
+
+
+def test_decoder_lossless_oracle_provenance():
+    import hashlib
+    from tests.settings_oracle import ORACLE
+    assert DECODING['generator_sha256'] == hashlib.sha256(Path('scripts/extract_decoder_vectors.mjs').read_bytes()).hexdigest()
+    assert DECODING['harness_sha256'] == hashlib.sha256(Path('scripts/extract_settings_oracle.mjs').read_bytes()).hexdigest()
+    for field in ('decoder_dependency','wasm_dependency','source_sha256'):
+        assert DECODING['provenance'][field] == ORACLE[field]
+    for vector in DECODING['vectors']:
+        raw = ''.join(vector['pieces']).encode('utf-16-le','surrogatepass')
+        assert raw == ''.join(vector['lossless_pieces']).encode('utf-16-le','surrogatepass')
+        if not any(0xD800 <= ord(c) <= 0xDFFF for p in vector['pieces'] for c in p):
+            assert vector['pieces'] == vector['lossless_pieces']
+            assert vector['children'] == vector['lossless_children']

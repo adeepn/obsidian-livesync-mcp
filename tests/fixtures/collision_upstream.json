@@ -5,32 +5,43 @@
     "minimumChunkSize": -1,
     "hashAlg": "xxhash64"
   },
-  "input": "🙂�",
+  "input": "\ud83d�",
   "path": "gate.md",
   "status": "defined",
   "pieces": [
     "\ud83d",
-    "\ude42",
     "�"
   ],
   "children": [
-    "h:3io3gbx5oks9x",
     "h:3io3gbx5oks9x",
     "h:3io3gbx5oks9x"
   ],
   "split_pieces": [
     0,
-    1,
-    2
+    1
   ],
   "split_children": [
     "h:3io3gbx5oks9x",
+    "h:3io3gbx5oks9x"
+  ],
+  "lossless_pieces": [
+    0,
+    1
+  ],
+  "lossless_children": [
+    "h:3io3gbx5oks9x",
+    "h:3io3gbx5oks9x"
+  ],
+  "lossless_split_pieces": [
+    0,
+    1
+  ],
+  "lossless_split_children": [
     "h:3io3gbx5oks9x",
     "h:3io3gbx5oks9x"
   ],
   "strings": [
     "\ud83d",
-    "\ude42",
     "�"
   ],
   "source_sha256": {
@@ -89,13 +100,7 @@
       "data": "�",
       "type": "leaf",
       "_rev": ""
-    },
-    {
-      "_id": "h:3io3gbx5oks9x",
-      "data": "�",
-      "type": "leaf",
-      "_rev": ""
     }
   ],
-  "frame_b64": "fmg6M2lvM2dieDVva3M5eB/vv70Kfmg6M2lvM2dieDVva3M5eB/vv70Kfmg6M2lvM2dieDVva3M5eB/vv70K"
+  "frame_b64": "fmg6M2lvM2dieDVva3M5eB/vv70Kfmg6M2lvM2dieDVva3M5eB/vv70K"
 }

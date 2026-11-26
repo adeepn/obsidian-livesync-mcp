@@ -157,8 +157,29 @@ async function vector(settings, payload) {
     } else raw = Buffer.from(payload.base64, 'base64');
     const blob = new Blob([raw], {type:payload.text?'text/plain':'application/octet-stream'});
     const result = [], children = [], splitPieces = [], splitChildren = [];
+    const entry = {path:payload.path, data:blob};
+    const params = splitter._activeSplitter.getParamsFor(entry);
+    // F13 owner decision: chunks.ts:234-250 lacks protection on two V1 paths.
+    // Keep upstream grouping/parameters; independently advance by Unicode points
+    // to the nominal UTF-16 cap, including the point crossing that cap.
+    function losslessV1(text) {
+        const groups = params.plainSplit ? ctx.pickPiece(text.split('\n'), params.minimumChunkSize) : [text];
+        const output = [];
+        const cap = params.pieceSize === 0 ? 1 : params.pieceSize;
+        for (const group of groups) {
+            let piece = '';
+            for (const point of group) {
+                piece += point;
+                if (piece.length >= cap) { output.push(piece); piece = ''; }
+            }
+            if (piece || group === '') output.push(piece);
+        }
+        return output;
+    }
     let steps = 0;
-    for await (const p of await splitter.splitContent({path:payload.path, data:blob})) {
+    const native = payload.units === undefined ? await splitter.splitContent(entry) :
+        ctx.splitPiecesTextV1(payload.units, params.pieceSize, params.plainSplit, params.minimumChunkSize)();
+    for await (const p of native) {
         if (process.env.G3_CELL && ++steps > 128) throw new RangeError('G3_STEP_LIMIT');
         // Empty worker sentinel is not a persisted leaf (EntryManager contract).
         if (!pieceIndex.has(p)) {pieceIndex.set(p, pieces.length); pieces.push(p);}
@@ -169,7 +190,18 @@ async function vector(settings, payload) {
         splitChildren.push(id);
         if (p !== '') {result.push(pieceIndex.get(p)); children.push(id);}
     }
-    const v = {pieces:result, children, split_pieces:splitPieces, split_children:splitChildren};
+    const lossless = payload.text && effective.chunkSplitterVersion === 'v1' ?
+        losslessV1(payload.units ?? await blob.text()) : splitPieces.map(i => pieces[i]);
+    const losslessPieces = [], losslessChildren = [];
+    for (const p of lossless) {
+        if (!pieceIndex.has(p)) {pieceIndex.set(p, pieces.length); pieces.push(p);}
+        losslessPieces.push(pieceIndex.get(p));
+        losslessChildren.push('h:' + await managers[settings.hashAlg].computeHashWithoutEncryption(p));
+    }
+    const v = {pieces:result, children, split_pieces:splitPieces, split_children:splitChildren,
+        lossless_pieces:losslessPieces.filter(i => pieces[i] !== ''),
+        lossless_children:losslessChildren.filter((_, i) => pieces[losslessPieces[i]] !== ''),
+        lossless_split_pieces:losslessPieces, lossless_split_children:losslessChildren};
     cache.set(cacheKey, v);
     return v;
 }

@@ -1,4 +1,4 @@
-// Node >=26.13.1; COMMONLIB WHEELS_DIR WHEELS_TARBALL OUTPUT
+// Node >=26.13.1; COMMONLIB WHEELS_DIR WHEELS_TARBALL OUTPUT WASM_ESM WASM_TARBALL
 // Execute pinned splitter functions and the real published decoder. No ported oracle.
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -7,7 +7,8 @@ import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {deflateSync} from 'node:zlib';
 import {splitterDependencies} from './splitter_oracle_dependencies.mjs';
-const [root,wheels,archive,out] = process.argv.slice(2);
+const [root,wheels,archive,out,wasm,wasmArchive] = process.argv.slice(2);
+let provenance;
 const pin='484c164450d61deb2e301582b60cb9b5f9fa977f';
 const {dependency,...primitives}=await splitterDependencies(root,wheels,archive);
 const src=execFileSync('git',['-C',root,'show',`${pin}:src/string_and_binary/chunks.ts`],{encoding:'utf8'});
@@ -36,8 +37,21 @@ for(const c of cases) for(const version of ['v1','v2','v2-segmenter','v3-rabin-k
  const fn=version==='v1'?ctx.splitPieces2:version==='v3-rabin-karp'?ctx.splitPiecesRabinKarp:ctx.splitPieces2V2;
  const pieces=[];
  for await(const p of (await fn(c.blob,102400,/\.(md|txt|canvas)$/.test(c.path),20,c.path,version==='v2-segmenter'))()) pieces.push(p);
- vectors.push({name:c.name,version,path:c.path,input_deflate_b64:deflateSync(Buffer.from(await c.blob.arrayBuffer())).toString('base64'),
+ // Independently projected F13 cuts and IDs use the verified pinned harness.
+ const raw = Buffer.from(await c.blob.arrayBuffer());
+ const settings = {chunkSplitterVersion:version,customChunkSize:0,minimumChunkSize:20,hashAlg:'xxhash64'};
+ const payload = {path:c.path,text:true,base64:raw.toString('base64')};
+ const result = JSON.parse(execFileSync(process.execPath,['scripts/extract_settings_oracle.mjs',root,wasm,wheels,archive,'/dev/null',wasmArchive],
+     {env:{...process.env,G3_CELL:JSON.stringify({settings,payload})},maxBuffer:8*1048576}));
+ if (result.status !== 'defined') throw Error('Undefined decoder vector');
+ provenance ??= Object.fromEntries(['source_sha256','wasm_dependency','decoder_dependency','upstream_commit','node'].map(k=>[k,result[k]]));
+ const rawPieces = result.split_pieces.map(i=>result.strings[i]);
+ if (JSON.stringify(rawPieces)!==JSON.stringify(pieces)) throw Error('Native decoder/harness mismatch');
+ const lossless = result.lossless_split_pieces.map(i=>result.strings[i]);
+ vectors.push({name:c.name,version,path:c.path,input_deflate_b64:deflateSync(raw).toString('base64'),
+ pieces, children:result.split_children, lossless_pieces:lossless, lossless_children:result.lossless_split_children,
+ lossless_expected_utf16_deflate_b64:lossless.map(p=>deflateSync(Buffer.from(p,'utf16le')).toString('base64')),
  expected_utf16_deflate_b64:pieces.map(p=>deflateSync(Buffer.from(p,'utf16le')).toString('base64'))});
 }
-fs.writeFileSync(out,JSON.stringify({upstream_commit:pin,dependency,source_sha256:createHash('sha256').update(src).digest('hex'),case_count:cases.length,vectors},null,2)+'\n');
+fs.writeFileSync(out,JSON.stringify({upstream_commit:pin,dependency,provenance,generator_sha256:createHash('sha256').update(fs.readFileSync(import.meta.filename)).digest('hex'),harness_sha256:createHash('sha256').update(fs.readFileSync('scripts/extract_settings_oracle.mjs')).digest('hex'),source_sha256:createHash('sha256').update(src).digest('hex'),case_count:cases.length,vectors},null,2)+'\n');
 console.log(`${cases.length} inputs x 4 algorithms = ${vectors.length} vectors`);

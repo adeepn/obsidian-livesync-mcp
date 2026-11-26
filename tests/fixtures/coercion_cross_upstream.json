@@ -43,7 +43,7 @@
     "wasm_sha256": "e3be9143c10d60a015448de1ceef383b8f2ea1fd2773a5a5c69973ed52d8325a",
     "node": "v26.13.1"
   },
-  "generator_sha256": "cbfbe6d46385431c7b69861f79994420e0646f6aba87d82759426a589e508aa0",
+  "generator_sha256": "2b7b156cd4760aa34c6f9124f059273bbdf6f9b474400e1b8bc7ed605c1fd689",
   "rows": [
     {
       "key": "minimumChunkSize",
@@ -174,6 +174,18 @@
       ],
       "split_children": [
         "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "lossless_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "lossless_split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_split_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
       ]
     },
     {
@@ -205,6 +217,14 @@
       ],
       "split_children": [
         "h:D+/SfK1JFZRgSfA1K+3A+lnWAeI="
+      ],
+      "lossless_pieces": [],
+      "lossless_children": [],
+      "lossless_split_pieces": [
+        ""
+      ],
+      "lossless_split_children": [
+        "h:D+/SfK1JFZRgSfA1K+3A+lnWAeI="
       ]
     },
     {
@@ -264,6 +284,18 @@
       ],
       "split_children": [
         "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "lossless_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "lossless_split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_split_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
       ]
     },
     {
@@ -294,6 +326,14 @@
         ""
       ],
       "split_children": [
+        "h:D+/SfK1JFZRgSfA1K+3A+lnWAeI="
+      ],
+      "lossless_pieces": [],
+      "lossless_children": [],
+      "lossless_split_pieces": [
+        ""
+      ],
+      "lossless_split_children": [
         "h:D+/SfK1JFZRgSfA1K+3A+lnWAeI="
       ]
     },
@@ -518,6 +558,18 @@
       ],
       "split_children": [
         "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "lossless_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "lossless_split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_split_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
       ]
     },
     {
@@ -552,6 +604,14 @@
         ""
       ],
       "split_children": [
+        "h:D+/SfK1JFZRgSfA1K+3A+lnWAeI="
+      ],
+      "lossless_pieces": [],
+      "lossless_children": [],
+      "lossless_split_pieces": [
+        ""
+      ],
+      "lossless_split_children": [
         "h:D+/SfK1JFZRgSfA1K+3A+lnWAeI="
       ]
     },
@@ -620,6 +680,18 @@
       ],
       "split_children": [
         "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "lossless_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "lossless_split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_split_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
       ]
     },
     {
@@ -654,6 +726,14 @@
         ""
       ],
       "split_children": [
+        "h:D+/SfK1JFZRgSfA1K+3A+lnWAeI="
+      ],
+      "lossless_pieces": [],
+      "lossless_children": [],
+      "lossless_split_pieces": [
+        ""
+      ],
+      "lossless_split_children": [
         "h:D+/SfK1JFZRgSfA1K+3A+lnWAeI="
       ]
     },

@@ -60,22 +60,24 @@ async def test_couchdb_upstream_wire(v):
 
 
 @pytest.mark.parametrize('kind', ['couchdb', 'journal'])
-async def test_witness_publication_and_fresh_reader(tmp_path, kind):
+async def test_witness_publication_and_fresh_reader(tmp_path, kind, monkeypatch):
     if kind == 'journal':
         backend, storage = await write_backend(tmp_path)
     else:
         transport, log = make_fake_couchdb({})
         backend = CouchDBBackend('http://test', 'user', 'password', 'vault', transport=transport)
     backend._splitter = ContentSplitter(W['settings'])
-    assert list(backend._splitter.split(W['input'], path=W['path'])) == W['pieces']
+    # Native splitPiecesTextV1 accepts raw units; public Blob ingress projects
+    # them first. Inject native lone-unit leaves to isolate wire protection.
+    monkeypatch.setattr(backend._splitter, 'split', lambda *a, **kw: W['pieces'])
     try:
         if kind == 'couchdb':
             with pytest.raises(WriterParameterRefused, match='unpaired UTF-16 surrogate'):
-                await backend._write_content(W['path'], W['input'], len(W['input'].encode()), 'plain', create=True, overwrite=False)
+                await backend._write_content(W['path'], W['input'].encode('utf-8', 'surrogatepass'), len(W['input'].encode('utf-8', 'surrogatepass')), 'plain', create=True, overwrite=False)
             assert not log
             return
         # Programmatic text/plain disk-ingestion representation; case-sensitive .MD split hint.
-        result = await backend._write_content(W['path'], W['input'], len(W['input'].encode()), 'plain', create=True, overwrite=False)
+        result = await backend._write_content(W['path'], W['input'].encode('utf-8', 'surrogatepass'), len(W['input'].encode('utf-8', 'surrogatepass')), 'plain', create=True, overwrite=False)
         if kind == 'journal':
             assert type(result['transport_replacements']) is int
             assert result['transport_replacements'] == REPLACEMENTS
@@ -99,7 +101,7 @@ async def test_witness_publication_and_fresh_reader(tmp_path, kind):
             note = await reader.read_note(W['path'])
             assert note['text'] == expected
             repeated = await backend._write_content(
-                W['path'], W['input'], len(W['input'].encode()), 'plain',
+                W['path'], W['input'].encode('utf-8', 'surrogatepass'), len(W['input'].encode('utf-8', 'surrogatepass')), 'plain',
                 create=False, overwrite=False, expected_rev=result['rev'])
             if kind == 'journal':
                 assert repeated['transport_replacements'] == REPLACEMENTS
@@ -110,15 +112,16 @@ async def test_witness_publication_and_fresh_reader(tmp_path, kind):
 
 
 @pytest.mark.parametrize('structured', [False, True])
-async def test_tool_reports_only_typed_transport_count(tmp_path, structured):
+async def test_tool_reports_only_typed_transport_count(tmp_path, structured, monkeypatch):
     import server
     backend, _ = await write_backend(tmp_path)
     backend._splitter = ContentSplitter(W['settings'])
+    monkeypatch.setattr(backend._splitter, 'split', lambda *a, **kw: W['pieces'])
     token = server._active_backend.set(backend)
 
     @server._tool_errors(writer=True)
     async def publish():
-        await backend._write_content(W['path'], W['input'], len(W['input'].encode()), 'plain', create=True, overwrite=False)
+        await backend._write_content(W['path'], W['input'].encode('utf-8', 'surrogatepass'), len(W['input'].encode('utf-8', 'surrogatepass')), 'plain', create=True, overwrite=False)
         return '{"status":"ok"}' if structured else 'Created.'
 
     try:
@@ -154,7 +157,7 @@ async def test_metadata_publication_preserves_surrogates(tmp_path):
 
 
 @pytest.mark.parametrize('control', FIXTURE['splitter_controls'], ids=lambda c: c['version'])
-def test_v2_protects_pairs_unlike_v1_witness(control):
-    # commonlib chunks.ts:307-310 and :362 protect V2 cuts, contrary to task premise.
+def test_v2_keeps_blob_ingress_projection(control):
+    # chunks.ts:350-362 decodes Blob ingress before the protected V2 cuts.
     splitter = ContentSplitter({**W['settings'], 'chunkSplitterVersion': control['version']})
     assert list(splitter.split(W['input'], path=W['path'])) == control['pieces']

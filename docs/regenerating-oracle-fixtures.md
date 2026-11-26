@@ -142,7 +142,7 @@ script unless stated otherwise. No command in this table uses real storage.
 | `node scripts/extract_legacy_splitter_vectors.mjs "$PARITY_COMMON" "$PARITY_WASM" "$PARITY_ORACLE/legacy_splitter_upstream.json"` | `legacy_splitter_upstream.json`; deterministic seed `0x3c202611`, direct and worker paths | `test_legacy_splitter.py` |
 | `node scripts/extract_splitter_migration_vectors.mjs "$PARITY_COMMON" "$PARITY_ORACLE/splitter_migration_upstream.json"` | `splitter_migration_upstream.json`; native migration branch, no package dependencies | `test_splitter_migration.py` |
 | `node scripts/extract_hash_vectors.mjs "$PARITY_COMMON" "$PARITY_WHEELS" "$PARITY_WASM" "$PARITY_ORACLE/hash_algorithms_upstream.json"` | `hash_algorithms_upstream.json`; requires wheels tarball named `task3b-wheels.tgz` beside the wheels directory | `test_hash_algorithms.py`, `test_settings_matrix.py` |
-| `node scripts/extract_decoder_vectors.mjs "$PARITY_COMMON" "$PARITY_WHEELS" "$PARITY_WHEELS_TGZ" "$PARITY_ORACLE/splitter_decoding_upstream.json"` | `splitter_decoding_upstream.json` | `test_splitter_decoding.py` |
+| `node scripts/extract_decoder_vectors.mjs "$PARITY_COMMON" "$PARITY_WHEELS" "$PARITY_WHEELS_TGZ" "$PARITY_ORACLE/splitter_decoding_upstream.json" "$PARITY_WASM" "$PARITY_WASM_TGZ"` | `splitter_decoding_upstream.json` | `test_splitter_decoding.py` |
 | `node --experimental-vm-modules scripts/extract_tweak_vectors.mjs "$PARITY_COMMON" "$PARITY_PLUGIN" "$PARITY_ORACLE/tweak_compatibility_upstream.json.gz"` | `tweak_compatibility_upstream.json.gz`; real source imports, both source pins | `test_tweak_differential.py`, `test_tweak_compatibility.py`, `test_selection_settings.py` |
 | `node scripts/extract_chunk_parameter_vectors.mjs "$PARITY_COMMON" "$PARITY_ORACLE/chunk_parameters_upstream.json"` | `chunk_parameters_upstream.json`; native cap/coercion expressions, no packages | `test_coercion_cells.py` |
 | `INCLUDE_MINIMUM=1 node scripts/extract_coercion_cells.mjs "$PARITY_COMMON" "$PARITY_WASM" "$PARITY_WHEELS" "$PARITY_WHEELS_TGZ" "$PARITY_WASM_TGZ" "$PARITY_ORACLE/coercion_upstream.json"` | `coercion_upstream.json`; mode commands below | `test_coercion_cells.py`, `test_writer_support.py` |
@@ -254,3 +254,11 @@ unlisted files refuse with provenance-mismatch. Restore the checkout or regenera
 from the pinned source and integrity-verified published archives, then restart.
 The manifest is repository integrity evidence, not a signature against a checkout
 attacker who can replace both the verifier and manifest.
+
+### F13 lossless text boundary oracle
+
+Run `node scripts/extract_lossless_vectors.mjs "$PARITY_COMMON" "$PARITY_WASM" "$PARITY_WHEELS" "$PARITY_WHEELS_TGZ" "$PARITY_WASM_TGZ" tests/fixtures/lossless_upstream.json.gz`.
+The generator uses the same verified native harness and dependencies as the
+settings oracle. Raw upstream partitions stay separate from the independent JS
+lossless projection; pinned native managers hash every projected piece.
+Validation: `./venv/bin/python -m pytest tests/test_lossless_legacy.py -q`.

@@ -21,7 +21,7 @@ for(const ingress of process.env.INGRESS_EDGES ? ['empty','bom'] : ['normal']) {
  let result;
  if(child.error?.code==='ETIMEDOUT')result={status:'time_limit'};
  else {if(child.status!==0)throw Error(child.stderr);result=JSON.parse(child.stdout);}
- if(result.source_sha256){provenance??=Object.fromEntries(['source_sha256','wasm_dependency','decoder_dependency','upstream_commit','wasm_sha256','node'].map(k=>[k,result[k]]));for(const k of ['pieces','split_pieces'])result[k]=result[k].map(i=>result.strings[i]);for(const k of ['strings',...Object.keys(provenance)])delete result[k];}
+ if(result.source_sha256){provenance??=Object.fromEntries(['source_sha256','wasm_dependency','decoder_dependency','upstream_commit','wasm_sha256','node'].map(k=>[k,result[k]]));for(const k of ['pieces','split_pieces','lossless_pieces','lossless_split_pieces'])result[k]=result[k].map(i=>result.strings[i]);for(const k of ['strings',...Object.keys(provenance)])delete result[k];}
  rows.push({key,value,version,mode,settings,settings_json:lexicalJSON(settings),payload,...result});
 }
 fs.writeFileSync(output,JSON.stringify({provenance,generator_sha256:createHash('sha256').update(fs.readFileSync('scripts/extract_coercion_cells.mjs')).digest('hex'),rows},null,2)+'\n');

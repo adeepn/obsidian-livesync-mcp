@@ -1176,3 +1176,41 @@ uncertainty, orphan-leaf note refusal and typed recovery remain unchanged.
 The endpoint/failure matrix and public fetch/list/search regressions use local
 HTTP doubles; this is a peer safety contract, not an upstream format oracle.
 No fixture, configuration variable/default or real vault is changed.
+
+### 2026-11-26 — F13 lossless legacy cuts
+
+[DECISION] Owner ruling “границы сдвинь” supersedes the historical G7/S1/P-33
+[GOTCHA] wording above for the peer's own valid astral writes. Extend a cut
+inside a valid pair one UTF-16 unit, then reset the next piece to its full cap.
+Apply to V1 non-plain and plain zero-cap text. Safe cuts/IDs, binary partitions,
+reads, collision guards and actual lone-unit leaf wire handling remain unchanged.
+V2/V2-segmenter use chunks.ts:297-313,350-379; V3 guards UTF-8 continuation bytes
+at :555-556,617-633. Regenerated raw/lossless oracles retain independent JS
+projection plus pinned native hash-manager results and verified dependency integrity.
+
+[GOTCHA] Caller lone surrogates already undergo Blob USVString ingress replacement
+with input_surrogates_replaced on both backends. Transport-only replacements and
+CouchDB leaf refusal require a raw lone-unit leaf; tests isolate that boundary.
+This task preserves ingress behaviour rather than moving replacement to transport.
+Historical text above remains as a record, not the current write contract.
+
+F13 regenerated fixture SHA256 ledger (Node 26.13.1):
+
+| Fixture | SHA256 |
+| --- | --- |
+| `acceptance_upstream.json` | `18dccd4da102b44c10568c9fa467ddc26bf039577160a030dded101ef52d7950` |
+| `coercion_cross_upstream.json` | `cd3dcbcf35a945dccf55b00d9269b37baba2d58b5b7554b3a6ac4954958ef9c7` |
+| `coercion_edges_upstream.json` | `a8b4e6f4a4368e375fe691903ffac6c1d4498448a0ae4c84076bdc01df0aafaa` |
+| `coercion_ingress_upstream.json` | `1173403c12c5f62421ac6dd4c5d216fcc84e61dd18de66617b5b10b9ebfa13db` |
+| `coercion_overflow_upstream.json` | `b7c1ac17465a9ab8c5b4a89afad62b5ffa34a4409dcd2062b4b3694fab90d6e1` |
+| `coercion_upstream.json` | `446b2e546c4f4a32b94a9aca4a0a399d08dfe8c79dc9b14554dcd58414ef034f` |
+| `coercion_zero_upstream.json` | `dcc4546d97be770a3709d762020c9fcdd0227574a64dd43d3c2d67ad0133afcf` |
+| `collision_upstream.json` | `e087b638ab11a0611e9250083d9d7ee9842f51c63ebccc34cee3970458cf0016` |
+| `legacy_bom_cells_upstream.json` | `7086fb152dd4c1ae35e38d96e85a511b5d7fe4fb16a5a6c6ee0bf81cb80c7cda` |
+| `legacy_cells_upstream.json` | `c946fc6e21ea47616242c23aeef700b97e2b4670b9c7b56e7e78abc93542274f` |
+| `legacy_wire_cells_upstream.json` | `e2f085993512b48d7a5b0be2975009d01f14792d724eff4deb56dc3c1d4a5427` |
+| `lossless_upstream.json.gz` | `887cbfc01f6f18115666dead0e25b1555b1e123fb6e181c2368aef633d6f4312` |
+| `minimum_concatenation_upstream.json.gz` | `bad4a2d53277bd713472a4abae5d9d058bc945bc2151541e4c176e2e4a2cc623` |
+| `settings_oracle_upstream.json.gz` | `dab416d7051e08688671bdb7918926f0b7ce86e88af9c9eaca0963f721192789` |
+| `splitter_decoding_upstream.json` | `08ff49436c4f07f39910d71b0d42c40be4d343f9b4ad69644a8c4dfa33067c9f` |
+| `surrogate_wire_upstream.json` | `a39b137d900f4cb70072918eb203effa12e831191866026d9e486adcd6cc2244` |

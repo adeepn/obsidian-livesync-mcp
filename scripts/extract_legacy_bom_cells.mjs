@@ -21,7 +21,7 @@ for (const custom of [0,-1,-2]) for (const minimum of [20,-1]) for (const mode o
         result=JSON.parse(child.stdout);
         if (result.status === 'defined') {
         provenance ??= Object.fromEntries(['source_sha256','wasm_dependency','decoder_dependency','upstream_commit','wasm_sha256','node'].map(k=>[k,result[k]]));
-        for (const key of ['pieces','split_pieces']) result[key]=result[key].map(i=>result.strings[i]);
+        for (const key of ['pieces','split_pieces','lossless_pieces','lossless_split_pieces']) result[key]=result[key].map(i=>result.strings[i]);
         for (const key of ['strings',...Object.keys(provenance)]) delete result[key];
         } else {
             if (result.status !== 'step_limit') throw Error('Unexpected upstream error');

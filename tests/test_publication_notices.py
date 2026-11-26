@@ -56,14 +56,13 @@ def test_notice_suffix_does_not_change_existing_fields():
 @pytest.mark.parametrize('kind', ['couchdb','journal'])
 @pytest.mark.parametrize('tool', ['create','overwrite','append','prepend','after-heading','search-replace',
                                   'upload','canvas','properties','tags','template'])
-async def test_every_write_tool_exposes_typed_notice(tmp_path,kind,tool):
+async def test_every_write_tool_preserves_notice_contract(tmp_path,kind,tool):
     import base64
     settings={'pathNormalizationVersion':0,'handleFilenameCaseSensitive':False,'chunkSplitterVersion':'v2','hashAlg':'sha1'}
     async with matrix_vault(tmp_path,kind,settings) as (backend,*_):
         await backend.startup_check()
         await backend.write_note('edit.md','# Anchor\nold',create=True)
         await backend.write_note('template.md','{{value}}',create=True)
-        before = await backend.read_note('edit.md')
         token=server._active_backend.set(backend)
         try:
             if tool=='create':result=await server.obsidian_create_note('new.md','\ufeffABC')
@@ -72,18 +71,20 @@ async def test_every_write_tool_exposes_typed_notice(tmp_path,kind,tool):
             elif tool in ('properties','tags'):
                 from content_splitter import ContentSplitter
                 backend._splitter=ContentSplitter({**settings,'chunkSplitterVersion':'v1','customChunkSize':-1,'minimumChunkSize':-1})
-                if tool=='properties':result=await server.obsidian_manage_properties('edit.md','set',json.dumps({'x':'🙂'}))
-                else:result=await server.obsidian_manage_tags('edit.md','add','🙂')
+                if tool=='properties':result=await server.obsidian_manage_properties('edit.md','set',json.dumps({'x':'\ud800'}))
+                else:result=await server.obsidian_manage_tags('edit.md','add','\ud800')
             elif tool=='template':result=await server.obsidian_create_from_template('template.md','new.md',json.dumps({'value':'\ud800'}))
             elif tool=='search-replace':result=await server.obsidian_update_note('edit.md',tool,search='old',replace='\ud800')
             else:result=await server.obsidian_update_note('edit.md',tool,content='\ud800',**({'heading':'Anchor'} if tool=='after-heading' else {}))
             records=[json.loads(line) for line in result.splitlines() if line.startswith('{"notices":')]
-            if tool in ('properties','tags') and kind=='couchdb':
-                # chunks.ts:243-252; real CouchDB 3.5.3 rejects lone units.
+            if tool in ('properties','tags'):
+                # Caller lone units are YAML-escaped before Blob ingestion;
+                # F13 no longer needs valid emoji to manufacture wire loss.
+                from frontmatter import get_properties
                 assert not records
-                assert 'CouchDB rejects data containing an unpaired UTF-16 surrogate' in result
-                assert 'v3' in result
-                assert await backend.read_note('edit.md') == before
+                assert not result.startswith('Error:')
+                props = get_properties((await backend.read_note('edit.md'))['text'])
+                assert (props['x'] if tool=='properties' else props['tags'][0]) == '\ud800'
                 return
             assert len(records)==1, result
             assert records[0]['notices']

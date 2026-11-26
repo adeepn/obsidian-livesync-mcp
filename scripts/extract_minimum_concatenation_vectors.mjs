@@ -23,7 +23,7 @@ for (const repeats of [219,220,221,400,401,402,2219,2220,2221,22219,22220,22221]
     const result = JSON.parse(child.stdout);
     if (result.status !== 'defined') throw Error('Upstream cell did not terminate');
     provenance ??= Object.fromEntries(['source_sha256','wasm_dependency','decoder_dependency','upstream_commit','wasm_sha256','node'].map(k => [k,result[k]]));
-    for (const key of ['pieces','split_pieces']) result[key] = result[key].map(index => result.strings[index]);
+    for (const key of ['pieces','split_pieces','lossless_pieces','lossless_split_pieces']) result[key] = result[key].map(index => result.strings[index]);
     for (const key of ['strings', ...Object.keys(provenance)]) delete result[key];
     rows.push({repeats, settings, ...result});
 }

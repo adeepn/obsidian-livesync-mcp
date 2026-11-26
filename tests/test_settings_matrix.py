@@ -395,12 +395,12 @@ async def test_settings_text_partition(tmp_path, kind, case):
     _, text = grid_payload(payload_kind)
     vector = GRID[case_id(case)]  # Strict independent upstream lookup.
     assert vector['settings'] == settings
-    # Compare raw partitions before publication can reject a broken surrogate
-    # cut or discard V1's empty binary sentinel. IDs are checked independently.
+    # Compare lossless partitions before publication discards V1's empty
+    # binary sentinel. Raw upstream partitions remain in the same oracle.
     splitter = ContentSplitter(settings)
     pieces = splitter.split(text, path=path)
     assert_partition(pieces, [splitter.chunk_id_for_piece(p) for p in pieces], {
-        'pieces': vector['split_pieces'], 'children': vector['split_children']})
+        'pieces': vector['lossless_split_pieces'], 'children': vector['lossless_split_children']})
     async with matrix_vault(tmp_path, kind, settings) as (backend, doc, _, _, _):
         await backend.startup_check()
         if payload_kind == 'hint-MD' or payload_kind.startswith('hint-path:'):
@@ -430,22 +430,6 @@ async def test_settings_persisted_equality_witness(tmp_path, kind, case):
     vector = GRID[case_id(case)]
     async with matrix_vault(tmp_path, kind, settings) as (backend, doc, chunks, requests, _):
         await backend.startup_check()
-        if kind == 'couchdb' and case[-1] == 'encoder-exact128':
-            # chunks.ts:243-252; live CouchDB 3.5.3 rejects JSON lone units.
-            # The native codec/hash oracle stays byte-exact; only journal can
-            # persist this witness after TextEncoder replacement.
-            from storage_base import WriterParameterRefused
-            from diagnostic_codes import DiagnosticCode
-            before = await chunks()
-            requests.clear()
-            with pytest.raises(WriterParameterRefused) as caught:
-                await backend._write_content(path, data, len(data.encode()), 'plain',
-                                             create=True, overwrite=False)
-            assert caught.value.diagnostic.code == DiagnosticCode.COUCHDB_SURROGATE_REFUSED
-            assert not requests
-            assert await chunks() == before
-            assert await backend.read_note(path) is None
-            return
         if is_text_blob(case[-1]):
             await backend._write_content(path, _TextBlob(data), len(data), 'plain',
                                          create=True, overwrite=False)
@@ -456,19 +440,9 @@ async def test_settings_persisted_equality_witness(tmp_path, kind, case):
             await backend.write_note(path, data, create=True)
         children = (await doc(path))['children']
         stored = await pieces_for(backend, children)
-        if case[-1] == 'encoder-exact128':
-            # journalRecords.ts:70-76 TextEncoder versus PouchDB JSON.stringify;
-            # scripts/extract_surrogate_vectors.mjs executes both contracts.
-            wire = json.loads((FIXTURES / 'surrogate_wire_upstream.json').read_text())
-            assert data == wire['witness']['input']
-            assert vector['children'] == wire['witness']['ids']
-            expected = [d['data'] for d in wire['vectors'][0]['decoded']]
-            assert stored == expected, 'PARTITION stored pieces mismatch'
-            assert children == wire['witness']['ids'], 'PARTITION stored children mismatch'
-        else:
-            assert_partition(stored, children, vector)
+        assert_partition(stored, children, vector)
         note = await backend.read_note(path)
-        if not is_text_blob(case[-1]) and case[-1] != 'encoder-exact128':
+        if not is_text_blob(case[-1]):
             assert note['data' if isinstance(data, bytes) else 'text'] == data
 
 

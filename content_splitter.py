@@ -472,18 +472,19 @@ def _from_units(text: str) -> str:
     return text.encode('utf-16-le', errors='surrogatepass').decode('utf-16-le', errors='surrogatepass')
 
 
-def _capped(text: str, maximum: int, preserve_pairs: bool = True, *, v1_plain=False):
-    # chunks.ts:218-254,296-323. V1 non-plain intentionally splits pairs.
+def _capped(text: str, maximum: int, *, v1_plain=False):
+    # F13 lossless difference from chunks.ts:234-250: protect both V1 paths
+    # using the forward-growth/reset rule of chunks.ts:297-313.
     maximum = min(maximum, len(text))  # substring(+Infinity) clamps to length.
     start = 0
     while True:
         # chunks.ts:234-240: charCodeAt(-1)=NaN != undefined, so V1
-        # increments a zero cap to one, intentionally cutting surrogate pairs.
+        # increments a zero cap to one. Protect that effective one-unit cut too.
         if v1_plain and maximum == 0:
             end = start + 1
         else:
             end = start + maximum
-        if (preserve_pairs and maximum > 0 and end < len(text) and 0xd800 <= ord(text[end - 1]) <= 0xdbff
+        if (end < len(text) and 0xd800 <= ord(text[end - 1]) <= 0xdbff
                 and 0xdc00 <= ord(text[end]) <= 0xdfff):
             end += 1
         yield _from_units(text[start:end])
@@ -626,7 +627,7 @@ class LegacySplitter(_Splitter):
                 _minimum_number(self.minimum_chunk_size)
             return ['']
         if not plain_split:
-            return list(_capped(text, maximum, False))
+            return list(_capped(text, maximum))
         return [piece for group in self._groups(text) for piece in _capped(group, maximum, v1_plain=True)]
 
     def _groups(self, text):

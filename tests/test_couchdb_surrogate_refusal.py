@@ -29,15 +29,19 @@ async def test_fake_models_real_utf8_json(route, value, accepted):
             assert response.json() == {'error': 'bad_request', 'reason': 'invalid UTF-8 JSON'}
 
 
-async def test_whole_write_refuses_before_any_request():
+async def test_whole_write_refuses_before_any_request(monkeypatch):
     transport, log = make_fake_couchdb({})
     backend = CouchDBBackend('http://test', 'user', 'password', 'vault', transport=transport)
     backend._splitter = ContentSplitter(W['settings'])
+    # Isolate raw native leaves; Blob ingress projects caller lone units.
+    monkeypatch.setattr(backend._splitter, 'split', lambda *a, **kw: W['pieces'])
     before = dict(backend._text_verdicts)
     try:
         with pytest.raises(WriterParameterRefused, match='CouchDB rejects.*unpaired UTF-16 surrogate') as error:
-            await backend._write_content(W['path'], W['input'], len(W['input'].encode()), 'plain', create=True, overwrite=False)
-        assert 'v3' in error.value.format()
+            await backend._write_content(W['path'], W['input'], len(W['input'].encode('utf-8', 'surrogatepass')), 'plain', create=True, overwrite=False)
+        assert 'Provide valid Unicode text' in error.value.format()
+        assert 'restore the affected data from a healthy device' in error.value.format()
+        assert 'splitter' not in error.value.format()
         assert 'device' in error.value.format()
         assert not log
         assert backend._text_verdicts == before

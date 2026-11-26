@@ -28,7 +28,7 @@ for (const custom of [0,-1,-2]) for (const minimum of minima) for (const empty o
     }
     if (result.source_sha256) {
         provenance ??= Object.fromEntries(['source_sha256','wasm_dependency','decoder_dependency','upstream_commit','wasm_sha256','node'].map(k=>[k,result[k]]));
-        for (const key of ['pieces','split_pieces']) result[key] = result[key].map(i=>result.strings[i]);
+        for (const key of ['pieces','split_pieces','lossless_pieces','lossless_split_pieces']) result[key] = result[key].map(i=>result.strings[i]);
         for (const key of ['strings', ...Object.keys(provenance)]) delete result[key];
     }
     const effectiveV1 = version === 'v1' || version.startsWith('legacy-0');

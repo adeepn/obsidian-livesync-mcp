@@ -33,8 +33,8 @@ def test_coercion_partition(row):
             splitter.split(raw, path=row['payload']['path'], text_blob=row['payload']['text'])
         return
     pieces = splitter.split(raw, path=row['payload']['path'], text_blob=row['payload']['text'])
-    assert pieces == row['split_pieces']
-    assert [splitter.chunk_id_for_piece(p) for p in pieces] == row['split_children']
+    assert pieces == row['lossless_split_pieces']
+    assert [splitter.chunk_id_for_piece(p) for p in pieces] == row['lossless_split_children']
 
 @pytest.mark.parametrize('kind', ['couchdb', 'journal'])
 @pytest.mark.parametrize('row', ROWS)
@@ -54,8 +54,8 @@ async def test_coercion_settings_matrix(tmp_path, kind, row):
             return
         result = await backend._write_content(row['payload']['path'], data, len(raw), 'plain' if row['payload']['text'] else 'newnote', create=True, overwrite=False)
         stored = await doc(row['payload']['path'])
-        assert stored['children'] == row['children']
-        assert (await backend.read_note(row['payload']['path']))['text' if row['payload']['text'] else 'data'] == (''.join(row['pieces']) if row['payload']['text'] else data)
+        assert stored['children'] == row['lossless_children']
+        assert (await backend.read_note(row['payload']['path']))['text' if row['payload']['text'] else 'data'] == (''.join(row['lossless_pieces']) if row['payload']['text'] else data)
 
 @pytest.mark.parametrize('minimum', [[1.0], [2.0]])
 def test_array_numeric_representation_uses_js_primitive(minimum):
@@ -64,7 +64,7 @@ def test_array_numeric_representation_uses_js_primitive(minimum):
                and r['version'] == 'v2' and r['mode'] == 'plain')
     settings = {**row['settings'], 'minimumChunkSize': minimum}
     raw = base64.b64decode(row['payload']['base64'])
-    assert ContentSplitter(settings).split(raw, path=row['payload']['path'], text_blob=True) == row['split_pieces']
+    assert ContentSplitter(settings).split(raw, path=row['payload']['path'], text_blob=True) == row['lossless_split_pieces']
 
 
 @pytest.mark.parametrize('row',json.loads(Path('tests/fixtures/chunk_parameters_upstream.json').read_text())['rows'])
@@ -118,8 +118,8 @@ def test_v2_repeated_array_minimum_concatenation(row):
     # doubling the accumulated string loses the original right operand.
     splitter = ContentSplitter(row['settings'])
     pieces = splitter.split('abcd\n' * row['repeats'], path='concatenate.md')
-    assert pieces == row['split_pieces']
-    assert [splitter.chunk_id_for_piece(piece) for piece in pieces] == row['split_children']
+    assert pieces == row['lossless_split_pieces']
+    assert [splitter.chunk_id_for_piece(piece) for piece in pieces] == row['lossless_split_children']
 
 
 def test_repeated_minimum_fixture_provenance():

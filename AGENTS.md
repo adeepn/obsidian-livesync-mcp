@@ -282,3 +282,12 @@ F12 endpoint-purpose classification is centralized in `storage_couchdb.py:_REQUE
 `tests/test_couchdb_request_purpose.py` covers endpoint/fault/status cells,
 public read refusals and fail-closed undeclared operations. No oracle generator
 or fixture is needed for this peer data-protection contract.
+
+F13 lossless text boundaries: `scripts/extract_lossless_vectors.mjs` records raw
+and independently projected lossless partitions/IDs with pinned native hash
+managers in `tests/fixtures/lossless_upstream.json.gz`.
+`tests/test_lossless_legacy.py` covers every writer text path, safe/broken cuts,
+full next-piece caps, both backend lifecycles, lone units and unchanged reads.
+`scripts/extract_decoder_vectors.mjs` also retains native decoder partitions
+and lossless partitions/IDs; its final two arguments are the verified WASM ESM
+and tarball paths. `tests/test_splitter_decoding.py` pins both source views.

@@ -36,7 +36,7 @@ def test_comparison_equality_is_observable(entry):
     witness = entry['witness']
     if witness['kind'] == 'grid':
         vector = GRID[witness['id']]
-        expected = expected_pieces({'pieces': vector['split_pieces']}), vector['split_children']
+        expected = expected_pieces({'pieces': vector['lossless_split_pieces']}), vector['lossless_split_children']
         run = lambda module: grid_result(module, vector)
     elif witness['kind'] == 'cell':
         from tests.test_legacy_cells import ALL_CELL_ROWS, cell_run
@@ -56,7 +56,7 @@ def test_comparison_equality_is_observable(entry):
     elif witness['kind'] == 'coercion':
         from tests.test_coercion_cells import ROWS, refuses
         row = ROWS[witness['index']]
-        expected = ('refused',) if refuses(row) else (row['split_pieces'], row['split_children'])
+        expected = ('refused',) if refuses(row) else (row['lossless_split_pieces'], row['lossless_split_children'])
         run = lambda module: coercion_result(module, row)
     elif witness['kind'] == 'helper':
         vector = ORACLE['helper_probes'][witness['family']][witness['index']]

@@ -40,8 +40,10 @@ const split=read('string_and_binary/chunks.ts');
 run(split.slice(0,split.indexOf('// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment'))+split.slice(split.indexOf('export function splitPiecesText('),split.indexOf('export async function splitPiecesRabinKarp(')));
 run(read('managers/HashManager/PureJSHashManager.ts'));
 const manager=vm.runInContext('new SHA1HashManager({})',ctx);
-const input='a'.repeat(123)+'🙂z', pieces=[];
-for await(const p of (await ctx.splitPieces2(new Blob([input],{type:'text/plain'}),124,false,5))()) pieces.push(p);
+// Direct native text function models a caller-supplied lone-unit leaf.
+// Blob ingress instead replaces it before splitting; tested separately.
+const input='a'.repeat(123)+'\ud83dz', pieces=[];
+for (const p of ctx.splitPiecesTextV1(input,124,false,5)()) pieces.push(p);
 const splitter_controls=[];
 for(const version of ['v2','v2-segmenter']) {
  const result=[];

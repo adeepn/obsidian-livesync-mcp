@@ -30,7 +30,7 @@ def test_terminating_legacy_cell(case):
     splitter = ContentSplitter(runtime_settings(case))
     pieces = splitter.split(grid_payload(case[-1])[1], path=grid_path(case[-1]))
     assert_partition(pieces, [splitter.chunk_id_for_piece(p) for p in pieces], {
-        'pieces': vector['split_pieces'], 'children': vector['split_children']})
+        'pieces': vector['lossless_split_pieces'], 'children': vector['lossless_split_children']})
 
 
 @pytest.mark.parametrize('version,custom,minimum,data,path,setting', [
@@ -57,7 +57,7 @@ def test_looping_cell_names_plugin_and_recovery(version, custom, minimum, data, 
 @pytest.mark.parametrize('case', G3_CASES, ids=case_id)
 async def test_cell_backend_lifecycle(tmp_path, kind, case):
     # EntryManagerImpls.ts:280 discards empty leaves; chunks.ts:234-240 can
-    # split pairs. journalRecords.ts:70-76 replaces lone units on leaf wire.
+    # split pairs in upstream. F13 own writes use the lossless oracle instead.
     from tests.settings_oracle import GRID, expected_pieces
     from tests.test_settings_matrix import matrix_vault, pieces_for
     vector = GRID[case_id(case)]
@@ -65,14 +65,6 @@ async def test_cell_backend_lifecycle(tmp_path, kind, case):
     data = grid_payload(case[-1])[1]
     path = grid_path(case[-1])
     expected = expected_pieces(vector)
-    if kind == 'journal':
-        # JS TextEncoder USVString conversion, independently executed in the
-        # committed surrogate_wire_upstream fixture; keep original IDs.
-        if case[-1] == 'g3-surrogate':
-            wire = json.loads((Path(__file__).parent / 'fixtures/legacy_wire_cells_upstream.json').read_text())
-            projected = next(r for r in wire['rows'] if r['id'] == case_id(case))
-            assert projected['children'] == vector['children']
-            expected = projected['pieces']
     async with matrix_vault(tmp_path, kind, settings) as (backend, doc, _, _, _):
         if case[4] == '__G3_NaN__':
             # tweak.compatibility.ts:47-65 uses JS equality: NaN != NaN.
@@ -93,7 +85,7 @@ async def test_cell_backend_lifecycle(tmp_path, kind, case):
             return
         await publish()
         metadata = await doc(path)
-        assert metadata['children'] == vector['children']
+        assert metadata['children'] == vector['lossless_children']
         stored = await pieces_for(backend, metadata['children'])
         assert stored == expected
         field = 'data' if isinstance(data, bytes) else 'text'
@@ -105,7 +97,7 @@ async def test_cell_backend_lifecycle(tmp_path, kind, case):
         await backend.rename_note(path, moved)
         assert await backend.read_note(path) is None
         assert (await backend.read_note(moved))[field] == reconstructed
-        assert (await doc(moved))['children'] == vector['children']
+        assert (await doc(moved))['children'] == vector['lossless_children']
         assert await backend.delete_note(moved) is True
         assert await backend.read_note(moved) is None
 
@@ -158,7 +150,7 @@ def cell_run(module, row):
 def test_every_upstream_cell(row):
     import content_splitter
     if row['status'] == 'defined':
-        assert cell_run(content_splitter, row) == (row['split_pieces'], row['split_children'])
+        assert cell_run(content_splitter, row) == (row['lossless_split_pieces'], row['lossless_split_children'])
     else:
         with pytest.raises(ValueError, match='plugin itself does not terminate'):
             cell_run(content_splitter, row)
