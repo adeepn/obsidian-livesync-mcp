@@ -1,0 +1,23 @@
+{
+  "date": "2026-11-26",
+  "command": "verify-visible",
+  "passed": true,
+  "result": [
+    {
+      "path": "parity-live/moved.md",
+      "byte_exact": true,
+      "remote_present": true,
+      "remote_size": 72,
+      "remote_sha256": "d94ff38ef94e1a4ac70a3cbca824dbd7b3a3908d41dbf83a578990eb49e90001",
+      "size": 72,
+      "ingested_blob_size": 72,
+      "metadata_size": 72,
+      "metadata_size_matches": true,
+      "type": "plain",
+      "type_matches": true,
+      "piece_count": 1,
+      "piece_ids_match": true,
+      "sha256": "d94ff38ef94e1a4ac70a3cbca824dbd7b3a3908d41dbf83a578990eb49e90001"
+    }
+  ]
+}

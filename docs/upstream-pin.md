@@ -29,25 +29,41 @@ Ordinary oracle tests are offline; active-selection integration tests invoke Nod
 
 ## Real-client evidence
 
-The live-validated client remains **1.0.50**, validated **2026-11-20**:
-[final transcripts](test-artifacts/2026-11-20-live-s3/) and
-[original acceptance checklist](live-check-s3-checklist.md).
-That validation covered S3 reconnect/replay, byte comparison and peer writes
-reflected by a real client under its settings; it did not validate every
-settings combination or plugin 1.0.52. The sanitized real milestone was not
-captured then. Native-host invalid-byte decoding remains an open experiment.
-
+The live-validated client is **1.0.50**. The settings-parity live acceptance ran
+against an S3 journal on **2026-11-25 and 2026-11-26**.
 Automated real-server acceptance: **DONE** —
 [261 checks](test-artifacts/2026-11-25-parity-docker/summary.txt).
-Live Obsidian acceptance: **IN PROGRESS**, client **1.0.50**, started **2026-11-25**;
-final live acceptance pending. **1.0.52 has not been exercised live**.
-First owner observation: ordinary sync against a confirmed wiped bucket creates
-service records (milestone and sync parameters) but does not re-send files;
-see step 0 for the explicitly authorized device-to-server rebuild sequence.
+Live Obsidian acceptance: **DONE** for the main scenarios of the
+[parity live checklist](live-check-parity-checklist.md). The
+[record](test-artifacts/2026-11-26-parity-live/summary.txt) lists every step, the
+defects the run found and the limits of the evidence. It shows:
 
-Final evidence belongs under `docs/test-artifacts/<date>-parity-live/` after the
-[parity live checklist](live-check-parity-checklist.md) is complete. Preparing
-a checklist/script or recording early observations is not final live validation.
+- every vault file byte-exact with the client's piece ids, after the reconnect and
+  again after the owner changed the size limit on the device;
+- 40 MiB and 100 MiB client-written binaries and a peer-written 40 MiB binary
+  applied by the client;
+- peer-written create, update, rename and soft delete applied by the client with
+  the peer's revision ids, nothing sent back;
+- a `.md` file with invalid UTF-8 ingested by the client as plain text, each
+  invalid sequence replaced by U+FFFD (15 bytes became 21), matching the peer;
+- a 50 MiB + 1 byte upload skipped and the rename of an oversized file refused,
+  with the bucket unchanged.
+
+The additional checklist scenarios were not executed. The large files repeat a
+short pattern, so the client cut them at the maximum piece size: cut positions on
+varied bytes rest on the offline oracle differentials, not on this run. CouchDB
+has no live client run; its evidence is the automated real-server acceptance.
+**1.0.52 has not been exercised live**.
+
+First owner observation (2026-11-25): ordinary sync against a confirmed wiped
+bucket creates service records (milestone and sync parameters) but does not
+re-send files; see step 0 of the checklist for the explicitly authorized
+device-to-server rebuild sequence.
+
+The earlier **2026-11-20** S3 validation stays on record:
+[final transcripts](test-artifacts/2026-11-20-live-s3/) and the
+[original acceptance checklist](live-check-s3-checklist.md). The sanitized real
+milestone was not captured then.
 
 Earlier historical audit: `docs/AUDIT-2026-11-10.md` §2, plugin `517f5c2` /
 commonlib `597b64e` (2026-11-10).

@@ -1,0 +1,11 @@
+{
+  "date": "2026-11-26",
+  "command": "write-large",
+  "passed": true,
+  "result": {
+    "path": "parity-live/peer-40m.bin",
+    "size": 41943040,
+    "sha256": "c6390d38a94ac47e31960a940c7ef9fc7bd6ed6caad6e503a689dc37ef462c62",
+    "piece_count": 410
+  }
+}

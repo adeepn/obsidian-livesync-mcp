@@ -2,13 +2,16 @@
 
 Automated real-server acceptance: **DONE** —
 [261 checks](test-artifacts/2026-11-25-parity-docker/summary.txt).
-Live Obsidian acceptance: **IN PROGRESS**, client **1.0.50**, started **2026-11-25**;
-final live acceptance pending. **1.0.52 has not been exercised live**.
-First owner observation: ordinary sync against a confirmed wiped bucket creates
-service records (milestone and sync parameters) but does not re-send files;
-see step 0 for the explicitly authorized device-to-server rebuild sequence.
+Live Obsidian acceptance: **DONE** for the main scenarios, client **1.0.50**, S3
+journal, **2026-11-26**: [record](test-artifacts/2026-11-26-parity-live/summary.txt).
+The additional scenarios of section 7 and the cleanup of section 8 were
+not executed. **1.0.52 has not been exercised live**.
+First owner observation (2026-11-25): ordinary sync against a confirmed wiped
+bucket creates service records (milestone and sync parameters) but does not
+re-send files; see step 0 for the explicitly authorized device-to-server rebuild
+sequence.
 
-Это инструкция продолжающейся проверки, не отчёт о завершённой live-приёмке.
+Это инструкция проверки, а не отчёт: результаты выполнения — в записи выше.
 Контроллер сначала вычитывает инструкцию, затем передаёт владельцу.
 
 ## 1. Подготовка вместе с контроллером

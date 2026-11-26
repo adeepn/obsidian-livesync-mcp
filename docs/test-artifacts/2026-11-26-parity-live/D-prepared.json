@@ -1,0 +1,12 @@
+{
+  "date": "2026-11-26",
+  "command": "prepare-decoding",
+  "passed": true,
+  "result": {
+    "prepared": [
+      "invalid.md",
+      "text.png",
+      "upper.MD"
+    ]
+  }
+}
