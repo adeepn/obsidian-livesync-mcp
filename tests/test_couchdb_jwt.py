@@ -11,6 +11,7 @@ import pytest
 from config import ConfigError, load_config
 from storage_couchdb import CouchDBBackend
 from tests.couchdb_fake import make_fake_couchdb
+from tests.test_integration_couchdb import raw_client, scratch_database
 
 FIXTURE = json.loads(Path('tests/fixtures/jwt_upstream.json').read_text())
 REFRESH_FIXTURE = json.loads(Path('tests/fixtures/jwt_refresh_upstream.json').read_text())
@@ -201,13 +202,18 @@ async def test_transport_secret_never_reaches_tools_or_logs(caplog, monkeypatch)
 
 
 @pytest.mark.asyncio
-@pytest.mark.skipif(not os.environ.get('COUCHDB_TEST_JWT_URL'), reason='COUCHDB_TEST_JWT_URL absent')
-async def test_live_jwt_startup():
-    # Controller supplies JWT-only credentials; never persist or display them.
+@pytest.mark.skipif(not all(os.environ.get(k) for k in ('COUCHDB_TEST_URL', 'COUCHDB_TEST_USER', 'COUCHDB_TEST_PASSWORD',
+                                                       'COUCHDB_TEST_JWT_URL', 'COUCHDB_TEST_JWT_SUBJECT', 'COUCHDB_TEST_JWT_HS_KEY')),
+                    reason='JWT acceptance environment absent')
+async def test_live_jwt_startup(scratch_database):
+    # Factory path with JWT-only credentials. The values stay in this mapping: exported
+    # COUCHDB_JWT_* variables would collide with the Basic defaults that configure the
+    # application built at import.
     from server import get_backend
-    env = {k:v for k,v in os.environ.items() if k.startswith('COUCHDB_JWT_')}
-    env.update(LIVESYNC_BACKEND='couchdb', COUCHDB_URL=os.environ['COUCHDB_TEST_JWT_URL'],
-               COUCHDB_DATABASE=os.environ.get('COUCHDB_DATABASE', 'vault'), MCP_API_KEY='smoke-only')
+    env = dict(LIVESYNC_BACKEND='couchdb', MCP_API_KEY='acceptance-only',
+               COUCHDB_URL=os.environ['COUCHDB_TEST_JWT_URL'], COUCHDB_DATABASE=scratch_database,
+               COUCHDB_JWT_ALGORITHM='HS256', COUCHDB_JWT_SUBJECT=os.environ['COUCHDB_TEST_JWT_SUBJECT'],
+               COUCHDB_JWT_KEY=os.environ['COUCHDB_TEST_JWT_HS_KEY'])
     b = get_backend(load_config(env))
     try:
         await b.startup_check()

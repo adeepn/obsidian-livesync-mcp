@@ -163,8 +163,9 @@ integrity-verified published octagonal-wheels and Node WebCrypto; synthetic
 private keys in `tests/fixtures/jwt_upstream.json` are test-only, not secrets.
 `tests/test_couchdb_jwt.py` covers exact wire bytes, raw EC verification,
 refresh boundaries, exclusive configuration, transport hygiene and typed stats.
-Its one live startup smoke is skipped unless `COUCHDB_TEST_JWT_URL` is exported
-with JWT credentials and the intended `COUCHDB_DATABASE`.
+Its one live startup smoke is skipped unless the `COUCHDB_TEST_*` acceptance
+variables listed in `docs/developer-acceptance.md` are exported; it runs on a
+scratch database and takes the JWT-only credentials from `COUCHDB_TEST_JWT_*`.
 
 `scripts/extract_text_budget_vectors.mjs` executes the pinned device size
 predicate and the verified splitter harness for a 12 MiB textual newnote;
