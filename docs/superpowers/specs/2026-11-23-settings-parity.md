@@ -1135,3 +1135,10 @@ Document batches use their locally requested key count. Unsupported/malformed
 encodings direct the operator to identity; refused write responses require a
 re-read before retry. Synthetic transport tests are defence evidence, not a
 fabricated native plugin decoder oracle.
+
+
+### 2026-11-26 — F10-2 selection changelog correction
+
+[GOTCHA] Only useIgnoreFiles/ignoreFiles are vault-derived selection fields.
+The milestone does not publish syncOnlyRegEx/syncIgnoreRegEx; those remain
+operator environment settings. Correct the branch changelog's broader claim.

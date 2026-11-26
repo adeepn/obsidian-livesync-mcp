@@ -19,8 +19,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Admit files under vault syncMaxSizeInMB (default 50 MiB, equality admitted,
   <=0 unlimited), with structured skipped writes and readable oversized revisions.
   Invalid plain-path UTF-8 requires explicit lossy conversion.
-- Derive allow/ignore regex, ignore-file selection, size and text policy from vault
-  settings, retaining independent local overrides. Active selection uses verified
+- Derive useIgnoreFiles/ignoreFiles, size and text policy from vault settings,
+  retaining independent local overrides. Keep syncOnlyRegEx/syncIgnoreRegEx as
+  operator environment settings; they are not published in the milestone.
+  Active selection uses verified
   pinned ECMAScript/minimatch code and requires Node 22+; inactive selection needs
   no Node. Refresh journal policies atomically and refuse incompatible active rules.
 - Support CouchDB Basic/JWT authentication (HS256/HS512/ES256/ES512), per-backend

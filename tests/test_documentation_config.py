@@ -1081,3 +1081,13 @@ def test_couchdb_http_decoding_policy_documented():
                          'LIVESYNC_COUCHDB_MAX_INFLATED_BYTES', '_bulk_docs'):
             assert required in text
     assert 'HTTP' in (ROOT / '.env.example').read_text().split('LIVESYNC_COUCHDB_MAX_INFLATED_BYTES=')[0][-250:]
+
+
+def test_changelog_distinguishes_vault_ignore_files_from_local_regex():
+    # C:common/models/tweak.definition.ts:116-151 milestone tweak fields omit
+    # syncOnlyRegEx/syncIgnoreRegEx; useIgnoreFiles/ignoreFiles are published.
+    text = (ROOT / 'CHANGELOG.md').read_text().split('### Settings parity', 1)[1]
+    text = text.split('\n## ', 1)[0]
+    assert 'syncOnlyRegEx' in text and 'syncIgnoreRegEx' in text
+    assert 'operator environment settings' in text
+    assert 'Derive allow/ignore regex' not in text
