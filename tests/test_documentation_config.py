@@ -1168,13 +1168,25 @@ def test_lossless_legacy_boundary_contract():
 
 
 def test_recommendation_only_policy_documentation():
-    for name in ('docs/tweak-compatibility.md', 'docs/peer-limitations.md',
-                 'docs/selection-filters.md', 'docs/size-policy.md'):
+    # The rule is stated once; the other pages keep the refusal that concerns them and link.
+    link = 'tweak-compatibility.md#recommendation-only-writer-policy'
+    normative = ' '.join((ROOT / 'docs/tweak-compatibility.md').read_text().split())
+    for term in ('Recommendation-only writer policy', 'device_count', 'disagree',
+                 'name_count', 'tweakModified', 'LIVESYNC_SYNC_MAX_SIZE_MB',
+                 'LIVESYNC_USE_IGNORE_FILES', 'LIVESYNC_IGNORE_FILES',
+                 'Only maps advertising the individual key vote',
+                 'the only settings values in tool output'):
+        assert term in normative, term
+    for name in ('docs/peer-limitations.md', 'docs/selection-filters.md', 'docs/size-policy.md'):
         text = (ROOT / name).read_text()
-        for term in ('Recommendation-only writer policy', 'device_count', 'disagree',
-                     'name_count', 'tweakModified', 'LIVESYNC_SYNC_MAX_SIZE_MB',
-                     'LIVESYNC_USE_IGNORE_FILES', 'LIVESYNC_IGNORE_FILES'):
-            assert term in text, (name, term)
+        assert '## Recommendation-only writer policy' in text, name
+        assert f']({link})' in text, name
+        assert 'Only maps advertising the individual key vote' not in text, name
+    for name in ('README.md', 'docs/peer-limitations.md', 'docs/selection-filters.md', 'docs/size-policy.md',
+                 'docs/tweak-compatibility.md'):
+        text = ' '.join((ROOT / name).read_text().split())
+        assert 'no device has a positive timestamp' in text, name
+    assert 'P-48' not in normative  # internal ruling identifiers stay out of the documentation
     assert 'Device-derived recommendation-only policy' in (ROOT / 'README.md').read_text()
     assert 'device maps precede PREFERRED' in (ROOT / '.env.example').read_text()
 
@@ -1189,14 +1201,11 @@ def test_reconnect_ingestion_documentation():
 
 
 def test_agreeing_newest_and_ignore_name_documentation():
-    for name in ('docs/tweak-compatibility.md', 'docs/peer-limitations.md',
-                 'docs/selection-filters.md', 'docs/size-policy.md'):
-        text = (ROOT / name).read_text()
-        assert 'equally newest devices that agree' in text
-        assert 'even when older devices differ' in text
+    normative = ' '.join((ROOT / 'docs/tweak-compatibility.md').read_text().split())
+    assert 'equally newest devices that agree' in normative
+    assert 'even when older devices differ' in normative
     for name in ('docs/selection-filters.md', 'docs/peer-limitations.md'):
         text = (ROOT / name).read_text()
         assert 'Name-shape validation is never fatal' in text
-        assert 'equally newest devices disagree' in text
         assert 'Ignore names never refuse startup' not in text
     assert 'F15-2' in (ROOT / 'docs/superpowers/specs/2026-11-23-settings-parity.md').read_text()

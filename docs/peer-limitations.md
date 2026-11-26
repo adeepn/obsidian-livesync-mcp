@@ -51,7 +51,8 @@ memory or that every server permits that input.
 | Refusal family | Pinned behaviour and peer reason | Remedy |
 | --- | --- | --- |
 | E2EE, obfuscated paths, encrypted chunks | Plugin supports encryption; peer does not implement it (`livesync_format.py:validate_vault_settings`; upstream encryption/identity sources inventoried in [the specification](superpowers/specs/2026-11-23-settings-parity.md)). | Use an unencrypted/unobfuscated test vault until issues #3/#4 are implemented. Do not disable encryption on a working vault just to connect this peer. |
-| Missing/unreadable/disagreeing effective identity, size, splitter, ignore or tweak snapshots | Peer cannot choose a safe writer policy without an authoritative or agreeing map (`livesync_format.py:resolve_*`; upstream tweak checks `C:common/models/tweak.definition.ts:1-138`, identity `C:services/base/PathService.ts:86-105`). | Align devices/PREFERRED or use the named documented override; refresh/restart. Inactive unusable ignore name types do not refuse; unresolved recommendation-policy ambiguity still refuses; explicit unresolved names only warn. |
+| Missing/unreadable/disagreeing effective identity, splitter or required tweak snapshots | Peer cannot choose a safe writer policy without an authoritative or agreeing map (`livesync_format.py:resolve_*`; upstream tweak checks `C:common/models/tweak.definition.ts:1-138`, identity `C:services/base/PathService.ts:86-105`). | Align devices/PREFERRED or use the named documented override; refresh/restart. |
+| Unresolved recommendation-only ambiguity (`syncMaxSizeInMB`, `useIgnoreFiles`, `ignoreFiles`) | A missing key has a default and a disagreement is arbitrated (newest device, or equally newest devices that agree); the peer refuses only when equally newest devices disagree, or no device has a positive timestamp, and PREFERRED does not advertise the key (`livesync_format.py:resolve_recommendation_policy`). | Align devices/PREFERRED or set `LIVESYNC_SYNC_MAX_SIZE_MB`, `LIVESYNC_USE_IGNORE_FILES` or `LIVESYNC_IGNORE_FILES`; refresh/restart. Inactive unusable ignore name types do not refuse; explicit unresolved names only warn. |
 | Invalid/unknown hash/derivation configuration | `content_splitter.py:SplitterConfig`; exact upstream algorithms and migration in `C:string_and_binary/chunks.ts:13-72,350-432,527-545`. Unknown splitter version normalization follows upstream; unsupported identity/hash combinations refuse rather than invent IDs. | Correct the named vault settings on devices and refresh. No extra finite cap on scalar coercion after JSON admission. |
 | Proven splitter loops; V2 binary data loss | `content_splitter.py` guards measured nontermination or actual discarded bytes; upstream loop/addition boundaries in `C:string_and_binary/chunks.ts:224-252,350-432`. | Use positive piece size and a positive V2 plain minimum as the typed reason directs. Empty inputs, terminating zero/negative cells and V3 retain native outcomes. [Cell boundaries](vault-format.md#invalid-writer-parameters). |
 | True chunk/path collisions, shared-leaf replacement | Both backends preflight IDs and data; upstream computes content IDs in `C:string_and_binary/chunks.ts:13-72`. Refusing protects another document sharing the ID. | Resolve the conflicting leaf in Obsidian or coordinate a different hash/positive chunk size. Journal compares TextEncoder-projected bytes; equal projected data is not a false collision. |
@@ -396,32 +397,9 @@ recovery is unchanged. [Endpoint inventory](vault-format.md#unreadable-write-ack
 
 ## Recommendation-only writer policy
 
-`syncMaxSizeInMB`, `useIgnoreFiles`, and `ignoreFiles` resolve independently
-from device maps advertising that key, before consulting PREFERRED. An explicit
-operator override always wins. Equal effective device policies use that value;
-disagreement uses the greatest positive numeric `tweakModified`. Under P-48a,
-a tie at that greatest positive timestamp counts as a tie only when the tied
-newest devices disagree: equally newest devices that agree give their common
-value even when older devices differ. If equally newest devices disagree, or
-no device has a positive timestamp, use PREFERRED when it advertises the key.
-Otherwise issue a typed ambiguity refusal naming the setting and operator override:
-`LIVESYNC_SYNC_MAX_SIZE_MB`, `LIVESYNC_USE_IGNORE_FILES`, or
-`LIVESYNC_IGNORE_FILES`. When no device advertises a key, use PREFERRED, then
-the device default. JavaScript size coercion, boolean truthiness and comma-name
-splitting still apply. Only maps advertising the individual key vote.
-
-This follows recommendation-only device behavior, not the compatibility
-baseline: required and compatible-lossy settings retain their existing
-PREFERRED-based assessment. Journal refresh validates the selection, size,
-derived text budget and provenance before installing the complete candidate.
-Rejected candidates preserve the previous effective snapshot. The peer never
-registers a device or publishes PREFERRED.
-
-`backend_info` and `obsidian_vault_stats` expose `recommendation_policy`, keyed
-by these three setting names. Each entry contains `source` (`override`,
-`device`, or `preferred`), integer `device_count`, and boolean `disagree`.
-Size and use-ignore entries expose the resolved numeric/boolean `value`;
-ignore names expose only integer `name_count`. A nonfinite unlimited size is
-reported as JSON null rather than a nonstandard numeric token. Device IDs and names are never
-exposed. `preferred` also labels the default when nothing advertises a key.
-The legacy selection source fields retain their `explicit`/`vault` vocabulary.
+`syncMaxSizeInMB`, `useIgnoreFiles` and `ignoreFiles` follow the devices, not PREFERRED.
+When the devices cannot decide and PREFERRED does not advertise the key either, the peer
+refuses with a typed ambiguity reason that names the operator override:
+`LIVESYNC_SYNC_MAX_SIZE_MB`, `LIVESYNC_USE_IGNORE_FILES` or `LIVESYNC_IGNORE_FILES`.
+The resolution order and the tie rule are defined once in
+[Tweak compatibility](tweak-compatibility.md#recommendation-only-writer-policy).

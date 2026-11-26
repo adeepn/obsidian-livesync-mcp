@@ -52,18 +52,18 @@ C:common/models/tweak.compatibility.ts:153-201;
 P:modules/coreFeatures/ModuleResolveMismatchedTweaks.ts:120-132,403-405.
 The native witness in `tests/fixtures/recommendation_upstream.json` executes
 these comparisons and the matched early-return branch. Multi-device arbitration
-is the owner's P-48 peer policy, not an invented upstream device oracle.
+is peer policy agreed with the repository owner, not an upstream device oracle.
 
 ## Recommendation-only writer policy
 
 `syncMaxSizeInMB`, `useIgnoreFiles`, and `ignoreFiles` resolve independently
 from device maps advertising that key, before consulting PREFERRED. An explicit
 operator override always wins. Equal effective device policies use that value;
-disagreement uses the greatest positive numeric `tweakModified`. Under P-48a,
-a tie at that greatest positive timestamp counts as a tie only when the tied
-newest devices disagree: equally newest devices that agree give their common
-value even when older devices differ. If equally newest devices disagree, or
-no device has a positive timestamp, use PREFERRED when it advertises the key.
+disagreement uses the greatest positive numeric `tweakModified`. A tie at that
+greatest timestamp counts as a tie only when the tied newest devices disagree:
+equally newest devices that agree give their common value even when older
+devices differ. If equally newest devices disagree, or no device has a positive
+timestamp, use PREFERRED when it advertises the key.
 Otherwise issue a typed ambiguity refusal naming the setting and operator override:
 `LIVESYNC_SYNC_MAX_SIZE_MB`, `LIVESYNC_USE_IGNORE_FILES`, or
 `LIVESYNC_IGNORE_FILES`. When no device advertises a key, use PREFERRED, then
@@ -82,12 +82,17 @@ PREFERRED: the matched branch returns before changing anything. When the user
 accepts the other side of a compatibility mismatch, the plugin copies the
 adopted side's recommendation-only values together with the compared changes
 (P:modules/coreFeatures/ModuleResolveMismatchedTweaks.ts:65-81,403-405,414).
-Recommendation-only values therefore move between a device and PREFERRED only
-through such a resolution. A plain settings change republishes only that
-device's own map. It was observed live on 2026-11-26 with plugin 1.0.50: the
-device map held `syncMaxSizeInMB` 100 while PREFERRED still held 50, and the
-device uploaded a 100 MiB file. The peer reads the device maps first for that
-reason; the policy above does not depend on the adoption path.
+Recommendation-only values move from a device to PREFERRED through such a
+resolution, and when the plugin seeds a PREFERRED that does not exist yet from
+the device's current settings (C:src/pouchdb/LiveSyncDBFunctions.ts:164-170).
+Once PREFERRED exists, a plain
+settings change republishes only that device's own map. It was observed live on
+2026-11-26 with plugin 1.0.50: the device map held `syncMaxSizeInMB` 100 while
+PREFERRED still held 50 (`B-reconnect-before-fix.json`), and the device had
+published a 104,857,600-byte file (`B-visible-device-files.json`); both reports
+are in `docs/test-artifacts/2026-11-26-parity-live/`. The peer reads the device
+maps first for that reason; the policy above does not depend on the adoption
+path.
 
 `backend_info` and `obsidian_vault_stats` expose `recommendation_policy`, keyed
 by these three setting names. Each entry contains `source` (`override`,

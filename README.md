@@ -121,7 +121,7 @@ refusal conditions and recovery instructions. The main practical differences:
   [Scope and alternatives](docs/peer-limitations.md#supported-vault-settings).
 - Hidden files, customization and plugin namespaces are excluded from ordinary tools.
   [Path and reflection scope](docs/peer-limitations.md#how-the-peer-differs-from-a-device).
-- Size/ignore policies follow devices before PREFERRED; overrides win. Equally newest devices that agree give their common value even when older devices differ; only disagreeing newest ties use PREFERRED, otherwise a typed ambiguity refusal names the operator override. See [arbitration and provenance](docs/tweak-compatibility.md#recommendation-only-writer-policy).
+- Size/ignore policies follow devices before PREFERRED; overrides win. Equally newest devices that agree give their common value even when older devices differ. PREFERRED decides when no device advertises a setting, when the equally newest devices disagree, or when no device has a positive timestamp; if PREFERRED does not advertise the setting either, a typed ambiguity refusal names the operator override. See [arbitration and provenance](docs/tweak-compatibility.md#recommendation-only-writer-policy).
 - The peer is an invisible writer: no device registration or PREFERRED publication.
   [Tweak policy](docs/peer-limitations.md#how-the-peer-differs-from-a-device).
 - Deletions retain body/chunk history; no timed purge or automatic conflict merging.
