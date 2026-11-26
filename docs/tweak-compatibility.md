@@ -77,6 +77,18 @@ derived text budget and provenance before installing the complete candidate.
 Rejected candidates preserve the previous effective snapshot. The peer never
 registers a device or publishes PREFERRED.
 
+A device keeps its own recommendation-only values while its settings match
+PREFERRED: the matched branch returns before changing anything. When the user
+accepts the other side of a compatibility mismatch, the plugin copies the
+adopted side's recommendation-only values together with the compared changes
+(P:modules/coreFeatures/ModuleResolveMismatchedTweaks.ts:65-81,403-405,414).
+Recommendation-only values therefore move between a device and PREFERRED only
+through such a resolution. A plain settings change republishes only that
+device's own map. It was observed live on 2026-11-26 with plugin 1.0.50: the
+device map held `syncMaxSizeInMB` 100 while PREFERRED still held 50, and the
+device uploaded a 100 MiB file. The peer reads the device maps first for that
+reason; the policy above does not depend on the adoption path.
+
 `backend_info` and `obsidian_vault_stats` expose `recommendation_policy`, keyed
 by these three setting names. Each entry contains `source` (`override`,
 `device`, or `preferred`), integer `device_count`, and boolean `disagree`.
