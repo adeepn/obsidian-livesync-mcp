@@ -1074,10 +1074,20 @@ def test_current_live_acceptance_status_is_explicit():
             assert term in text, (name, term)
         assert '**IN PROGRESS**' not in text, name
         assert 'final live acceptance pending' not in text, name
-    # DONE must not outgrow the record: its limits stay stated next to it.
-    assert 'CouchDB\nhas no live client run' in (ROOT / 'docs/upstream-pin.md').read_text()
-    assert 'maximum piece size' in (ROOT / 'docs/upstream-pin.md').read_text()
-    assert (ROOT / 'docs/test-artifacts/2026-11-26-parity-live/summary.txt').is_file()
+    # DONE must not outgrow the record: every limit of the live run stays stated next to it.
+    pin = ' '.join((ROOT / 'docs/upstream-pin.md').read_text().split())
+    for limit in ('The additional checklist scenarios were not executed.',
+                  'repeat a short pattern, so the client cut them at the maximum piece size',
+                  'cut positions on varied bytes rest on the offline oracle differentials, not on this run',
+                  'One device, one vault, one remote type and one splitter and hash mode were live',
+                  'the lossless legacy cut has no live evidence',
+                  'CouchDB has no live client run',
+                  'hidden files and files above the size limit are outside the comparison',
+                  '15 bytes on disk, 21 stored'):
+        assert limit in pin, limit
+    for name in ('summary.txt', 'checks.txt', 'bucket-listing.txt', 'journal-inventory.txt',
+                 'revision-prefixes.json', 'disk-listing.txt', 'client-logs.md'):
+        assert (ROOT / 'docs/test-artifacts/2026-11-26-parity-live' / name).is_file(), name
 
 
 def test_couchdb_http_decoding_policy_documented():

@@ -24,9 +24,10 @@ Self-hosted LiveSync **1.0.50**, Obsidian on macOS, vault `TESTVault`, remote "S
 
 Observation: the device created the service records in the empty bucket but did not re-send its files.
 The owner then ran "Overwrite Server Data with This Device's Files" (Maintenance and Recovery);
-the bucket received one journal with the vault and an updated milestone (bucket listing in the controller report).
+the bucket holds the device's journal published 10:51:42 with the eight vault files
+(bucket-listing.txt, journal-inventory.txt).
 
-## B100 — Maximum file size raised to 100 (2026-11-26 11:32)
+## B100 — Maximum file size raised to 100 (2026-11-26 11:32–11:33)
 
 ```
 26.11.2026, 11:32:42->Some tweak values have been changed. syncMaxSizeInMB
@@ -161,10 +162,10 @@ policy, missing 0, size or hash mismatches 0.
 
 The owner could not check the names in Obsidian's file explorer, which hides
 `.bin` files by default, and asked the controller to check the files instead
-(«файлы сам проверяй - я же их не вижу в обсидиане»). Controller checks on disk
-after this sync: `parity-live` holds the same eight files with unchanged sizes and
-modification times; `skipped.bin` and `refused-move.bin` are absent; `exact.bin` is
-104,857,600 bytes with the SHA-256 it had before. No file outside `.obsidian` was
-modified after 16:00. Reconnect (`B-refusals-reconnect.json`): PASS, 14 expected
-files byte-exact, 2 excluded by the vault size policy, missing 0, size or hash
-mismatches 0. The bucket still holds 11 objects.
+(«файлы сам проверяй - я же их не вижу в обсидиане»). Controller checks after this
+sync: reconnect (`B-refusals-reconnect.json`) PASS, 14 files compared, 2 excluded by
+the vault size policy, missing 0, size or hash mismatches 0 (13 files byte-identical,
+`invalid.md` equal to the client-ingested text). On disk (`disk-listing.txt`) the folder
+holds the same eight files; their modification times predate the refusal step;
+`skipped.bin` and `refused-move.bin` are absent. The bucket (`bucket-listing.txt`) holds
+11 objects; only the milestone changed, at 16:20:30.

@@ -38,8 +38,11 @@ Live Obsidian acceptance: **DONE** for the main scenarios of the
 [record](test-artifacts/2026-11-26-parity-live/summary.txt) lists every step, the
 defects the run found and the limits of the evidence. It shows:
 
-- every vault file byte-exact with the client's piece ids, after the reconnect and
-  again after the owner changed the size limit on the device;
+- every file the comparison admits equal to what the client stored (bytes, type,
+  metadata size, piece ids), after the reconnect and again after the owner changed the
+  size limit on the device; hidden files and files above the size limit are outside the
+  comparison, and the one file with invalid UTF-8 is compared after the client replaced
+  the invalid bytes (15 bytes on disk, 21 stored);
 - 40 MiB and 100 MiB client-written binaries and a peer-written 40 MiB binary
   applied by the client;
 - peer-written create, update, rename and soft delete applied by the client with
@@ -51,9 +54,10 @@ defects the run found and the limits of the evidence. It shows:
 
 The additional checklist scenarios were not executed. The large files repeat a
 short pattern, so the client cut them at the maximum piece size: cut positions on
-varied bytes rest on the offline oracle differentials, not on this run. CouchDB
-has no live client run; its evidence is the automated real-server acceptance.
-**1.0.52 has not been exercised live**.
+varied bytes rest on the offline oracle differentials, not on this run. One device,
+one vault, one remote type and one splitter and hash mode were live, and the lossless
+legacy cut has no live evidence. CouchDB has no live client run; its evidence is the
+automated real-server acceptance. **1.0.52 has not been exercised live**.
 
 First owner observation (2026-11-25): ordinary sync against a confirmed wiped
 bucket creates service records (milestone and sync parameters) but does not
