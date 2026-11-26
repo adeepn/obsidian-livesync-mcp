@@ -277,3 +277,8 @@ F11 response outcome coverage lives in `tests/test_couchdb_response_outcome.py`:
 committed document/bulk/local/delete/leaf acknowledgements, public append retry
 warnings, move source retirement, read refusals and connection send boundaries.
 The HTTP body diagnostic retains closed typed recovery across outcome wrapping.
+
+F12 endpoint-purpose classification is centralized in `storage_couchdb.py:_REQUEST_PURPOSES`;
+`tests/test_couchdb_request_purpose.py` covers endpoint/fault/status cells,
+public read refusals and fail-closed undeclared operations. No oracle generator
+or fixture is needed for this peer data-protection contract.

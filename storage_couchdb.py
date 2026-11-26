@@ -124,6 +124,43 @@ _TEXT_WINDOW_SIZE = 50
 _DB_MISSING_REASON = "no_db_file"
 
 
+# C:pouchdb/LiveSyncLocalDB.ts:638-656 separates get/allDocs reads from
+# put/bulkDocs publication. RemoteService.ts:135-159,373-381 observes body
+# failures after fetch; HTTP POST alone does not establish publication.
+# Published pouchdb-adapter-http 9.0.0 lib/index.es.js:597-654,743-773,
+# 851-861,1013-1019: DELETE/attachment reads, bulk/put, allDocs POST reads,
+# and changes feeds; :278-287,1141-1145 creates/deletes databases. This table is the peer safety contract, not a wire oracle.
+# One closed inventory for all request/error paths; no verb-based fallback.
+_REQUEST_PURPOSES = {
+    ('root', 'GET'): 'read', ('root', 'HEAD'): 'read',
+    ('session', 'GET'): 'read', ('session', 'HEAD'): 'read',
+    ('database', 'GET'): 'read', ('database', 'HEAD'): 'read',
+    ('database', 'PUT'): 'write', ('database', 'POST'): 'write',
+    ('database', 'DELETE'): 'write',
+    ('db-info', 'GET'): 'read',
+    ('changes', 'GET'): 'read', ('changes', 'POST'): 'read',
+    ('all-docs', 'GET'): 'read', ('all-docs', 'POST'): 'read',
+    ('bulk-docs', 'GET'): 'read', ('bulk-docs', 'POST'): 'write',
+    ('document', 'GET'): 'read', ('document', 'HEAD'): 'read',
+    ('document', 'PUT'): 'write', ('document', 'POST'): 'write',
+    ('document', 'DELETE'): 'write',
+    ('local', 'GET'): 'read', ('local', 'HEAD'): 'read',
+    ('local', 'PUT'): 'write', ('local', 'DELETE'): 'write',
+    ('leaf', 'GET'): 'read', ('leaf', 'HEAD'): 'read',
+    ('leaf', 'PUT'): 'write-leaf', ('leaf', 'DELETE'): 'write-leaf',
+    ('attachment', 'GET'): 'read', ('attachment', 'HEAD'): 'read',
+    ('attachment', 'PUT'): 'write', ('attachment', 'DELETE'): 'write',
+}
+
+
+class CouchDBRequestPurposeRefused(StorageUnavailable):
+    """An undeclared operation cannot be sent safely; no remote fields escape."""
+
+    def format(self):
+        return (super().format() + '; request purpose is undeclared; no request sent; '
+                'upgrade the peer to declare this operation before retrying')
+
+
 class CouchDBHTTPBudgetExceeded(CouchDBInflateBudgetExceeded):
     """HTTP budget refusal, including possibly committed write responses."""
 
@@ -139,6 +176,16 @@ class CouchDBHTTPEncodingRefused(StorageError):
         return ('CouchDB HTTP Content-Encoding is unsupported or malformed; '
                 'configure the server/proxy to return identity encoding and retry; '
                 'if publishing, re-read the note before retrying')
+
+
+@dataclass(frozen=True)
+class _HTTPReadDiagnostic(PublicDiagnostic):
+    """HTTP 408 on a read-only POST cannot imply a publication outcome."""
+
+    def status_guidance(self):
+        if self.status == 408:
+            return 'the read request timed out; retry the read'
+        return super().status_guidance()
 
 
 @dataclass(frozen=True)
@@ -325,6 +372,41 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
     def _doc_path(self, doc_id: str) -> str:
         return f"{self._db_path}/{urllib.parse.quote(doc_id, safe='')}"
 
+    def _request_purpose(self, method: str, path: str) -> str:
+        # HTTPX accepts both database-relative and root-relative paths. Strip
+        # one leading separator for classification only, never a network path.
+        path = path.removeprefix("/")
+        # Match wire-encoded document IDs before unquoting: _local/id is
+        # encoded by _doc_path, while attachment separators remain literal.
+        if path in {'', '/'}:
+            family = 'root'
+        elif path == '_session':
+            family = 'session'
+        elif path == self._db_path:
+            family = 'database'
+        elif path.startswith(self._db_path + '/'):
+            tail = path[len(self._db_path) + 1:]
+            special = {'_all_docs': 'all-docs', '_bulk_docs': 'bulk-docs',
+                       '_changes': 'changes', '_db_info': 'db-info'}
+            decoded = urllib.parse.unquote(tail)
+            if tail in special:
+                family = special[tail]
+            elif decoded.startswith('_local/') and decoded != '_local/':
+                family = 'local'
+            elif decoded.startswith('h:') and '/' not in tail:
+                family = 'leaf'
+            elif tail and not decoded.startswith('_'):
+                family = 'attachment' if '/' in tail else 'document'
+            else:
+                family = 'undeclared'
+        else:
+            family = 'undeclared'
+        purpose = _REQUEST_PURPOSES.get((family, method))
+        if purpose is None:
+            raise CouchDBRequestPurposeRefused(PublicDiagnostic(
+                operation=method, transport='CouchDB'))
+        return purpose
+
     @staticmethod
     def _preflight_documents(value: object) -> None:
         # chunks.ts:243-252 cuts V1 non-plain UTF-16 units; :698-699 protects
@@ -358,6 +440,7 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
         other error status and every transport failure raises a storage
         exception whose message carries no URL, database or revision.
         """
+        purpose = self._request_purpose(method, path)
         if json_body is not None:
             self._preflight_documents(json_body)
         # LiveSyncReplicator.ts:2071-2098 passes custom headers to the
@@ -412,7 +495,7 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
             # failures after fetch settles. An unreadable acknowledgement cannot
             # prove non-publication. Apply the peer uncertainty contract to all writes,
             # including bulk/local/leaf PUTs; reads retain the typed refusal.
-            if method in {"PUT", "POST", "DELETE"}:
+            if purpose != "read":
                 raise OutcomeUnknown(_HTTPBodyDiagnostic(
                     operation=method, transport='CouchDB', cause=type(exc),
                     budget_bytes=exc.limit if type(exc) is CouchDBHTTPBudgetExceeded else None,
@@ -420,7 +503,7 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
             raise
         except httpx.HTTPError as exc:
             logger.warning('CouchDB <omitted> <omitted> failed: <omitted>; cause: %s', cause_name(type(exc)))
-            if method in {"PUT", "POST", "DELETE"} and not isinstance(
+            if purpose != "read" and not isinstance(
                 exc, (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout)
             ):
                 raise OutcomeUnknown(PublicDiagnostic(operation=method, transport='CouchDB', cause=type(exc))) from None
@@ -446,10 +529,11 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
                       DiagnosticCode.COUCHDB_AUTHORIZATION_ERROR if code in {401, 403} else
                       DiagnosticCode.THE_NOTE_WAS_CHANGED_CONCURRENTLY_RE_READ_IT_AND_RETRY if code == 409 else
                       DiagnosticCode.COUCHDB_UNAVAILABLE if code >= 500 else DiagnosticCode.FAILED)
-            public = PublicDiagnostic(reason, status=code, operation=method, transport='CouchDB', cause=httpx.HTTPStatusError)
+            diagnostic_type = _HTTPReadDiagnostic if purpose == 'read' else PublicDiagnostic
+            public = diagnostic_type(reason, status=code, operation=method, transport='CouchDB', cause=httpx.HTTPStatusError)
             if code == 409:
                 raise ConcurrentModification(public) from None
-            if (code == 408 or code >= 500) and method in {'PUT', 'POST', 'DELETE'}:
+            if (code == 408 or code >= 500) and purpose != 'read':
                 raise OutcomeUnknown(public) from None
             raise StorageUnavailable(public) from None
         return response

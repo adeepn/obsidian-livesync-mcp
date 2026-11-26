@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Settings parity
 
+- Classify CouchDB response failures by endpoint purpose: read-only POST remains
+  a typed refusal; write acknowledgements retain uncertainty and recovery.
+  Refuse undeclared operations before sending with upgrade guidance.
+
 - Classify unreadable CouchDB PUT/POST/DELETE acknowledgements as outcome unknown
   with typed budget/encoding recovery and non-idempotent retry guidance. Preserve
   read refusals, uncertain orphan-leaf handling and move source-removal context.

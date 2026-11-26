@@ -70,7 +70,7 @@ See the [complete environment reference](docs/configuration.md).
 
 | Variable | Default | Recovery |
 | --- | --- | --- |
-| `LIVESYNC_COUCHDB_MAX_INFLATED_BYTES` | Splitter-derived, 32 MiB floor | Raise and restart for legitimate larger HTTP/document responses; an unreadable write acknowledgement is outcome unknown: re-read before retrying. |
+| `LIVESYNC_COUCHDB_MAX_INFLATED_BYTES` | Splitter-derived, 32 MiB floor | Raise and restart for legitimate larger HTTP/document responses; read-only POST remains a typed refusal; an unreadable write acknowledgement is outcome unknown: re-read before retrying. |
 
 ## Backends
 
@@ -107,6 +107,7 @@ and [source and live evidence](docs/upstream-pin.md).
 | Reflection, hidden/customization/plugin sync | Outside ordinary-tool scope | [Full scope](docs/peer-limitations.md#supported-vault-settings) |
 | YAML aliases and properties | Supported with configurable projection budgets | [Properties](docs/frontmatter-properties.md) |
 | HTTP request bodies | Configurable local policy | 1 GiB default, 0 unlimited; `LIVESYNC_MAX_REQUEST_BYTES`; [HTTP 413 recovery](docs/configuration.md#http-request-bodies) |
+| CouchDB request purpose | Read-only POST remains a typed refusal | [Endpoint purposes](docs/vault-format.md#unreadable-write-acknowledgements) |
 | Device request/cache/concurrency tuning | Local peer policies | [Operational bounds](docs/peer-limitations.md#operational-and-tool-bounds) |
 
 ## How the peer differs from a device
@@ -130,6 +131,8 @@ refusal conditions and recovery instructions. The main practical differences:
   [Transport and compression](docs/peer-limitations.md#how-the-peer-differs-from-a-device).
 - Successful lossy writes disclose typed notices. Unreadable write acknowledgements
   are outcome unknown; re-read before retrying, especially non-idempotent append.
+  Endpoint purpose distinguishes read-only POST from publication; undeclared operations
+  refuse before sending with upgrade guidance.
   [Publication and outcomes](docs/peer-limitations.md#how-the-peer-differs-from-a-device).
 - Replay has configurable resource budgets; runtime decoder/SQLite capacity also applies.
   [Limits and recovery](docs/peer-limitations.md#operational-and-tool-bounds).

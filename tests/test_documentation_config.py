@@ -1122,3 +1122,15 @@ def test_unreadable_write_outcome_recovery_documented():
     for name in ('.env.example', 'docs/configuration.md'):
         text = (ROOT / name).read_text()
         assert 'outcome unknown' in text and 're-read before retrying' in text
+
+
+def test_couchdb_request_purpose_documented():
+    for name in ('README.md', 'docs/vault-format.md', 'docs/configuration.md',
+                 '.env.example', 'CHANGELOG.md'):
+        text = (ROOT / name).read_text()
+        assert 'read-only POST' in text
+    text = (ROOT / 'docs/vault-format.md').read_text()
+    for term in ('_all_docs', '_bulk_docs', '_changes', '_session', '_db_info',
+                 'write-leaf', 'CouchDBRequestPurposeRefused', '_design', '_view',
+                 '_find', 'upgrade', 'before sending'):
+        assert term in text

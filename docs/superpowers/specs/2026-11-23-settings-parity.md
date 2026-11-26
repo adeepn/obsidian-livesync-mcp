@@ -1164,3 +1164,15 @@ Synthetic committed-response tests cover document, bulk, local, delete, leaf,
 public append, source retirement and connection send boundaries. No oracle fixture,
 configuration default or LiveSync format changed. No real-server acceptance was
 performed for F11; transport faults run against the HTTP-level CouchDB double.
+
+
+## 2026-11-26 — F12 endpoint-purpose response classification
+
+[DECISION] Replace F11's verb-only uncertainty classification with one closed
+endpoint-purpose table, shared by body, transport and HTTP-status handlers.
+Read-only POST `_all_docs`/`_changes` failures are ordinary typed refusals.
+Unknown operations refuse before send with upgrade guidance. Write/leaf
+uncertainty, orphan-leaf note refusal and typed recovery remain unchanged.
+The endpoint/failure matrix and public fetch/list/search regressions use local
+HTTP doubles; this is a peer safety contract, not an upstream format oracle.
+No fixture, configuration variable/default or real vault is changed.

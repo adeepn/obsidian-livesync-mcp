@@ -270,16 +270,42 @@ may already have committed it. These resource caps do not change file admission.
 
 ### Unreadable write acknowledgements
 
-An unreadable PUT/POST/DELETE response is outcome unknown, including document,
+An unreadable write-purpose PUT/POST/DELETE response is outcome unknown, including document,
 `_bulk_docs`, `_local`, delete and leaf requests: the change MAY have been applied.
 Re-read before retrying; append is NON-IDEMPOTENT. This applies to wire/decoded
 budget overflow, unsupported Content-Encoding, corrupt/truncated compression and
 connection loss after sending. Budget errors retain the typed byte limit and
 LIVESYNC_COUCHDB_MAX_INFLATED_BYTES raise/restart guidance; encoding errors name
 Content-Encoding and advise configuring the server/proxy for identity encoding.
-No remote header/body values are exposed. GET/HEAD keep typed refusals; connection,
+No remote header/body values are exposed. Read-purpose GET/HEAD and read-only POST
+requests keep typed refusals; connection,
 connect-timeout and pool-timeout failures before sending remain unavailability.
-All POST responses are conservatively classified at this shared request boundary.
+Classification is by endpoint purpose, never by HTTP verb alone. The single
+`_REQUEST_PURPOSES` table is consulted before sending and controls body failures,
+transport failures and readable HTTP status mapping alike:
+
+| Endpoint family | Methods and purpose |
+| --- | --- |
+| Root info, `_session` | GET/HEAD: read |
+| Database (with or without a leading slash) | GET/HEAD: read; PUT/POST/DELETE: write |
+| `_db_info` | GET: read |
+| `_all_docs`, `_changes` | GET/POST: read |
+| `_bulk_docs` | GET: read; POST: write |
+| Single document | GET/HEAD: read; PUT/POST/DELETE: write |
+| `_local` document (encoded or literal separator) | GET/HEAD: read; PUT/DELETE: write |
+| Content-addressed `h:` leaf | GET/HEAD: read; PUT/DELETE: write-leaf |
+| Attachment | GET/HEAD: read; PUT/DELETE: write |
+
+Production callers currently issue session/database/document GET, `_all_docs`
+GET/POST and document PUT (including local/leaf IDs). The remaining declared
+low-level routes retain their established error handling; declarations do not
+add public tools. `_design`, `_view`, `_find` and all other undeclared routes or
+methods are unused and refused before sending with typed
+`CouchDBRequestPurposeRefused`: upgrade the peer to declare the operation before
+retrying. This refuses an internal unsupported operation, not a vault setting.
+Readable 409 remains a conflict, 404 on GET/HEAD remains caller-interpreted absence,
+other readable 4xx remain ordinary refusals (408 on a write remains uncertain),
+and readable 5xx is uncertain only for write/write-leaf purposes.
 
 The leaf PUT itself is outcome unknown if its acknowledgement cannot be read.
 At the note boundary, `_write_chunk` converts this to MutationNotApplied: metadata
