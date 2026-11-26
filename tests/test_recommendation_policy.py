@@ -159,9 +159,20 @@ async def test_policy_stats_are_closed_and_include_all_keys(tmp_path, kind, monk
 
 async def test_public_policy_rejects_untyped_fields(monkeypatch):
     from diagnostic_hygiene import recommendation_fields
+    closed = dict(source=None, device_count=0, disagree=False)
     bad = {'syncMaxSizeInMB': dict(value='secret', source='secret', device_count=True, disagree='secret'),
-           'ignoreFiles': dict(value='secret', name_count='secret', source='secret')}
-    assert 'secret' not in json.dumps(recommendation_fields(bad))
+           'useIgnoreFiles': dict(value='secret', source='secret', device_count=1.5, disagree=1),
+           'ignoreFiles': dict(value='secret', name_count='secret', source='secret', device_count=-1, disagree='secret'),
+           'unexpected-key': dict(value='secret')}
+    projected = recommendation_fields(bad)
+    assert 'secret' not in json.dumps(projected)
+    # Every field of the projection falls back to a closed default on a wrong type.
+    assert projected == {'syncMaxSizeInMB': dict(closed, value=None),
+                         'useIgnoreFiles': dict(closed, value=None),
+                         'ignoreFiles': dict(closed, name_count=0)}
+    assert recommendation_fields('secret') == {}
+    assert recommendation_fields({'syncMaxSizeInMB': 'secret', 'useIgnoreFiles': dict(closed, value=True)}) == {
+        'useIgnoreFiles': dict(closed, value=True)}
 
 
 @pytest.mark.parametrize('kind', ['couchdb', 's3'])
