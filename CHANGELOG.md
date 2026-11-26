@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Settings parity
 
+- Clarify that agreeing newest devices win despite older disagreement; distinguish
+  nonfatal ignore-name shapes from typed policy ambiguity and its overrides.
+
 - Compare reconnect files with device-ingested text, type and Blob size; report
   typed transformations and isolate file failures while retaining raw digests.
 

@@ -1170,3 +1170,17 @@ def test_reconnect_ingestion_documentation():
         assert 'invalid_bytes_replaced' in text
         assert 'splitter_projection' in text
     assert 'F15-1' in (ROOT / 'docs/superpowers/specs/2026-11-23-settings-parity.md').read_text()
+
+
+def test_agreeing_newest_and_ignore_name_documentation():
+    for name in ('docs/tweak-compatibility.md', 'docs/peer-limitations.md',
+                 'docs/selection-filters.md', 'docs/size-policy.md'):
+        text = (ROOT / name).read_text()
+        assert 'equally newest devices that agree' in text
+        assert 'even when older devices differ' in text
+    for name in ('docs/selection-filters.md', 'docs/peer-limitations.md'):
+        text = (ROOT / name).read_text()
+        assert 'Name-shape validation is never fatal' in text
+        assert 'equally newest devices disagree' in text
+        assert 'Ignore names never refuse startup' not in text
+    assert 'F15-2' in (ROOT / 'docs/superpowers/specs/2026-11-23-settings-parity.md').read_text()

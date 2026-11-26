@@ -102,9 +102,12 @@ Array scalar conversion is iterative and adds no coercion depth limit after JSON
 `syncMaxSizeInMB`, `useIgnoreFiles`, and `ignoreFiles` resolve independently
 from device maps advertising that key, before consulting PREFERRED. An explicit
 operator override always wins. Equal effective device policies use that value;
-disagreement uses the greatest positive numeric `tweakModified`. If disagreeing
-newest devices tie, or no device has a positive timestamp, use PREFERRED when
-it advertises the key. Otherwise refuse with the setting name and its override:
+disagreement uses the greatest positive numeric `tweakModified`. Under P-48a,
+a tie at that greatest positive timestamp counts as a tie only when the tied
+newest devices disagree: equally newest devices that agree give their common
+value even when older devices differ. If equally newest devices disagree, or
+no device has a positive timestamp, use PREFERRED when it advertises the key.
+Otherwise issue a typed ambiguity refusal naming the setting and operator override:
 `LIVESYNC_SYNC_MAX_SIZE_MB`, `LIVESYNC_USE_IGNORE_FILES`, or
 `LIVESYNC_IGNORE_FILES`. When no device advertises a key, use PREFERRED, then
 the device default. JavaScript size coercion, boolean truthiness and comma-name

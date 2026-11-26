@@ -101,7 +101,7 @@ and [source and live evidence](docs/upstream-pin.md).
 | Path normalization and filename case | Identical | Legacy/NFC, insensitive/sensitive identities |
 | Splitter versions and legacy migration | Reconnect compares device-ingested bodies; lossless text cuts; otherwise identical where terminating and lossless | [Exact coercion and guards](docs/vault-format.md#invalid-writer-parameters) |
 | Chunk hashes, Eden, long-line threshold | Identical at pin | [Full settings table](docs/peer-limitations.md#supported-vault-settings) |
-| File size and ignore-file selection | Device-derived recommendation-only policy; local overrides | [Size](docs/size-policy.md), [selection](docs/selection-filters.md) |
+| File size and ignore-file selection | Device-derived recommendation-only policy; local overrides; unusable name shapes add no rules, unresolved policy ambiguity refuses with the override name | [Size](docs/size-policy.md), [selection](docs/selection-filters.md) |
 | Headers, JWT and addressing | Explicit local connection settings | [Connection setup](docs/connecting-storage.md) |
 | CouchDB compression | Device-compatible; transformations disclosed; bounded reads; unreadable write acknowledgement is outcome unknown | [Compression](docs/vault-format.md#couchdb-compression) |
 | E2EE and path obfuscation | Unsupported | [Recovery choices](docs/peer-limitations.md#supported-vault-settings) |
@@ -121,7 +121,7 @@ refusal conditions and recovery instructions. The main practical differences:
   [Scope and alternatives](docs/peer-limitations.md#supported-vault-settings).
 - Hidden files, customization and plugin namespaces are excluded from ordinary tools.
   [Path and reflection scope](docs/peer-limitations.md#how-the-peer-differs-from-a-device).
-- Size/ignore policies follow devices before PREFERRED; overrides win. See [arbitration and provenance](docs/tweak-compatibility.md#recommendation-only-writer-policy).
+- Size/ignore policies follow devices before PREFERRED; overrides win. Equally newest devices that agree give their common value even when older devices differ; only disagreeing newest ties use PREFERRED, otherwise a typed ambiguity refusal names the operator override. See [arbitration and provenance](docs/tweak-compatibility.md#recommendation-only-writer-policy).
 - The peer is an invisible writer: no device registration or PREFERRED publication.
   [Tweak policy](docs/peer-limitations.md#how-the-peer-differs-from-a-device).
 - Deletions retain body/chunk history; no timed purge or automatic conflict merging.

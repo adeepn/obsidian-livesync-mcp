@@ -241,3 +241,33 @@ def test_override_metadata_retains_negative_unlimited():
     assert projected['syncMaxSizeInMB'] == dict(value=-1, source='override', device_count=1, disagree=False)
     assert projected['useIgnoreFiles']['source'] == 'override'
     assert projected['ignoreFiles']['source'] == 'override'
+
+
+@pytest.mark.parametrize('kind', ['couchdb', 's3'])
+@pytest.mark.parametrize('preferred', [False, True], ids=['without-preferred', 'with-preferred'])
+@pytest.mark.parametrize('key,old,new,env', KEYS)
+async def test_agreeing_newest_devices_override_older_disagreement(tmp_path, kind, preferred, key, old, new, env):
+    """P-48a peer arbitration, not an invented plugin multi-device oracle.
+
+    Native numeric newer-side rule: P:ModuleResolveMismatchedTweaks.ts:120-132.
+    Recommendation-only keys: C:common/models/tweak.definition.ts:116-135.
+    Catch treating any newest tie as ambiguous or falling back to older/PREFERRED.
+    """
+    common = {'pathNormalizationVersion': 0, 'useIgnoreFiles': True}
+    entries = {
+        'older': {**common, key: old, 'tweakModified': 10},
+        'newest-a': {**common, key: new, 'tweakModified': 20},
+        'newest-b': {**common, key: new, 'tweakModified': 20},
+    }
+    if preferred:
+        entries['PREFERRED'] = {**common, key: old, 'tweakModified': 30}
+    async with vault(tmp_path, kind, {'tweak_values': entries}) as (backend, writes):
+        await backend.startup_check()
+        effective = {'syncMaxSizeInMB': backend.sync_max_size_mb,
+                     'useIgnoreFiles': backend.selection_use_ignore_files,
+                     'ignoreFiles': backend.selection_ignore_files}
+        assert effective[key] == ((new,) if key == 'ignoreFiles' else new)
+        info = (await backend.backend_info())['recommendation_policy'][key]
+        assert info['source'] == 'device'
+        assert info['device_count'] == 3 and info['disagree'] is True
+        assert not writes()

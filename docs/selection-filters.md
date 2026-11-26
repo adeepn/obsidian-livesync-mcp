@@ -107,9 +107,9 @@ command before making any storage changes, preserving its only copy.
 
 ## Ignore-name lookup and warnings
 
-Both vault-derived and explicit comma-separated names use exact JavaScript trim and retain empty entries (targetFilter.ts:95-145). Empty, repeated-comma, absolute-looking, traversal-looking and backslash-containing names never refuse startup. Inactive useIgnoreFiles=false never type-validates or reads names; recommendation-policy ambiguity still requires PREFERRED or an override. Missing, unreadable or unusable names contribute no rule. Storage lookup normalizes separators inside the vault-note namespace; escaping paths and service IDs are absent, never host-file reads. Backend info and vault_stats expose integer `selection_unresolved_ignore_names`: explicit names unresolved by the latest root/ancestor lookup; 0 while inactive or vault-derived. Correct the explicit name or publish its ignore file if this count is nonzero. Reads bypass filters.
+Both vault-derived and explicit comma-separated names use exact JavaScript trim and retain empty entries (targetFilter.ts:95-145). Name-shape validation is never fatal: empty, repeated-comma, absolute-looking, traversal-looking and backslash-containing names contribute no rule when unusable. Inactive useIgnoreFiles=false never type-validates or reads names; recommendation-policy ambiguity still requires PREFERRED or an override. Missing, unreadable or unusable names contribute no rule. Storage lookup normalizes separators inside the vault-note namespace; escaping paths and service IDs are absent, never host-file reads. Backend info and vault_stats expose integer `selection_unresolved_ignore_names`: explicit names unresolved by the latest root/ancestor lookup; 0 while inactive or vault-derived. Correct the explicit name or publish its ignore file if this count is nonzero. Reads bypass filters.
 
-Inactive device maps may contain conflicting or non-string ignoreFiles values. Both backends start and perform zero ignore-name storage reads while useIgnoreFiles is false.
+Inactive device maps may contain non-string or unusable ignoreFiles names; these do not block startup and cause zero ignore-name storage reads while useIgnoreFiles is false. Policy arbitration is separate: if equally newest devices disagree about useIgnoreFiles or ignoreFiles and PREFERRED cannot resolve the active policy, startup gives a typed ambiguity refusal naming `LIVESYNC_USE_IGNORE_FILES` / `LIVESYNC_IGNORE_FILES`. Set the named override or align the advertising devices/PREFERRED, then restart.
 
 Vault-derived useIgnoreFiles follows plain JavaScript truthiness (targetFilter.ts:132-137): null, false, numeric zero and empty strings are inactive; nonzero numbers, nonempty strings, arrays and objects are active, including empty arrays/objects and the string "false". Only effective boolean disagreement requires LIVESYNC_USE_IGNORE_FILES; equivalent raw types agree. The operator override stays a strict boolean.
 
@@ -129,9 +129,12 @@ and restart; changing vault settings cannot repair installed code.
 `syncMaxSizeInMB`, `useIgnoreFiles`, and `ignoreFiles` resolve independently
 from device maps advertising that key, before consulting PREFERRED. An explicit
 operator override always wins. Equal effective device policies use that value;
-disagreement uses the greatest positive numeric `tweakModified`. If disagreeing
-newest devices tie, or no device has a positive timestamp, use PREFERRED when
-it advertises the key. Otherwise refuse with the setting name and its override:
+disagreement uses the greatest positive numeric `tweakModified`. Under P-48a,
+a tie at that greatest positive timestamp counts as a tie only when the tied
+newest devices disagree: equally newest devices that agree give their common
+value even when older devices differ. If equally newest devices disagree, or
+no device has a positive timestamp, use PREFERRED when it advertises the key.
+Otherwise issue a typed ambiguity refusal naming the setting and operator override:
 `LIVESYNC_SYNC_MAX_SIZE_MB`, `LIVESYNC_USE_IGNORE_FILES`, or
 `LIVESYNC_IGNORE_FILES`. When no device advertises a key, use PREFERRED, then
 the device default. JavaScript size coercion, boolean truthiness and comma-name

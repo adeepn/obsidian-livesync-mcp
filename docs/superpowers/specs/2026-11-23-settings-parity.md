@@ -1241,3 +1241,13 @@ Raw local/remote digests remain available; per-file failures continue with typed
 cause classes. The three device decoding outputs are retained as explicitly
 labelled owner observations, not native upstream oracle evidence. Production
 write policy is unchanged. No new environment variable is introduced.
+
+### 2026-11-26 — F15-2 P-48a documentation and regression coverage
+
+At the greatest positive tweakModified, only disagreeing newest devices count
+as a tie: equally newest devices that agree supply their common value despite
+older disagreement, with or without PREFERRED. Disagreeing newest ties use
+PREFERRED or a typed refusal naming the operator override. Two-backend startup
+cases cover all three recommendation-only keys. Name-shape validation remains
+nonfatal; unresolved policy disagreement can refuse startup. No production
+policy change or new environment variable is introduced.
