@@ -79,8 +79,8 @@ combination. [Source inventory and caveats](superpowers/specs/2026-11-23-setting
 
 | Setting | Plugin values | Status | Peer behavior |
 |---|---|---|---|
-| `couchDB_CustomHeaders` | Key: Value lines | Identical for valid HTTP headers | Configure COUCHDB_CUSTOM_HEADERS locally; all database requests, origin restricted |
-| `bucketCustomHeaders` | Key: Value lines | Identical for valid HTTP headers | Configure S3_CUSTOM_HEADERS locally; final wire overrides, including signed headers |
+| `couchDB_CustomHeaders` | Key: Value lines | Transport-safety difference | Configure COUCHDB_CUSTOM_HEADERS locally; all database requests, origin restricted. Refuse transport-owned headers even when syntactically valid; force Accept-Encoding: identity |
+| `bucketCustomHeaders` | Key: Value lines | Transport-safety difference | Configure S3_CUSTOM_HEADERS locally; final wire overrides, including signed headers, except transport-owned headers refused even when syntactically valid |
 | `forcePathStyle` | Boolean, default true | Identical for configured endpoints | S3_FORCE_PATH_STYLE=true/false; SDK addressing rules still apply |
 | `pathNormalizationVersion` | 0 legacy / 1 NFC | Identical | Both, independently of filename case; collisions refuse |
 | `handleFilenameCaseSensitive` | false / true | Identical | Legacy, NFC, case-sensitive and NFC+case-sensitive identities |
@@ -272,7 +272,12 @@ TextEncoder replacement and device chunk IDs remain unchanged.
 - Custom request headers are local connection credentials, copied from the plugin,
   not inferred from shared vault settings. Invalid HTTP names/control characters
   refuse startup with variable, entry ordinal and rule; correct that entry.
-  Text form follows upstream colon truncation; use JSON for colon-containing values.
+  Syntactically valid transport-owned headers are also refused: Host,
+  Content-Length, Transfer-Encoding, Connection, Keep-Alive, TE, Trailer, Upgrade
+  and all Proxy-* fields. This is a transport-safety difference from the plugin;
+  startup errors are value-free. Remove these entries and configure routing/proxy
+  transport separately. Text form follows upstream colon truncation; use JSON
+  for colon-containing values.
   Transport library logs are suppressed process-wide once custom headers are used;
   application diagnostics report typed presence/count only.
 - S3 custom endpoints default to path-style addressing; virtual-host-only providers

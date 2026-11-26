@@ -1091,3 +1091,17 @@ def test_changelog_distinguishes_vault_ignore_files_from_local_regex():
     assert 'syncOnlyRegEx' in text and 'syncIgnoreRegEx' in text
     assert 'operator environment settings' in text
     assert 'Derive allow/ignore regex' not in text
+
+
+def test_header_parity_claim_names_transport_safety_difference():
+    # RemoteService.ts:360-369 appends plugin custom headers; F9 deliberately
+    # refuses transport-owned fields on the peer, even if syntactically valid.
+    for name in ('README.md', 'docs/peer-limitations.md',
+                 'docs/connecting-storage.md', 'docs/couchdb-jwt.md'):
+        text = (ROOT / name).read_text()
+        assert 'Identical for valid HTTP headers' not in text
+        assert 'transport-owned' in text and 'Host' in text
+    rows = [line for line in (ROOT / 'docs/peer-limitations.md').read_text().splitlines()
+            if line.startswith('| `couchDB_CustomHeaders`') or line.startswith('| `bucketCustomHeaders`')]
+    assert len(rows) == 2
+    assert all('Transport-safety difference' in row for row in rows)

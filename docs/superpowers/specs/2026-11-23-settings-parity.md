@@ -1142,3 +1142,12 @@ fabricated native plugin decoder oracle.
 [GOTCHA] Only useIgnoreFiles/ignoreFiles are vault-derived selection fields.
 The milestone does not publish syncOnlyRegEx/syncIgnoreRegEx; those remain
 operator environment settings. Correct the branch changelog's broader claim.
+
+
+### 2026-11-26 — F10-3 custom-header status correction
+
+[GOTCHA] Syntactically valid does not imply supported: transport-owned Host,
+Content-Length, Transfer-Encoding, hop-by-hop and Proxy-* fields are refused
+with value-free configuration errors. Mark both custom-header inventory rows as
+a transport-safety difference. Preserve README/connection guidance and state
+the same restriction explicitly in the JWT guide.

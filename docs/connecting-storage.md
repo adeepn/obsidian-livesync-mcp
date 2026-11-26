@@ -242,7 +242,8 @@ entry ordinal (line number in text, member number in JSON) and broken rule;
 correct that entry. No header name or credential value is echoed.
 
 CouchDB sends headers on metadata, document, attachment and `_local` requests
-at the configured origin. Like normal device replication
+at the configured origin. Subject to the transport-owned exclusions below,
+like normal device replication
 (`RemoteService.ts:360-369`), custom headers
 append to existing headers, including Authorization and Content-Type. An
 Authorization entry therefore combines with Basic auth; use the proxy's own

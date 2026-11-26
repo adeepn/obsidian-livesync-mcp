@@ -78,3 +78,11 @@ include the plugin's `_admin` role, not an independently configurable role list.
 errors name the variables to correct; wrong server verification keys or claims
 produce sanitized CouchDB errors. Check the handler, key family, kid, subject,
 clock and required claims against the device settings before retrying.
+
+
+Custom headers retain the peer's transport-safety difference from the plugin:
+syntactically valid transport-owned Host, Content-Length, Transfer-Encoding,
+Connection, Keep-Alive, TE, Trailer, Upgrade and all Proxy-* fields are refused
+with value-free configuration errors. Remove them and configure routing/proxy
+transport separately. This restriction also applies with JWT authentication;
+see [custom header policy](connecting-storage.md#reverse-proxies-and-auth-proxies).
