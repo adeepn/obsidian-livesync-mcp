@@ -18,7 +18,7 @@ import re
 from collections.abc import Mapping
 
 import xxhash
-from wire_encoding import js_number_string
+from wire_encoding import combine_pairs, js_number_string, text_encoder_string
 
 
 class UnsupportedWriterMode(ValueError):
@@ -34,8 +34,7 @@ class SplitterRefusal(ValueError):
 
 def _js_utf8(text: str) -> bytes:
     # Blob/TextEncoder replace lone JS surrogates with U+FFFD and combine pairs.
-    return text.encode('utf-16-le', errors='surrogatepass').decode(
-        'utf-16-le', errors='replace').encode('utf-8')
+    return text_encoder_string(text).encode('utf-8')
 
 
 class _TextBlob(bytes):
@@ -469,7 +468,7 @@ def _unit_string(text: str) -> str:
 
 
 def _from_units(text: str) -> str:
-    return text.encode('utf-16-le', errors='surrogatepass').decode('utf-16-le', errors='surrogatepass')
+    return combine_pairs(text)
 
 
 def _capped(text: str, maximum: int, *, v1_plain=False):

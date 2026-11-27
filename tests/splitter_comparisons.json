@@ -1,6 +1,6 @@
 [
   {
-    "line": 52,
+    "line": 51,
     "column": 7,
     "function": "_wheels_read_string",
     "source": "len(raw) > 128",
@@ -13,7 +13,7 @@
     }
   },
   {
-    "line": 59,
+    "line": 58,
     "column": 30,
     "function": "_wheels_read_string.continuation",
     "source": "index < len(raw)",
@@ -26,7 +26,7 @@
     }
   },
   {
-    "line": 63,
+    "line": 62,
     "column": 10,
     "function": "_wheels_read_string",
     "source": "index < len(raw)",
@@ -39,7 +39,7 @@
     }
   },
   {
-    "line": 66,
+    "line": 65,
     "column": 11,
     "function": "_wheels_read_string",
     "source": "c < 128",
@@ -52,7 +52,7 @@
     }
   },
   {
-    "line": 68,
+    "line": 67,
     "column": 13,
     "function": "_wheels_read_string",
     "source": "c & 0xe0 == 0xc0",
@@ -65,7 +65,7 @@
     }
   },
   {
-    "line": 70,
+    "line": 69,
     "column": 13,
     "function": "_wheels_read_string",
     "source": "c & 0xf0 == 0xe0",
@@ -78,7 +78,7 @@
     }
   },
   {
-    "line": 72,
+    "line": 71,
     "column": 13,
     "function": "_wheels_read_string",
     "source": "c & 0xf8 == 0xf0",
@@ -91,7 +91,7 @@
     }
   },
   {
-    "line": 74,
+    "line": 73,
     "column": 15,
     "function": "_wheels_read_string",
     "source": "code < 0x10000",
@@ -104,7 +104,7 @@
     }
   },
   {
-    "line": 89,
+    "line": 88,
     "column": 7,
     "function": "_base36",
     "source": "value < 0",
@@ -118,7 +118,7 @@
     }
   },
   {
-    "line": 100,
+    "line": 99,
     "column": 20,
     "function": "_int32",
     "source": "value < 0x80000000",
@@ -132,7 +132,7 @@
     }
   },
   {
-    "line": 132,
+    "line": 131,
     "column": 7,
     "function": "_write_string",
     "source": "len(units) > 128",
@@ -146,7 +146,7 @@
     }
   },
   {
-    "line": 136,
+    "line": 135,
     "column": 10,
     "function": "_write_string",
     "source": "i < len(units)",
@@ -159,7 +159,7 @@
     }
   },
   {
-    "line": 139,
+    "line": 138,
     "column": 11,
     "function": "_write_string",
     "source": "c < 0x80",
@@ -173,7 +173,7 @@
     }
   },
   {
-    "line": 141,
+    "line": 140,
     "column": 13,
     "function": "_write_string",
     "source": "c < 0x800",
@@ -187,7 +187,7 @@
     }
   },
   {
-    "line": 143,
+    "line": 142,
     "column": 13,
     "function": "_write_string",
     "source": "c < 0xd800",
@@ -201,7 +201,7 @@
     }
   },
   {
-    "line": 143,
+    "line": 142,
     "column": 27,
     "function": "_write_string",
     "source": "c > 0xdfff",
@@ -215,7 +215,7 @@
     }
   },
   {
-    "line": 146,
+    "line": 145,
     "column": 45,
     "function": "_write_string",
     "source": "i < len(units)",
@@ -226,7 +226,7 @@
     "proof": "Every SHA-1 splitter input appends ASCII \"-\" and decimal piece.length; no final surrogate can need a missing next unit. Direct helper vectors additionally exercise lone trailing surrogates."
   },
   {
-    "line": 166,
+    "line": 165,
     "column": 7,
     "function": "chunk_id_for_piece",
     "source": "hash_alg == 'xxhash64'",
@@ -239,7 +239,7 @@
     }
   },
   {
-    "line": 168,
+    "line": 167,
     "column": 9,
     "function": "chunk_id_for_piece",
     "source": "hash_alg in ('xxhash32', None)",
@@ -252,7 +252,7 @@
     }
   },
   {
-    "line": 170,
+    "line": 169,
     "column": 9,
     "function": "chunk_id_for_piece",
     "source": "hash_alg == ''",
@@ -265,7 +265,7 @@
     }
   },
   {
-    "line": 172,
+    "line": 171,
     "column": 9,
     "function": "chunk_id_for_piece",
     "source": "hash_alg == 'mixed-purejs'",
@@ -278,7 +278,7 @@
     }
   },
   {
-    "line": 174,
+    "line": 173,
     "column": 9,
     "function": "chunk_id_for_piece",
     "source": "hash_alg == 'sha1'",
@@ -291,7 +291,7 @@
     }
   },
   {
-    "line": 183,
+    "line": 182,
     "column": 7,
     "function": "_js_truthy",
     "source": "value is None",
@@ -304,7 +304,7 @@
     }
   },
   {
-    "line": 183,
+    "line": 182,
     "column": 24,
     "function": "_js_truthy",
     "source": "value is False",
@@ -315,7 +315,7 @@
     "proof": "False is also numeric zero in Python. Removing the explicit False arm reaches the numeric value!=0 arm and still returns false; upstream JS truthiness is unchanged."
   },
   {
-    "line": 186,
+    "line": 185,
     "column": 15,
     "function": "_js_truthy",
     "source": "value != 0",
@@ -328,7 +328,7 @@
     }
   },
   {
-    "line": 187,
+    "line": 186,
     "column": 11,
     "function": "_js_truthy",
     "source": "value != ''",
@@ -350,7 +350,7 @@
       "kind": "deep_scalar",
       "index": 0
     },
-    "line": 212,
+    "line": 211,
     "column": 15
   },
   {
@@ -363,7 +363,7 @@
       "kind": "deep_scalar",
       "index": 6
     },
-    "line": 221,
+    "line": 220,
     "column": 19
   },
   {
@@ -376,7 +376,7 @@
       "kind": "deep_scalar",
       "index": 4
     },
-    "line": 224,
+    "line": 223,
     "column": 17
   },
   {
@@ -385,7 +385,7 @@
     "operator": 0,
     "mutation": "False",
     "citation": "ContentSplitterBase.ts:68; chunks.ts:297-313; ECMAScript OrdinaryToPrimitive/ToNumber at these sourced call sites",
-    "line": 230,
+    "line": 229,
     "column": 11,
     "witness": {
       "kind": "coercion",
@@ -393,7 +393,7 @@
     }
   },
   {
-    "line": 233,
+    "line": 232,
     "column": 7,
     "function": "_splitter_property_key",
     "source": "value is None",
@@ -404,7 +404,7 @@
     "proof": "This null-to-property-key branch is reached only for top-level null: array null items are intercepted by the item-is-null branch. Both null and the fallback spelling are unknown algorithm keys and normalize once to the empty version, without running legacy migration."
   },
   {
-    "line": 255,
+    "line": 254,
     "column": 51,
     "function": "normalize_splitter_settings",
     "source": "key == ''",
@@ -417,7 +417,7 @@
     }
   },
   {
-    "line": 256,
+    "line": 255,
     "column": 52,
     "function": "normalize_splitter_settings",
     "source": "version == 0",
@@ -430,7 +430,7 @@
     }
   },
   {
-    "line": 261,
+    "line": 260,
     "column": 9,
     "function": "normalize_splitter_settings",
     "source": "key not in (\n            'v1', 'v2', 'v2-segmenter', 'v3-rabin-karp',\n            # ChunkAlgorithmNames is a JS object literal; `in` also sees\n            # Object.prototype. These survive adjustment but fail dispatch.\n            'constructor', '__defineGetter__', '__defineSetter__',\n            'hasOwnProperty', '__lookupGetter__', '__lookupSetter__',\n            'isPrototypeOf', 'propertyIsEnumerable', 'toString',\n            'valueOf', '__proto__', 'toLocaleString')",
@@ -443,7 +443,7 @@
     }
   },
   {
-    "line": 284,
+    "line": 283,
     "column": 33,
     "function": "ContentSplitter.__init__",
     "source": "settings.get('chunkSplitterVersion', '') == ''",
@@ -456,7 +456,7 @@
     }
   },
   {
-    "line": 306,
+    "line": 305,
     "column": 11,
     "function": "ContentSplitter.__init__",
     "source": "self.hash_alg is None",
@@ -469,7 +469,7 @@
     }
   },
   {
-    "line": 308,
+    "line": 307,
     "column": 11,
     "function": "ContentSplitter.__init__",
     "source": "self.hash_alg not in ('xxhash64', 'xxhash32', 'mixed-purejs', 'sha1', '')",
@@ -480,7 +480,7 @@
     "proof": "Writer admission rejects unsupported hash algorithms before dispatch. Supported dispatches have separate witnessed comparisons; malformed algorithm names are not splitter partitions."
   },
   {
-    "line": 312,
+    "line": 311,
     "column": 11,
     "function": "ContentSplitter.__init__",
     "source": "self.version == 'v2-segmenter'",
@@ -491,7 +491,7 @@
     "proof": "For the equality value v2-segmenter, removing this alias normalization still selects V2Splitter through the dispatcher alias. At this pin V2 and V2-segmenter execute the same algorithm; useSegmenter is unused."
   },
   {
-    "line": 314,
+    "line": 313,
     "column": 11,
     "function": "ContentSplitter.__init__",
     "source": "self.version == ''",
@@ -504,7 +504,7 @@
     }
   },
   {
-    "line": 316,
+    "line": 315,
     "column": 11,
     "function": "ContentSplitter.__init__",
     "source": "self.version not in ('v1', 'v2', 'v2-segmenter', 'v3-rabin-karp')",
@@ -515,7 +515,7 @@
     "proof": "Writer admission rejects unsupported splitter versions after one-pass normalization. Upstream dispatcher likewise has no matching splitter."
   },
   {
-    "line": 322,
+    "line": 321,
     "column": 11,
     "function": "ContentSplitter.__init__",
     "source": "type(version) is not int",
@@ -526,7 +526,7 @@
     "proof": "ID-derivation version/type admission prevents writes using an unsupported identity configuration; no splitter equality is claimed for refused configurations."
   },
   {
-    "line": 322,
+    "line": 321,
     "column": 39,
     "function": "ContentSplitter.__init__",
     "source": "version not in (0, 1)",
@@ -537,7 +537,7 @@
     "proof": "ID-derivation version/type admission prevents writes using an unsupported identity configuration; no splitter equality is claimed for refused configurations."
   },
   {
-    "line": 325,
+    "line": 324,
     "column": 12,
     "function": "ContentSplitter.__init__",
     "source": "version == 0",
@@ -548,7 +548,7 @@
     "proof": "ID-derivation key/version pairing admission protects identity; invalid pairings are rejected before splitting."
   },
   {
-    "line": 325,
+    "line": 324,
     "column": 29,
     "function": "ContentSplitter.__init__",
     "source": "key != ''",
@@ -559,7 +559,7 @@
     "proof": "ID-derivation key/version pairing admission protects identity; invalid pairings are rejected before splitting."
   },
   {
-    "line": 325,
+    "line": 324,
     "column": 44,
     "function": "ContentSplitter.__init__",
     "source": "version == 1",
@@ -570,7 +570,7 @@
     "proof": "ID-derivation key/version pairing admission protects identity; invalid pairings are rejected before splitting."
   },
   {
-    "line": 326,
+    "line": 325,
     "column": 40,
     "function": "ContentSplitter.__init__",
     "source": "re.fullmatch('[0-9a-f]{64}', key) is None",
@@ -586,7 +586,7 @@
     "operator": 0,
     "mutation": "True",
     "citation": "ContentSplitterBase.ts:68; chunks.ts:297-313; ECMAScript OrdinaryToPrimitive/ToNumber at these sourced call sites",
-    "line": 349,
+    "line": 348,
     "column": 11,
     "witness": {
       "kind": "coercion",
@@ -594,7 +594,7 @@
     }
   },
   {
-    "line": 364,
+    "line": 363,
     "column": 7,
     "function": "_minimum_number",
     "source": "value is None",
@@ -612,13 +612,13 @@
     "operator": 0,
     "mutation": "value <= 0",
     "citation": "ContentSplitterBase.ts:68; chunks.ts:297-313; ECMAScript OrdinaryToPrimitive/ToNumber at these sourced call sites",
-    "line": 384,
+    "line": 383,
     "column": 64,
     "class": "a",
     "proof": "Reached only after float conversion raises OverflowError and the original value is numeric. Numeric zero converts exactly without overflow; the equality boundary is unreachable. Radix-string overflow short-circuits before this numeric comparison. This preserves ToNumber sign at ContentSplitterBase.ts:68 and chunks.ts:369."
   },
   {
-    "line": 429,
+    "line": 428,
     "column": 15,
     "function": "RabinKarpSplitter.split",
     "source": "len(raw) >= 4 * 1024 * 1024",
@@ -631,7 +631,7 @@
     }
   },
   {
-    "line": 432,
+    "line": 431,
     "column": 22,
     "function": "RabinKarpSplitter.split",
     "source": "len(raw) / (unit * 4) > 500",
@@ -644,7 +644,7 @@
     }
   },
   {
-    "line": 450,
+    "line": 449,
     "column": 24,
     "function": "RabinKarpSplitter.split",
     "source": "size >= maximum",
@@ -657,7 +657,7 @@
     }
   },
   {
-    "line": 450,
+    "line": 449,
     "column": 44,
     "function": "RabinKarpSplitter.split",
     "source": "size >= minimum",
@@ -670,7 +670,7 @@
     }
   },
   {
-    "line": 450,
+    "line": 449,
     "column": 64,
     "function": "RabinKarpSplitter.split",
     "source": "fingerprint % modulus == 1",
@@ -683,7 +683,7 @@
     }
   },
   {
-    "line": 451,
+    "line": 450,
     "column": 45,
     "function": "RabinKarpSplitter.split",
     "source": "byte & 0xc0 != 0x80",
@@ -696,7 +696,7 @@
     }
   },
   {
-    "line": 454,
+    "line": 453,
     "column": 37,
     "function": "RabinKarpSplitter.split",
     "source": "index >= 48",
@@ -709,7 +709,7 @@
     }
   },
   {
-    "line": 483,
+    "line": 482,
     "column": 24,
     "function": "_capped",
     "source": "maximum == 0",
@@ -722,7 +722,7 @@
     }
   },
   {
-    "line": 487,
+    "line": 486,
     "column": 12,
     "function": "_capped",
     "source": "end < len(text)",
@@ -733,7 +733,7 @@
     "proof": "At end == text.length no following unit exists to complete a pair. Blob.text() replaces unpaired units; hence a high/low pair cannot straddle EOF."
   },
   {
-    "line": 487,
+    "line": 486,
     "column": 32,
     "function": "_capped",
     "source": "0xd800 <= ord(text[end - 1]) <= 0xdbff",
@@ -746,7 +746,7 @@
     }
   },
   {
-    "line": 487,
+    "line": 486,
     "column": 32,
     "function": "_capped",
     "source": "0xd800 <= ord(text[end - 1]) <= 0xdbff",
@@ -759,7 +759,7 @@
     }
   },
   {
-    "line": 488,
+    "line": 487,
     "column": 20,
     "function": "_capped",
     "source": "0xdc00 <= ord(text[end]) <= 0xdfff",
@@ -772,7 +772,7 @@
     }
   },
   {
-    "line": 488,
+    "line": 487,
     "column": 20,
     "function": "_capped",
     "source": "0xdc00 <= ord(text[end]) <= 0xdfff",
@@ -785,7 +785,7 @@
     }
   },
   {
-    "line": 492,
+    "line": 491,
     "column": 11,
     "function": "_capped",
     "source": "start >= len(text)",
@@ -798,7 +798,7 @@
     }
   },
   {
-    "line": 500,
+    "line": 499,
     "column": 10,
     "function": "_binary_minimum",
     "source": "w > 10",
@@ -811,7 +811,7 @@
     }
   },
   {
-    "line": 526,
+    "line": 525,
     "column": 20,
     "function": "V2Splitter.split",
     "source": "minimum == 0",
@@ -824,7 +824,7 @@
     }
   },
   {
-    "line": 526,
+    "line": 525,
     "column": 37,
     "function": "V2Splitter.split",
     "source": "math.copysign(1, minimum) > 0",
@@ -840,7 +840,7 @@
     "operator": 0,
     "mutation": "False",
     "citation": "ContentSplitterBase.ts:68; chunks.ts:297-313; ECMAScript OrdinaryToPrimitive/ToNumber at these sourced call sites",
-    "line": 529,
+    "line": 528,
     "column": 15,
     "witness": {
       "kind": "coercion",
@@ -848,7 +848,7 @@
     }
   },
   {
-    "line": 531,
+    "line": 530,
     "column": 14,
     "function": "V2Splitter.split",
     "source": "adjusted > 0",
@@ -861,7 +861,7 @@
     }
   },
   {
-    "line": 531,
+    "line": 530,
     "column": 31,
     "function": "V2Splitter.split",
     "source": "len(text) / adjusted > 100",
@@ -874,7 +874,7 @@
     }
   },
   {
-    "line": 538,
+    "line": 537,
     "column": 15,
     "function": "V2Splitter.split",
     "source": "end - start > adjusted",
@@ -887,7 +887,7 @@
     }
   },
   {
-    "line": 549,
+    "line": 548,
     "column": 11,
     "function": "V2Splitter._cap",
     "source": "self.absolute_max_piece_size <= 0",
@@ -900,7 +900,7 @@
     }
   },
   {
-    "line": 550,
+    "line": 549,
     "column": 59,
     "function": "V2Splitter._cap",
     "source": "len(_from_units(text)) > 1",
@@ -913,7 +913,7 @@
     }
   },
   {
-    "line": 550,
+    "line": 549,
     "column": 103,
     "function": "V2Splitter._cap",
     "source": "self.absolute_max_piece_size < 0",
@@ -926,7 +926,7 @@
     }
   },
   {
-    "line": 566,
+    "line": 565,
     "column": 11,
     "function": "V2Splitter._binary",
     "source": "self.absolute_max_piece_size <= 0",
@@ -939,7 +939,7 @@
     }
   },
   {
-    "line": 578,
+    "line": 577,
     "column": 14,
     "function": "V2Splitter._binary",
     "source": "offset < len(data)",
@@ -952,7 +952,7 @@
     }
   },
   {
-    "line": 580,
+    "line": 579,
     "column": 15,
     "function": "V2Splitter._binary",
     "source": "preferred != -1",
@@ -963,7 +963,7 @@
     "proof": "At preferred == search, inclusive indexOf from that matching index returns the same offset. At sentinel -1, repeating the failed suffix search cannot find a match in a suffix of a suffix with no delimiter."
   },
   {
-    "line": 580,
+    "line": 579,
     "column": 35,
     "function": "V2Splitter._binary",
     "source": "preferred < search",
@@ -974,7 +974,7 @@
     "proof": "At preferred == search, inclusive indexOf from that matching index returns the same offset. At sentinel -1, repeating the failed suffix search cannot find a match in a suffix of a suffix with no delimiter."
   },
   {
-    "line": 583,
+    "line": 582,
     "column": 15,
     "function": "V2Splitter._binary",
     "source": "found == -1",
@@ -987,7 +987,7 @@
     }
   },
   {
-    "line": 584,
+    "line": 583,
     "column": 19,
     "function": "V2Splitter._binary",
     "source": "newline != -1",
@@ -998,7 +998,7 @@
     "proof": "At newline == search inclusive indexOf returns the same LF offset. At sentinel -1 a suffix of a suffix without LF still has no LF, so repeating the search is indistinguishable."
   },
   {
-    "line": 584,
+    "line": 583,
     "column": 37,
     "function": "V2Splitter._binary",
     "source": "newline < search",
@@ -1009,7 +1009,7 @@
     "proof": "At newline == search inclusive indexOf returns the same LF offset. At sentinel -1 a suffix of a suffix without LF still has no LF, so repeating the search is indistinguishable."
   },
   {
-    "line": 587,
+    "line": 586,
     "column": 50,
     "function": "V2Splitter._binary",
     "source": "found != -1",
@@ -1022,7 +1022,7 @@
     }
   },
   {
-    "line": 599,
+    "line": 598,
     "column": 25,
     "function": "LegacySplitter.split",
     "source": "maximum <= 0",
@@ -1033,7 +1033,7 @@
     "proof": "Nonpositive cap can leave the upstream offset unchanged on nonempty input; guard prevents nontermination."
   },
   {
-    "line": 611,
+    "line": 610,
     "column": 19,
     "function": "LegacySplitter.split",
     "source": "found != -1",
@@ -1046,7 +1046,7 @@
     }
   },
   {
-    "line": 616,
+    "line": 615,
     "column": 19,
     "function": "LegacySplitter.split",
     "source": "offset >= len(data)",
@@ -1059,7 +1059,7 @@
     }
   },
   {
-    "line": 621,
+    "line": 620,
     "column": 44,
     "function": "LegacySplitter.split",
     "source": "maximum < 0",
@@ -1072,7 +1072,7 @@
     }
   },
   {
-    "line": 621,
+    "line": 620,
     "column": 80,
     "function": "LegacySplitter.split",
     "source": "maximum == 0",
@@ -1085,7 +1085,7 @@
     }
   },
   {
-    "line": 647,
+    "line": 646,
     "column": 35,
     "function": "LegacySplitter._groups.take",
     "source": "index < count",
@@ -1098,7 +1098,7 @@
     }
   },
   {
-    "line": 649,
+    "line": 648,
     "column": 14,
     "function": "LegacySplitter._groups",
     "source": "index < count",
@@ -1111,7 +1111,7 @@
     }
   },
   {
-    "line": 654,
+    "line": 653,
     "column": 22,
     "function": "LegacySplitter._groups",
     "source": "index < count",
@@ -1124,7 +1124,7 @@
     }
   },
   {
-    "line": 656,
+    "line": 655,
     "column": 23,
     "function": "LegacySplitter._groups",
     "source": "index == count",
@@ -1137,7 +1137,7 @@
     }
   },
   {
-    "line": 659,
+    "line": 658,
     "column": 47,
     "function": "LegacySplitter._groups",
     "source": "len(pre) > 2048",
@@ -1150,7 +1150,7 @@
     }
   },
   {
-    "line": 660,
+    "line": 659,
     "column": 19,
     "function": "LegacySplitter._groups",
     "source": "index < count",
@@ -1163,7 +1163,7 @@
     }
   },
   {
-    "line": 674,
+    "line": 673,
     "column": 20,
     "function": "LegacySplitter._groups",
     "source": "length >= _minimum_number(self.minimum_chunk_size)",
@@ -1176,7 +1176,7 @@
     }
   },
   {
-    "line": 674,
+    "line": 673,
     "column": 74,
     "function": "LegacySplitter._groups",
     "source": "index == count",
@@ -1189,7 +1189,7 @@
     }
   },
   {
-    "line": 675,
+    "line": 674,
     "column": 27,
     "function": "LegacySplitter._groups",
     "source": "lines[index] == '#'",

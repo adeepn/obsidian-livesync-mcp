@@ -31,6 +31,7 @@ from copy import deepcopy
 
 from content_splitter import (ContentSplitter, UnsupportedWriterMode, SplitterRefusal,
                               chunk_id_for_piece, _js_truthy, _minimum_number)
+from wire_encoding import combine_pairs, text_encoder_string
 
 # Upstream isPlainText (path.ts): extensions stored as plain text chunks.
 TEXT_EXTENSIONS = frozenset(
@@ -410,8 +411,7 @@ def prepare_file_content(
         except UnicodeEncodeError:
             # createBlob/toBlob (common/utils.ts:100-115) uses Blob's
             # USVString conversion: combine pairs and replace lone surrogates.
-            content = content.encode("utf-16-le", errors="surrogatepass").decode(
-                "utf-16-le", errors="replace")
+            content = text_encoder_string(content)
             raw = content.encode("utf-8")
         return (content if doc_type == "plain" else raw), doc_type, len(raw)
     if doc_type == "plain":
@@ -428,8 +428,7 @@ def assemble_text(chunk_datas: list[str]) -> str:
     """
     # commonlib common/utils.ts:83-84 joins JS UTF-16 strings. Combine pairs
     # across chunk boundaries into Python scalar values without moving cuts.
-    return "".join(chunk_datas).encode("utf-16-le", errors="surrogatepass").decode(
-        "utf-16-le", errors="surrogatepass")
+    return combine_pairs("".join(chunk_datas))
 
 
 def assemble_binary(chunk_datas: list[str]) -> bytes:

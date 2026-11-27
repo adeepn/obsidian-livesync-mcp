@@ -3,6 +3,8 @@ from contextvars import ContextVar
 import json
 from typing import Literal, TypedDict
 
+from wire_encoding import text_encoder_string
+
 class PublicationNotice(TypedDict, total=False):
     code: Literal['legacy_bom_removed', 'invalid_utf8_replaced',
                   'input_surrogates_replaced', 'journal_surrogates_replaced',
@@ -70,7 +72,7 @@ def notice_text(result, notices):
 def ingress_notices(original):
     """common/utils.ts:100-115 Blob USVString conversion; explicit UTF-8 opt-in."""
     if isinstance(original, str):
-        converted = original.encode('utf-16-le', errors='surrogatepass').decode('utf-16-le', errors='replace')
+        converted = text_encoder_string(original)
         count = converted.count('\ufffd') - original.count('\ufffd')
         return [{'code': 'input_surrogates_replaced', 'count': count}] if count else []
     invalid = len(original) - len(original.decode('utf-8', errors='ignore').encode('utf-8'))
