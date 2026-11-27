@@ -12,6 +12,9 @@ import sys
 import tarfile
 import urllib.request
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from selection_provenance import relative_name
+
 PIN = '484c164450d61deb2e301582b60cb9b5f9fa977f'
 upstream = Path(sys.argv[1])
 pinned = subprocess.check_output(
@@ -51,7 +54,7 @@ Path('vendor/selection/sources.json').write_text(json.dumps(manifest, indent=2) 
 
 # Manifest covers every installed byte, not just acquisition archives.
 base = Path('vendor/selection')
-files = {str(p): hashlib.sha256(p.read_bytes()).hexdigest()
+files = {relative_name(Path('.'), p): hashlib.sha256(p.read_bytes()).hexdigest()
          for p in sorted(base.rglob('*')) if p.is_file() and p.name != 'installed-sha256.json'}
 for name in ('selection_worker.mjs', 'scripts/selection_provenance.mjs'):
     files[name] = hashlib.sha256(Path(name).read_bytes()).hexdigest()

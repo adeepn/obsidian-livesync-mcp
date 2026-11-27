@@ -66,6 +66,16 @@ def test_hashed_files_keep_their_bytes_on_checkout():
     assert all(line.endswith(': text: unset') for line in attributes.splitlines())
 
 
+def test_manifest_names_are_posix_paths_on_every_platform():
+    from pathlib import PurePosixPath, PureWindowsPath
+    from selection_provenance import relative_name
+    windows = PureWindowsPath('C:/peer')
+    assert relative_name(windows, windows / 'vendor/selection/node_modules/minimatch/dist/esm/index.js') == (
+        'vendor/selection/node_modules/minimatch/dist/esm/index.js')
+    assert relative_name(PurePosixPath('/peer'), PurePosixPath('/peer/selection_worker.mjs')) == 'selection_worker.mjs'
+    assert relative_name(Path('.'), Path('vendor/selection/upstream.mjs')) == 'vendor/selection/upstream.mjs'
+
+
 def test_installed_tree_is_verified():
     from selection_provenance import verify_selection_files
     verify_selection_files(Path.cwd())

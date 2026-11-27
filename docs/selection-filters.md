@@ -124,7 +124,7 @@ Installed vendor bytes and the worker are verified against
 `provenance-mismatch` refusal means restore or regenerate the verified installation
 and restart; changing vault settings cannot repair installed code. The hashed files carry
 `-text` in `.gitattributes`, so a checkout with line-ending conversion enabled keeps the
-bytes that the manifest hashes.
+bytes that the manifest hashes. Manifest names are POSIX paths on every platform.
 
 ## Recommendation-only writer policy
 
