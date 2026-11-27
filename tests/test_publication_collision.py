@@ -98,10 +98,16 @@ async def test_shared_leaf_refusal_has_typed_recovery_before_publication(tmp_pat
         if representation == 'encrypted':
             leaf['data'] = 'PRIVATE_NOTE'
             leaf['e_'] = True
-        compact = {chunk_id: ('PRIVATE_NOTE' if representation == 'both' else foreign)}
+        compact = {chunk_id: foreign}
         backend._store.apply_journal(
-            'collision', compact if representation in ('compact', 'both') else {},
+            'collision', compact if representation == 'compact' else {},
             [leaf] if representation != 'compact' else [])
+        if representation == 'both':
+            # A document and a cache file with other data. No journal file makes
+            # this state any more: two records for one chunk fail the file.
+            chunk_file = backend._store._chunk_path(chunk_id)
+            chunk_file.parent.mkdir(parents=True, exist_ok=True)
+            chunk_file.write_bytes(b'PRIVATE_NOTE')
         before = await chunks()
         before_puts = list(storage.put_calls)
         before_leaf = backend._store.winner(chunk_id)

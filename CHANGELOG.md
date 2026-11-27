@@ -6,6 +6,100 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Journal revision trees
+
+- Replay journal files on the S3 backend the way a device receives them, with
+  the published PouchDB code ported in `revision_tree.py`: a file's records are
+  filtered, sorted and merged into each document's revision tree, which is cut
+  to the device's limit of 100 revisions per path. The peer now holds the
+  revision a device's database holds, so a note whose conflict was resolved in
+  Obsidian no longer vanishes, and a discarded version is no longer served as
+  the current one.
+- Refuse a file a device refuses (the chunk-record contract of its decoder,
+  invalid revision, unknown reserved key, reserved identifier, a document
+  named like a member of `Object.prototype`, a duplicated chunk, malformed
+  attachments) instead of storing records a device drops, and keep what a
+  device committed before refusing: the chunk batch, and the other records
+  of a batch with one refused member. Three inputs a device accepts are
+  refused as well because what it then holds depends on its engine, adapter
+  or build: a revision position or hash that converts to a number that is
+  not finite (any other number of a body is held, as `Infinity`), a chain
+  without an element, and a supplied `_rev_tree` or attachment that is not
+  well-formed.
+- Receive compact chunk records as the chunk documents a device's decoder
+  makes of them: a chunk the state holds is kept as it is, two records for
+  one chunk in a file refuse the file after the first is written. A chunk is
+  held as a document and no file is written for it; a file a release before
+  chunk documents wrote is read only for a chunk no document names, so it no
+  longer stands in for a chunk document.
+- Check and clean attachments as PouchDB does before a batch is written, a
+  revision-deleted record's included; keep only the six attachment keys it
+  knows, in its order, which the deterministic revision hash is taken over;
+  let a metadata stub name an attachment of the chunk batch committed just
+  before, and a migrating stub one an earlier row stored. Keep every body a
+  legacy state held: one that a later row's replay displaces is kept as it was.
+- Convert numbers as a device does when it receives: trim exactly the
+  characters `ToNumber` trims, keep the sign of a negative numeric string, turn
+  a radix literal beyond every double into `Infinity`, and hold an integer
+  literal beyond the interpreter's digit limit or double precision as the
+  double `JSON.parse` holds. No record now fails with a Python error where a
+  device has a defined value. A number that is not finite is written as
+  `null` in the spelling a chunk's revision is hashed over, as `JSON.stringify`
+  writes it. A revision whose hash carries a hyphen, or whose position is
+  negative, is not named by its tree, as PouchDB's own read decides; a winner
+  under whose name no body is stored is missing, as a device's read reports it
+  before it looks at the tree.
+- Walk each record over a stack of its own when it is converted, hashed and
+  copied for a new revision, so a record nested as deep as the decoder admits
+  is held as a device holds it instead of failing on the interpreter's call
+  stack.
+- Hold a document, revision or attachment-digest name that carries a lone
+  UTF-16 unit, as a device holds it; the state file stores such a key with its
+  units spelled out.
+- Give every new revision the base a device's `put` takes its revision from,
+  as a device does when a file appears over an existing entry: the plugin
+  reads it with a raw `get`, which does not read the tree. Over a
+  revision-deleted winner PouchDB attaches the write below the tombstone.
+  Where the tree does not name the base's revision (`2-7` for the hash `7`),
+  the new revision is a root above the hash it spells, as it is on a device;
+  the leaves there stay as conflicts and the note is readable again. The tree
+  that names the revision is the one of the document written: the chain of
+  the base is not taken along. A deletion is put over the object the same
+  `get` returned. A revision of a
+  format PouchDB refuses, a live winner whose slot holds no body and a
+  revision-deleted winner the tree does not name are refused to writers as
+  they are to readers: PouchDB answers such writes with an error and writes
+  nothing. A revision tombstone is still an absent note for every reader, and
+  updating or deleting it changes nothing; a revision-deleted chunk counts as
+  missing. A deletion of an object that is not a live note publishes nothing,
+  where a device writes a revision over it.
+- Publish each new revision with the chain a device reports for it, read both
+  deletion flags with JavaScript truthiness on both backends, and refuse a
+  winning revision the tree does not name by string to every reader, as a
+  device's `get` with `revs` fails on it.
+- Store each body in the by-sequence slot the IndexedDB adapter stores it in,
+  `<id>::<rev>`, and read the document and the revision back off that name as
+  the adapter's `decodeDoc` does. A revision that holds a colon is cut there,
+  and two documents whose id and revision spell one slot share it, as on a
+  device; readers and writers then see what a device's database hands them.
+  A merge that stems a revision away removes its slot with the attachment
+  mappings it held, as the adapter's compaction does, so over a shared slot
+  the other document's body goes with it. Each attachment of a stored body is
+  mapped to its slot, mappings accumulate on a slot, and the attachment data
+  a device holds is held: an attachment no slot maps any more is gone, and a
+  stub naming it is refused. The records of a batch are stored in the order
+  the adapter's transaction stores them: every document's records start
+  together and a document's next record waits for the write before it, so a
+  shared slot holds the body stored last in that order. A raw `get` returns the body of the winner's slot as
+  it was stored, its deletion flag included. State of earlier releases is
+  replayed on first open, and a body a replay stems away is kept beside.
+- Rebuild state written by earlier releases on first open, in one transaction
+  taken before the schema is inspected: no body the old state held is
+  dropped, not one a replay stems away or stores in another form (attachment
+  data made a stub of), and a name the state file stores escaped is tracked
+  as it is stored. State holding any record a device refuses, or written in a
+  layout no release wrote, is moved aside and rebuilt.
+
 ### Settings parity
 
 - Clarify that agreeing newest devices win despite older disagreement; distinguish

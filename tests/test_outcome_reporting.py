@@ -540,9 +540,9 @@ async def test_completed_publication_does_not_fail_on_tracking_read(tmp_path, mo
         apply = store.apply_journal
         get = store._meta_get
         committed = False
-        def applied(*args):
+        def applied(*args, **kwargs):
             nonlocal committed
-            apply(*args)
+            apply(*args, **kwargs)
             committed = True
         def broken_read(key):
             if committed and key == 'last_sent_key':

@@ -10,7 +10,7 @@ import pytest
 from botocore.exceptions import ClientError
 
 import journal_codec as codec
-from journal_store import JournalStore, parse_rev
+from journal_store import JournalStore
 from livesync_format import PATH_IDENTITY_LEGACY
 from object_storage import Boto3ObjectStorage
 from replay_limits import ReplayBudgetExceeded
@@ -48,13 +48,15 @@ def test_deep_json():
         codec.parse_journal(data, name='deep')
 
 
-async def test_revision_bounds_retry_convergence(tmp_path):
+async def test_refused_file_retry_convergence(tmp_path):
     bad = '1-docs.jsonl.gz'
     good = '2-docs.jsonl.gz'
-    peer, storage = await backend(tmp_path, {bad: journal_blob([meta_doc('bad.md', '9223372036854775808-a')]), good: journal_blob([meta_doc('good.md', '1-a')])})
+    # A device refuses this revision outright; until the file is gone the peer
+    # refuses it again on every refresh, as a device does on every receive.
+    peer, storage = await backend(tmp_path, {bad: journal_blob([meta_doc('bad.md', 'not-a-rev')]), good: journal_blob([meta_doc('good.md', '1-a')])})
     try:
         for _ in range(2):
-            with pytest.raises(StorageError, match='1-docs.jsonl.gz.*ValueError'):
+            with pytest.raises(StorageError, match='1-docs.jsonl.gz.*RecordRefused'):
                 await peer.refresh(force=True)
             assert not peer._store.processed(bad)
         storage._objects.pop(bad)
@@ -64,10 +66,15 @@ async def test_revision_bounds_retry_convergence(tmp_path):
         await peer.close()
 
 
-def test_revision_upper_boundary():
-    assert parse_rev('9223372036854775807-a')[0] == 2**63-1
-    with pytest.raises(ValueError):
-        parse_rev('9223372036854775808-a')
+def test_generation_beyond_sqlite_integer_is_held(tmp_path):
+    # A device holds the generation as a double and reports it in that spelling.
+    store = JournalStore(tmp_path / "state", PATH_IDENTITY_LEGACY)
+    try:
+        store.apply_journal('a', {}, [meta_doc('big.md', '9223372036854775808-a')])
+        assert store.winner('big.md')['_rev'] == '9223372036854776000-a'
+        assert store.note_ids() == ['big.md']
+    finally:
+        store.close()
 
 
 @pytest.mark.skipif(os.name != 'posix', reason='POSIX permissions')
@@ -231,8 +238,8 @@ async def test_time_budget_preserves_progress(tmp_path, monkeypatch, caplog):
     monkeypatch.setattr(storage_journal.time, 'monotonic', lambda: clock[0])
     peer, storage = await backend(tmp_path, {f'{i}-docs.jsonl.gz': journal_blob([meta_doc(f'{i}.md', '1-a')]) for i in range(3)}, max_refresh_seconds=1)
     apply = peer._store.apply_journal
-    def slow_apply(*args):
-        apply(*args)
+    def slow_apply(*args, **kwargs):
+        apply(*args, **kwargs)
         clock[0] += 2
     peer._store.apply_journal = slow_apply
     try:

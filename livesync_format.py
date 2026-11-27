@@ -708,11 +708,24 @@ def is_service_document_id(doc_id: str) -> bool:
             or doc_id.startswith("_design/") or doc_id.startswith("_local"))
 
 
-def is_note_document(doc: dict) -> bool:
-    """Whether a document is live note metadata, excluding service ids."""
-    return (not doc.get("deleted")
-            and doc.get("type") in ("plain", "newnote", "notes")
+def is_note_metadata(doc: dict) -> bool:
+    """Whether a document is note metadata in any state: plain, newnote or
+    legacy ``notes`` under a non-service id."""
+    return (doc.get("type") in ("plain", "newnote", "notes")
             and not is_service_document_id(str(doc.get("_id", ""))))
+
+
+def is_note_document(doc: dict) -> bool:
+    """Whether a document is a live note.
+
+    Two deletions exist: ``deleted`` is LiveSync's note state, ``_deleted`` is
+    a revision tombstone (PouchDB), which the plugin writes when it resolves a
+    conflict. Neither is a live note. Both are read with JavaScript
+    truthiness, as the plugin reads them (EntryManagerImpls.ts:437), so an
+    empty array or object deletes as truly as ``true``.
+    """
+    return (is_note_metadata(doc)
+            and not _js_truthy(doc.get("deleted")) and not _js_truthy(doc.get("_deleted")))
 
 
 def extract_inline_chunks(doc: dict) -> dict[str, str]:
@@ -753,13 +766,33 @@ def legacy_body(doc: dict) -> str | None:
     return data
 
 
+def _copy_json(value):
+    """A copy of a JSON value of any depth. The walk keeps its own stack: a
+    device holds a record nested as deep as its decoder admits."""
+    if not isinstance(value, (dict, list)):
+        return value
+    copy = {} if isinstance(value, dict) else [None] * len(value)
+    stack = [(value, copy)]
+    while stack:
+        source, target = stack.pop()
+        items = source.items() if isinstance(source, dict) else enumerate(source)
+        for key, item in items:
+            if isinstance(item, (dict, list)):
+                cloned = {} if isinstance(item, dict) else [None] * len(item)
+                target[key] = cloned
+                stack.append((item, cloned))
+            else:
+                target[key] = item
+    return copy
+
+
 def clone_metadata(doc: dict, **overrides) -> dict:
     """Clone all metadata/content fields, including unknown future fields.
 
     Publication identity, revision and conflict shadows are backend concerns;
     callers explicitly override or remove them for the intended operation.
     """
-    return deepcopy({**doc, **overrides})
+    return _copy_json({**doc, **overrides})
 
 
 @dataclass(frozen=True)

@@ -1,7 +1,7 @@
 """P-15: peer refusals preserve notes; replay follows remote truth incrementally."""
 import pytest
 
-import journal_store
+from journal_store import JournalStore
 from storage_base import ConcurrentModification, StorageError
 from storage_journal import JournalBackend, SYNC_PARAMETERS_KEY
 from tests.test_storage_journal import make_backend, healthy_bucket, params_blob
@@ -27,7 +27,7 @@ async def assert_preserved(backend, before):
         assert (after['text'], after['data'], after['rev']) == (note['text'], note['data'], note['rev']), path
 
 
-@pytest.mark.parametrize('failure', ['missing-last-sent', 'chunk-install'])
+@pytest.mark.parametrize('failure', ['missing-last-sent', 'before-metadata'])
 async def test_peer_refusal_or_unapplied_local_commit_preserves_readable_notes(tmp_path, monkeypatch, failure):
     backend, storage = make_backend(tmp_path, healthy_bucket())
     fresh = JournalBackend(storage, tmp_path / 'fresh')
@@ -48,19 +48,33 @@ async def test_peer_refusal_or_unapplied_local_commit_preserves_readable_notes(t
             assert storage.put_calls == []
         else:
             state = snapshot(backend._store)
-            def fail_install(*args):
-                raise OSError('injected chunk install failure')
+            real_write = JournalStore._write_plan
+            calls = 0
+
+            def fail_second_batch(inner, rows, trees):
+                nonlocal calls
+                calls += 1
+                if calls == 2:
+                    raise OSError('injected metadata commit failure')
+                return real_write(inner, rows, trees)
+
             with monkeypatch.context() as patch:
-                patch.setattr(journal_store.os, 'replace', fail_install)
+                patch.setattr(JournalStore, '_write_plan', fail_second_batch)
                 with pytest.raises(StorageError, match='outcome unknown'):
                     await backend.write_note('only.md', 'replacement with new chunk')
             after = snapshot(backend._store)
             assert after['chunks'] == state['chunks']
             # Unknown remote publication retains outbound recovery evidence;
             # local metadata, processed tracking and old last-sent stay intact.
-            def without_outbound_rows(sql):
-                return [line for line in sql if not line.startswith('INSERT INTO "outbound"')]
-            assert without_outbound_rows(after['sql']) == without_outbound_rows(state['sql'])
+            # The chunk batch is the first of the two commits, as on a device:
+            # it holds the new chunk document, and nothing else changed.
+            def local_state(sql):
+                return [line for line in sql if not line.startswith('INSERT INTO "outbound"')
+                        and "VALUES('h:" not in line]
+            assert local_state(after['sql']) == local_state(state['sql'])
+            added = [line for line in after['sql'] if line not in state['sql']
+                     and not line.startswith('INSERT INTO "outbound"')]
+            assert len(added) == 2 and all("VALUES('h:" in line for line in added)
             assert len(backend._store.outbound_journals()) == 2
         await assert_preserved(backend, before)
         await fresh.startup_check()
@@ -69,9 +83,9 @@ async def test_peer_refusal_or_unapplied_local_commit_preserves_readable_notes(t
         # survivors of a wipe are intentionally not resurrected remotely.
         for path, note in before.items():
             current = await fresh.read_note(path)
-            if current is not None and failure != 'chunk-install':
+            if current is not None and failure != 'before-metadata':
                 assert (current['text'], current['data'], current['rev']) == (note['text'], note['data'], note['rev'])
-        if failure == 'chunk-install':
+        if failure == 'before-metadata':
             await backend.refresh(force=True)
             assert (await backend.read_note('only.md'))['text'] == 'replacement with new chunk'
             assert (await fresh.read_note('only.md'))['text'] == 'replacement with new chunk'

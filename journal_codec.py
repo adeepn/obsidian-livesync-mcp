@@ -34,6 +34,7 @@ streams raise :class:`ValueError` loudly instead of returning garbage.
 from __future__ import annotations
 
 import json
+import math
 import zlib
 from wire_encoding import json_stringify, text_encoder_string
 from dataclasses import dataclass, field
@@ -63,15 +64,23 @@ _CORRUPT_BLOB_MESSAGE = "incompatible or corrupt journal blob"
 
 @dataclass
 class JournalFile:
-    """A parsed journal file: chunk bodies keyed by id, plus metadata docs.
+    """A parsed journal file: its records in order, plus two views of them.
 
-    Compact chunk records do not carry a revision on the wire (upstream
-    decodes them with ``_rev: ""``), so only the unescaped chunk *data* is
-    kept. Full-JSON records — metadata and any chunk record that arrived in
-    JSON form — keep their ``_rev`` and land in :attr:`docs` untouched.
+    :attr:`records` is every document upstream's decoder makes of the file, in
+    file order: each full-JSON record as it is, and for each compact chunk
+    record ``{_id, data, type: "leaf", _rev: ""}``
+    (commonlib ``journalRecords.ts:31-50``). This is what a device receives
+    and what the local store replays.
+
+    :attr:`docs` holds the full-JSON records alone, and :attr:`chunks` maps a
+    compact record's id to its unescaped *data*. Both are views for callers
+    that do not replay the file; a file with two compact records for one
+    chunk keeps only the last in :attr:`chunks`, so it is never replayed from
+    it (see ``JournalStore.apply_journal``).
     """
 
     name: str
+    records: list[dict] = field(default_factory=list)
     chunks: dict[str, str] = field(default_factory=dict)
     docs: list[dict] = field(default_factory=list)
 
@@ -238,12 +247,36 @@ def _parse_compact_line(
     chunk_id = line[1:separator] if separator != -1 else ""
     if separator == -1 or not chunk_id.startswith("h:") or len(chunk_id) <= 2:
         raise ValueError(f"{name}: line {lineno}: invalid journal chunk record")
-    target.chunks[chunk_id] = _unescape_chunk_data(line[separator + 1 :])
+    data = _unescape_chunk_data(line[separator + 1 :])
+    target.chunks[chunk_id] = data
+    # The document the decoder makes of a compact record carries no revision.
+    target.records.append({"_id": chunk_id, "data": data, "type": "leaf", "_rev": ""})
 
 
 def _reject_json_constant(name: str, lineno: int, token: str) -> None:
     """Reject NaN/Infinity/-Infinity like JSON.parse (callers get context)."""
     raise ValueError(f"{name}: line {lineno}: invalid JSON constant {token}")
+
+
+def _json_integer(digits: str) -> int | float:
+    """An integer literal as JSON.parse holds it: a double.
+
+    A double represents every small integer exactly, so those keep their
+    integer value. Any other literal is rounded to the nearest double, as on a
+    device, and one beyond every double's range is signed Infinity. The hook
+    receives the literal's digits, with its sign on this interpreter. Past the
+    interpreter's digit limit only ``float`` parses them, which rounds the
+    same way.
+    """
+    try:
+        value = int(digits)
+    except ValueError:
+        return float(digits)
+    try:
+        double = float(value)
+    except OverflowError:
+        return math.inf if value > 0 else -math.inf
+    return value if value == double else double
 
 
 def _metadata_depth(line: str, limit: int) -> int:
@@ -281,6 +314,7 @@ def _parse_metadata_line(
     try:
         doc = json.loads(
             line,
+            parse_int=_json_integer,
             parse_constant=lambda token: _reject_json_constant(name, lineno, token),
         )
     except RecursionError as exc:
@@ -309,6 +343,7 @@ def _parse_metadata_line(
     elif not isinstance(rev, str) or not rev:
         raise ValueError(f"{name}: line {lineno}: invalid journal metadata revision")
     target.docs.append(doc)
+    target.records.append(doc)
 
 
 def journal_filename(

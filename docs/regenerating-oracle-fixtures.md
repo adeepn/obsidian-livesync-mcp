@@ -34,7 +34,9 @@ node --version
 ```
 
 Existing read-only checkouts can be used instead by setting `PARITY_COMMON` and
-`PARITY_PLUGIN` to their paths. Do not run package install scripts. The acquisition
+`PARITY_PLUGIN` to their paths. Keep them outside `/tmp`: macOS removes files
+there that were not accessed for three days, which leaves a checkout without
+`HEAD`, its refs and every unread file. Do not run package install scripts. The acquisition
 below reads the pinned lockfile's exact URLs and verifies SHA512 **before** writing
 or extracting any package. It retains a URL/version/SHA256/integrity manifest.
 The `xxhash-wasm-102` alias resolves to **xxhash-wasm 1.1.0**, not version 1.0.2.
@@ -45,6 +47,7 @@ The `xxhash-wasm-102` alias resolves to **xxhash-wasm 1.1.0**, not version 1.0.2
 | `octagonal-wheels` | 0.1.57 | `https://registry.npmjs.org/octagonal-wheels/-/octagonal-wheels-0.1.57.tgz`; lockfile SHA512 and archive SHA256 `a7b3f0e70ee2092c3b5367e35c31ee99f0b3bcfd4f19098da8b038520bbf2ea7` |
 | `fflate` | 0.8.3 | `https://registry.npmjs.org/fflate/-/fflate-0.8.3.tgz`; lockfile SHA512 |
 | `pouchdb-adapter-http` | 9.0.0 | `https://registry.npmjs.org/pouchdb-adapter-http/-/pouchdb-adapter-http-9.0.0.tgz`; lockfile SHA512; only its verified serializer source is evaluated |
+| PouchDB closure: `pouchdb-core`, `pouchdb-adapter-memory`, `pouchdb-adapter-idb`, `pouchdb-adapter-indexeddb` and their dependencies (64 packages; `spark-md5` 3.0.2, `uuid` 11.1.1, the rest 9.0.0 or older) | see lockfile | Dependency closure of the pinned lockfile, resolved as Node resolves it; exact `resolved` URL and SHA512; flat archives named `<name>-<version>.tgz` under `$PARITY_ORACLE/pouchdb`; executed by the journal winner generator |
 | `minimatch` | 11.0.3 | Exact lockfile `resolved` URL and SHA512; additionally recorded in `vendor/selection/sources.json` |
 | `brace-expansion` | 5.0.12 | Same |
 | `balanced-match` | 4.0.4 | Same |
@@ -94,6 +97,76 @@ PARITY_WASM="$PARITY_ORACLE/xxhash.mjs"
 PARITY_WASM_TGZ="$PARITY_ORACLE/xxhash-wasm-102.tgz"
 PARITY_WHEELS="$PARITY_ORACLE/wheels"
 PARITY_WHEELS_TGZ="$PARITY_ORACLE/task3b-wheels.tgz"
+```
+
+The journal winner generator executes the published PouchDB database. Its 64
+packages are the dependency closure of `pouchdb-core`, `pouchdb-adapter-memory`,
+`pouchdb-adapter-idb` and `pouchdb-adapter-indexeddb` in the pinned lockfile,
+resolved as Node resolves them, fetched the same way. The IDB adapter runs on
+`fake-indexeddb` 6.2.8, an implementation of the IndexedDB specification that is
+not in the lockfile: the snippet fetches that archive too, pinned with its
+integrity in `scripts/extract_winner_vectors.mjs` and recorded in the fixture
+as `indexeddb`:
+
+```bash
+export PARITY_COMMON PARITY_ORACLE
+./venv/bin/python - <<'PY'
+import base64, hashlib, json, os, subprocess, urllib.request
+from pathlib import Path
+root = Path(os.environ['PARITY_COMMON'])
+out = Path(os.environ['PARITY_ORACLE']) / 'pouchdb'
+pin = '484c164450d61deb2e301582b60cb9b5f9fa977f'
+raw = subprocess.check_output(['git', '-C', str(root), 'show', pin + ':package-lock.json'])
+assert raw == (root / 'package-lock.json').read_bytes()
+lock = json.loads(raw)['packages']
+def enclosing(location):
+    # the package that contains a nested node_modules entry, or nothing at the top level
+    cut = location.rfind('/node_modules/')
+    return location[:cut] if cut > 0 else ''
+def resolve(location, name):
+    # Node's resolution from inside a package: its own node_modules, then each enclosing scope
+    scope = location
+    while True:
+        candidate = (scope + '/' if scope else '') + 'node_modules/' + name
+        if candidate in lock:
+            return candidate
+        if not scope:
+            raise SystemExit('No lock entry for ' + name)
+        scope = enclosing(scope)
+needed = {}
+for start in ('node_modules/pouchdb-core', 'node_modules/pouchdb-adapter-memory',
+              'node_modules/pouchdb-adapter-idb', 'node_modules/pouchdb-adapter-indexeddb'):
+    stack = [start]
+    while stack:
+        location = stack.pop()
+        if location in needed:
+            continue
+        needed[location] = lock[location]
+        stack += [resolve(location, name) for name in lock[location].get('dependencies', {})]
+out.mkdir(parents=True, exist_ok=True)
+archives, manifest = set(), {}
+for location, entry in sorted(needed.items()):
+    assert entry['resolved'].startswith('https://registry.npmjs.org/')
+    name = location[location.rfind('/') + 1:]
+    archive = out / (name + '-' + entry['version'] + '.tgz')
+    assert archive not in archives, archive
+    archives.add(archive)
+    data = archive.read_bytes() if archive.exists() else urllib.request.urlopen(entry['resolved'], timeout=30).read()
+    assert 'sha512-' + base64.b64encode(hashlib.sha512(data).digest()).decode() == entry['integrity']
+    archive.write_bytes(data)
+    manifest[location] = dict(version=entry['version'], url=entry['resolved'],
+                              integrity=entry['integrity'], sha256=hashlib.sha256(data).hexdigest())
+(out / 'dependencies.json').write_text(json.dumps(manifest, indent=2) + '\n')
+assert len(manifest) == 64, len(manifest)
+double = {'package': 'fake-indexeddb', 'version': '6.2.8',
+          'resolved': 'https://registry.npmjs.org/fake-indexeddb/-/fake-indexeddb-6.2.8.tgz',
+          'integrity': 'sha512-mpVW/HLUqwKXJ6F/s0hMgdK1eQfM4ncTHDioNGHWL0WKV3VcZCoZq1NKgboBbAge07aRCO7L48yziKssL59XEQ=='}
+archive = out / f"fake-indexeddb-{double['version']}.tgz"
+data = archive.read_bytes() if archive.exists() else urllib.request.urlopen(double['resolved'], timeout=30).read()
+assert 'sha512-' + base64.b64encode(hashlib.sha512(data).digest()).decode() == double['integrity']
+archive.write_bytes(data)
+PY
+PARITY_POUCHDB_TGZ="$PARITY_ORACLE/pouchdb"
 ```
 
 `scripts/splitter_oracle_dependencies.mjs:8-52` rechecks the wheels archive,
@@ -165,6 +238,7 @@ script unless stated otherwise. No command in this table uses real storage.
 | `node scripts/probe_ingested_blob_size.mjs "$PARITY_COMMON" "$PARITY_WHEELS" "$PARITY_WHEELS_TGZ" "$PARITY_ORACLE/ingested_blob_size_upstream.json"` | `ingested_blob_size_upstream.json`; native ingestion/reflection with in-memory host seams | `test_ingested_blob_size.py`, `test_settings_matrix.py` |
 | `node scripts/probe_journal_checkpoints.mjs "$PARITY_COMMON" > "$PARITY_ORACLE/journal-checkpoints.json"` | Scratch-only probe, no committed fixture; source hashes, native checkpoint assertions | Built-in assertions; `test_storage_journal.py` covers peer lifecycle |
 | `node scripts/probe_size_admission.mjs "$PARITY_COMMON" > "$PARITY_ORACLE/size-admission.json"` | Scratch-only probe, no committed fixture; native rename/Blob-size assertions | Built-in assertions; `test_size_policy.py` covers peer admission |
+| `node scripts/extract_winner_vectors.mjs "$PARITY_COMMON" "$PARITY_POUCHDB_TGZ" tests/fixtures/journal_winner_upstream.json.gz` | `journal_winner_upstream.json.gz`; 611 cases received as 1197 journal files (403 named, 208 random), the device's view after every file, the level adapter's cross-check, `Number` and `parseInt` of 2,118 strings and the 25 characters `Number` trims, the plugin's write and delete paths over twenty states and 34 `atob` inputs | `test_journal_winner.py` |
 
 Coercion fixtures have distinct embedded recipe modes. Set only the named mode(s)
 for each invocation; do not inherit other `*_EDGES` variables:
@@ -270,3 +344,118 @@ Validation: `./venv/bin/python -m pytest tests/test_lossless_legacy.py -q`.
 Pinned source hashes, built-in-only dependencies and native comparison/retention
 outputs are stored in the fixture; validated by `tests/test_recommendation_policy.py`.
 The owner live device=100 / PREFERRED=50 observation is separate acceptance evidence.
+
+### Journal winner oracle
+
+`node scripts/extract_winner_vectors.mjs "$PARITY_COMMON" "$PARITY_POUCHDB_TGZ" tests/fixtures/journal_winner_upstream.json.gz`
+
+A device receives one journal file in two batches
+(`C:src/replication/journal/JournalSyncCore.ts:778-840`): chunk documents it
+does not hold are created with `new_edits: true`; metadata is filtered by
+`revsDiff`, sorted by pouchdb-core and imported with `new_edits: false`
+through `parseDoc`/`preprocessAttachments`/`processDocs` (pouchdb-adapter-utils
+9.0.0) and pouchdb-merge, which build each document's revision tree, stem it to
+the device's `revs_limit` of 100 (`C:src/pouchdb/LiveSyncLocalDB.ts:293-298`)
+and pick the winning revision with `winningRev`: not revision-deleted, then
+the highest position, then the greatest hash.
+
+The generator receives every file twice through the plugin's own code and the
+published database:
+
+- The plugin's decoder (`C:src/replication/journal/journalRecords.ts`) decides
+  first what a file contains. It imports the plugin's whole utility module, so
+  its pinned bytes and those of the two escape functions it uses are evaluated
+  in a context of their own, imports stripped, as
+  `scripts/extract_legacy_wire_cells.mjs` does; the SHA256 of both files is in
+  the fixture.
+- The plugin's selection functions (`C:src/replication/journal/journalReceive.ts`)
+  are imported from the pinned checkout unchanged.
+- **IDB, the reference.** The published `pouchdb-adapter-idb` 9.0.0 runs
+  unmodified on `fake-indexeddb` 6.2.8, an implementation of the IndexedDB
+  specification, under pouchdb-core's own wrappers (`bulkDocs`, `revsDiff`,
+  `get`, `allDocs`). Nothing of it is mirrored: the order its transaction
+  serves requests in and runs their success handlers, the start of every
+  document's records together (`processDocs`), the write of attachment data
+  before a body, a body into the by-sequence slot `<id>::<rev>` and its
+  overwrite of a taken key, `compactRevs`, `insertAttachmentMappings`,
+  `decodeDoc`, and its reads. Devices default to this adapter
+  (`P:src/common/core/settings/compatibilitySettings.ts:13-18`). The
+  implementation is pinned with its registry integrity in the generator and
+  verified before it is used; the fixture records it as `indexeddb`. An
+  earlier generator mirrored the adapter's orchestration over Maps by hand and
+  was wrong twice: it continued a document's records at once where the
+  transaction continues them after the writes, and it replaced a slot's
+  attachment mappings where the adapter accumulates them.
+- **Level, the cross-check.** The unmodified `pouchdb-adapter-memory` adapter
+  (the level core over an in-memory store) runs end to end. One substitution is
+  made in the process: `atob` of the published `pouchdb-binary-utils` is the
+  platform function, which its browser build uses and its Node build does not
+  (the Node build demands the canonical spelling). The generator asserts that
+  the `idb`, `indexeddb` and `memory` adapters still call the shared functions,
+  and records on a case the file where the level adapter parts ways with IDB:
+  it ignores a record whose revision already has a stored body although the tree
+  does not name it (pouchdb-adapter-leveldb-core 9.0.0, `lib/index.js:723-729`),
+  and it stores a document body as JSON (`encode: safeJsonStringify`), where a
+  number beyond every double is `null` and IDB keeps it. The level core also
+  stores a body by sequence and never decodes a revision off a key, so it
+  reads a revision that holds a colon where IDB cannot. The corpus holds
+  fifty-one such cases (`level-ignored-kept-revision`; the eight `rev-*`
+  cases of a revision that holds a colon and the twenty-six `slot-collision*`
+  cases of two documents whose id and revision spell one slot, seven of them
+  records of two documents in one batch; `attachment-mapping-accumulates` and
+  `attachment-compaction-order`, where it drops an attachment the IDB adapter still maps;
+  `messy-45`,
+  `messy-50`; the seven `number-*` cases of such a number in a note's body and
+  the five `chunk-nonfinite-hash*` cases of one in a chunk body); in every
+  other case both adapters hold the same, compared in key order. A file fails at
+  `metadata-selection` when the plugin's own selection of the metadata batch
+  throws, before the database is given that batch. An exception the published code throws
+  from a callback of the level adapter is uncaught, as it is on a device, and
+  ends the generator with the case named: the corpus chains no file over a
+  state that leads there.
+
+The corpus is seeded and deterministic (the generator builds it twice and
+compares the bytes): 611 cases as 1197 files — 403 named cases for every
+refusal and corner, the hostile trees of three review rounds, all 24 orders of
+a branched tree as separate files and as one batch, histories around the
+revision limit, full-JSON and compact chunk documents (a held chunk, two
+records for one chunk in a batch, either form first, a JSON chunk whose data
+holds a lone UTF-16 unit, a number beyond every double in a chunk body given as
+raw frames, records nested as deep as the peer's decoder budget admits and a
+supplied tree of 250 links), attachments as core's
+`bulkDocs` sees them (a deleted record's, an array of them, fields it does not
+keep, a stub naming the chunk batch's own), revision names with a lone UTF-16
+unit, frames of the decoder's own grammar, numbers around every conversion of
+the receive path (a negative or padded start, each trimmed character, radix
+literals and digit strings beyond every double, integer and decimal literals
+beyond a double's range or precision given as raw frames, hashes with
+hyphens), and 208 random adversarial cases mixing inconsistent ancestry, late
+and repeated arrivals, both deletion flags, malformed revision strings and
+non-string hashes, 40 of them over starts and hashes from the number pools.
+After every file, applied or refused, the fixture records for each document of
+the file, compact chunk records included, the winning revision, its deleted
+state, the leaves in `collectLeaves` order, the conflicts, the chain and body
+`get` returns (a double JSON cannot carry keeps its JavaScript spelling),
+whether the tree holds a position that is not finite, and whether the file
+applied or which stage failed. Two cases record which revision of the tree still has a body
+(`slots`): a merge stems a revision away from one path while a shorter path keeps
+it, and the adapter compacts only what no path keeps. It also holds 27 inputs a device accepts into an
+engine-dependent tree or record, which the peer refuses (see
+[peer limits](peer-limitations.md)): `empty-ids` and every view marked
+`unbounded`. Separately it records `Number` and `parseInt` of 2,118 strings
+under Node's engine (each code point `Number` trims, alone and around a number;
+numeric spellings; digit strings of 300 to 5,000 digits; random strings over
+the characters that can matter) and the result of the plugin's own write and
+delete paths over twenty starting states (a raw `get` supplies `_rev`, then
+`put(newDoc, {force: true})`; a deletion puts the object that `get` returned;
+core turns a forced put into an explicit revision with a random id, so the
+base `get` returned, the generation and ancestry of the revision written, the
+document it was written into, the conflicts it left — the revision written standing
+behind a placeholder where it is one of them — and what a raw `get` of that
+document returns afterwards are recorded) and 34 inputs of the platform `atob`.
+
+The fixture records the 64 archives with lock path, URL, integrity and SHA256,
+and the `lib/index.js` SHA256 of the three adapters. Validation:
+`./venv/bin/python -m pytest tests/test_journal_winner.py tests/test_journal_store.py -q`.
+`tests/test_revision_tree_fuzz.py` draws 12,000 random JSON values and holds
+the port to typed refusals: nothing else may fail the receive path.
