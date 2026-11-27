@@ -3,6 +3,14 @@ import json
 import re
 
 _SURROGATES = re.compile('[\ud800-\udfff]')
+_SURROGATE_PAIR = re.compile('([\ud800-\udbff])([\udc00-\udfff])')
+
+
+def _combine_pairs(value: str) -> str:
+    # A valid pair held as two units is one character to JavaScript. Only
+    # units left unpaired are replaced (TextEncoder) or escaped (JSON.stringify).
+    return _SURROGATE_PAIR.sub(
+        lambda m: chr(0x10000 + ((ord(m[1]) - 0xd800) << 10) + ord(m[2]) - 0xdc00), value)
 
 
 def json_stringify(value: object) -> str:
@@ -17,17 +25,17 @@ def json_stringify(value: object) -> str:
 
 
 def escape_json_surrogates(text: str) -> str:
-    """Escape surrogate units in serialized JSON without changing other fields."""
-    return _SURROGATES.sub(lambda m: '\\u%04x' % ord(m[0]), text)
+    """Escape unpaired surrogate units in serialized JSON, changing nothing else."""
+    return _SURROGATES.sub(lambda m: '\\u%04x' % ord(m[0]), _combine_pairs(text))
 
 
 def text_encoder_string(value: str) -> str:
     """journalRecords.ts:70-74: TextEncoder replaces unpaired UTF-16 units."""
-    return _SURROGATES.sub('\ufffd', value)
+    return _SURROGATES.sub('\ufffd', _combine_pairs(value))
 
 
 def surrogate_count(value: str) -> int:
-    return sum(1 for _ in _SURROGATES.finditer(value))
+    return sum(1 for _ in _SURROGATES.finditer(_combine_pairs(value)))
 
 
 def js_number_string(value: int | float) -> str:
