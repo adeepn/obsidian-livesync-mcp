@@ -15,10 +15,15 @@ from journal_codec import parse_journal, serialize_journal
 from wire_encoding import json_stringify, surrogate_count, text_encoder_string
 
 PAIR = '\ud83d\ude42'
+PAIRS = ['\ud800\udc00', '\udbff\udfff', PAIR, '\ud83c\udf89']  # first, last and two ordinary
 INPUTS = {
     'pair': 'a' + PAIR + 'b',
     'pair-only': PAIR,
+    'first-astral': PAIRS[0] + 'x',
+    'last-astral': 'x' + PAIRS[1],
+    'two-pairs': PAIRS[2] + PAIRS[3],
     'lone-units': 'x\ud83dy\ude42z',
+    'lone-boundaries': '\udbffa\udc00',
     'high-then-pair': 'x\ud83d' + PAIR,
     'pair-then-lone-low': 'x' + PAIR + '\ude42',
     'not-adjacent': '\ud83da\ude42',
@@ -59,6 +64,14 @@ def test_text_encoder_matches_native(native, name):
 @pytest.mark.parametrize('name', sorted(INPUTS))
 def test_json_stringify_matches_native(native, name):
     assert json_stringify({'t': INPUTS[name]}) == native[name]['json']
+
+
+@pytest.mark.parametrize('pair', PAIRS)
+def test_each_pair_becomes_its_character(pair):
+    character = pair.encode('utf-16-le', errors='surrogatepass').decode('utf-16-le')
+    assert text_encoder_string('a' + pair + 'b') == 'a' + character + 'b'
+    assert json_stringify({'t': pair}) == '{"t":"' + character + '"}'
+    assert surrogate_count(pair) == 0
 
 
 def test_lone_units_are_replaced_and_counted():
