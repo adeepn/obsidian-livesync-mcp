@@ -122,7 +122,9 @@ Upstream `serviceFeatures/targetFilter.ts:132-149` has no corresponding deadline
 Installed vendor bytes and the worker are verified against
 `vendor/selection/installed-sha256.json` before Node launch/import. A
 `provenance-mismatch` refusal means restore or regenerate the verified installation
-and restart; changing vault settings cannot repair installed code.
+and restart; changing vault settings cannot repair installed code. The hashed files carry
+`-text` in `.gitattributes`, so a checkout with line-ending conversion enabled keeps the
+bytes that the manifest hashes.
 
 ## Recommendation-only writer policy
 

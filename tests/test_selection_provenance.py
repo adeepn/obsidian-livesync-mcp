@@ -1,4 +1,5 @@
 """Installed-byte provenance is peer policy, before native path.ts:241-265 runs."""
+import json
 import shutil
 import subprocess
 from pathlib import Path
@@ -55,6 +56,14 @@ def test_direct_worker_checks_before_import(installation, damage):
     assert result.returncode != 0
     assert not marker.exists()
     assert 'selection provenance mismatch' in result.stderr
+
+
+def test_hashed_files_keep_their_bytes_on_checkout():
+    # A checkout with core.autocrlf=true must not change the bytes the manifest hashes.
+    names = sorted(json.loads(Path('vendor/selection/installed-sha256.json').read_text())['files'])
+    attributes = subprocess.run(['git', 'check-attr', 'text', '--', *names],
+                                capture_output=True, text=True, check=True).stdout
+    assert all(line.endswith(': text: unset') for line in attributes.splitlines())
 
 
 def test_installed_tree_is_verified():

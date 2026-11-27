@@ -1,2 +1,6 @@
-# Preserve generated/upstream distributions byte-for-byte, including whitespace.
-vendor/selection/** -whitespace
+# Preserve generated/upstream distributions byte by byte: no whitespace
+# normalization in diffs and no line-ending conversion on checkout, so that the
+# installed-byte hashes hold on every platform.
+vendor/selection/** -whitespace -text
+selection_worker.mjs -whitespace -text
+scripts/selection_provenance.mjs -whitespace -text
