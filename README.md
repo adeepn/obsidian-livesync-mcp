@@ -1,109 +1,18 @@
 # obsidian-livesync-mcp
 
-Remote MCP server for accessing your Obsidian vault via CouchDB / [Self-hosted LiveSync](https://github.com/vrtmrz/obsidian-livesync). Works with Claude Code, Claude.ai, and any MCP-compatible client.
+A Python MCP peer for an Obsidian [Self-hosted LiveSync](https://github.com/vrtmrz/obsidian-livesync)
+vault in CouchDB or S3 journals. It uses device-identical path identities,
+splitters, chunk IDs and file-size admission at the [audited upstream pin](docs/upstream-pin.md),
+with the explicit differences below. No Obsidian app or local vault folder is
+needed on the server. Read, edit, search, manage properties/tags, links and canvas from an MCP client; see the [tool overview](docs/tools.md).
 
-No Obsidian desktop app required on the server — connects to CouchDB or S3-compatible LiveSync journal storage.
+[Install and start](#quick-start) · [clients and authentication](docs/clients-and-authentication.md) ·
+[connection recipes](docs/connecting-storage.md)
 
-## Architecture
+## Quick start
 
-```
-Obsidian + LiveSync <-> CouchDB or S3 journals <-> Python MCP peer <-> MCP client
-```
-
-The server reads and writes the same vault storage as the Obsidian plugin.
-CouchDB holds the live documents; S3 holds append-only journals that this peer
-replays into local SQLite revision trees and chunk files.
-
-## Backends
-
-Storage is selected by a single environment variable, `LIVESYNC_BACKEND`:
-
-- **`couchdb`** — talks directly to the CouchDB instance your vault syncs to. Configure it with the `COUCHDB_*` variables below.
-- **`s3`** — replays and publishes Self-hosted LiveSync journals in S3-compatible storage, with a local SQLite and chunk cache.
-
-All tools work through a storage-agnostic backend interface, so switching backends later is a configuration change, not a rewrite. The `vault_stats` tool reports the active backend in its `backend` field.
-
-## Upstream tracking
-
-The daily and manually dispatched upstream watcher compares the latest
-`vrtmrz/obsidian-livesync` release with [the compatibility pin](docs/upstream-pin.md)
-and checks commonlib default-branch changes against the
-[protocol manifest](docs/upstream-protocol-files.txt). It maintains one open
-`upstream-drift` issue, updates its comparison output, and closes it when clean.
-Check failures fail the workflow without closing an existing alert.
-
-On drift, read the issue diff, update the pin through a PR, extend codec tests
-or capture a new golden journal fixture from a real client, and note the
-change in CHANGELOG. The initial commonlib tracking pin does not replace the
-older audit or the plugin 1.0.50 live acceptance.
-
-Run `scripts/check_upstream.sh` locally with authenticated `gh`. Once a month,
-repeat the Task-10 live smoke against a **scratch bucket** using
-`scripts/live_check_s3.py` (sweep-notes, verify-vault, write-phase,
-verify-visible); follow the [live acceptance checklist](docs/live-check-s3-checklist.md).
-
-## Features
-
-### Notes
-- **search** — Full-text search (text/regex)
-- **fetch** — Get content, properties, and stats (.md/.base/.canvas)
-- **create_note** — Create notes with frontmatter
-- **update_note** — Modify (overwrite/append/prepend/after-heading/search-replace)
-- **delete_note** — Delete notes
-- **move_note** — Move/rename
-- **duplicate_note** — Duplicate
-- **list_notes** — List files with folder/extension filters
-
-### Properties & Tags
-- **manage_properties** — Get/set/delete frontmatter properties
-- **manage_tags** — Add/remove/list tags
-- **get_all_tags** — All vault tags with counts
-
-### Graph & Links
-- **get_links** — Outgoing/incoming links
-- **get_link_graph** — Full vault graph
-- **find_orphaned_notes** — Notes with no links
-- **find_hub_notes** — Most connected notes
-
-### Canvas
-- **canvas_node** — Add/remove canvas nodes
-- **canvas_edge** — Add/remove canvas edges
-
-### Other
-- **obsidian_upload_attachment** — Upload PDFs, scans, and other binary attachments from base64 (32 MiB decoded maximum)
-- **obsidian_download_attachment** — Download complete binary attachments as base64 with size/SHA-256 (32 MiB raw maximum; optional `max_bytes` limit, no truncation)
-- **vault_stats** — Vault statistics
-- **create_from_template** — Create from template with variable substitution
-- **list_templates** — List available templates
-
-## Prerequisites
-
-- CouchDB with Obsidian LiveSync data, or S3-compatible LiveSync journal storage
-- Python 3.11+
-
-### CouchDB vault compatibility
-
-Binary uploads and downloads are symmetrically capped at **32 MiB raw
-(decoded) bytes**. Uploads are stored as LiveSync `newnote` documents with
-per-chunk base64 data. `obsidian_download_attachment(path, max_bytes=0)` returns
-JSON `{path, size, sha256, content_b64}` with base64 transport and SHA-256 over
-the raw bytes. A positive `max_bytes` sets an additional caller limit; exceeding
-either limit returns an error without content or truncation. The hard cap keeps
-JSON-RPC payloads manageable. `obsidian_fetch` returns binary metadata including
-`size` and `sha256`, without the body. Use text note tools for textual paths.
-
-The server derives document ids from vault paths the same way LiveSync does, so it supports vaults using the plugin's default path settings:
-
-- **No end-to-end encryption** — E2EE vaults are rejected at startup (and encrypted chunks are refused on read).
-- **No path obfuscation** — obfuscated vaults are rejected at startup.
-- **Case-insensitive filenames** (`handleFilenameCaseSensitive` off, the default) — document ids are lowercased paths.
-- **No Unicode NFC path normalization** (`pathNormalizationVersion` 0, the default).
-
-A vault using an unsupported combination fails the startup check with an explicit error instead of serving mismatched data.
-
-## Setup
-
-### 1. Install
+Requires Python 3.11+ and an existing vault that already syncs in LiveSync.
+Node.js 22+ is additionally required only when selection filters are active.
 
 ```bash
 git clone https://github.com/adeepn/obsidian-livesync-mcp
@@ -111,367 +20,211 @@ cd obsidian-livesync-mcp
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-```
-
-### 2. Configure
-
-```bash
 cp .env.example .env
-# Edit .env: pick LIVESYNC_BACKEND, fill the backend credentials,
-# and set exactly one auth mode (see Authentication below).
 ```
 
-`run.py` loads `.env` via python-dotenv before the server reads the environment. If you start the server any other way (systemd uses `EnvironmentFile=`), the variables must already be in the environment.
+Edit `.env`: choose the backend, copy its connection values from the plugin,
+and set one authentication mode. Replace template secrets; unused backend/auth
+groups should be removed or commented. `run.py` loads `.env` before constructing
+the application; other launchers must supply the environment themselves.
 
-The server validates configuration when the application is constructed at import. Missing required variables, an absent auth mode, or placeholder secrets from `.env.example` fail immediately. `create_app(cfg)` accepts an injected validated `Config`; auth, URL, host, port, and backend startup all use that same configuration. Environment changes after construction require a new application or restart. OAuth still uses the preconfigured client registration and redirect URI rules below.
+| Backend | Copy from LiveSync settings | First access | Smoke check |
+|---|---|---|---|
+| CouchDB | URL, username, password, database | Direct database access | `obsidian_vault_stats`, then `obsidian_list_notes` |
+| S3 journal | Endpoint/access key/secret/bucket/region/prefix; compatible `sls://` URI | Full journal replay into local state | Same calls; allow replay to finish |
 
-### Quick start matrix
+For an already syncing vault, open **Settings → Self-hosted LiveSync → Remote
+Configuration → Connection settings → Saved connections**, find the row marked
+**(Active)**, then click its wrench (**Configure**). Copy the connection fields
+locally and click **Cancel**; do not save or change the working connection.
 
-Open **Obsidian → Settings → Self-hosted LiveSync** in a vault that already
-syncs successfully. Use the connection settings for that same vault, not a new
-bucket or database. Labels can vary with plugin version.
-
-| Backend | Where credentials come from | Configuration | First tool call | Smoke check |
-| --- | --- | --- | --- | --- |
-| CouchDB | Plugin remote database settings: CouchDB URI, username, password and database name | CouchDB block below + shared server/auth block | Direct access, no full journal replay or local replica | Call `obsidian_vault_stats`, then `obsidian_list_notes` from an MCP client |
-| S3 journal | Plugin object-storage/journal settings: **Copy setup URI** (`sls://…`), or endpoint, access key, secret key, bucket, region and prefix | Exactly one S3 block below + shared server/auth block | Full journal replay; time scales with history and network, disk roughly vault size or larger with history | Call the same two tools; allow replay to finish or continue across bounded refreshes |
-
-Put the following shared settings in `.env`, replacing the deployment URL and
-setting a strong bearer token locally (for example, generate one with
-`python -c 'import secrets; print(secrets.token_urlsafe(32))'`). Never share it.
-For a local smoke check, these lines bind only to localhost:
-
-```dotenv
-MCP_API_KEY=<paste-generated-token>
-MCP_SERVER_URL=http://localhost:8484
-MCP_HOST=127.0.0.1
-MCP_PORT=8484
-```
-
-For remote clients, configure your public HTTPS URL and reverse proxy; see
-Connecting Clients and Authentication. Alternatively use the complete OAuth
-group instead of `MCP_API_KEY`.
-
-**CouchDB:** copy the four values from the plugin's remote database settings.
-`COUCHDB_URL` is the server base URL; keep the database name in its own field.
-Replace all angle-bracket fields before starting:
-
-```dotenv
-LIVESYNC_BACKEND=couchdb
-COUCHDB_URL=<CouchDB-server-URI>
-COUCHDB_USER=<plugin-username>
-COUCHDB_PASSWORD=<plugin-password>
-COUCHDB_DATABASE=<plugin-database-name>
-```
-
-> **CouchDB compatibility:** legacy path identity only today: case-insensitive,
-> normalization version 0, no E2EE or path obfuscation. NFC is refused.
-> The S3 peer supports NFC identity; CouchDB NFC support remains future work.
-> CouchDB needs no local state directory.
-
-**S3 URI:** paste the plugin's object-storage `sls://` setup URI as one line.
-An Obsidian-wide encrypted setup link is not an S3 connection URI.
-
-```dotenv
-LIVESYNC_BACKEND=s3
-LIVESYNC_S3_URI=<paste-sls://-setup-URI>
-```
-
-**S3 individual fields:** use this instead of the URI block; copy the values
-from the same plugin object-storage settings:
-
-```dotenv
-LIVESYNC_BACKEND=s3
-S3_ENDPOINT_URL=<plugin-endpoint-URL>
-S3_ACCESS_KEY_ID=<plugin-access-key>
-S3_SECRET_ACCESS_KEY=<plugin-secret-key>
-S3_BUCKET=<plugin-bucket>
-S3_REGION=auto
-S3_PREFIX=
-```
-
-Use the plugin's region and prefix if nonempty. Optional local state settings
-are described under Local cache. Do not leave both S3 connection forms enabled,
-even with empty individual values. If starting from `.env.example`, remove its
-unused backend/auth settings and replace its placeholder secrets.
-
-Start with `python run.py`, connect an MCP client to `http://localhost:8484/mcp`
-using the bearer token, and call `obsidian_vault_stats` and `obsidian_list_notes`.
-Expect the chosen `backend`, sensible note counts and known vault paths.
-CouchDB access is immediate apart from the requested vault scan; S3's initial
-replay can be lengthy. Startup validates settings but does not replay journals.
-There is no dedicated health endpoint; these tool calls check storage access too.
-
-### Environment reference
-
-This table covers every environment variable consumed by `config.py`.
-“Required for S3 fields” means only the individual-variable connection form;
-URI and individual fields are mutually exclusive. Backend-specific settings
-are read only for the selected backend. Empty defaults below mean an empty string.
-
-| Variable | Default | Requirement | Purpose |
-| --- | --- | --- | --- |
-| `LIVESYNC_BACKEND` | none | Required | Select `couchdb` or `s3` |
-| `COUCHDB_URL` | `http://localhost:5984` | Optional | CouchDB server base URL |
-| `COUCHDB_USER` | none | Required for CouchDB | Database username |
-| `COUCHDB_PASSWORD` | none | Required for CouchDB | Database password |
-| `COUCHDB_DATABASE` | none | Required for CouchDB | LiveSync database name |
-| `LIVESYNC_S3_URI` | empty | Required unless S3 fields set | `sls://access:secret@endpoint?bucket=…&region=…&prefix=…` connection |
-| `S3_ENDPOINT_URL` | none | Required for S3 fields | S3-compatible endpoint URL |
-| `S3_ACCESS_KEY_ID` | none | Required for S3 fields | Object-storage access key |
-| `S3_SECRET_ACCESS_KEY` | none | Required for S3 fields | Object-storage secret key |
-| `S3_BUCKET` | none | Required for S3 fields | Existing LiveSync journal bucket |
-| `S3_REGION` | `auto` (fields); empty if omitted in URI | Optional | Object-storage region |
-| `S3_PREFIX` | empty | Optional | Literal key prefix, including trailing slash if needed |
-| `S3_STATE_DIR` | `./data` | Optional | Dedicated persistent local replica directory |
-| `S3_REFRESH_MIN_INTERVAL_SEC` | `5` | Optional | Positive finite seconds between refresh attempts |
-| `S3_STATE_SIZE_WARN_MB` | `0` | Optional | Non-negative integer warning threshold in MiB; 0 disables |
-| `MCP_API_KEY` | empty | Required unless full OAuth group set | Shared bearer token; takes precedence over OAuth |
-| `OAUTH_PASSWORD` | empty | Required for OAuth | Password on the authorization form |
-| `OAUTH_CLIENT_ID` | empty | Required for OAuth | Pre-registered client ID |
-| `OAUTH_CLIENT_SECRET` | empty | Required for OAuth | Pre-registered client secret |
-| `MCP_SERVER_URL` | `https://localhost:8484` | Optional | External server base URL used for auth resource binding |
-| `MCP_HOST` | `0.0.0.0` | Optional | HTTP bind address |
-| `MCP_PORT` | `8484` | Optional | HTTP port, integer 1–65535 |
-| `LIVESYNC_SCAN_MAX_NOTES` | `10000` | Optional | Positive note count cap per aggregate scan |
-| `LIVESYNC_SCAN_MAX_BYTES` | `67108864` | Optional | Positive aggregate UTF-8 byte cap per scan |
-
-### S3 journal backend
-
-Binary uploads and downloads are symmetrically capped at **32 MiB raw
-(decoded) bytes**. Uploads are stored as LiveSync `newnote` documents with
-per-chunk base64 data. `obsidian_download_attachment(path, max_bytes=0)` returns
-JSON `{path, size, sha256, content_b64}` with base64 transport and SHA-256 over
-the raw bytes. A positive `max_bytes` sets an additional caller limit; exceeding
-either limit returns an error without content or truncation. The hard cap keeps
-JSON-RPC payloads manageable. `obsidian_fetch` returns binary metadata including
-`size` and `sha256`, without the body. Use text note tools for textual paths.
-
-Set `LIVESYNC_BACKEND=s3` and choose exactly one connection form.
-Use the URI or individual-variable block in the quick start matrix.
-Prefix is prepended literally to object keys; include a trailing slash for a
-folder prefix. Shared state settings work with either connection form.
-
-Before each tool operation, the backend refreshes its local state. On first
-use, this replays the full journal history. This one-time replay can take a
-long time for a large vault. Startup validates settings and opens local state; it does not replay
-journals. Subsequent refreshes use the processed-file ledger; epoch changes or a detected
-remote wipe reset the cache and require replay again. Use a dedicated writable
-state directory per vault/peer and persist it across restarts. It contains
-`journal.sqlite3` (SQLite revision state and processed journals) and
-`chunks/` (cached chunk files).
-
-`obsidian_refresh` lists remote journals and replays unseen files.
-`S3_REFRESH_MIN_INTERVAL_SEC` is the minimum spacing between refresh attempts, including failures
-and partial budget stops (positive seconds, default 5); calls within that interval are skipped.
-Ordinary tool calls refresh automatically using the same throttle. There is
-no background polling. `obsidian_refresh` also uses this throttle; allow the
-interval to elapse to receive subsequent device changes. Internal callers can use
-`refresh(force=True)` to bypass the throttle. Refresh failures
-return a tool error instead of serving stale data. Calls throttled after an
-unresolved failure also return an error; a successful refresh clears that failure.
-
-Replay uses bounded downloads (512 MiB compressed per object), inflation (1 GiB),
-records (100,000 per file), lines (64 MiB in UTF-8 bytes), and JSON nesting
-(512 levels). Limits are module constants in `object_storage.py` and
-`journal_codec.py`; `Boto3ObjectStorage(max_object_bytes=...)` and the codec
-keyword arguments allow overrides. `JournalBackend` also accepts
-`max_inflated_bytes`, `max_records`, and `max_line_bytes`.
-
-Each refresh examines at most 1,000,000 keys, downloads at most 4 GiB
-(including sync parameters), and has a 300-second wall-clock budget.
-Override these through `JournalBackend(max_refresh_keys=...,
-max_refresh_bytes=..., max_refresh_seconds=...)`. These are Python constructor
-options, not environment variables. Stops are logged; processed files stay
-processed. Key-limited sweeps continue from their last listed key, then restart
-from the beginning so late objects below the cursor are eventually discovered.
-Files are numerically ordered within each bounded window. Byte/time stops retry
-the unfinished window and skip its processed files. The time budget is checked
-between synchronous operations; an in-flight request, parse or SQLite transaction
-can finish after the deadline. Configure budgets large enough for a single
-allowed journal plus control reads. Restarting the server restarts the listing
-sweep; the durable processed ledger preserves replay progress.
-
-Local state directories and chunk shards are private (`0700`); SQLite and newly
-written chunk files use `0600`. Opening an existing cache tightens permissive
-directory modes and logs each correction once.
-
-Remote storage is append-only: updates publish new journal objects.
-Publication first attempts atomic create-only `PutObject(IfNoneMatch="*")`
-(Ruling B-13). Occupied keys are regenerated, with at most ten attempts;
-read-back verification still precedes local application. Providers reporting
-conditional writes as unsupported use the B-10 exists-precheck + put fallback,
-with a warning logged once per adapter. That compatibility fallback retains
-the race between the precheck and upload.
-The backend never deletes S3 objects, prunes history, or runs remote garbage
-collection. Deleting a note publishes a tombstone; it does not remove journal
-objects. Local cache resets can delete local state.
-
-Concurrent edits can leave sibling revisions. The winner is deterministic:
-highest revision generation, then lexicographically greatest revision hash.
-A successful write confirms publication, not that it will remain the winner.
-Sibling revisions remain available to LiveSync's conflict UI in Obsidian for
-resolution.
-
-Supported S3 vault settings are legacy path identity (normalization version 0)
-and NFC identity (version 1), with case-insensitive filenames. E2EE, path
-obfuscation and case-sensitive filename settings are rejected at startup.
-
-### Local cache (S3)
-
-The state directory is a **rebuildable replica**, not an eviction cache.
-`journal.sqlite3` holds revision trees, replay checkpoints and peer metadata;
-SQLite WAL/SHM sidecars may also be present. `chunks/` holds content-addressed
-chunks, including historical chunks. State grows with vault content and history
-and is **never auto-pruned** during normal operation. Remote journals are
-append-only, so deleting a note does not reclaim its history here.
-
-Keep a dedicated writable `S3_STATE_DIR` per vault/peer, persisted across restarts.
-Allow roughly vault-sized disk space initially and potentially much more for
-history, revision metadata and SQLite overhead. Replay time depends on journal
-volume and network speed; there is no fixed completion time. Large histories
-may need multiple refresh calls because replay has per-call budgets.
-
-Monitor `obsidian_vault_stats` → `local_state`: `path`, `bytes`,
-`human_readable_size`, `warn_threshold_mb`, and `warning`. Size is a best-effort
-sum of logical SQLite/sidecar and chunk-file bytes, measured once per call;
-it may differ from filesystem allocated space reported by `du`.
-Set `S3_STATE_SIZE_WARN_MB=1024`, for example, to warn above 1024 MiB
-(1 MB here means 1,048,576 bytes). Zero disables warnings; equality does not
-warn. A warning adds a human-readable `hint` to the tool response. This is
-observability only: it does not stop writes or delete anything.
-
-For a manual check in a shell with `S3_STATE_DIR` set to the configured path:
+Follow the [exact connection steps and .env blocks](docs/connecting-storage.md)
+for either backend. Startup validates settings; S3 replay starts on the first
+tool access. There is no dedicated health endpoint.
 
 ```bash
-du -sh "$S3_STATE_DIR"
-```
-
-`.env` is loaded by `run.py`, not automatically by your shell. If the setting
-is unset, check the default `./data` relative to the server's working directory.
-
-To reset safely:
-
-1. Stop the server (for systemd: `sudo systemctl stop obsidian-mcp`) and any
-   other process using that state directory. Confirm the remote vault is intact.
-2. Check the exact configured path. Move the directory aside for recovery, or
-   remove only that directory with `rm -rf -- "$S3_STATE_DIR"` after verifying
-   that the variable is set and points to the intended peer state directory.
-3. Start the server (`sudo systemctl start obsidian-mcp` for systemd). The next
-   tool call replays remote journals to rebuild local state; allow time and disk
-   for a full replay. Check statistics and known notes before discarding a backup.
-
-A reset removes local replay progress; it does not delete remote journals.
-Automatic logical resets occur on a journal epoch change
-(`protocolVersion:pbkdf2salt`) or when the last journal published by this peer
-vanishes, indicating a remote wipe. These clear local tables/chunks and require
-replay again; they are compatibility/recovery actions, not space-based eviction.
-Changing path-identity mode requires a fresh state directory; it fails closed
-rather than silently converting the existing replica.
-
-### 3. Run
-
-With the virtualenv from step 1 activated:
-
-```bash
+source venv/bin/activate
 python run.py
 ```
 
-The server serves streamable HTTP at `/mcp`; all client URLs below assume that transport.
-
-### 4. Systemd service (optional)
-
-```bash
-sudo cp obsidian-mcp.service /etc/systemd/system/
-# Edit the service file: set User and paths
-sudo systemctl daemon-reload
-sudo systemctl enable obsidian-mcp
-sudo systemctl start obsidian-mcp
-```
-
-## Connecting Clients
-
-### Codex
-
-Set the same API key in the environment where Codex runs, then add a streamable HTTP MCP server to `~/.codex/config.toml`:
+Connect an MCP client to `http://localhost:8484/mcp` with the configured bearer
+token. For a local deployment set `MCP_HOST=127.0.0.1` and
+`MCP_SERVER_URL=http://localhost:8484`; use HTTPS/reverse proxy for remote access.
+For Codex, set the same token in its environment:
 
 ```toml
 [mcp_servers.obsidian]
-url = "https://your-server/mcp"
+url = "http://localhost:8484/mcp"
 bearer_token_env_var = "MCP_API_KEY"
 ```
 
-Codex support has been verified with this streamable HTTP configuration and the bearer token stored in the `MCP_API_KEY` environment variable.
+Missing credentials/auth, template secrets or incompatible vault settings fail
+at application construction/startup. Configuration errors name variables and validation
+rules without echoing supplied values, including invalid ports and backend names.
+Restart after changing configuration.
 
-For MCP clients that ask for custom headers directly, use:
+## Configuration
 
-| Key | Value |
-| --- | --- |
-| `Authorization` | `Bearer your_api_key` |
+See the [complete environment reference](docs/configuration.md).
 
-Replace `your_api_key` with the exact value configured on the server as `MCP_API_KEY`.
+| Variable | Default | Recovery |
+| --- | --- | --- |
+| `LIVESYNC_COUCHDB_MAX_INFLATED_BYTES` | Splitter-derived, 32 MiB floor | Raise and restart for legitimate larger HTTP/document responses; read-only POST remains a typed refusal; an unreadable write acknowledgement is outcome unknown: re-read before retrying. |
 
-### Claude.ai (Web)
+Legacy lossless text cuts and read-only reconnect ingestion comparison need no new environment variable.
+They extend a cut one UTF-16 unit and reset the next piece to its full nominal size.
 
-1. Settings > Connectors > Add custom connector
-2. URL: `https://your-server/mcp`
-3. Client ID and Client Secret from your `.env`
+## Backends
 
-## Authentication
+### CouchDB
 
-The server supports two authentication modes, which are mutually exclusive:
+Use the same database as LiveSync. The peer reads and publishes live documents;
+no local replica directory is required. [Connection details](docs/connecting-storage.md#couchdb).
 
-1. **Bearer API key** - set `MCP_API_KEY` and clients must send `Authorization: Bearer <MCP_API_KEY>`.
-2. **OAuth 2.1** - set `OAUTH_PASSWORD` plus the OAuth client settings to use the authorization code flow + PKCE.
+### S3 journal
 
-Configure exactly one mode. If both `MCP_API_KEY` and the OAuth variables are present, the server runs in bearer mode only and the OAuth endpoints stay disabled. If neither mode is configured, the server fails at startup instead of running open.
+The peer replays append-only journals into SQLite and chunk files, then appends
+new journals. Tools refresh automatically, subject to the refresh interval;
+there is no background polling. [Connection details](docs/connecting-storage.md#s3-journal),
+[refresh, publication and conflict semantics](docs/s3-journal.md).
 
-In OAuth mode `OAUTH_PASSWORD` is enforced: `GET /authorize` first returns a password form, and an authorization code is issued only after the correct password is submitted (compared in constant time). The code still cannot be exchanged without `OAUTH_CLIENT_SECRET`, which must have high entropy.
+For CouchDB JWT connections, follow the [JWT setup route](docs/connecting-storage.md#couchdb-jwt-authentication) to copy the plugin fields and configure the server verifier.
 
-Both auth modes bind access tokens to the configured `MCP_SERVER_URL` plus `/mcp`; OAuth refreshes retain that resource. Resource validation stays enabled. Client registration and redirect URI rules below are unchanged.
+## Supported vault settings
 
-### Current limitations
+“Identical” means source-audited behavior at the pin, not live acceptance of every
+combination. See the [complete setting/value/status table](docs/peer-limitations.md#supported-vault-settings)
+and [source and live evidence](docs/upstream-pin.md).
 
-Out of the box, OAuth only supports **Claude** (Claude.ai and Claude Code) as a client. The pre-registered OAuth client has hardcoded `redirect_uris` for Claude's callback URLs and `scope: claudeai`.
+| Settings | Status | Details |
+|---|---|---|
+| Path normalization and filename case | Identical | Legacy/NFC, insensitive/sensitive identities |
+| Splitter versions and legacy migration | Reconnect compares device-ingested bodies; lossless text cuts; otherwise identical where terminating and lossless | [Exact coercion and guards](docs/vault-format.md#invalid-writer-parameters) |
+| Chunk hashes, Eden, long-line threshold | Identical at pin | [Full settings table](docs/peer-limitations.md#supported-vault-settings) |
+| File size and ignore-file selection | Device-derived recommendation-only policy; local overrides; unusable name shapes add no rules, unresolved policy ambiguity refuses with the override name | [Size](docs/size-policy.md), [selection](docs/selection-filters.md) |
+| Headers, JWT and addressing | Explicit local connection settings | [Connection setup](docs/connecting-storage.md) |
+| CouchDB compression | Device-compatible; transformations disclosed; bounded reads; unreadable write acknowledgement is outcome unknown | [Compression](docs/vault-format.md#couchdb-compression) |
+| E2EE and path obfuscation | Unsupported | [Recovery choices](docs/peer-limitations.md#supported-vault-settings) |
+| Deletion retention and conflict automation | Deliberate differences | [Policies](docs/peer-limitations.md#deletion-and-conflict-policies) |
+| Reflection, hidden/customization/plugin sync | Outside ordinary-tool scope | [Full scope](docs/peer-limitations.md#supported-vault-settings) |
+| YAML aliases and properties | Supported with configurable projection budgets | [Properties](docs/frontmatter-properties.md) |
+| HTTP request bodies | Configurable local policy | 1 GiB default, 0 unlimited; `LIVESYNC_MAX_REQUEST_BYTES`; [HTTP 413 recovery](docs/configuration.md#http-request-bodies) |
+| CouchDB request purpose | Read-only POST remains a typed refusal | [Endpoint purposes](docs/vault-format.md#unreadable-write-acknowledgements) |
+| Device request/cache/concurrency tuning | Local peer policies | [Operational bounds](docs/peer-limitations.md#operational-and-tool-bounds) |
 
-### Adding other MCP clients
+## How the peer differs from a device
 
-To support other clients, **pre-register additional clients** — add more clients in `oauth_provider.py` `__init__` with the appropriate `redirect_uris` for your client.
+The [full inventory](docs/peer-limitations.md) retains exact defaults, coercion,
+refusal conditions and recovery instructions. The main practical differences:
 
-Dynamic Client Registration (DCR) is disabled and should stay disabled: with it enabled, anyone who knows your server URL can register a client, and every registration grows the in-memory client store without bound.
+- E2EE and obfuscated paths require an unencrypted, unobfuscated vault.
+  [Scope and alternatives](docs/peer-limitations.md#supported-vault-settings).
+- Hidden files, customization and plugin namespaces are excluded from ordinary tools.
+  [Path and reflection scope](docs/peer-limitations.md#how-the-peer-differs-from-a-device).
+- Size/ignore policies follow devices before PREFERRED; overrides win. Devices that agree give their common value without any timestamp. Only a disagreement looks at timestamps: the newest device wins, and equally newest devices that agree give their common value. A disagreement without a winner goes to PREFERRED, and so does a setting that no device advertises; if PREFERRED is silent too, the setting takes its device default, and only the unresolved disagreement becomes a typed ambiguity refusal that names the operator override. See [arbitration and provenance](docs/tweak-compatibility.md#recommendation-only-writer-policy).
+- The peer is an invisible writer: no device registration or PREFERRED publication.
+  [Tweak policy](docs/peer-limitations.md#how-the-peer-differs-from-a-device).
+- Deletions retain body/chunk history; no timed purge or automatic conflict merging.
+  [Retention and conflicts](docs/peer-limitations.md#deletion-and-conflict-policies).
+- Reads come from storage and bypass device selection/reflection filters.
+  [Selection and size behavior](docs/peer-limitations.md#how-the-peer-differs-from-a-device).
+- Native nontermination, data loss, unsafe renames and chunk collisions refuse before publication.
+  [Exact guards and remedies](docs/peer-limitations.md#how-the-peer-differs-from-a-device).
+- Legacy text cuts keep valid astral characters together by extending the piece
+  one UTF-16 unit; the next piece uses its full nominal size. Binary cuts and reads
+  are unchanged. Compression preserves CR/LF and leading BOM; CouchDB refuses
+  lone-surrogate leaves. Caller-provided lone units retain Blob ingress replacement.
+  [Transport and compression](docs/peer-limitations.md#how-the-peer-differs-from-a-device).
+- Successful lossy writes disclose typed notices. Unreadable write acknowledgements
+  are outcome unknown; re-read before retrying, especially non-idempotent append.
+  Endpoint purpose distinguishes read-only POST from publication; undeclared operations
+  refuse before sending with upgrade guidance.
+  [Publication and outcomes](docs/peer-limitations.md#how-the-peer-differs-from-a-device).
+- Replay has configurable resource budgets; runtime decoder/SQLite capacity also applies.
+  [Limits and recovery](docs/peer-limitations.md#operational-and-tool-bounds).
+- Whole-text access, scans and regex requests use separate configurable budgets and pagination.
+  [Tool contracts](docs/peer-limitations.md#how-the-peer-differs-from-a-device).
+- Properties/tags have expanded YAML node, byte and depth budgets; raw text remains available.
+  [Projection limits](docs/peer-limitations.md#how-the-peer-differs-from-a-device).
+- Transport/selection deadlines, retries, auth and headers are configured locally.
+  [Defaults and connection constraints](docs/peer-limitations.md#how-the-peer-differs-from-a-device). The read-only reconnect helper compares device-ingested bodies, types and Blob sizes. It reports `ingestion_transformed`, with `invalid_bytes_replaced` for malformed plain UTF-8 or `splitter_projection` for changes such as legacy BOM removal; local and remote sizes/SHA-256 remain visible. Non-plain files compare byte-exact. A per-file failure reports its cause class and continues. See the [live checklist](docs/live-check-parity-checklist.md).
+
+## Outcome reporting
+
+**Applied** confirms durable publication, not conflict winner status.
+**Refused without change** leaves the requested mutation unapplied;
+**skipped** means the new oversized input was not saved and any old revision
+remains. **Outcome unknown** means metadata publication may have happened:
+re-read affected paths before retrying, especially non-idempotent edits.
+[Operation/retry contract and journal reconciliation](docs/outcome-reporting.md).
+
+## Local state and recovery (S3)
+
+Persist a dedicated `S3_STATE_DIR` per peer/vault. `journal.sqlite3`, WAL/SHM
+sidecars and `chunks/` form a rebuildable replica with history, not an eviction
+cache; disk can exceed vault size. Do not share it between processes.
+Wipe clears replication tracking only; an epoch change alone preserves dedupe.
+Path identity changes archive the whole old directory under
+`<state_dir>.quarantine/<UTC timestamp and unique suffix>/state`, then rebuild.
+To restore, stop the peer, move current state aside, restore the archived
+`state` and the old identity settings. Monitor `obsidian_vault_stats.local_state`.
+[Safe reset, survivors, disk warnings and full restoration steps](docs/local-state-and-recovery.md).
+
+## Upstream tracking
+
+[Pin and source/live evidence](docs/upstream-pin.md). The daily/manual watcher
+checks plugin releases and commonlib protocol-manifest changes, maintaining
+one `upstream-drift` issue; failures do not close alerts. Run
+`scripts/check_upstream.sh` with authenticated `gh`. Review drift, extend tests
+and update the pin by PR. Monthly scratch-bucket smoke:
+[existing checklist](docs/live-check-s3-checklist.md); settings parity acceptance:
+[owner checklist](docs/live-check-parity-checklist.md).
+
+## Security, systemd, clients and authentication
+
+Keep credentials and `.env` out of version control. Default logs/diagnostics
+omit remote bodies, headers, secrets and settings values; note paths remain
+visible with control characters escaped. Reporting and hosting boundaries log only
+cause classes and typed fields, without exception chains. Keep unsafe debug disabled.
+[Diagnostic policy](docs/diagnostics-and-secrets.md).
+
+Use one auth mode: bearer `MCP_API_KEY`, or the complete OAuth group.
+Bearer takes precedence if both are supplied. OAuth uses password + PKCE,
+pre-registered Claude callbacks and resource binding to the configured URL
+plus `/mcp`; DCR is disabled. [Systemd commands, Claude.ai setup and other clients](docs/clients-and-authentication.md).
+
+## Configuration and tool reference
+
+The [environment reference](docs/configuration.md) lists every variable, default,
+requirement and override. Copy only the selected backend and authentication group
+from [.env.example](.env.example); keep secrets local.
+
+[Tool overview](docs/tools.md) · [text access and scan policy](docs/scan-policy.md) ·
+[full size policy](docs/size-policy.md) · [oracle regeneration](docs/regenerating-oracle-fixtures.md).
 
 ## License
 
-Apache 2.0
+Apache 2.0 — see [LICENSE](LICENSE).
 
-### Vault scan limits
+At the hosting boundary, SDK transport/validation logs contain only logger name,
+closed level and exception class. Request header values, paths, body fragments,
+third-party messages and exception text/tracebacks are withheld before handlers.
+This includes Content-Type, Host and Origin validation and resource/prompt errors.
 
-`LIVESYNC_SCAN_MAX_NOTES` (default `10000`) and `LIVESYNC_SCAN_MAX_BYTES`
-(default `67108864`, 64 MiB) must be positive integers. They bound aggregate
-UTF-8 body and metadata input to search, tags, graph, links and statistics.
-At most two vault scans run concurrently. Partial responses include
-`"truncated": true` and `scan` counts (`notes`, `bytes`, and configured maxima).
-Previously list-shaped responses become `{ "results": [...], ... }` when
-truncated. Counts and graph conclusions then describe only the scanned subset.
-The CouchDB metadata index uses the same caps, retains no bodies or eden, and
-propagates truncation to these tools. Direct note reads remain available.
-These are aggregate scan limits: an individual HTTP response or note is still
-loaded before its actual size can be checked. Regex replacements have a separate
-10 MiB UTF-8 output cap and a two-second disposable-process deadline.
+CouchDB decompression has a per-document operational budget, derived from the
+resolved splitter with a 32 MiB floor; override LIVESYNC_COUCHDB_MAX_INFLATED_BYTES
+and restart for larger valid pieces. This is separate from device file admission.
+An unreadable PUT/POST/DELETE acknowledgement is outcome unknown: the change
+MAY have been applied. Re-read before retrying; append is NON-IDEMPOTENT.
+Budget/encoding recovery details accompany the warning. Read refusals remain
+ordinary typed refusals. An uncertain leaf PUT may leave an orphan; the note
+remains unchanged until metadata publication. See [response outcomes](docs/vault-format.md#unreadable-write-acknowledgements).
 
-New and replaced metadata persist canonical, case-preserving paths: separators
-are `/`, leading `./` and trailing slashes are removed, and internal parent
-segments resolve (`folder/../b.md` becomes `b.md`). Parent traversal above the
-vault root remains forbidden. Existing records are not migrated automatically.
+Custom headers deliberately differ from the plugin for transport safety:
+Content-Length, Transfer-Encoding, Host, Connection, Keep-Alive, TE, Trailer,
+Upgrade and all Proxy-* fields are transport-owned and refused case-insensitively
+for both storages. Remove these entries and configure routing/proxy transport
+separately. Other headers still apply after S3 signing.
 
-
-## Vault-wide scan consistency
-
-Search, tags, graph, listings, and statistics are best-effort scans in backend
-iteration order. They do not guarantee a snapshot across the scan: CouchDB
-changes can be interleaved between metadata windows and chunk fetches. Results
-can therefore combine observations from different times; a successful mutation
-means durable publication, not a promise that it remains the eventual winner.
-The S3 journal backend also uses best-effort scans of its local state.
-Refresh or state resets can interleave with a scan; chunks are retained until
-an epoch or remote-wipe reset. An unreadable note can be returned without text.
+Active selection verifies installed vendor/worker hashes before execution;
+restore or regenerate the verified installation after a provenance-mismatch.

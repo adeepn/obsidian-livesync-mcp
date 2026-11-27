@@ -5,3 +5,14 @@ __pycache__/
 .worktrees/
 .superpowers/
 data/
+
+# Working evidence belongs in .superpowers/, never in acceptance artifacts.
+*.log
+!/docs/test-artifacts/**/*.log
+state.json
+*.tmp
+.DS_Store
+*~
+*.swp
+*.swo
+*.bak

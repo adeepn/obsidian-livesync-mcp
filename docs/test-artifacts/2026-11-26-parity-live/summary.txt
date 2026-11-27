@@ -1,0 +1,133 @@
+Settings parity: live Obsidian acceptance record, 2026-11-25 to 2026-11-26
+Client: Self-hosted LiveSync 1.0.50 in Obsidian on macOS, the owner's device, test vault.
+Remote: disposable local S3 journal, container parity-s3-live (SeaweedFS S3, image digest in
+bucket-listing.txt) at 127.0.0.1:19000, bucket plan-b-it, prefix livetest/. Not a production remote.
+Vault settings during the run: chunkSplitterVersion v3-rabin-karp, hashAlg xxhash64,
+customChunkSize 0, minimumChunkSize 20 (tweak_values in A-reconnect.json). syncMaxSizeInMB was
+changed on the device: 50 -> 100 at 11:32, back to 50 at 15:22 on 2026-11-26 (times are MSK).
+Peer: branch settings-parity, scripts/live_check_parity.py. The commit of the peer's working
+copy for each run comes from the controller's run log and is repeated in checks.txt; no output
+records the commit itself. By that log, runs up to 12:45 used 3d812ff, the size rerun of 13:16
+used 37f63b0, later runs used 2cb6eee. `git diff --stat 2cb6eee 2a5805d` touches docs only.
+Statements marked "controller" are the controller's own notes, not output of a tool.
+
+RESULT: main checklist scenarios PASS. The run found two defects in code (1 and 2, fixed)
+and one documentation error (3, corrected). The additional scenarios of checklist section 7
+and the cleanup of section 8 were not executed.
+
+Not exercised live: plugin 1.0.52, a CouchDB remote with a client, other splitters and hash
+modes, encryption and path obfuscation, selection filters, more than one device.
+
+Steps
+-----
+The counts are PASS lines printed by the helper; checks.txt holds them. They count emitted
+checks, not independent assertions.
+
+Step | Device (plugin 1.0.50) | Peer | Result | Evidence
+0 | Ordinary sync against the wiped bucket, 2026-11-25 22:15 | bucket listing | Observation: the client created the service records and sent no file. The owner then ran "Overwrite Server Data with This Device's Files" (controller); the bucket holds the client's journal of 10:51:42 with the eight vault files. | client-logs.md, bucket-listing.txt, journal-inventory.txt
+A | Overwrite 10:51 | reconnect 10:53 | PASS, 13 checks: 8 files byte-identical to the bytes on disk; type, metadata size and piece ids equal for every file. | A-reconnect.json, checks.txt
+B100 | Maximum file size set to 100 (edits 11:32:42 and 11:32:49), sync 11:33:05 | - | Device map 100; PREFERRED stays 50. | client-logs.md, B-reconnect-before-fix.json
+B | Three files placed in the vault 11:34, sync 11:46:50 | prepare-size 11:34, reconnect 11:48, verify-visible 11:49 | PASS: device-40m.bin 40 MiB, 410 pieces; exact.bin 100 MiB, 1024 pieces; byte-identical, ids equal. above.bin (100 MiB + 1 byte) not sent by the client (its log). | B-prepared.json, B-visible-device-files.json, B-reconnect-before-fix.json, client-logs.md, checks.txt
+B-size | - | verify-size --limit-mib 100, 11:47 | FAIL on 3d812ff: "resolved vault size limit differs from expected owner setting". The reports show the device at 100 and PREFERRED at 50, and the reconnect of 11:48 excluded exact.bin (100 MiB) as oversized: defect 1. PASS on 37f63b0 at 13:16. | B-size.json, checks.txt, F-size-100.json
+B-upload | Sync 12:19:42 | write-large 12:18:59, verify-visible 12:20 | PASS: the client applied the peer-written 40 MiB file (410 pieces) and sent nothing back (its log). | B-upload.json, B-visible.json, client-logs.md, checks.txt
+C | Sync 12:24:23 | write-phase 12:23:41, verify-visible 12:24 | PASS: the client applied the peer-written create, update, rename and soft delete and sent nothing back. Every revision prefix it printed matches a revision in the bucket's tree. | C-write.json, C-visible.json, C-client-log.md, revision-prefixes.json
+D | Three unusual files placed in the vault 12:25, sync 12:45:17 | prepare-decoding 12:25, inspect-decoding 12:45 | PASS, 5 checks: the client stored invalid.md as plain text with U+FFFD in place of each invalid sequence (15 bytes became 21), text.png and upper.MD as newnote with their raw bytes. The peer's ingestion of the same bytes gives the same type, size, piece bytes and ids. | D-prepared.json, D-device-decoding.json, client-logs.md, journal-inventory.txt
+F | - | verify-size 13:16 on 37f63b0, reconnect 13:53 on 2cb6eee | A reconnect between the two (controller: about 13:20, on 37f63b0) stopped on invalid.md: defect 2, helper only; no transcript kept. PASS, 20 checks, 15 files: 14 byte-identical, invalid.md equal to the client-ingested text. | F-size-100.json, F-reconnect.json, checks.txt
+B50 | Maximum file size set back to 50 (edits 15:22:18 and 15:22:20), sync 15:22:27 | reconnect 15:23 | PASS, 19 checks: 13 files byte-identical, invalid.md equal to the client-ingested text; exact.bin and above.bin excluded, as the client skipped exact.bin (its log). | B50-reconnect.json, client-logs.md, checks.txt
+B-refusals | - | oversize 16:18:12 | PASS, 4 checks: upload of 50 MiB + 1 byte skipped without publication; rename of exact.bin refused; source revision and bytes intact. The bucket was not changed: the controller's listing of about 16:19 showed the milestone last written 15:39:02. | B-refusals.json, checks.txt, bucket-listing.txt
+after B-refusals | Sync 16:20:30 | reconnect 16:21, listings 16:49 | PASS, 19 checks, 13 files byte-identical, invalid.md equal to the client-ingested text. On disk the folder holds the same eight files; their modification times predate the refusal step; skipped.bin and refused-move.bin are absent. The bucket holds 11 objects; only the milestone changed, written at 16:20:30, the time of the client's sync. | B-refusals-reconnect.json, disk-listing.txt, bucket-listing.txt, client-logs.md
+7.1, 7.2, E | - | - | Additional scenarios: not executed. | -
+8 | - | - | Cleanup of the acceptance files from the test vault: not executed; it needs a separate owner confirmation. The eight files remain in parity-live.
+
+Defects found by this run
+-------------------------
+1. Stale PREFERRED after a settings change (production). The client keeps a changed
+   recommendation-only setting in its own map and does not republish PREFERRED:
+   B-reconnect-before-fix.json shows the device map at 100 and PREFERRED at 50, and the
+   client had uploaded a 100 MiB file. The peer of 3d812ff resolved PREFERRED first and
+   treated exact.bin as oversized. Fixed by 37f63b0 "fix: derive recommendation-only policy
+   from devices". Confirmed in this one-device vault in both directions: B-size PASS after
+   the fix, B50 PASS after lowering the limit.
+2. Check helper stopped on a client-ingested file (helper only). reconnect refused
+   invalid.md, which the client had stored with invalid bytes replaced (controller: no
+   transcript kept). Fixed by caf8665 "fix: compare reconnect files with device-ingested
+   bodies".
+3. Checklist step 0 promised the wrong thing (documentation). It said an ordinary sync after
+   a confirmed wipe would re-send the files. Observation 0 shows that it does not. The step
+   was corrected earlier on this branch, in 5cfe58a "docs: correct device rebuild after a
+   confirmed remote wipe".
+
+Limits of this record
+---------------------
+- Scope of the file comparison. reconnect compares the files that the size policy admits
+  and the peer's scope covers. Hidden files (11) are outside the scope; above.bin, and
+  exact.bin at limit 50, are above the policy. invalid.md is compared with the text the
+  client stored, not with the 15 bytes on disk. "PASS" therefore means: every compared file
+  equals the client's stored form, byte for byte, with equal type, metadata size and
+  piece ids.
+- The large files are a repeating 13-byte pattern (local_prepare in the helper). The client
+  cut every piece at the maximum size, 102,400 bytes, with a last piece of 61,440 bytes for
+  device-40m.bin, and stored identical pieces once: journal-inventory.txt shows 14 stored
+  pieces for the 1,434 piece references of the two files, and the same 14 piece sizes in the
+  peer's journal for its own 40 MiB file. The steps prove piece counts, ids, sizes, storage
+  once and end-to-end transfer of large files. They do not prove cut positions on varied
+  bytes against a real client. Cut positions are covered by the offline oracle differentials
+  against the pinned upstream code.
+- The lossless legacy cut (fea689f) has no live evidence: the vault uses V3.
+- Obsidian's file explorer hides .bin files by default. The owner could not see them and
+  asked the controller to check; disk-listing.txt is that check.
+- What remains of the test vault: file names, sizes, SHA-256 digests, short revision
+  prefixes and the names of the six notes that were in the vault before this run; no text of
+  those six notes. The text of the synthetic acceptance notes is retained: the body the peer
+  wrote (C-write.json) and the fixed input bytes and stored pieces of the three unusual files
+  (D-device-decoding.json).
+
+Final state of the test bucket
+------------------------------
+bucket-listing.txt: 11 objects, 29,106 bytes.
+- 3 journals written by the client: 12,572 B (10:51:42), 6,327 B (11:46:50), 441 B (12:45:17)
+- 6 journals written by the peer: 6,157 B (12:18:59) and 5 of 207 to 281 B (12:23:41)
+- _00000000-milestone.json, 2,211 B, last written 16:20:30
+- _obsidian_livesync_journal_sync_parameters.json, 155 B (10:51:40)
+The writer per journal is the controller's attribution: the client's logs name the journals
+it received, two of its uploads match two journals by time (11:46:50 and 12:45:17), and the
+peer's runs match the six journals with a hash suffix by time (checks.txt).
+
+Contents of this directory
+--------------------------
+summary.txt                 this record
+client-logs.md              client log lines pasted by the owner, verbatim
+C-client-log.md             client log of the write phase C, verbatim
+checks.txt                  stdout and stderr of every peer run, with capture times
+bucket-listing.txt          the bucket after the last sync, and before it
+journal-inventory.txt       every journal: sizes, piece sizes, document paths
+revision-prefixes.json      revisions the client printed, against the bucket's revision trees
+disk-listing.txt            the folder parity-live on disk after the last sync
+A-reconnect.json            step A
+B-prepared.json             step B, files created
+B-reconnect-before-fix.json step B, reconnect on 3d812ff: "passed" with exact.bin
+                            wrongly excluded, the footprint of defect 1
+B-size.json                 step B-size, the FAIL that exposed defect 1
+B-visible-device-files.json step B, the two client-written binaries
+B-upload.json, B-visible.json
+                            step B-upload, the peer-written binary
+C-write.json, C-visible.json
+                            step C, the peer-written notes
+D-prepared.json, D-device-decoding.json
+                            step D, client ingestion of unusual files
+F-size-100.json             rerun on 37f63b0
+F-reconnect.json            rerun on 2cb6eee, all 15 files
+B50-reconnect.json          limit lowered to 50
+B-refusals.json             oversize upload and rename refused
+B-refusals-reconnect.json   all 14 admitted files after the last sync
+
+The JSON reports are the helper's output: paths, sizes, SHA-256 digests, piece counts,
+booleans and typed setting values, plus the text of the synthetic acceptance notes named
+above. checks.txt and journal-inventory.txt hold tool output. bucket-listing.txt is a tool
+listing of the final state, followed by an earlier listing transcribed by the controller and
+by the controller's attribution of the writers. revision-prefixes.json and disk-listing.txt
+were produced by a controller script that read the bucket and the disk. The controller
+states that credentials were sourced only inside its commands; no credential value is in
+this directory.
+Not included: SQLite state, the chunk cache, raw journals, record content other than those
+synthetic notes, revision ids beyond six hex digits, device ids and credentials.

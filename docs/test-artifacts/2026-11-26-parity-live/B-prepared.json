@@ -1,0 +1,12 @@
+{
+  "date": "2026-11-26",
+  "command": "prepare-size",
+  "passed": true,
+  "result": {
+    "prepared": [
+      "above.bin",
+      "device-40m.bin",
+      "exact.bin"
+    ]
+  }
+}

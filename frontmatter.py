@@ -15,10 +15,20 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from io import StringIO
+from copy import deepcopy
+from contextvars import ContextVar
+from dataclasses import dataclass
+
+from ruamel.yaml.events import (AliasEvent, ScalarEvent, MappingStartEvent,
+    SequenceStartEvent, MappingEndEvent, SequenceEndEvent)
 
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
 from ruamel.yaml.error import YAMLError
+from ruamel.yaml.tokens import CommentToken
+from ruamel.yaml.composer import Composer
+from ruamel.yaml.constructor import RoundTripConstructor
+from ruamel.yaml.representer import RoundTripRepresenter
 
 _DELIMITER = "---"
 # Sentinel key used to make ruamel attach comments of a comments-only
@@ -27,8 +37,122 @@ _DELIMITER = "---"
 _SENTINEL_KEY = "__frontmatter_placeholder__"
 
 
+@dataclass(frozen=True)
+class FrontmatterLimits:
+    """Property projection budgets; the stored note is never limited here."""
+
+    max_nodes: int = 20_000
+    max_depth: int = 200
+    max_bytes: int = 4 * 1024**2
+
+
+frontmatter_limits: ContextVar[FrontmatterLimits] = ContextVar(
+    "frontmatter_limits", default=FrontmatterLimits())
+
+
 class FrontmatterError(ValueError):
-    """Raised when the frontmatter block is not parseable YAML mapping."""
+    """Closed, value-free property projection failure."""
+
+    def __init__(self, reason="invalid YAML", *, runtime_depth=False):
+        self.reason = reason if reason in {
+            "nodes", "depth", "bytes", "alias expansion", "invalid YAML", "mapping required"} else "invalid YAML"
+        variable = {"bytes": "LIVESYNC_FRONTMATTER_MAX_BYTES",
+                    "nodes": "LIVESYNC_FRONTMATTER_MAX_NODES",
+                    "depth": "LIVESYNC_FRONTMATTER_MAX_DEPTH",
+                    "alias expansion": "LIVESYNC_FRONTMATTER_MAX_NODES"}.get(self.reason)
+        if runtime_depth:
+            remedy = "The YAML parser reached its interpreter recursion ceiling; "
+        elif self.reason == "alias expansion":
+            remedy = ("Cyclic aliases have no finite JSON representation; for finite "
+                      f"expansions raise {variable} and restart, or ")
+        else:
+            remedy = (f"Raise {variable} and restart, or " if variable else "")
+        self.public_message = (
+            f"Error: frontmatter {self.reason}; the note itself is intact and synced. "
+            "Only properties/tags tools declined. " + remedy +
+            "fetch or edit the raw note text.")
+        super().__init__(self.public_message)
+
+    def for_creation(self):
+        """Render the same closed fields before any note has been published."""
+        return self.public_message.replace(
+            "the note itself is intact and synced.",
+            "note creation declined before publication; no note was created.")
+
+
+def _string_bytes(value: str) -> int:
+    """Expanded UTF-8 string payload, including every mapping-key occurrence.
+
+    C:EntryManagerImpls.ts:253-280 stores Blob bytes, not YAML properties.
+    This peer-only projection guard bounds scalar alias amplification before
+    JSON serialization. Node limits separately bound punctuation/containers.
+    """
+    return len(value.encode("utf-8", errors="surrogatepass"))
+
+
+def _preflight(fm_raw: str) -> None:
+    """Count expanded event nodes before constructing round-trip containers.
+
+    LiveSync syncs Blob bytes without interpreting YAML (commonlib
+    managers/EntryManager/EntryManagerImpls.ts:253-280; size predicate
+    services/base/VaultService.ts:73-81). These are peer JSON tool budgets,
+    not a vault setting or a claim about Obsidian's host YAML parser.
+    A completed anchor carries its expansion count/height, so exponentially
+    repeated aliases are refused in O(source events), without expanding them.
+    """
+    limits = frontmatter_limits.get()
+    stack, anchors = [], {}
+
+    def append(count, height, byte_count, aliased):
+        if byte_count > limits.max_bytes:
+            raise FrontmatterError("bytes")
+        if count > limits.max_nodes:
+            raise FrontmatterError("alias expansion" if aliased else "nodes")
+        if len(stack) + height > limits.max_depth:
+            raise FrontmatterError("depth")
+        if stack:
+            frame = stack[-1]
+            frame[0] += count
+            frame[1] = max(frame[1], height + 1)
+            frame[2] |= aliased
+            frame[4] += byte_count
+            if frame[4] > limits.max_bytes:
+                raise FrontmatterError("bytes")
+            if frame[0] > limits.max_nodes:
+                raise FrontmatterError("alias expansion" if frame[2] else "nodes")
+
+    try:
+        for event in _rt_yaml().parse(fm_raw):
+            if isinstance(event, (MappingStartEvent, SequenceStartEvent)):
+                if len(stack) > limits.max_depth:
+                    raise FrontmatterError("depth")
+                binding = None
+                if event.anchor:
+                    # Each declaration has its own completion record. A nested
+                    # rebind shadows the outer name immediately and stays the
+                    # latest binding when that outer container finishes.
+                    binding = [None, None, None]
+                    anchors[event.anchor] = binding
+                stack.append([1, 0, False, binding, 0])
+            elif isinstance(event, (MappingEndEvent, SequenceEndEvent)):
+                count, height, aliased, anchor, byte_count = stack.pop()
+                if anchor is not None:
+                    anchor[:] = count, height, byte_count
+                append(count, height, byte_count, aliased)
+            elif isinstance(event, ScalarEvent):
+                if event.anchor:
+                    anchors[event.anchor] = [1, 0, _string_bytes(event.value)]
+                append(1, 0, _string_bytes(event.value), False)
+            elif isinstance(event, AliasEvent):
+                if event.anchor not in anchors:
+                    raise FrontmatterError("invalid YAML")
+                if anchors[event.anchor][0] is None:
+                    # Recursive YAML has no finite JSON representation. ruamel's
+                    # round-trip constructor otherwise substitutes None here.
+                    raise FrontmatterError("alias expansion")
+                append(*anchors[event.anchor], True)
+    except YAMLError:
+        raise FrontmatterError("invalid YAML") from None
 
 
 def _is_delimiter_line(line: str) -> bool:
@@ -70,9 +194,58 @@ def split_frontmatter(text: str) -> tuple[str, str]:
     return fm_raw, body
 
 
+class _CompactComposer(Composer):
+    """Share immutable implicit tags instead of one Tag/cache per scalar."""
+
+    def __init__(self, loader=None):
+        super().__init__(loader)
+        self.warn_double_anchors = False
+        self._implicit_tags = {}
+
+    def compose_node(self, parent, index):
+        # ruamel.yaml 0.18.17 composer.py:105-138; resolver implicit tags
+        # have no handle/handles and are only read by the constructor.
+        node = super().compose_node(parent, index)
+        tag = node.ctag
+        if tag.handle is None and tag.handles is None:
+            node.ctag = self._implicit_tags.setdefault(tag.suffix, tag)
+        return node
+
+
+class _CompactSequence(CommentedSeq):
+    def _yaml_set_idx_line_col(self, key, data):
+        # ruamel.yaml 0.18.17 constructor.py:1190-1224 stores one index
+        # dictionary entry/list for every sequence item. No peer consumer
+        # reads those coordinates: source edits use YAML event token spans.
+        # Comments/styles/anchors remain the upstream constructor's work.
+        pass
+
+
+class _CompactConstructor(RoundTripConstructor):
+    def construct_yaml_seq(self, node):
+        # Same generator contract as ruamel.yaml 0.18.17
+        # constructor.py:1452-1459, using the coordinate-free sequence.
+        data = _CompactSequence()
+        data._yaml_set_line_col(node.start_mark.line, node.start_mark.column)
+        yield data
+        data.extend(self.construct_rt_sequence(node, data))
+        self.set_collection_style(data, node)
+
+
+class _CompactRepresenter(RoundTripRepresenter):
+    pass
+
+
+_CompactConstructor.add_constructor('tag:yaml.org,2002:seq', _CompactConstructor.construct_yaml_seq)
+_CompactRepresenter.add_representer(_CompactSequence, RoundTripRepresenter.represent_list)
+
+
 def _rt_yaml() -> YAML:
     yaml = YAML(typ="rt")
     yaml.preserve_quotes = True
+    yaml.Composer = _CompactComposer
+    yaml.Constructor = _CompactConstructor
+    yaml.Representer = _CompactRepresenter
     return yaml
 
 
@@ -82,14 +255,17 @@ def _parse(fm_raw: str) -> CommentedMap:
     An empty or comments-only block yields an empty mapping; comments are
     kept attached to it so that adding the first property preserves them.
     """
+    _preflight(fm_raw)
     try:
         data = _rt_yaml().load(fm_raw)
-    except YAMLError as exc:
-        raise FrontmatterError(f"invalid frontmatter YAML: {exc}") from exc
+    except RecursionError:
+        raise FrontmatterError("depth", runtime_depth=True) from None
+    except YAMLError:
+        raise FrontmatterError("invalid YAML") from None
     if data is None:
         return _empty_with_comments(fm_raw)
     if not isinstance(data, CommentedMap):
-        raise FrontmatterError("frontmatter is not a property mapping")
+        raise FrontmatterError("mapping required")
     return data
 
 
@@ -111,34 +287,74 @@ def _empty_with_comments(fm_raw: str) -> CommentedMap:
     return data
 
 
-def _to_plain(value, *, _seen=None, _budget=None, _depth=0):
-    """Convert round-trip scalars/containers to plain Python values."""
-    if _seen is None:
-        _seen, _budget = set(), [10000]
-    _budget[0] -= 1
-    if _budget[0] < 0:
-        raise FrontmatterError("frontmatter exceeds maximum nodes")
-    if _depth > 32:
-        raise FrontmatterError("frontmatter exceeds maximum depth")
-    if isinstance(value, (dict, list, tuple)):
-        if id(value) in _seen:
-            raise FrontmatterError("YAML aliases are not supported in frontmatter")
-        _seen.add(id(value))
-    def convert(item):
-        return _to_plain(item, _seen=_seen, _budget=_budget, _depth=_depth + 1)
-    if isinstance(value, dict):
-        return {str(convert(key)): convert(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [convert(item) for item in value]
-    if isinstance(value, bool):  # before int: bool is an int subclass
-        return value
-    if isinstance(value, int):  # keeps '01234' as 1234, '0x1F' as 31
-        return int(value)
-    if isinstance(value, float):
-        return float(value)
-    if value is None:
-        return None
-    return str(value)  # quoted/plain strings, dates, timestamps
+def _to_plain(value, *, limits=None):
+    """Memoised plain projection with expanded-node accounting and cycle guard."""
+    limits = limits or frontmatter_limits.get()
+    memo, active = {}, set()
+
+    def convert(node, depth):
+        if depth > limits.max_depth:
+            raise FrontmatterError("depth")
+        container = isinstance(node, (dict, list, tuple))
+        identity = id(node)
+        if container and identity in active:
+            raise FrontmatterError("alias expansion")
+        if container and identity in memo:
+            result, count, height, byte_count = memo[identity]
+            if depth + height > limits.max_depth:
+                raise FrontmatterError("depth")
+            return result, count, height, byte_count, True
+        if not container:
+            if isinstance(node, bool) or node is None:
+                result = node
+            elif isinstance(node, int):
+                result = int(node)
+            elif isinstance(node, float):
+                result = float(node)
+            else:
+                result = str(node)
+            byte_count = _string_bytes(result) if isinstance(result, str) else 0
+            if byte_count > limits.max_bytes:
+                raise FrontmatterError("bytes")
+            return result, 1, 0, byte_count, False
+        active.add(identity)
+        count, height, byte_count, aliased = 1, 0, 0, False
+        result = {} if isinstance(node, dict) else []
+
+        def child(item):
+            nonlocal count, height, byte_count, aliased
+            plain, size, levels, expanded_bytes, reused = convert(item, depth + 1)
+            byte_count += expanded_bytes
+            if byte_count > limits.max_bytes:
+                raise FrontmatterError("bytes")
+            count += size
+            height = max(height, levels + 1)
+            aliased |= reused
+            if count > limits.max_nodes:
+                raise FrontmatterError("alias expansion" if aliased else "nodes")
+            return plain
+
+        if isinstance(node, dict):
+            for key, item in node.items():
+                plain_key = child(key)
+                string_key = str(plain_key)
+                if not isinstance(plain_key, str):
+                    # JSON object keys are strings even for YAML numeric keys.
+                    byte_count += _string_bytes(string_key)
+                    if byte_count > limits.max_bytes:
+                        raise FrontmatterError("bytes")
+                result[string_key] = child(item)
+        else:
+            for item in node:
+                result.append(child(item))
+        active.remove(identity)
+        memo[identity] = result, count, height, byte_count
+        return result, count, height, byte_count, aliased
+
+    try:
+        return convert(value, 0)[0]
+    except RecursionError:
+        raise FrontmatterError("depth", runtime_depth=True) from None
 
 
 def _dump(data: CommentedMap) -> str:
@@ -170,6 +386,159 @@ def _plain_equal(left, right) -> bool:
     return left == right
 
 
+_MERGE_KEY = object()
+
+
+def _comment_line_starts(raw, comments):
+    """Find actual standalone comment lines from parser comment tokens.
+
+    A CommentToken may start inline and include subsequent comment lines.
+    Scalar contents resembling comments never become CommentTokens, which
+    distinguishes indented YAML comments from ``#`` inside a block scalar.
+    """
+    pending, starts = [comments], set()
+    while pending:
+        token = pending.pop()
+        if isinstance(token, (list, tuple)):
+            pending.extend(token)
+        elif isinstance(token, CommentToken):
+            position = raw.rfind('\n', 0, token.start_mark.index) + 1
+            first = True
+            while position < len(raw):
+                end = raw.find('\n', position)
+                end = len(raw) if end == -1 else end
+                line = raw[position:end]
+                if line.lstrip().startswith('#'):
+                    starts.add(position)
+                elif line.strip() and not first:
+                    break
+                first = False
+                position = end + 1
+    return starts
+
+
+def _key_spans(raw, data):
+    """Read explicit key/value token spans, without inherited merge keys.
+
+    Event positions retain the explicit ``?`` prefix of complex keys and
+    exclude a flow root's closing brace. Node .lc coordinates do neither.
+    """
+    explicit = iter(key for key, _ in data.non_merged_items())
+    depth, key_turn, current, start = 0, True, None, 0
+    spans, flow, closing, comment_lines = {}, False, len(raw), set()
+    for event in _rt_yaml().parse(raw):
+        comment_lines.update(_comment_line_starts(raw, getattr(event, "comment", None)))
+        begins = isinstance(event, (ScalarEvent, AliasEvent, MappingStartEvent, SequenceStartEvent))
+        if depth == 0 and isinstance(event, MappingStartEvent):
+            flow = event.flow_style
+        elif depth == 1 and begins:
+            if key_turn:
+                current = (_MERGE_KEY if isinstance(event, ScalarEvent)
+                           and event.value == "<<" and event.style is None
+                           and event.tag in (None, "tag:yaml.org,2002:merge")
+                           else next(explicit))
+                start = event.start_mark.index
+                line_start = raw.rfind("\n", 0, start) + 1
+                if raw[line_start:start].strip() == "?":
+                    start = line_start
+            key_turn = not key_turn
+            if key_turn and isinstance(event, (ScalarEvent, AliasEvent)):
+                spans[current] = (start, event.end_mark.index)
+        if isinstance(event, (MappingStartEvent, SequenceStartEvent)):
+            depth += 1
+        elif isinstance(event, (MappingEndEvent, SequenceEndEvent)):
+            depth -= 1
+            if depth == 1 and key_turn:
+                spans[current] = (start, event.end_mark.index)
+            if depth == 0:
+                closing = event.start_mark.index
+    return spans, bool(flow), closing, comment_lines
+
+
+def _dump_preserving_keys(raw, original_spans, original_flow, closing, comment_lines, before, data, after):
+    """Replace changed key tokens in the original source, preserving trivia."""
+    rendered = _dump(data)
+    if not original_spans:
+        return rendered
+    rendered_spans, _, _, _ = _key_spans(rendered, data)
+    replacements = []
+    added = []
+    for key, (start, end) in original_spans.items():
+        if key is _MERGE_KEY:
+            continue
+        if key in rendered_spans:
+            if not _plain_equal(before[str(_to_plain(key))], after[str(_to_plain(key))]):
+                new_start, new_end = rendered_spans[key]
+                replacement = rendered[new_start:new_end]
+                if raw[start:end].endswith('\n') and not replacement.endswith('\n'):
+                    replacement += '\n'
+                replacements.append((start, end, replacement))
+    # Delete maximal adjacent source-key runs. Flow punctuation belongs to
+    # the whole run; per-key comma intervals overlap for a removed suffix.
+    ordered = list(original_spans)
+    index = 0
+    while index < len(ordered):
+        key = ordered[index]
+        if key is _MERGE_KEY or key in rendered_spans:
+            index += 1
+            continue
+        first = index
+        while index < len(ordered) and ordered[index] is not _MERGE_KEY and ordered[index] not in rendered_spans:
+            index += 1
+        start = original_spans[ordered[first]][0]
+        end = original_spans[ordered[index - 1]][1]
+        if original_flow:
+            if index < len(ordered):
+                end = original_spans[ordered[index]][0]
+            elif first > 0:
+                previous_end = original_spans[ordered[first - 1]][1]
+                comma = raw.find(',', previous_end, start)
+                if comma != -1:
+                    start = comma
+            else:
+                end = closing
+        else:
+            # Block collection end marks can already point at the next key.
+            # Use its start directly, never consume its following newline.
+            end = original_spans[ordered[index]][0] if index < len(ordered) else len(raw)
+            # Collection end marks can include following standalone comments.
+            # Those source bytes belong outside the deleted value: retain the
+            # trailing actual comment/blank-line run before the next key.
+            # Token classification excludes indented block-scalar content.
+            while end > start:
+                search_end = end - 1 if raw[end - 1] == '\n' else end
+                line_start = max(start, raw.rfind('\n', start, search_end) + 1)
+                line = raw[line_start:end]
+                if line.strip() and line_start not in comment_lines:
+                    break
+                end = line_start
+        replacements.append((start, end, ''))
+    for key, (start, end) in rendered_spans.items():
+        if key not in original_spans:
+            added.append(rendered[start:end])
+    if added:
+        if original_flow:
+            surviving = [span for key, span in original_spans.items() if key in rendered_spans]
+            if surviving:
+                tail = raw[surviving[-1][1]:closing].lstrip()
+                prefix = ' ' if tail.startswith(',') else ', '
+            else:
+                prefix = ''
+            replacements.append((closing, closing, prefix + ', '.join(added)))
+        else:
+            prefix = '' if raw.endswith('\n') else '\n'
+            replacements.append((len(raw), len(raw), prefix + '\n'.join(added) + '\n'))
+    for start, end, replacement in sorted(replacements, reverse=True):
+        raw = raw[:start] + replacement + raw[end:]
+    try:
+        reparsed = _to_plain(_parse(raw))
+    except FrontmatterError:
+        raise FrontmatterError("alias expansion") from None
+    if not _plain_equal(reparsed, after):
+        raise FrontmatterError("alias expansion")
+    return raw
+
+
 def _apply(text: str, editor: Callable[[CommentedMap], None]) -> str:
     """Edit the frontmatter mapping in place and re-serialize.
 
@@ -180,11 +549,13 @@ def _apply(text: str, editor: Callable[[CommentedMap], None]) -> str:
     if not has_block:
         return text
     data = _parse(fm_raw)
+    original_spans, original_flow, closing, comment_lines = _key_spans(fm_raw, data)
     before = _to_plain(data)
     editor(data)
-    if _plain_equal(_to_plain(data), before):
+    after = _to_plain(data)
+    if _plain_equal(after, before):
         return text
-    result = _new_block(_dump(data), body)
+    result = _new_block(_dump_preserving_keys(fm_raw, original_spans, original_flow, closing, comment_lines, before, data, after), body)
     return text if result == text else result
 
 
@@ -208,6 +579,7 @@ def set_properties(text: str, props: dict) -> str:
         data = CommentedMap()
         for key, value in props.items():
             data[str(key)] = value
+        _to_plain(data)
         return _new_block(_dump(data), body)
 
     def editor(data: CommentedMap) -> None:
@@ -245,6 +617,29 @@ def _current_tags(data: CommentedMap) -> CommentedSeq | None:
     if value is None:
         return None
     if isinstance(value, (list, tuple)):
+        # An alias used as tags must not edit its earlier anchor's property.
+        # If tags itself defines the anchor, later aliases keep following it.
+        for key, item in data.non_merged_items():
+            if key == 'tags':
+                break
+            pending, seen = [item], set()
+            found = False
+            while pending:
+                candidate = pending.pop()
+                if candidate is value:
+                    found = True
+                    break
+                if id(candidate) in seen:
+                    continue
+                seen.add(id(candidate))
+                if isinstance(candidate, dict):
+                    pending.extend(candidate.values())
+                elif isinstance(candidate, (list, tuple)):
+                    pending.extend(candidate)
+            if found:
+                value = deepcopy(value)
+                value.yaml_set_anchor(None)
+                break
         return value
     seq = CommentedSeq()
     seq.append(value if isinstance(value, str) else str(value))
@@ -261,6 +656,7 @@ def add_tags(text: str, tags: list[str]) -> str:
         seq = CommentedSeq()
         seq.extend(str(tag) for tag in tags)
         data["tags"] = seq
+        _to_plain(data)
         return _new_block(_dump(data), body)
 
     def editor(data: CommentedMap) -> None:

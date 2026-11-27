@@ -94,6 +94,8 @@ class ChangeTracker:
         self._database = database
         self._since = json.dumps(update_seq)
         self.chunk_ids: set[str] = set()
+        self.expected: dict[str, str] = {}
+        self.referenced: set[str] = set()
 
     async def _drain(self) -> list[dict]:
         results: list[dict] = []
@@ -120,12 +122,21 @@ class ChangeTracker:
                 f"bare CouchDB deletion detected: {result}"
             )
             doc_id = result.get("id")
+            for revision in result.get("changes", []):
+                response = await self._raw.get(
+                    f"{self._database}/{urllib.parse.quote(doc_id, safe='')}",
+                    params={"rev": revision["rev"]},
+                )
+                assert response.status_code == 200
+                self.referenced.update(response.json().get("children", []))
             if isinstance(doc_id, str) and doc_id.startswith("h:"):
                 self.chunk_ids.add(doc_id)
         for chunk_id in sorted(self.chunk_ids):
             chunk = await stored_doc(self._raw, self._database, chunk_id)
             assert chunk.get("type") == "leaf", chunk_id
-            assert isinstance(chunk.get("data"), str), chunk_id
+            assert chunk.get("data") == self.expected[chunk_id], chunk_id
+            assert chunk["_rev"].startswith("1-"), chunk_id
+        assert self.referenced <= self.chunk_ids
 
 
 @pytest.fixture
@@ -182,6 +193,13 @@ async def test_real_couchdb_write_lifecycle(
     # -- startup: fresh vault, no E2EE milestone ----------------------------
     await backend.startup_check()
 
+    # The resolved device splitter is independently oracle-verified by the
+    # offline settings suites; this audit checks persistence, not splitting.
+    for body in (body_v1, body_v2):
+        for piece in backend._splitter.split(body, path=note_path):
+            if piece:
+                tracker.expected[backend._splitter.chunk_id_for_piece(piece)] = piece
+
     # -- create --------------------------------------------------------------
     meta = await backend.write_note(note_path, body_v1, create=True)
     assert meta["path"] == note_path
@@ -208,7 +226,7 @@ async def test_real_couchdb_write_lifecycle(
     reread = await backend.read_note(note_path)
     assert reread is not None and reread["text"] == body_v2
     await tracker.checkpoint()
-    assert len(tracker.chunk_ids) == 2  # both revisions left a chunk
+    assert tracker.chunk_ids == set(tracker.expected)
 
     # -- rename: children copied verbatim, ctime preserved --------------------
     renamed = await backend.rename_note(note_path, renamed_path)
@@ -238,7 +256,7 @@ async def test_real_couchdb_write_lifecycle(
     assert (await backend.read_note(copy_path))["text"] == body_v2
     assert (await backend.read_note(renamed_path))["text"] == body_v2
     await tracker.checkpoint()
-    assert len(tracker.chunk_ids) == 2  # duplicate reused, no new chunk
+    assert tracker.chunk_ids == set(tracker.expected)
 
     # -- soft delete: LiveSync revision, not a CouchDB tombstone --------------
     assert await backend.delete_note(copy_path) is True
@@ -253,12 +271,8 @@ async def test_real_couchdb_write_lifecycle(
     assert listed == [renamed_path]
     await tracker.checkpoint()
 
-    # Audit B1 close-out: both chunks ever written — the v1 chunk is by now
-    # referenced only by the soft-deleted rename source — are still live
-    # leaf documents holding exactly the bytes this test wrote.
-    assert len(tracker.chunk_ids) == 2
-    datas = {
-        (await stored_doc(raw_client, database, chunk_id))["data"]
-        for chunk_id in tracker.chunk_ids
-    }
-    assert datas == {body_v1, body_v2}
+    # Every distinct piece remains live and unchanged, including retired notes.
+    assert tracker.chunk_ids == tracker.referenced == set(tracker.expected)
+    response = await raw_client.get(f"{database}/_all_docs")
+    assert response.status_code == 200
+    assert {r["id"] for r in response.json()["rows"] if r["id"].startswith("h:")} == set(tracker.expected)

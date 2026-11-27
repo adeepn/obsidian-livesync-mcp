@@ -1,5 +1,16 @@
 # Универсальный LiveSync MCP — Фундамент + CouchDB-бэкенд (План A) Implementation Plan
 
+> **SUPERSEDED — политика записи, Task 4 / fix round 1 (2026-11-24).**
+> Упоминания `BinaryNoteError`, запрета записи по расширению и запрета бинарных
+> upload ниже описывают историческое решение и больше не являются требованиями.
+> `write_note` принимает `str | bytes`; тип выбирается по upstream disk-ingestion
+> правилам. Newnote bytes сохраняются точно; invalid UTF-8 на plain-пути по
+> умолчанию отклоняется, явный `lossy_text=true` доступен в upload-инструменте.
+> Textual newnotes участвуют в text-tools по общей UTF-8/control/budget eligibility.
+> Актуальные контракты: [settings parity, §в](../specs/2026-11-23-settings-parity.md#в-plain--newnote)
+> и [scan policy](../../scan-policy.md#text-scan-eligibility). Исходный текст сохранён
+> для истории; удалённые runtime-символы не восстанавливаются.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Переписать слой хранения CouchDB-бэкенда и слой инструментов по аудиту и дизайн-документу, введя `StorageBackend`-интерфейс и общий модуль формата LiveSync — фундамент, на который в Плане B встанет S3-бэкенд.

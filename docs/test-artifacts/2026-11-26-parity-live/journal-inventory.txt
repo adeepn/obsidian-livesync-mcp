@@ -1,0 +1,54 @@
+Inventory of the nine journals in the test bucket, read-only
+===========================================================
+Taken 2026-11-26 16:49:00 MSK. Each object was read, inflated and parsed with the repository's
+journal_codec (the same parsing the peer uses). Record counts, piece sizes and document
+paths only: no record content, no ids, no revisions.
+
+1795679502038-docs.jsonl.gz
+  stored 12,572 B, inflated 18,282 B, publication time in the name: 07:51:42 UTC = 10:51:42 MSK
+  chunk records: 9 (9 distinct ids); piece sizes: 1 x 10,362 B, 1 x 680 B, 1 x 353 B, 1 x 206 B, 1 x 205 B, 1 x 175 B, 1 x 136 B, 1 x 63 B, 1 x 22 B
+  metadata documents: 8 - 1 piece: Welcome.md, 1 piece: Тестовая заметка.md, 1 piece: Связанная заметка.md, 1 piece: Папка S3/Переехавшая.md, 1 piece: От клиента.md, 1 piece: Папка/Переехавшая.md, 2 pieces: Картинка.md, 1 piece: test-image.png
+
+1795682810621-docs.jsonl.gz
+  stored 6,327 B, inflated 1,883,178 B, publication time in the name: 08:46:50 UTC = 11:46:50 MSK
+  chunk records: 14 (14 distinct ids); piece sizes: 13 x 102,400 B, 1 x 61,440 B
+  metadata documents: 2 - 410 pieces: parity-live/device-40m.bin, 1024 pieces: parity-live/exact.bin
+
+1795684739923-ee3d70427a0833fc858be3ba5af029d8-docs.jsonl.gz
+  stored 6,157 B, inflated 1,864,703 B, publication time in the name: 09:18:59 UTC = 12:18:59 MSK
+  chunk records: 14 (14 distinct ids); piece sizes: 13 x 102,400 B, 1 x 61,440 B
+  metadata documents: 1 - 410 pieces: parity-live/peer-40m.bin
+
+1795685021043-663c7003724156fd98594264d9e3054b-docs.jsonl.gz
+  stored 238 B, inflated 362 B, publication time in the name: 09:23:41 UTC = 12:23:41 MSK
+  chunk records: 1 (1 distinct id); piece sizes: 1 x 52 B
+  metadata documents: 1 - 1 piece: parity-live/created.md
+
+1795685021098-cebb595acce4222d91eba4e4612fa1c1-docs.jsonl.gz
+  stored 281 B, inflated 418 B, publication time in the name: 09:23:41 UTC = 12:23:41 MSK
+  chunk records: 1 (1 distinct id); piece sizes: 1 x 72 B
+  metadata documents: 1 - 1 piece: parity-live/created.md
+
+1795685021140-5f7739a521c6ce27771d874f36234f43-docs.jsonl.gz
+  stored 279 B, inflated 655 B, publication time in the name: 09:23:41 UTC = 12:23:41 MSK
+  chunk records: 0 (0 distinct ids); piece sizes: none
+  metadata documents: 2 - 1 piece: parity-live/moved.md, 1 piece: parity-live/created.md [deleted]
+
+1795685021176-7dc3d6fa592757398a688525b76fc867-docs.jsonl.gz
+  stored 238 B, inflated 362 B, publication time in the name: 09:23:41 UTC = 12:23:41 MSK
+  chunk records: 1 (1 distinct id); piece sizes: 1 x 52 B
+  metadata documents: 1 - 1 piece: parity-live/deleted.md
+
+1795685021210-15ca03c2a6385067c0f7cd7ba32b72f3-docs.jsonl.gz
+  stored 207 B, inflated 337 B, publication time in the name: 09:23:41 UTC = 12:23:41 MSK
+  chunk records: 0 (0 distinct ids); piece sizes: none
+  metadata documents: 1 - 1 piece: parity-live/deleted.md [deleted]
+
+1795686317457-docs.jsonl.gz
+  stored 441 B, inflated 1,017 B, publication time in the name: 09:45:17 UTC = 12:45:17 MSK
+  chunk records: 3 (3 distinct ids); piece sizes: 1 x 32 B, 1 x 28 B, 1 x 21 B
+  metadata documents: 3 - 1 piece: parity-live/invalid.md, 1 piece: parity-live/text.png, 1 piece: parity-live/upper.MD
+
+Totals: binary piece 31, chunk records 43, journals 9, metadata documents 20, piece references 1862, text piece 12.
+The metadata documents reference their pieces by id. A piece that several files or several
+positions share is stored once, which is why the piece references outnumber the chunk records.

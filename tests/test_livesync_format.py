@@ -1,7 +1,6 @@
 """Tests for LiveSync path/namespace rules and document/chunk codecs."""
 
 import base64
-import hashlib
 import unicodedata
 
 import pytest
@@ -9,17 +8,13 @@ import pytest
 from livesync_format import (
     PATH_IDENTITY_LEGACY,
     PATH_IDENTITY_NFC,
-    WRITABLE_BINARY_EXTENSIONS,
     ForbiddenPathError,
     TEXT_EXTENSIONS,
     UnsupportedVaultSettings,
     assemble_binary,
     assemble_text,
     chunk_id_for,
-    doc_type_for,
-    encode_newnote,
     is_text_doc,
-    is_writable_text_path,
     new_metadata_doc,
     path2id,
     resolve_path_identity,
@@ -109,50 +104,19 @@ def test_validate_empty_path():
 
 def test_is_text_doc():
     assert is_text_doc("plain", "x.bin") is True
-    assert is_text_doc("newnote", "a.md") is True
+    assert is_text_doc("newnote", "a.md") is False
     assert is_text_doc("newnote", "a.png") is False
-    assert is_text_doc(None, "a.md") is True
+    assert is_text_doc(None, "a.md") is False
 
 
 @pytest.mark.parametrize("extension", sorted(TEXT_EXTENSIONS))
 def test_is_text_doc_text_extensions(extension):
-    assert is_text_doc("newnote", "note" + extension) is True
+    assert is_text_doc("newnote", "note" + extension) is False
 
 
 @pytest.mark.parametrize("extension", [".png", ".jpg", ".pdf", ".bin"])
 def test_is_text_doc_binary_extensions(extension):
     assert is_text_doc("newnote", "note" + extension) is False
-
-
-def test_is_writable_text_path_write_side_policy():
-    # The write allowlist is the inverse of the read classification:
-    # everything textual the tools advertise is writable, including
-    # extensions upstream never classifies as text (.base, .json,
-    # .yaml) and text-ish formats (.svg, .canvas).
-    for path in [
-        "Tasks.base", "DB.base", "note.md", "Board.canvas", "logo.svg",
-        "data.json", "conf.yaml", "no-extension", "notes.txt",
-    ]:
-        assert is_writable_text_path(path) is True, path
-
-
-@pytest.mark.parametrize(
-    "extension",
-    sorted(WRITABLE_BINARY_EXTENSIONS),
-)
-def test_is_writable_text_path_binary_denylist(extension):
-    assert is_writable_text_path("file" + extension) is False
-
-
-def test_is_writable_text_path_denylist_is_case_insensitive():
-    assert is_writable_text_path("Photo.PNG") is False
-    assert is_writable_text_path("Archive.ZIP") is False
-
-
-def test_is_writable_text_path_svg_is_not_a_binary_extension():
-    # Regression guard: svg is XML text and must stay writable even if
-    # someone "completes" the image denylist carelessly.
-    assert ".svg" not in WRITABLE_BINARY_EXTENSIONS
 
 
 # --- Document and chunk codecs (task 3) ---
@@ -173,16 +137,6 @@ def test_assemble_binary_invalid():
         assemble_binary(["SGVsbG8=", "!!!not-base64!!!"])
 
 
-def test_encode_newnote_roundtrip():
-    data = "héllo wörld \N{SNOWMAN}".encode("utf-8") + bytes(range(256))
-    assert assemble_binary(encode_newnote(data)) == data
-
-
-def test_encode_newnote_single_chunk():
-    # v1 encoding: the whole body is one base64 chunk.
-    assert encode_newnote(b"12345") == [base64.b64encode(b"12345").decode("ascii")]
-
-
 def test_chunk_id_deterministic():
     chunk_id = chunk_id_for("same content")
     assert chunk_id == chunk_id_for("same content")
@@ -190,9 +144,8 @@ def test_chunk_id_deterministic():
     assert chunk_id != chunk_id_for("different content")
 
 
-def test_chunk_id_sha256_prefix():
-    expected = "h:" + hashlib.sha256("body".encode("utf-8")).hexdigest()[:16]
-    assert chunk_id_for("body") == expected
+def test_chunk_id_upstream_xxhash64_vector():
+    assert chunk_id_for("helloWorld") == "h:37me21jj44pcc"
 
 
 def test_metadata_doc_shape():
@@ -252,25 +205,12 @@ def test_soft_delete_keeps_body():
     assert original["type"] == "plain"
 
 
-def test_doc_type_for():
-    # Audit B3: any text is written as type "plain" regardless of extension.
-    assert doc_type_for("x.md") == "plain"
-    assert doc_type_for("x.base") == "plain"
-
-
-@pytest.mark.parametrize('suffix', ['/', '/.', '\\', '\\.'])
-@pytest.mark.parametrize('name', ['image.png', 'image.PNG', 'archive.zip'])
-def test_normalized_binary_paths_refuse_text_writes(name, suffix):
-    assert path2id(name + suffix) == path2id(name)
-    assert not is_writable_text_path(name + suffix)
-
-
-@pytest.mark.parametrize('path,expected', [
-    ('note.md/', True), ('note.md/.', True), ('note.md\\.', True),
-    ('image.png/.', False), ('note.MD/.', False), ('note.json/', False),
+@pytest.mark.parametrize('path', [
+    'note.md/', 'note.md/.', 'note.md\\.',
+    'image.png/.', 'note.MD/.', 'note.json/',
 ])
-def test_text_doc_classification_uses_normalized_path(path, expected):
-    assert is_text_doc('newnote', path) is expected
+def test_text_doc_type_overrides_path(path):
+    assert is_text_doc('newnote', path) is False
     assert is_text_doc('plain', path)
 
 
@@ -435,15 +375,22 @@ def test_resolve_identity_refuses_obfuscation():
         resolve_path_identity(milestone)
 
 
-def test_resolve_identity_refuses_case_sensitive():
-    milestone = {"tweak_values": {"PREFERRED": {
-        "handleFilenameCaseSensitive": True,
-    }}}
-    with pytest.raises(UnsupportedVaultSettings, match="case-sensitive"):
-        resolve_path_identity(milestone)
-    # The setting may sit at the top level in older milestone shapes.
-    with pytest.raises(UnsupportedVaultSettings, match="case-sensitive"):
-        resolve_path_identity({"handleFilenameCaseSensitive": True})
+@pytest.mark.parametrize("nfc", [False, True])
+def test_case_sensitive_identity(nfc):
+    from livesync_format import PATH_IDENTITY_CASE_SENSITIVE
+    identity = resolve_path_identity({"handleFilenameCaseSensitive": True,
+                                      "pathNormalizationVersion": int(nfc)})
+    assert PATH_IDENTITY_CASE_SENSITIVE in identity
+    assert ("nfc" in identity) == nfc
+    assert path2id("A.md", nfc=nfc, case_sensitive=True) == "A.md"
+    assert path2id("a.md", nfc=nfc, case_sensitive=True) == "a.md"
+    assert path2id("_A.md", case_sensitive=True) == "/_A.md"
+    assert (path2id("Cafe\u0301.md", nfc=nfc, case_sensitive=True) ==
+            path2id("Café.md", nfc=nfc, case_sensitive=True)) == nfc
+
+
+def test_obfuscated_identifier_is_unchanged():
+    assert path2id("f:AbCd") == "f:AbCd"
 
 
 def test_resolve_identity_no_settings_fails_closed():
@@ -494,7 +441,7 @@ def test_resolve_identity_refuses_unknown_version():
         ):
             resolve_path_identity(milestone)
     # The refusal names the offending value (not a secret: a version).
-    with pytest.raises(UnsupportedVaultSettings, match="pathNormalizationVersion 2"):
+    with pytest.raises(UnsupportedVaultSettings, match="pathNormalizationVersion"):
         resolve_path_identity(
             {"tweak_values": {"PREFERRED": {"pathNormalizationVersion": 2}}}
         )
@@ -517,6 +464,14 @@ def test_unsupported_vault_settings_contract():
     import livesync_format as module
 
     assert "storage_base" not in inspect.getsource(module)
+    # Cold imports must preserve the boundary transitively through the splitter.
+    import subprocess
+    import sys
+    result = subprocess.run(
+        [sys.executable, '-c', "import sys; import livesync_format; assert 'storage_base' not in sys.modules"],
+        capture_output=True, text=True, timeout=60,
+    )
+    assert result.returncode == 0, result.stderr
     assert issubclass(UnsupportedVaultSettings, ValueError)
     with pytest.raises(UnsupportedVaultSettings) as excinfo:
         resolve_path_identity({})

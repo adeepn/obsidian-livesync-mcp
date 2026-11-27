@@ -23,21 +23,23 @@ Design notes:
   concurrent devices coexist and the loser stays queryable via
   :meth:`JournalStore.leaves`.
 - *Epoch resets*: the epoch is ``protocolVersion:pbkdf2salt`` from the
-  journal sync parameters. When it changes, the remote history is no longer
-  compatible with local state, so setting a different epoch wipes every
-  table (except the path-identity configuration) and every chunk file, and
-  the reset is logged.
+  journal sync parameters. The backend confirms wipes against send history;
+  resets clear only processed-journal and last-sent tracking. Local revision
+  trees and chunks survive, including notes absent from rebuilt remote history.
 - *Path identity*: the mode resolved at startup
   (:func:`livesync_format.resolve_path_identity`) is stored on first open;
-  reopening the same state directory with a different mode is a state-dir
-  configuration error. The store never derives or rewrites ids — NFC
-  normalization already happened when the journal's doc ids were produced.
+  reopening with a different mode quarantines the whole old state directory
+  beside it before starting fresh. IDs are never mixed or rewritten.
 
-The store performs no I/O outside ``state_dir`` and only uses the standard
-library.
+The store uses only the standard library; identity quarantine is a sibling
+of ``state_dir`` so old documents and chunks remain recoverable.
 """
 
 from __future__ import annotations
+
+from wire_encoding import escape_json_surrogates
+
+from diagnostic_hygiene import PublicDiagnostic, DiagnosticPath, DiagnosticCode
 
 import json
 import logging
@@ -46,9 +48,12 @@ import re
 import sqlite3
 import stat
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 
 from livesync_format import (
+    PATH_IDENTITY_CASE_SENSITIVE,
+    PATH_IDENTITY_NFC_CASE_SENSITIVE,
     PATH_IDENTITY_LEGACY,
     PATH_IDENTITY_NFC,
     EncryptedInlineChunk,
@@ -56,11 +61,12 @@ from livesync_format import (
     assemble_text,
     extract_inline_chunks,
     is_note_document,
-    is_text_doc,
     legacy_body,
 )
 
 from storage_base import StorageError
+from storage_base import TextBudgetExceeded
+from text_eligibility import TextProjection, DEFAULT_TEXT_VERDICT_CACHE_ENTRIES
 
 logger = logging.getLogger(__name__)
 
@@ -75,8 +81,10 @@ _META_LAST_SENT_KEY = "last_sent_key"
 # CouchDB/LiveSync revision strings: "<generation>-<hash>".
 _REV_RE = re.compile(r"^(\d+)-(.+)$")
 
-# Accept only bounded chunk identifiers without path separators or dots.
-_CHUNK_ID_RE = re.compile(r"^h:[A-Za-z0-9+_-]{1,64}$")
+# Accept bounded historical IDs and standard SHA-1 base64 IDs. Upstream:
+# commonlib@484c164450d61deb2e301582b60cb9b5f9fa977f
+# managers/HashManager/PureJSHashManager.ts:77-87.
+_CHUNK_ID_RE = re.compile(r"^h:(?:[A-Za-z0-9+_-]{1,64}|[A-Za-z0-9+/]{27}=)$")
 
 _ENCRYPTED_MESSAGE = (
     "note {path!r} uses end-to-end encryption, "
@@ -84,13 +92,22 @@ _ENCRYPTED_MESSAGE = (
 )
 
 
-class EncryptedNoteError(ValueError):
-    """The note body requires unsupported end-to-end decryption.
+class NoteDecodeError(ValueError):
+    """Typed corruption context for backend/tool projection."""
 
-    A distinct class (still a :class:`ValueError` for existing callers) so
-    backends can classify E2EE refusals structurally — never by scanning
-    the human-readable message, which embeds the user-controlled note path.
-    """
+    def __init__(self, public):
+        self.diagnostic = public
+        super().__init__(public.format())
+
+
+class EncryptedNoteError(NoteDecodeError):
+    """Structural encryption classification; no exception-text parsing."""
+
+    def __init__(self, public=None, *, path=None):
+        super().__init__(public if isinstance(public, PublicDiagnostic) else
+            PublicDiagnostic(DiagnosticCode.ENCRYPTED_NOTE,
+                paths=(DiagnosticPath(path, remote=True),) if path is not None else ()))
+
 
 _SCHEMA_V1 = """
 CREATE TABLE IF NOT EXISTS docs (
@@ -102,6 +119,11 @@ CREATE TABLE IF NOT EXISTS docs (
 );
 CREATE TABLE IF NOT EXISTS processed (
     name TEXT NOT NULL PRIMARY KEY
+);
+CREATE TABLE IF NOT EXISTS outbound (
+    name TEXT NOT NULL PRIMARY KEY,
+    digest TEXT NOT NULL,
+    confirmed INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS meta (
     key TEXT NOT NULL PRIMARY KEY,
@@ -147,22 +169,22 @@ def _private_directory(path: Path) -> None:
     path.mkdir(mode=0o700, parents=True, exist_ok=True)
     if path.stat().st_mode & 0o077:
         path.chmod(0o700)
-        logger.warning("tightened journal state directory permissions: %s", path)
+        logger.warning('tightened journal state directory permissions: <omitted>')
 
 
 class JournalStore:
     """Local journal-peer state rooted at ``state_dir``.
 
-    All persistence lives under ``state_dir``: the SQLite database and the
-    ``chunks/`` tree. See the module docstring for the format and the
-    revision-tree semantics.
+    Active persistence lives under ``state_dir``: the SQLite database and the
+    ``chunks/`` tree. Identity changes archive it in a sibling quarantine.
+    See the module docstring for the format and revision-tree semantics.
     """
 
     def state_size_bytes(self) -> int:
         """Logical bytes in SQLite (including WAL/SHM) and the chunk tree.
 
-        Best-effort measurement: a concurrent reset may remove files during
-        the walk. Do not follow symlinks outside this peer's state.
+        Best-effort measurement: external state maintenance may move files
+        during the walk. Do not follow symlinks outside this peer's state.
         """
         paths = [self.state_dir / name for name in
                  (_DB_FILENAME, _DB_FILENAME + "-wal", _DB_FILENAME + "-shm")]
@@ -179,11 +201,19 @@ class JournalStore:
             total += sum(file_size(Path(root) / name) for name in files)
         return total
 
-    def __init__(self, state_dir: Path, path_identity: str):
-        if path_identity not in (PATH_IDENTITY_LEGACY, PATH_IDENTITY_NFC):
+    def __init__(self, state_dir: Path, path_identity: str, *,
+                 text_verdict_cache_entries: int = DEFAULT_TEXT_VERDICT_CACHE_ENTRIES):
+        if text_verdict_cache_entries <= 0:
+            raise ValueError("text verdict cache entries must be positive")
+        self.text_verdict_cache_entries = text_verdict_cache_entries
+        if path_identity not in (
+            PATH_IDENTITY_LEGACY, PATH_IDENTITY_NFC,
+            PATH_IDENTITY_CASE_SENSITIVE, PATH_IDENTITY_NFC_CASE_SENSITIVE,
+        ):
             raise ValueError(
                 f"unknown path identity {path_identity!r}; expected "
-                f"{PATH_IDENTITY_LEGACY!r} or {PATH_IDENTITY_NFC!r}"
+                f"{PATH_IDENTITY_LEGACY!r}, {PATH_IDENTITY_NFC!r}, "
+                f"{PATH_IDENTITY_CASE_SENSITIVE!r} or {PATH_IDENTITY_NFC_CASE_SENSITIVE!r}"
             )
         self.state_dir = Path(state_dir)
         self.path_identity = path_identity
@@ -213,21 +243,51 @@ class JournalStore:
         os.close(descriptor)
         db_path.chmod(0o600)
         self._conn = sqlite3.connect(db_path)
+        # Check identity before migrations can change the old database.
+        has_meta = self._conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='meta'"
+        ).fetchone()
+        stored_identity = self._meta_get(_META_PATH_IDENTITY) if has_meta else None
+        if stored_identity is not None and stored_identity != path_identity:
+            self._conn.close()
+            quarantine_root = self.state_dir.with_name(self.state_dir.name + ".quarantine")
+            if quarantine_root.is_symlink():
+                raise StorageError("quarantine directory is a symlink; refusing to move state")
+            _private_directory(quarantine_root)
+            # Reserve a unique sibling destination; never overwrite an archive.
+            stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ-")
+            destination = Path(tempfile.mkdtemp(prefix=stamp, dir=quarantine_root))
+            # If the move fails, retain both the source and reservation.
+            self.state_dir.rename(destination / "state")
+            archived = destination / "state"
+            logger.warning('journal path identity changed <omitted> -> <omitted>; old state quarantined at <omitted>. To restore: stop all peers using this state directory, move the current state aside, move <omitted> back to <omitted> and configure identity <omitted>')
+            self.__init__(self.state_dir, path_identity,
+                          text_verdict_cache_entries=text_verdict_cache_entries)
+            return
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA synchronous=NORMAL")
         self._conn.executescript(_SCHEMA_V1)
+        self._conn.execute("""CREATE TABLE IF NOT EXISTS text_verdicts (
+            doc_id TEXT, rev TEXT, budget INTEGER, eligible INTEGER,
+            PRIMARY KEY(doc_id, rev, budget))""")
+
+        # Disposable cache migration: remove old positives and obsolete
+        # revisions/budgets before enforcing one row per document.
+        with self._conn:
+            self._conn.execute('DELETE FROM text_verdicts WHERE eligible != 0')
+            self._conn.execute('DELETE FROM text_verdicts WHERE rowid NOT IN '
+                               '(SELECT MAX(rowid) FROM text_verdicts GROUP BY doc_id)')
+            self._conn.execute('CREATE UNIQUE INDEX IF NOT EXISTS '
+                               'text_verdict_document ON text_verdicts(doc_id)')
+            self._trim_text_verdicts()
+
+        self._conn.execute("""CREATE TABLE IF NOT EXISTS selection_verdicts (
+            cache_key TEXT PRIMARY KEY, rules TEXT, verdict TEXT, used INTEGER)""")
+        self._conn.commit()
 
         stored_identity = self._meta_get(_META_PATH_IDENTITY)
         if stored_identity is None:
             self._meta_set(_META_PATH_IDENTITY, path_identity)
-        elif stored_identity != path_identity:
-            self._conn.close()
-            raise ValueError(
-                f"journal state at {str(self.state_dir)!r} uses path "
-                f"identity {stored_identity!r} but {path_identity!r} was "
-                "configured; the state directory belongs to a different "
-                "vault configuration"
-            )
 
     # -- Journal replay ------------------------------------------------------
 
@@ -236,11 +296,10 @@ class JournalStore:
     ) -> None:
         """Replay one parsed journal file; idempotent per ``name``.
 
-        Chunks are staged in unique temporary files. Docs commit before chunks
-        are atomically published; only then is the journal marked processed in
-        a separate transaction. Failed transactions remove their staging
-        without publishing any new chunks. Publication failures leave the
-        journal unprocessed so replay can complete it idempotently.
+        Stage and install content-addressed chunks before committing metadata.
+        A failed install cannot expose a revision whose children are missing.
+        Failed transactions may leave harmless orphan chunks, reused on retry.
+        Mark processed only after both chunks and metadata are installed.
         """
         if self.processed(name):
             return
@@ -250,7 +309,7 @@ class JournalStore:
                 try:
                     chunk_file = self._chunk_path(chunk_id)
                 except ValueError:
-                    logger.warning("skipping invalid journal chunk identifier %r", chunk_id)
+                    logger.warning('skipping invalid journal chunk identifier <omitted>')
                     continue
                 if chunk_file.exists():
                     continue
@@ -261,12 +320,12 @@ class JournalStore:
                     tmp_file = Path(stream.name)
                     staged.append((tmp_file, chunk_file))
                     stream.write(data.encode("utf-8"))
+            for tmp_file, chunk_file in staged:
+                os.replace(tmp_file, chunk_file)
             with self._conn:
                 for doc in docs or []:
                     self._insert_doc(name, doc)
-            for tmp_file, chunk_file in staged:
-                os.replace(tmp_file, chunk_file)
-            self.mark_processed(name)
+            self.finish_bookkeeping(lambda: self.mark_processed(name))
         finally:
             for tmp_file, _ in staged:
                 tmp_file.unlink(missing_ok=True)
@@ -274,6 +333,7 @@ class JournalStore:
     def _insert_doc(self, name: str, doc: object) -> None:
         gen, rev_hash = self._validate_doc(name, doc)
         doc_id = doc["_id"]
+        self._conn.execute("DELETE FROM text_verdicts WHERE doc_id=?", (doc_id,))
         self._conn.execute(
             "INSERT OR IGNORE INTO docs(doc_id, gen, rev_hash, doc_json) "
             "VALUES (?, ?, ?, ?)",
@@ -314,7 +374,10 @@ class JournalStore:
     def _chunk_path(self, chunk_id: str) -> Path:
         if not isinstance(chunk_id, str) or _CHUNK_ID_RE.fullmatch(chunk_id) is None:
             raise ValueError("invalid journal chunk identifier")
-        digest = chunk_id[len("h:") :]
+        # Escape only the cache filename, never the journal ID. SHA-1's '='
+        # suffix makes these paths disjoint from historical IDs; '/' -> '_'
+        # is injective over the standard base64 alphabet (which excludes '_').
+        digest = chunk_id[len("h:") :].replace("/", "_")
         if len(digest) < 3:
             chunk_file = self._chunks_dir / _SHORT_SHARD / digest
         else:
@@ -331,6 +394,16 @@ class JournalStore:
         ).fetchone()
         return row is not None
 
+    def finish_bookkeeping(self, action) -> None:
+        """Retry tracking after metadata commit; replay repairs exhausted attempts."""
+        for attempt in range(3):
+            try:
+                action()
+                return
+            except (OSError, sqlite3.Error):
+                if attempt == 2:
+                    logger.warning('completed journal bookkeeping deferred to replay')
+
     def mark_processed(self, name: str) -> None:
         with self._conn:
             self._conn.execute(
@@ -341,6 +414,31 @@ class JournalStore:
         return int(
             self._conn.execute("SELECT COUNT(*) FROM processed").fetchone()[0]
         )
+
+    def record_outbound(self, name: str, digest: str) -> None:
+        """Commit intent before sending; a crash must not lose send ownership."""
+        with self._conn:
+            self._conn.execute(
+                "INSERT INTO outbound(name, digest) VALUES (?, ?)", (name, digest),
+            )
+
+    def confirm_outbound(self, name: str) -> None:
+        with self._conn:
+            self._conn.execute("UPDATE outbound SET confirmed = 1 WHERE name = ?", (name,))
+
+    def discard_outbound(self, name: str) -> None:
+        with self._conn:
+            self._conn.execute("DELETE FROM outbound WHERE name = ?", (name,))
+
+    def outbound_journals(self) -> list[tuple[str, str, int]]:
+        return self._conn.execute("SELECT name, digest, confirmed FROM outbound").fetchall()
+
+    def compact_outbound(self, newest: str) -> None:
+        """Retain the newest confirmed wipe sentinel and unresolved intents."""
+        with self._conn:
+            self._conn.execute(
+                "DELETE FROM outbound WHERE confirmed = 1 AND name != ?", (newest,),
+            )
 
     @property
     def last_sent_key(self) -> str:
@@ -356,55 +454,47 @@ class JournalStore:
 
     @epoch.setter
     def epoch(self, value: str) -> None:
-        current = self.epoch
-        if value != current:
-            logger.info(
-                "journal store: epoch changed %r -> %r; resetting local state",
-                current,
-                value,
-            )
-            self.reset()
+        # Epoch alone does not prove a wipe (upstream JournalSyncCore:354-388).
+        # The backend reconciles send history before clearing dedupe caches.
         self._meta_set(_META_EPOCH, value)
 
-    def reset(self) -> None:
-        """Wipe replicated state: docs/processed/meta rows and chunk files.
+    def selection_cache_size(self):
+        return self._conn.execute('SELECT COUNT(*) FROM selection_verdicts').fetchone()[0]
 
-        The path-identity configuration row is preserved (it describes the
-        state directory, not the remote history). The reset is logged.
+    def _selection_cache_trim(self, limit):
+        self._conn.execute('DELETE FROM selection_verdicts WHERE cache_key NOT IN '
+                           '(SELECT cache_key FROM selection_verdicts ORDER BY used DESC LIMIT ?)', (limit,))
+
+    def selection_cache_get(self, key, rules, limit):
+        with self._conn:
+            self._conn.execute('DELETE FROM selection_verdicts WHERE rules != ?', (rules,))
+            self._selection_cache_trim(limit)
+            row = self._conn.execute('SELECT verdict FROM selection_verdicts WHERE cache_key = ?', (key,)).fetchone()
+            if row is not None:
+                self._conn.execute('UPDATE selection_verdicts SET used = '
+                                   '(SELECT COALESCE(MAX(used), 0) + 1 FROM selection_verdicts) '
+                                   'WHERE cache_key = ?', (key,))
+        return json.loads(row[0]) if row else None
+
+    def selection_cache_put(self, key, rules, value, limit):
+        with self._conn:
+            self._conn.execute('INSERT OR REPLACE INTO selection_verdicts VALUES (?, ?, ?, '
+                               '(SELECT COALESCE(MAX(used), 0) + 1 FROM selection_verdicts))',
+                               (key, rules, json.dumps(value)))
+            self._selection_cache_trim(limit)
+
+    def reset(self) -> None:
+        """Clear replication deduplication caches, retaining every local copy.
+
+        Like device checkpoint resets (JournalSyncCore.ts:332-341,392-400),
+        this never removes revision trees or content-addressed chunk files.
+        Identity, epoch, and read/selection verdicts remain valid locally.
         """
         with self._conn:
-            self._conn.execute("DELETE FROM docs")
             self._conn.execute("DELETE FROM processed")
-            self._conn.execute("DELETE FROM meta")
-            self._conn.execute(
-                "INSERT OR REPLACE INTO meta(key, value) VALUES (?, ?)",
-                (_META_PATH_IDENTITY, self.path_identity),
-            )
-        removed = 0
-        if self._chunks_dir.is_symlink():
-            self._chunks_dir.unlink()
-        elif self._chunks_dir.is_dir():
-            for shard in self._chunks_dir.iterdir():
-                if shard.is_symlink():
-                    shard.unlink()
-                    removed += 1
-                elif shard.is_dir():
-                    for chunk_file in shard.iterdir():
-                        if chunk_file.is_file():
-                            chunk_file.unlink()
-                            removed += 1
-                    try:
-                        shard.rmdir()
-                    except OSError:
-                        pass
-                elif shard.is_file():
-                    shard.unlink()
-                    removed += 1
-        logger.warning(
-            "journal store state reset: cleared docs/processed/meta tables "
-            "and removed %d chunk file(s)",
-            removed,
-        )
+            self._conn.execute("DELETE FROM outbound")
+            self._conn.execute("DELETE FROM meta WHERE key = ?", (_META_LAST_SENT_KEY,))
+        logger.warning('journal store dedupe caches reset; local documents and chunks retained')
 
     def _meta_get(self, key: str) -> str | None:
         row = self._conn.execute(
@@ -471,47 +561,59 @@ class JournalStore:
         winner = self.winner(doc_id)
         if winner is None or not is_note_document(winner):
             return None
+        return self._read_note_content(winner)
+
+    def read_ignore_file(self, doc_id: str):
+        """Decode only a configured ignore document, including hidden i: metadata.
+
+        Public note reads retain their service-namespace gate. This private
+        backend seam never lists or exposes internal documents to MCP callers.
+        """
+        winner = self.winner(doc_id)
+        if (winner is None or winner.get('deleted') or winner.get('_deleted')
+                or winner.get('type') not in ('plain', 'newnote', 'notes')):
+            return None
+        if not doc_id.startswith('i:') and not is_note_document(winner):
+            return None
+        return self._read_note_content(winner)
+
+    def _read_note_content(self, winner: dict):
+        doc_id = winner['_id']
         path = _display_path(winner, doc_id)
 
         if winner.get("e_"):
-            raise EncryptedNoteError(_ENCRYPTED_MESSAGE.format(path=path))
+            raise EncryptedNoteError(PublicDiagnostic(DiagnosticCode.ENCRYPTED_NOTE, paths=(DiagnosticPath(path, remote=True),)))
 
         doc_type = winner.get("type")
         if doc_type == "notes":
             raw = winner.get("data")
             if isinstance(raw, str) and raw.startswith("%"):
-                raise EncryptedNoteError(_ENCRYPTED_MESSAGE.format(path=path))
+                raise EncryptedNoteError(PublicDiagnostic(DiagnosticCode.ENCRYPTED_NOTE, paths=(DiagnosticPath(path, remote=True),)))
             try:
                 text = legacy_body(winner)
             except ValueError:
-                raise ValueError(
-                    f"note {path!r} is corrupt: missing legacy data field"
-                ) from None
+                raise NoteDecodeError(PublicDiagnostic(DiagnosticCode.IS_CORRUPT_MISSING_LEGACY_DATA_FIELD, paths=(DiagnosticPath(path, remote=True),))) from None
             return winner, text, None, True
 
-        # is_note_document guarantees doc_type in ("plain", "newnote") here.
+        # Both entry points restrict non-legacy content to plain/newnote.
         children = winner.get("children")
         if children is None:
             children = []
         if not isinstance(children, list) or not all(
             isinstance(child, str) for child in children
         ):
-            raise ValueError(f"note {path!r} is corrupt: invalid children field")
+            raise NoteDecodeError(PublicDiagnostic(DiagnosticCode.IS_CORRUPT_INVALID_CHILDREN_FIELD, paths=(DiagnosticPath(path, remote=True),)))
         try:
             inline = extract_inline_chunks(winner)
         except EncryptedInlineChunk:
             raise EncryptedNoteError(
-                _ENCRYPTED_MESSAGE.format(path=path)
+                PublicDiagnostic(DiagnosticCode.ENCRYPTED_NOTE, paths=(DiagnosticPath(path, remote=True),))
             ) from None
         except ValueError:
-            raise ValueError(
-                f"note {path!r} is corrupt: invalid eden field"
-            ) from None
+            raise NoteDecodeError(PublicDiagnostic(DiagnosticCode.IS_CORRUPT_INVALID_EDEN_FIELD, paths=(DiagnosticPath(path, remote=True),))) from None
 
         if not children:
-            if doc_type == "plain" or (
-                not winner.get("eden") and is_text_doc(doc_type, path)
-            ):
+            if doc_type == "plain":
                 return winner, "", None, True
             return winner, None, b"", False
 
@@ -521,17 +623,55 @@ class JournalStore:
         try:
             body = assemble_binary(datas)
         except ValueError:
-            raise ValueError(
-                f"note {path!r} is corrupt: invalid chunk encoding"
-            ) from None
-        is_text = is_text_doc(doc_type, path)
-        text: str | None = None
-        if is_text:
-            try:
-                text = body.decode("utf-8")
-            except UnicodeDecodeError:
-                is_text = False
-        return winner, text, body, is_text
+            raise NoteDecodeError(PublicDiagnostic(DiagnosticCode.IS_CORRUPT_INVALID_CHUNK_ENCODING, paths=(DiagnosticPath(path, remote=True),))) from None
+        return winner, None, body, False
+
+    def scan_newnote(self, doc: dict, max_bytes: int, *, strict_budget=False) -> str | None:
+        # SQLite INTEGER is signed 64-bit; a BLOB keeps larger budgets exact.
+        cache_budget = max_bytes if max_bytes < 2 ** 63 else str(max_bytes).encode('ascii')
+        key = (doc['_id'], doc['_rev'], cache_budget)
+        verdict = self._conn.execute(
+            'SELECT rev, budget FROM text_verdicts WHERE doc_id=?',
+            (doc['_id'],)).fetchone()
+        if verdict == key[1:] and not strict_budget:
+            self._remember_nontext(key)
+            return None
+        if verdict is not None:
+            with self._conn:
+                self._conn.execute('DELETE FROM text_verdicts WHERE doc_id=?', (doc['_id'],))
+        if doc.get('e_'):
+            raise EncryptedNoteError(PublicDiagnostic(DiagnosticCode.ENCRYPTED_NOTE, paths=(DiagnosticPath(doc['path'], remote=True),)))
+        children = doc.get('children') or []
+        if not isinstance(children, list) or not all(isinstance(c, str) for c in children):
+            raise ValueError('invalid children field')
+        inline = extract_inline_chunks(doc)
+        projection = TextProjection(max_bytes)
+        eligible = True
+        for index, child in enumerate(children):
+            piece = self._chunk_datas([child], inline, doc['path'])[0]
+            if not projection.feed(piece, final=index == len(children) - 1):
+                eligible = False
+                projection.parts.clear()
+                if not strict_budget:
+                    break
+        if strict_budget and max_bytes and projection.bytes > max_bytes:
+            raise TextBudgetExceeded(projection.bytes, max_bytes)
+        if not eligible:
+            self._remember_nontext(key)
+        return projection.text() if eligible else None
+
+    def _remember_nontext(self, key: tuple[str, str, int]) -> None:
+        # Reinsert on a hit so rowid orders least-to-most recently used.
+        with self._conn:
+            self._conn.execute('DELETE FROM text_verdicts WHERE doc_id=?', (key[0],))
+            self._conn.execute('INSERT INTO text_verdicts VALUES (?, ?, ?, 0)', key)
+            self._trim_text_verdicts()
+
+    def _trim_text_verdicts(self) -> None:
+        self._conn.execute(
+            'DELETE FROM text_verdicts WHERE rowid IN '
+            '(SELECT rowid FROM text_verdicts ORDER BY rowid DESC LIMIT -1 OFFSET ?)',
+            (self.text_verdict_cache_entries,))
 
     def _chunk_datas(
         self, children: list[str], inline: dict[str, str], path: str
@@ -543,9 +683,7 @@ class JournalStore:
             try:
                 chunk_file = self._chunk_path(child)
             except ValueError:
-                raise ValueError(
-                    f"note {path!r} is corrupt: invalid chunk reference"
-                ) from None
+                raise NoteDecodeError(PublicDiagnostic(DiagnosticCode.IS_CORRUPT_INVALID_CHUNK_REFERENCE, paths=(DiagnosticPath(path, remote=True),))) from None
             if child in inline:
                 datas.append(inline[child])
                 continue
@@ -553,23 +691,19 @@ class JournalStore:
                 try:
                     datas.append(chunk_file.read_bytes().decode("utf-8"))
                 except (OSError, UnicodeDecodeError):
-                    raise ValueError(
-                        f"note {path!r} is corrupt: unreadable chunk file"
-                    ) from None
+                    raise NoteDecodeError(PublicDiagnostic(DiagnosticCode.IS_CORRUPT_UNREADABLE_CHUNK_FILE, paths=(DiagnosticPath(path, remote=True),))) from None
                 continue
             chunk_doc = self.winner(child)
             if chunk_doc is not None:
                 if chunk_doc.get("e_"):
                     raise EncryptedNoteError(
-                        _ENCRYPTED_MESSAGE.format(path=path)
+                        PublicDiagnostic(DiagnosticCode.ENCRYPTED_NOTE, paths=(DiagnosticPath(path, remote=True),))
                     )
                 data = chunk_doc.get("data")
                 if not chunk_doc.get("deleted") and isinstance(data, str):
                     datas.append(data)
                     continue
-            raise ValueError(
-                f"note {path!r} is corrupt: a content chunk is missing"
-            )
+            raise NoteDecodeError(PublicDiagnostic(DiagnosticCode.IS_CORRUPT_A_CONTENT_CHUNK_IS_MISSING, paths=(DiagnosticPath(path, remote=True),)))
         return datas
 
     def iterate_notes(self, extension: str = ".md"):
@@ -599,7 +733,11 @@ class JournalStore:
 
 
 def _dump_doc(doc: dict) -> str:
-    return json.dumps(doc, ensure_ascii=False, separators=(",", ":"))
+    # journalRecords.ts:76 preserves surrogate units in JSON metadata. SQLite
+    # accepts UTF-8 text, so retain those units as escapes in the local copy too.
+    # Retain local handling of replayed numeric overflows for note isolation;
+    # strict wire publication validation belongs in serialize_journal.
+    return escape_json_surrogates(json.dumps(doc, ensure_ascii=False, separators=(",", ":")))
 
 
 def _display_path(doc: dict, doc_id: str) -> str:

@@ -1,0 +1,3970 @@
+{
+  "provenance": {
+    "source_sha256": {
+      "package/dist/hash/purejs.js": "09bc77348cb96f592fbb18b5b7a61f4b747cc91f12d5ea0b29b3b2609e0cca7c",
+      "package/dist/binary/base64.js": "0675e7a75edeb8eabc7f867ac18a44bd50bf4f493a5356d3760fb2b167fa82bc",
+      "package/dist/common/logger.js": "cc929b9b9a685fb060c6c382f53a3e61e67b05a4ae299fe846966a6d7332f58f",
+      "package/dist/binary/encodedUTF16.tables.internal.js": "17432ddd36cb745ab82a42d269736b954f3841070da54d5152a6be246b3a40d4",
+      "package/dist/binary/hex.js": "e9544562fc02c0df659dd27550d553ade49959ad546ba6b88f236c6274ccb9e6",
+      "common/models/setting.const.ts": "a3c3ae6df58a2c6aeb67a546eba90799f556d855fad50da60efb15026e548c04",
+      "common/models/shared.const.behabiour.ts": "72a60cdb46d46deec169bc18da86c89f9ef2e14ba33aa33aea547348f382894e",
+      "common/models/setting.const.defaults.ts": "7a49ac7546318e447e5541882532ca8993649bc66fc08eff75501e76b82eb48d",
+      "string_and_binary/path.ts": "5deb06668cae485345c3904072c537791294ff7f374bd16066f3b2da6a9ffdde",
+      "string_and_binary/convert.ts": "c473660a9b8d3b0f450b2d471f88186af5be113c038cd3fafbfe5a6ed65b363d",
+      "string_and_binary/chunks.ts": "8cccf58cd8306d8504bcc41d5e2c303361936f8691abebf40764856805cf54aa",
+      "ContentSplitter/ContentSplitterBase.ts": "495f5884048e6ab7192afcefcfe871cd853154230655f1602dd0b344a1952276",
+      "ContentSplitter/ContentSplitterV1.ts": "de1b394d87d94b2cb2ad5a713c5341d589c8c69bc636fe7d5e18df5f424ddb08",
+      "ContentSplitter/ContentSplitterV2.ts": "eaa0ab49060407436be403d3aff0d35c7700f952ef1b9174a99a6fe03bbf82fb",
+      "ContentSplitter/ContentSplitterRabinKarp.ts": "f1befeaac960bc5753d104e86c905643d34b7af74e13cb522452fa6b9485d987",
+      "ContentSplitter/ContentSplitters.ts": "520be1f0745494fd835010d963e350433dceff205fc35c72d90acdc2a66116a9",
+      "managers/HashManager/XXHashHashManager.ts": "24c192b549e7b3dd486432e572800ce9a77102a27ad152a9e66e209005df726a",
+      "managers/HashManager/PureJSHashManager.ts": "b2298e9bb0ae2c3abaefa0a13ff75ba1129a3fc33125cc23105937a8d3668be2",
+      "services/base/SettingService.ts": "6e3bb59f1aac22e86b8a92681bdaeddf7f1d1fb9dc7eca5d31c46e3b9d536b69"
+    },
+    "wasm_dependency": {
+      "package": "xxhash-wasm",
+      "version": "1.1.0",
+      "source": "https://registry.npmjs.org/xxhash-wasm/-/xxhash-wasm-1.1.0.tgz",
+      "integrity": "sha512-147y/6YNh+tlp6nd/2pWq38i9h6mz/EuQ6njIrmW8D1BS5nCqs0P6DG+m6zTGnNz5I+uhZ0SHxBs9BsPrwcKDA==",
+      "module_sha256": "e3be9143c10d60a015448de1ceef383b8f2ea1fd2773a5a5c69973ed52d8325a"
+    },
+    "decoder_dependency": {
+      "package": "octagonal-wheels",
+      "version": "0.1.57",
+      "integrity": "sha512-CijSXOtflv60HaqrsyHxJ7jBwE/8v+RX5JjIDnJaibXM8qgG5IV1RJAHFEKDyqA/nhJb46TZf+eVa+2LBRf2vQ==",
+      "source_sha256": {
+        "package/dist/binary/base64.js": "0675e7a75edeb8eabc7f867ac18a44bd50bf4f493a5356d3760fb2b167fa82bc",
+        "package/dist/common/logger.js": "cc929b9b9a685fb060c6c382f53a3e61e67b05a4ae299fe846966a6d7332f58f",
+        "package/dist/binary/blob.js": "21ef13f0c43ecaf20fa4875395d849dab74f1046a676b769586feeef91e9270d",
+        "package/dist/binary/typedArray.js": "a6af3f42ca6d4b8cdd79947dca8719d220d97595cdf0be7a948a8404ad5e0f58"
+      }
+    },
+    "upstream_commit": "484c164450d61deb2e301582b60cb9b5f9fa977f",
+    "wasm_sha256": "e3be9143c10d60a015448de1ceef383b8f2ea1fd2773a5a5c69973ed52d8325a",
+    "node": "v26.13.1"
+  },
+  "generator_sha256": "2b7b156cd4760aa34c6f9124f059273bbdf6f9b474400e1b8bc7ed605c1fd689",
+  "rows": [
+    {
+      "key": "customChunkSize",
+      "value": [
+        null
+      ],
+      "version": "v1",
+      "mode": "plain",
+      "settings": {
+        "chunkSplitterVersion": "v1",
+        "hashAlg": "sha1",
+        "customChunkSize": [
+          null
+        ],
+        "minimumChunkSize": 20
+      },
+      "settings_json": "{\"chunkSplitterVersion\":\"v1\",\"hashAlg\":\"sha1\",\"customChunkSize\":[1e309],\"minimumChunkSize\":20}",
+      "payload": {
+        "path": "coerce.md",
+        "text": true,
+        "base64": "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      },
+      "status": "defined",
+      "pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\n"
+      ],
+      "children": [
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M="
+      ],
+      "split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\n"
+      ],
+      "split_children": [
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M="
+      ],
+      "lossless_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\n"
+      ],
+      "lossless_children": [
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M="
+      ],
+      "lossless_split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\n"
+      ],
+      "lossless_split_children": [
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:1zTMfg6CARcPSVS296xV2NEGLDM=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M="
+      ]
+    },
+    {
+      "key": "customChunkSize",
+      "value": [
+        null
+      ],
+      "version": "v1",
+      "mode": "text",
+      "settings": {
+        "chunkSplitterVersion": "v1",
+        "hashAlg": "sha1",
+        "customChunkSize": [
+          null
+        ],
+        "minimumChunkSize": 20
+      },
+      "settings_json": "{\"chunkSplitterVersion\":\"v1\",\"hashAlg\":\"sha1\",\"customChunkSize\":[1e309],\"minimumChunkSize\":20}",
+      "payload": {
+        "path": "coerce.svg",
+        "text": true,
+        "base64": "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      },
+      "status": "defined",
+      "pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "split_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "lossless_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "lossless_split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_split_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ]
+    },
+    {
+      "key": "customChunkSize",
+      "value": [
+        null
+      ],
+      "version": "v1",
+      "mode": "binary",
+      "settings": {
+        "chunkSplitterVersion": "v1",
+        "hashAlg": "sha1",
+        "customChunkSize": [
+          null
+        ],
+        "minimumChunkSize": 20
+      },
+      "settings_json": "{\"chunkSplitterVersion\":\"v1\",\"hashAlg\":\"sha1\",\"customChunkSize\":[1e309],\"minimumChunkSize\":20}",
+      "payload": {
+        "path": "coerce.png",
+        "text": false,
+        "base64": "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      },
+      "status": "defined",
+      "pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ],
+      "split_pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "split_children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ],
+      "lossless_pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "lossless_children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ],
+      "lossless_split_pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "lossless_split_children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ]
+    },
+    {
+      "key": "customChunkSize",
+      "value": [
+        null
+      ],
+      "version": "v2",
+      "mode": "plain",
+      "settings": {
+        "chunkSplitterVersion": "v2",
+        "hashAlg": "sha1",
+        "customChunkSize": [
+          null
+        ],
+        "minimumChunkSize": 20
+      },
+      "settings_json": "{\"chunkSplitterVersion\":\"v2\",\"hashAlg\":\"sha1\",\"customChunkSize\":[1e309],\"minimumChunkSize\":20}",
+      "payload": {
+        "path": "coerce.md",
+        "text": true,
+        "base64": "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      },
+      "status": "defined",
+      "pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "children": [
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug="
+      ],
+      "split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        ""
+      ],
+      "split_children": [
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:D+/SfK1JFZRgSfA1K+3A+lnWAeI="
+      ],
+      "lossless_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_children": [
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug="
+      ],
+      "lossless_split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        ""
+      ],
+      "lossless_split_children": [
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:D+/SfK1JFZRgSfA1K+3A+lnWAeI="
+      ]
+    },
+    {
+      "key": "customChunkSize",
+      "value": [
+        null
+      ],
+      "version": "v2",
+      "mode": "text",
+      "settings": {
+        "chunkSplitterVersion": "v2",
+        "hashAlg": "sha1",
+        "customChunkSize": [
+          null
+        ],
+        "minimumChunkSize": 20
+      },
+      "settings_json": "{\"chunkSplitterVersion\":\"v2\",\"hashAlg\":\"sha1\",\"customChunkSize\":[1e309],\"minimumChunkSize\":20}",
+      "payload": {
+        "path": "coerce.svg",
+        "text": true,
+        "base64": "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      },
+      "status": "defined",
+      "pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "split_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "lossless_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "lossless_split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_split_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ]
+    },
+    {
+      "key": "customChunkSize",
+      "value": [
+        null
+      ],
+      "version": "v2",
+      "mode": "binary",
+      "settings": {
+        "chunkSplitterVersion": "v2",
+        "hashAlg": "sha1",
+        "customChunkSize": [
+          null
+        ],
+        "minimumChunkSize": 20
+      },
+      "settings_json": "{\"chunkSplitterVersion\":\"v2\",\"hashAlg\":\"sha1\",\"customChunkSize\":[1e309],\"minimumChunkSize\":20}",
+      "payload": {
+        "path": "coerce.png",
+        "text": false,
+        "base64": "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      },
+      "status": "defined",
+      "pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ],
+      "split_pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "split_children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ],
+      "lossless_pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "lossless_children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ],
+      "lossless_split_pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "lossless_split_children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ]
+    },
+    {
+      "key": "customChunkSize",
+      "value": [
+        null
+      ],
+      "version": "v2-segmenter",
+      "mode": "plain",
+      "settings": {
+        "chunkSplitterVersion": "v2-segmenter",
+        "hashAlg": "sha1",
+        "customChunkSize": [
+          null
+        ],
+        "minimumChunkSize": 20
+      },
+      "settings_json": "{\"chunkSplitterVersion\":\"v2-segmenter\",\"hashAlg\":\"sha1\",\"customChunkSize\":[1e309],\"minimumChunkSize\":20}",
+      "payload": {
+        "path": "coerce.md",
+        "text": true,
+        "base64": "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      },
+      "status": "defined",
+      "pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "children": [
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug="
+      ],
+      "split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        ""
+      ],
+      "split_children": [
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:D+/SfK1JFZRgSfA1K+3A+lnWAeI="
+      ],
+      "lossless_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_children": [
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug="
+      ],
+      "lossless_split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\n",
+        ""
+      ],
+      "lossless_split_children": [
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:DyT67smP6qV8AYt+SsqLaJFPSug=",
+        "h:D+/SfK1JFZRgSfA1K+3A+lnWAeI="
+      ]
+    },
+    {
+      "key": "customChunkSize",
+      "value": [
+        null
+      ],
+      "version": "v2-segmenter",
+      "mode": "text",
+      "settings": {
+        "chunkSplitterVersion": "v2-segmenter",
+        "hashAlg": "sha1",
+        "customChunkSize": [
+          null
+        ],
+        "minimumChunkSize": 20
+      },
+      "settings_json": "{\"chunkSplitterVersion\":\"v2-segmenter\",\"hashAlg\":\"sha1\",\"customChunkSize\":[1e309],\"minimumChunkSize\":20}",
+      "payload": {
+        "path": "coerce.svg",
+        "text": true,
+        "base64": "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      },
+      "status": "defined",
+      "pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "split_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "lossless_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "lossless_split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_split_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ]
+    },
+    {
+      "key": "customChunkSize",
+      "value": [
+        null
+      ],
+      "version": "v2-segmenter",
+      "mode": "binary",
+      "settings": {
+        "chunkSplitterVersion": "v2-segmenter",
+        "hashAlg": "sha1",
+        "customChunkSize": [
+          null
+        ],
+        "minimumChunkSize": 20
+      },
+      "settings_json": "{\"chunkSplitterVersion\":\"v2-segmenter\",\"hashAlg\":\"sha1\",\"customChunkSize\":[1e309],\"minimumChunkSize\":20}",
+      "payload": {
+        "path": "coerce.png",
+        "text": false,
+        "base64": "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      },
+      "status": "defined",
+      "pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ],
+      "split_pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "split_children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ],
+      "lossless_pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "lossless_children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ],
+      "lossless_split_pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "lossless_split_children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ]
+    },
+    {
+      "key": "customChunkSize",
+      "value": [
+        null
+      ],
+      "version": "v3-rabin-karp",
+      "mode": "plain",
+      "settings": {
+        "chunkSplitterVersion": "v3-rabin-karp",
+        "hashAlg": "sha1",
+        "customChunkSize": [
+          null
+        ],
+        "minimumChunkSize": 20
+      },
+      "settings_json": "{\"chunkSplitterVersion\":\"v3-rabin-karp\",\"hashAlg\":\"sha1\",\"customChunkSize\":[1e309],\"minimumChunkSize\":20}",
+      "payload": {
+        "path": "coerce.md",
+        "text": true,
+        "base64": "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      },
+      "status": "defined",
+      "pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "split_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "lossless_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "lossless_split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_split_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ]
+    },
+    {
+      "key": "customChunkSize",
+      "value": [
+        null
+      ],
+      "version": "v3-rabin-karp",
+      "mode": "text",
+      "settings": {
+        "chunkSplitterVersion": "v3-rabin-karp",
+        "hashAlg": "sha1",
+        "customChunkSize": [
+          null
+        ],
+        "minimumChunkSize": 20
+      },
+      "settings_json": "{\"chunkSplitterVersion\":\"v3-rabin-karp\",\"hashAlg\":\"sha1\",\"customChunkSize\":[1e309],\"minimumChunkSize\":20}",
+      "payload": {
+        "path": "coerce.svg",
+        "text": true,
+        "base64": "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      },
+      "status": "defined",
+      "pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "split_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "lossless_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "lossless_split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_split_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ]
+    },
+    {
+      "key": "customChunkSize",
+      "value": [
+        null
+      ],
+      "version": "v3-rabin-karp",
+      "mode": "binary",
+      "settings": {
+        "chunkSplitterVersion": "v3-rabin-karp",
+        "hashAlg": "sha1",
+        "customChunkSize": [
+          null
+        ],
+        "minimumChunkSize": 20
+      },
+      "settings_json": "{\"chunkSplitterVersion\":\"v3-rabin-karp\",\"hashAlg\":\"sha1\",\"customChunkSize\":[1e309],\"minimumChunkSize\":20}",
+      "payload": {
+        "path": "coerce.png",
+        "text": false,
+        "base64": "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      },
+      "status": "defined",
+      "pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ],
+      "split_pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "split_children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ],
+      "lossless_pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "lossless_children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ],
+      "lossless_split_pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "lossless_split_children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ]
+    },
+    {
+      "key": "customChunkSize",
+      "value": [
+        null
+      ],
+      "version": "v1",
+      "mode": "plain",
+      "settings": {
+        "chunkSplitterVersion": "v1",
+        "hashAlg": "sha1",
+        "customChunkSize": [
+          null
+        ],
+        "minimumChunkSize": 20
+      },
+      "settings_json": "{\"chunkSplitterVersion\":\"v1\",\"hashAlg\":\"sha1\",\"customChunkSize\":[-1e309],\"minimumChunkSize\":20}",
+      "payload": {
+        "path": "coerce.md",
+        "text": true,
+        "base64": "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      },
+      "status": "step_limit",
+      "error_class": "RangeError"
+    },
+    {
+      "key": "customChunkSize",
+      "value": [
+        null
+      ],
+      "version": "v1",
+      "mode": "text",
+      "settings": {
+        "chunkSplitterVersion": "v1",
+        "hashAlg": "sha1",
+        "customChunkSize": [
+          null
+        ],
+        "minimumChunkSize": 20
+      },
+      "settings_json": "{\"chunkSplitterVersion\":\"v1\",\"hashAlg\":\"sha1\",\"customChunkSize\":[-1e309],\"minimumChunkSize\":20}",
+      "payload": {
+        "path": "coerce.svg",
+        "text": true,
+        "base64": "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      },
+      "status": "step_limit",
+      "error_class": "RangeError"
+    },
+    {
+      "key": "customChunkSize",
+      "value": [
+        null
+      ],
+      "version": "v1",
+      "mode": "binary",
+      "settings": {
+        "chunkSplitterVersion": "v1",
+        "hashAlg": "sha1",
+        "customChunkSize": [
+          null
+        ],
+        "minimumChunkSize": 20
+      },
+      "settings_json": "{\"chunkSplitterVersion\":\"v1\",\"hashAlg\":\"sha1\",\"customChunkSize\":[-1e309],\"minimumChunkSize\":20}",
+      "payload": {
+        "path": "coerce.png",
+        "text": false,
+        "base64": "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      },
+      "status": "step_limit",
+      "error_class": "RangeError"
+    },
+    {
+      "key": "customChunkSize",
+      "value": [
+        null
+      ],
+      "version": "v2",
+      "mode": "plain",
+      "settings": {
+        "chunkSplitterVersion": "v2",
+        "hashAlg": "sha1",
+        "customChunkSize": [
+          null
+        ],
+        "minimumChunkSize": 20
+      },
+      "settings_json": "{\"chunkSplitterVersion\":\"v2\",\"hashAlg\":\"sha1\",\"customChunkSize\":[-1e309],\"minimumChunkSize\":20}",
+      "payload": {
+        "path": "coerce.md",
+        "text": true,
+        "base64": "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      },
+      "status": "time_limit"
+    },
+    {
+      "key": "customChunkSize",
+      "value": [
+        null
+      ],
+      "version": "v2",
+      "mode": "text",
+      "settings": {
+        "chunkSplitterVersion": "v2",
+        "hashAlg": "sha1",
+        "customChunkSize": [
+          null
+        ],
+        "minimumChunkSize": 20
+      },
+      "settings_json": "{\"chunkSplitterVersion\":\"v2\",\"hashAlg\":\"sha1\",\"customChunkSize\":[-1e309],\"minimumChunkSize\":20}",
+      "payload": {
+        "path": "coerce.svg",
+        "text": true,
+        "base64": "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      },
+      "status": "time_limit"
+    },
+    {
+      "key": "customChunkSize",
+      "value": [
+        null
+      ],
+      "version": "v2",
+      "mode": "binary",
+      "settings": {
+        "chunkSplitterVersion": "v2",
+        "hashAlg": "sha1",
+        "customChunkSize": [
+          null
+        ],
+        "minimumChunkSize": 20
+      },
+      "settings_json": "{\"chunkSplitterVersion\":\"v2\",\"hashAlg\":\"sha1\",\"customChunkSize\":[-1e309],\"minimumChunkSize\":20}",
+      "payload": {
+        "path": "coerce.png",
+        "text": false,
+        "base64": "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      },
+      "status": "step_limit",
+      "error_class": "RangeError"
+    },
+    {
+      "key": "customChunkSize",
+      "value": [
+        null
+      ],
+      "version": "v2-segmenter",
+      "mode": "plain",
+      "settings": {
+        "chunkSplitterVersion": "v2-segmenter",
+        "hashAlg": "sha1",
+        "customChunkSize": [
+          null
+        ],
+        "minimumChunkSize": 20
+      },
+      "settings_json": "{\"chunkSplitterVersion\":\"v2-segmenter\",\"hashAlg\":\"sha1\",\"customChunkSize\":[-1e309],\"minimumChunkSize\":20}",
+      "payload": {
+        "path": "coerce.md",
+        "text": true,
+        "base64": "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      },
+      "status": "time_limit"
+    },
+    {
+      "key": "customChunkSize",
+      "value": [
+        null
+      ],
+      "version": "v2-segmenter",
+      "mode": "text",
+      "settings": {
+        "chunkSplitterVersion": "v2-segmenter",
+        "hashAlg": "sha1",
+        "customChunkSize": [
+          null
+        ],
+        "minimumChunkSize": 20
+      },
+      "settings_json": "{\"chunkSplitterVersion\":\"v2-segmenter\",\"hashAlg\":\"sha1\",\"customChunkSize\":[-1e309],\"minimumChunkSize\":20}",
+      "payload": {
+        "path": "coerce.svg",
+        "text": true,
+        "base64": "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      },
+      "status": "time_limit"
+    },
+    {
+      "key": "customChunkSize",
+      "value": [
+        null
+      ],
+      "version": "v2-segmenter",
+      "mode": "binary",
+      "settings": {
+        "chunkSplitterVersion": "v2-segmenter",
+        "hashAlg": "sha1",
+        "customChunkSize": [
+          null
+        ],
+        "minimumChunkSize": 20
+      },
+      "settings_json": "{\"chunkSplitterVersion\":\"v2-segmenter\",\"hashAlg\":\"sha1\",\"customChunkSize\":[-1e309],\"minimumChunkSize\":20}",
+      "payload": {
+        "path": "coerce.png",
+        "text": false,
+        "base64": "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      },
+      "status": "step_limit",
+      "error_class": "RangeError"
+    },
+    {
+      "key": "customChunkSize",
+      "value": [
+        null
+      ],
+      "version": "v3-rabin-karp",
+      "mode": "plain",
+      "settings": {
+        "chunkSplitterVersion": "v3-rabin-karp",
+        "hashAlg": "sha1",
+        "customChunkSize": [
+          null
+        ],
+        "minimumChunkSize": 20
+      },
+      "settings_json": "{\"chunkSplitterVersion\":\"v3-rabin-karp\",\"hashAlg\":\"sha1\",\"customChunkSize\":[-1e309],\"minimumChunkSize\":20}",
+      "payload": {
+        "path": "coerce.md",
+        "text": true,
+        "base64": "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      },
+      "status": "defined",
+      "pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "split_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "lossless_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "lossless_split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_split_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ]
+    },
+    {
+      "key": "customChunkSize",
+      "value": [
+        null
+      ],
+      "version": "v3-rabin-karp",
+      "mode": "text",
+      "settings": {
+        "chunkSplitterVersion": "v3-rabin-karp",
+        "hashAlg": "sha1",
+        "customChunkSize": [
+          null
+        ],
+        "minimumChunkSize": 20
+      },
+      "settings_json": "{\"chunkSplitterVersion\":\"v3-rabin-karp\",\"hashAlg\":\"sha1\",\"customChunkSize\":[-1e309],\"minimumChunkSize\":20}",
+      "payload": {
+        "path": "coerce.svg",
+        "text": true,
+        "base64": "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      },
+      "status": "defined",
+      "pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "split_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "lossless_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "lossless_split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_split_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ]
+    },
+    {
+      "key": "customChunkSize",
+      "value": [
+        null
+      ],
+      "version": "v3-rabin-karp",
+      "mode": "binary",
+      "settings": {
+        "chunkSplitterVersion": "v3-rabin-karp",
+        "hashAlg": "sha1",
+        "customChunkSize": [
+          null
+        ],
+        "minimumChunkSize": 20
+      },
+      "settings_json": "{\"chunkSplitterVersion\":\"v3-rabin-karp\",\"hashAlg\":\"sha1\",\"customChunkSize\":[-1e309],\"minimumChunkSize\":20}",
+      "payload": {
+        "path": "coerce.png",
+        "text": false,
+        "base64": "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      },
+      "status": "defined",
+      "pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ],
+      "split_pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "split_children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ],
+      "lossless_pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "lossless_children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ],
+      "lossless_split_pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "lossless_split_children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ]
+    },
+    {
+      "key": "minimumChunkSize",
+      "value": [
+        null
+      ],
+      "version": "v1",
+      "mode": "plain",
+      "settings": {
+        "chunkSplitterVersion": "v1",
+        "hashAlg": "sha1",
+        "customChunkSize": 0,
+        "minimumChunkSize": [
+          null
+        ]
+      },
+      "settings_json": "{\"chunkSplitterVersion\":\"v1\",\"hashAlg\":\"sha1\",\"customChunkSize\":0,\"minimumChunkSize\":[1e309]}",
+      "payload": {
+        "path": "coerce.md",
+        "text": true,
+        "base64": "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      },
+      "status": "defined",
+      "pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "split_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "lossless_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "lossless_split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_split_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ]
+    },
+    {
+      "key": "minimumChunkSize",
+      "value": [
+        null
+      ],
+      "version": "v1",
+      "mode": "text",
+      "settings": {
+        "chunkSplitterVersion": "v1",
+        "hashAlg": "sha1",
+        "customChunkSize": 0,
+        "minimumChunkSize": [
+          null
+        ]
+      },
+      "settings_json": "{\"chunkSplitterVersion\":\"v1\",\"hashAlg\":\"sha1\",\"customChunkSize\":0,\"minimumChunkSize\":[1e309]}",
+      "payload": {
+        "path": "coerce.svg",
+        "text": true,
+        "base64": "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      },
+      "status": "defined",
+      "pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "split_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "lossless_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "lossless_split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_split_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ]
+    },
+    {
+      "key": "minimumChunkSize",
+      "value": [
+        null
+      ],
+      "version": "v1",
+      "mode": "binary",
+      "settings": {
+        "chunkSplitterVersion": "v1",
+        "hashAlg": "sha1",
+        "customChunkSize": 0,
+        "minimumChunkSize": [
+          null
+        ]
+      },
+      "settings_json": "{\"chunkSplitterVersion\":\"v1\",\"hashAlg\":\"sha1\",\"customChunkSize\":0,\"minimumChunkSize\":[1e309]}",
+      "payload": {
+        "path": "coerce.png",
+        "text": false,
+        "base64": "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      },
+      "status": "defined",
+      "pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ],
+      "split_pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "split_children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ],
+      "lossless_pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "lossless_children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ],
+      "lossless_split_pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "lossless_split_children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ]
+    },
+    {
+      "key": "minimumChunkSize",
+      "value": [
+        null
+      ],
+      "version": "v2",
+      "mode": "plain",
+      "settings": {
+        "chunkSplitterVersion": "v2",
+        "hashAlg": "sha1",
+        "customChunkSize": 0,
+        "minimumChunkSize": [
+          null
+        ]
+      },
+      "settings_json": "{\"chunkSplitterVersion\":\"v2\",\"hashAlg\":\"sha1\",\"customChunkSize\":0,\"minimumChunkSize\":[1e309]}",
+      "payload": {
+        "path": "coerce.md",
+        "text": true,
+        "base64": "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      },
+      "status": "defined",
+      "pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "split_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "lossless_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "lossless_split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_split_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ]
+    },
+    {
+      "key": "minimumChunkSize",
+      "value": [
+        null
+      ],
+      "version": "v2",
+      "mode": "text",
+      "settings": {
+        "chunkSplitterVersion": "v2",
+        "hashAlg": "sha1",
+        "customChunkSize": 0,
+        "minimumChunkSize": [
+          null
+        ]
+      },
+      "settings_json": "{\"chunkSplitterVersion\":\"v2\",\"hashAlg\":\"sha1\",\"customChunkSize\":0,\"minimumChunkSize\":[1e309]}",
+      "payload": {
+        "path": "coerce.svg",
+        "text": true,
+        "base64": "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      },
+      "status": "defined",
+      "pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "split_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "lossless_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "lossless_split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_split_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ]
+    },
+    {
+      "key": "minimumChunkSize",
+      "value": [
+        null
+      ],
+      "version": "v2",
+      "mode": "binary",
+      "settings": {
+        "chunkSplitterVersion": "v2",
+        "hashAlg": "sha1",
+        "customChunkSize": 0,
+        "minimumChunkSize": [
+          null
+        ]
+      },
+      "settings_json": "{\"chunkSplitterVersion\":\"v2\",\"hashAlg\":\"sha1\",\"customChunkSize\":0,\"minimumChunkSize\":[1e309]}",
+      "payload": {
+        "path": "coerce.png",
+        "text": false,
+        "base64": "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      },
+      "status": "defined",
+      "pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ],
+      "split_pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "split_children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ],
+      "lossless_pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "lossless_children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ],
+      "lossless_split_pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "lossless_split_children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ]
+    },
+    {
+      "key": "minimumChunkSize",
+      "value": [
+        null
+      ],
+      "version": "v2-segmenter",
+      "mode": "plain",
+      "settings": {
+        "chunkSplitterVersion": "v2-segmenter",
+        "hashAlg": "sha1",
+        "customChunkSize": 0,
+        "minimumChunkSize": [
+          null
+        ]
+      },
+      "settings_json": "{\"chunkSplitterVersion\":\"v2-segmenter\",\"hashAlg\":\"sha1\",\"customChunkSize\":0,\"minimumChunkSize\":[1e309]}",
+      "payload": {
+        "path": "coerce.md",
+        "text": true,
+        "base64": "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      },
+      "status": "defined",
+      "pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "split_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "lossless_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "lossless_split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_split_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ]
+    },
+    {
+      "key": "minimumChunkSize",
+      "value": [
+        null
+      ],
+      "version": "v2-segmenter",
+      "mode": "text",
+      "settings": {
+        "chunkSplitterVersion": "v2-segmenter",
+        "hashAlg": "sha1",
+        "customChunkSize": 0,
+        "minimumChunkSize": [
+          null
+        ]
+      },
+      "settings_json": "{\"chunkSplitterVersion\":\"v2-segmenter\",\"hashAlg\":\"sha1\",\"customChunkSize\":0,\"minimumChunkSize\":[1e309]}",
+      "payload": {
+        "path": "coerce.svg",
+        "text": true,
+        "base64": "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      },
+      "status": "defined",
+      "pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "split_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "lossless_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "lossless_split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_split_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ]
+    },
+    {
+      "key": "minimumChunkSize",
+      "value": [
+        null
+      ],
+      "version": "v2-segmenter",
+      "mode": "binary",
+      "settings": {
+        "chunkSplitterVersion": "v2-segmenter",
+        "hashAlg": "sha1",
+        "customChunkSize": 0,
+        "minimumChunkSize": [
+          null
+        ]
+      },
+      "settings_json": "{\"chunkSplitterVersion\":\"v2-segmenter\",\"hashAlg\":\"sha1\",\"customChunkSize\":0,\"minimumChunkSize\":[1e309]}",
+      "payload": {
+        "path": "coerce.png",
+        "text": false,
+        "base64": "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      },
+      "status": "defined",
+      "pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ],
+      "split_pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "split_children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ],
+      "lossless_pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "lossless_children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ],
+      "lossless_split_pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "lossless_split_children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ]
+    },
+    {
+      "key": "minimumChunkSize",
+      "value": [
+        null
+      ],
+      "version": "v3-rabin-karp",
+      "mode": "plain",
+      "settings": {
+        "chunkSplitterVersion": "v3-rabin-karp",
+        "hashAlg": "sha1",
+        "customChunkSize": 0,
+        "minimumChunkSize": [
+          null
+        ]
+      },
+      "settings_json": "{\"chunkSplitterVersion\":\"v3-rabin-karp\",\"hashAlg\":\"sha1\",\"customChunkSize\":0,\"minimumChunkSize\":[1e309]}",
+      "payload": {
+        "path": "coerce.md",
+        "text": true,
+        "base64": "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      },
+      "status": "defined",
+      "pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "split_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "lossless_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "lossless_split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_split_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ]
+    },
+    {
+      "key": "minimumChunkSize",
+      "value": [
+        null
+      ],
+      "version": "v3-rabin-karp",
+      "mode": "text",
+      "settings": {
+        "chunkSplitterVersion": "v3-rabin-karp",
+        "hashAlg": "sha1",
+        "customChunkSize": 0,
+        "minimumChunkSize": [
+          null
+        ]
+      },
+      "settings_json": "{\"chunkSplitterVersion\":\"v3-rabin-karp\",\"hashAlg\":\"sha1\",\"customChunkSize\":0,\"minimumChunkSize\":[1e309]}",
+      "payload": {
+        "path": "coerce.svg",
+        "text": true,
+        "base64": "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      },
+      "status": "defined",
+      "pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "split_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "lossless_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "lossless_split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_split_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ]
+    },
+    {
+      "key": "minimumChunkSize",
+      "value": [
+        null
+      ],
+      "version": "v3-rabin-karp",
+      "mode": "binary",
+      "settings": {
+        "chunkSplitterVersion": "v3-rabin-karp",
+        "hashAlg": "sha1",
+        "customChunkSize": 0,
+        "minimumChunkSize": [
+          null
+        ]
+      },
+      "settings_json": "{\"chunkSplitterVersion\":\"v3-rabin-karp\",\"hashAlg\":\"sha1\",\"customChunkSize\":0,\"minimumChunkSize\":[1e309]}",
+      "payload": {
+        "path": "coerce.png",
+        "text": false,
+        "base64": "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      },
+      "status": "defined",
+      "pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ],
+      "split_pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "split_children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ],
+      "lossless_pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "lossless_children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ],
+      "lossless_split_pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "lossless_split_children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ]
+    },
+    {
+      "key": "minimumChunkSize",
+      "value": [
+        null
+      ],
+      "version": "v1",
+      "mode": "plain",
+      "settings": {
+        "chunkSplitterVersion": "v1",
+        "hashAlg": "sha1",
+        "customChunkSize": 0,
+        "minimumChunkSize": [
+          null
+        ]
+      },
+      "settings_json": "{\"chunkSplitterVersion\":\"v1\",\"hashAlg\":\"sha1\",\"customChunkSize\":0,\"minimumChunkSize\":[-1e309]}",
+      "payload": {
+        "path": "coerce.md",
+        "text": true,
+        "base64": "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      },
+      "status": "defined",
+      "pieces": [
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n"
+      ],
+      "children": [
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M="
+      ],
+      "split_pieces": [
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        ""
+      ],
+      "split_children": [
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:D+/SfK1JFZRgSfA1K+3A+lnWAeI="
+      ],
+      "lossless_pieces": [
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n"
+      ],
+      "lossless_children": [
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M="
+      ],
+      "lossless_split_pieces": [
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        ""
+      ],
+      "lossless_split_children": [
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:D+/SfK1JFZRgSfA1K+3A+lnWAeI="
+      ]
+    },
+    {
+      "key": "minimumChunkSize",
+      "value": [
+        null
+      ],
+      "version": "v1",
+      "mode": "text",
+      "settings": {
+        "chunkSplitterVersion": "v1",
+        "hashAlg": "sha1",
+        "customChunkSize": 0,
+        "minimumChunkSize": [
+          null
+        ]
+      },
+      "settings_json": "{\"chunkSplitterVersion\":\"v1\",\"hashAlg\":\"sha1\",\"customChunkSize\":0,\"minimumChunkSize\":[-1e309]}",
+      "payload": {
+        "path": "coerce.svg",
+        "text": true,
+        "base64": "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      },
+      "status": "defined",
+      "pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "split_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "lossless_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "lossless_split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_split_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ]
+    },
+    {
+      "key": "minimumChunkSize",
+      "value": [
+        null
+      ],
+      "version": "v1",
+      "mode": "binary",
+      "settings": {
+        "chunkSplitterVersion": "v1",
+        "hashAlg": "sha1",
+        "customChunkSize": 0,
+        "minimumChunkSize": [
+          null
+        ]
+      },
+      "settings_json": "{\"chunkSplitterVersion\":\"v1\",\"hashAlg\":\"sha1\",\"customChunkSize\":0,\"minimumChunkSize\":[-1e309]}",
+      "payload": {
+        "path": "coerce.png",
+        "text": false,
+        "base64": "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      },
+      "status": "defined",
+      "pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ],
+      "split_pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "split_children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ],
+      "lossless_pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "lossless_children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ],
+      "lossless_split_pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "lossless_split_children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ]
+    },
+    {
+      "key": "minimumChunkSize",
+      "value": [
+        null
+      ],
+      "version": "v2",
+      "mode": "plain",
+      "settings": {
+        "chunkSplitterVersion": "v2",
+        "hashAlg": "sha1",
+        "customChunkSize": 0,
+        "minimumChunkSize": [
+          null
+        ]
+      },
+      "settings_json": "{\"chunkSplitterVersion\":\"v2\",\"hashAlg\":\"sha1\",\"customChunkSize\":0,\"minimumChunkSize\":[-1e309]}",
+      "payload": {
+        "path": "coerce.md",
+        "text": true,
+        "base64": "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      },
+      "status": "defined",
+      "pieces": [
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n"
+      ],
+      "children": [
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M="
+      ],
+      "split_pieces": [
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        ""
+      ],
+      "split_children": [
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:D+/SfK1JFZRgSfA1K+3A+lnWAeI="
+      ],
+      "lossless_pieces": [
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n"
+      ],
+      "lossless_children": [
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M="
+      ],
+      "lossless_split_pieces": [
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        ""
+      ],
+      "lossless_split_children": [
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:D+/SfK1JFZRgSfA1K+3A+lnWAeI="
+      ]
+    },
+    {
+      "key": "minimumChunkSize",
+      "value": [
+        null
+      ],
+      "version": "v2",
+      "mode": "text",
+      "settings": {
+        "chunkSplitterVersion": "v2",
+        "hashAlg": "sha1",
+        "customChunkSize": 0,
+        "minimumChunkSize": [
+          null
+        ]
+      },
+      "settings_json": "{\"chunkSplitterVersion\":\"v2\",\"hashAlg\":\"sha1\",\"customChunkSize\":0,\"minimumChunkSize\":[-1e309]}",
+      "payload": {
+        "path": "coerce.svg",
+        "text": true,
+        "base64": "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      },
+      "status": "defined",
+      "pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "split_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "lossless_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "lossless_split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_split_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ]
+    },
+    {
+      "key": "minimumChunkSize",
+      "value": [
+        null
+      ],
+      "version": "v2",
+      "mode": "binary",
+      "settings": {
+        "chunkSplitterVersion": "v2",
+        "hashAlg": "sha1",
+        "customChunkSize": 0,
+        "minimumChunkSize": [
+          null
+        ]
+      },
+      "settings_json": "{\"chunkSplitterVersion\":\"v2\",\"hashAlg\":\"sha1\",\"customChunkSize\":0,\"minimumChunkSize\":[-1e309]}",
+      "payload": {
+        "path": "coerce.png",
+        "text": false,
+        "base64": "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      },
+      "status": "defined",
+      "pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ],
+      "split_pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "split_children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ],
+      "lossless_pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "lossless_children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ],
+      "lossless_split_pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "lossless_split_children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ]
+    },
+    {
+      "key": "minimumChunkSize",
+      "value": [
+        null
+      ],
+      "version": "v2-segmenter",
+      "mode": "plain",
+      "settings": {
+        "chunkSplitterVersion": "v2-segmenter",
+        "hashAlg": "sha1",
+        "customChunkSize": 0,
+        "minimumChunkSize": [
+          null
+        ]
+      },
+      "settings_json": "{\"chunkSplitterVersion\":\"v2-segmenter\",\"hashAlg\":\"sha1\",\"customChunkSize\":0,\"minimumChunkSize\":[-1e309]}",
+      "payload": {
+        "path": "coerce.md",
+        "text": true,
+        "base64": "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      },
+      "status": "defined",
+      "pieces": [
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n"
+      ],
+      "children": [
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M="
+      ],
+      "split_pieces": [
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        ""
+      ],
+      "split_children": [
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:D+/SfK1JFZRgSfA1K+3A+lnWAeI="
+      ],
+      "lossless_pieces": [
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n"
+      ],
+      "lossless_children": [
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M="
+      ],
+      "lossless_split_pieces": [
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        "AAAA\n",
+        ""
+      ],
+      "lossless_split_children": [
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:uviRf9ZpXnPQmiqR8mYYfPyhd2M=",
+        "h:D+/SfK1JFZRgSfA1K+3A+lnWAeI="
+      ]
+    },
+    {
+      "key": "minimumChunkSize",
+      "value": [
+        null
+      ],
+      "version": "v2-segmenter",
+      "mode": "text",
+      "settings": {
+        "chunkSplitterVersion": "v2-segmenter",
+        "hashAlg": "sha1",
+        "customChunkSize": 0,
+        "minimumChunkSize": [
+          null
+        ]
+      },
+      "settings_json": "{\"chunkSplitterVersion\":\"v2-segmenter\",\"hashAlg\":\"sha1\",\"customChunkSize\":0,\"minimumChunkSize\":[-1e309]}",
+      "payload": {
+        "path": "coerce.svg",
+        "text": true,
+        "base64": "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      },
+      "status": "defined",
+      "pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "split_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "lossless_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "lossless_split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_split_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ]
+    },
+    {
+      "key": "minimumChunkSize",
+      "value": [
+        null
+      ],
+      "version": "v2-segmenter",
+      "mode": "binary",
+      "settings": {
+        "chunkSplitterVersion": "v2-segmenter",
+        "hashAlg": "sha1",
+        "customChunkSize": 0,
+        "minimumChunkSize": [
+          null
+        ]
+      },
+      "settings_json": "{\"chunkSplitterVersion\":\"v2-segmenter\",\"hashAlg\":\"sha1\",\"customChunkSize\":0,\"minimumChunkSize\":[-1e309]}",
+      "payload": {
+        "path": "coerce.png",
+        "text": false,
+        "base64": "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      },
+      "status": "defined",
+      "pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ],
+      "split_pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "split_children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ],
+      "lossless_pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "lossless_children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ],
+      "lossless_split_pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "lossless_split_children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ]
+    },
+    {
+      "key": "minimumChunkSize",
+      "value": [
+        null
+      ],
+      "version": "v3-rabin-karp",
+      "mode": "plain",
+      "settings": {
+        "chunkSplitterVersion": "v3-rabin-karp",
+        "hashAlg": "sha1",
+        "customChunkSize": 0,
+        "minimumChunkSize": [
+          null
+        ]
+      },
+      "settings_json": "{\"chunkSplitterVersion\":\"v3-rabin-karp\",\"hashAlg\":\"sha1\",\"customChunkSize\":0,\"minimumChunkSize\":[-1e309]}",
+      "payload": {
+        "path": "coerce.md",
+        "text": true,
+        "base64": "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      },
+      "status": "defined",
+      "pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "split_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "lossless_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "lossless_split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_split_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ]
+    },
+    {
+      "key": "minimumChunkSize",
+      "value": [
+        null
+      ],
+      "version": "v3-rabin-karp",
+      "mode": "text",
+      "settings": {
+        "chunkSplitterVersion": "v3-rabin-karp",
+        "hashAlg": "sha1",
+        "customChunkSize": 0,
+        "minimumChunkSize": [
+          null
+        ]
+      },
+      "settings_json": "{\"chunkSplitterVersion\":\"v3-rabin-karp\",\"hashAlg\":\"sha1\",\"customChunkSize\":0,\"minimumChunkSize\":[-1e309]}",
+      "payload": {
+        "path": "coerce.svg",
+        "text": true,
+        "base64": "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      },
+      "status": "defined",
+      "pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "split_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "lossless_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ],
+      "lossless_split_pieces": [
+        "AAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\nAAAA\n"
+      ],
+      "lossless_split_children": [
+        "h:ThCIA2Fd+jijz7jzlNt9MlE7YRA="
+      ]
+    },
+    {
+      "key": "minimumChunkSize",
+      "value": [
+        null
+      ],
+      "version": "v3-rabin-karp",
+      "mode": "binary",
+      "settings": {
+        "chunkSplitterVersion": "v3-rabin-karp",
+        "hashAlg": "sha1",
+        "customChunkSize": 0,
+        "minimumChunkSize": [
+          null
+        ]
+      },
+      "settings_json": "{\"chunkSplitterVersion\":\"v3-rabin-karp\",\"hashAlg\":\"sha1\",\"customChunkSize\":0,\"minimumChunkSize\":[-1e309]}",
+      "payload": {
+        "path": "coerce.png",
+        "text": false,
+        "base64": "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      },
+      "status": "defined",
+      "pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ],
+      "split_pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "split_children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ],
+      "lossless_pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "lossless_children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ],
+      "lossless_split_pieces": [
+        "QUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCkFBQUEKQUFBQQpBQUFBCg=="
+      ],
+      "lossless_split_children": [
+        "h:PowXx0T1ITl9fSZXbH/v35zhM+c="
+      ]
+    }
+  ]
+}

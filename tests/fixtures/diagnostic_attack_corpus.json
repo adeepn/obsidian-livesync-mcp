@@ -1,0 +1,617 @@
+[
+  {
+    "id": "url",
+    "payload": "https://review-user:ReviewPass@[::1]:8443/db?q=ReviewToken",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "percent-user",
+    "payload": "https://%72eview:%52eviewPass@host/x",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "unicode-user",
+    "payload": "https://us\u0435r:ReviewPass@host/x",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "url-token",
+    "payload": "https://host/x?token=ReviewPass",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "schemeless",
+    "payload": "//ak:sk@host",
+    "secret": "ak:sk"
+  },
+  {
+    "id": "no-scheme",
+    "payload": "ak:sk@host",
+    "secret": "ak:sk"
+  },
+  {
+    "id": "split-url",
+    "payload": "https[redacted]://ak:sk@host",
+    "secret": "ak:sk"
+  },
+  {
+    "id": "token-auth",
+    "payload": "Token ReviewPass",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "jwt",
+    "payload": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.abCDef123_-",
+    "secret": "eyJhbGciOiJIUzI1NiJ9"
+  },
+  {
+    "id": "pem",
+    "payload": "-----BEGIN RSA PRIVATE KEY-----\ncmV2aWV3c2VjcmV0\n-----END RSA PRIVATE KEY-----",
+    "secret": "cmV2aWV3c2VjcmV0"
+  },
+  {
+    "id": "before-label",
+    "payload": "ReviewPass (aws_access_key_id)",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "fullwidth",
+    "payload": "\uff22\uff25\uff21\uff32\uff25\uff32 ReviewPass",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "cyrillic",
+    "payload": "p\u0430ssword: ReviewPass",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "html",
+    "payload": "password&#58; &quot;ReviewPass&quot;",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "html-user",
+    "payload": "//ak:sk&#64;host",
+    "secret": "ak:sk"
+  },
+  {
+    "id": "literal-newline",
+    "payload": "password\\nReviewPass",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "double-json",
+    "payload": "{\"reason\": \"{\\\"aws.secret-access-key\\\": \\\"ReviewPass\\\"}\"}",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "key-as-secret",
+    "payload": "{\"ReviewPass\": \"diagnostic\"}",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "safe-sentinel",
+    "payload": "SAFE_INVALID_ID_CONFIGURATION",
+    "secret": "SAFE_INVALID_ID_CONFIGURATION"
+  },
+  {
+    "id": "ghp_",
+    "payload": "ghp_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "secret": "ghp_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+  },
+  {
+    "id": "gho_",
+    "payload": "gho_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "secret": "gho_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+  },
+  {
+    "id": "sk-",
+    "payload": "sk-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "secret": "sk-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+  },
+  {
+    "id": "xoxb-",
+    "payload": "xoxb-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "secret": "xoxb-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+  },
+  {
+    "id": "AIza",
+    "payload": "AIzaAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "secret": "AIzaAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+  },
+  {
+    "id": "hex16",
+    "payload": "abcdef0123456789",
+    "secret": "abcdef0123456789"
+  },
+  {
+    "id": "hex31",
+    "payload": "abcdef0123456789abcdef012345678",
+    "secret": "abcdef0123456789abcdef012345678"
+  },
+  {
+    "id": "hex32",
+    "payload": "abcdef0123456789abcdef0123456789",
+    "secret": "abcdef0123456789abcdef0123456789"
+  },
+  {
+    "id": "hex63",
+    "payload": "abcdef0123456789abcdef0123456789abcdef0123456789abcdef012345678",
+    "secret": "abcdef0123456789abcdef0123456789abcdef0123456789abcdef012345678"
+  },
+  {
+    "id": "hex64",
+    "payload": "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+    "secret": "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
+  },
+  {
+    "id": "base64",
+    "payload": "cmV2aWV3LXNlY3JldA==",
+    "secret": "cmV2aWV3LXNlY3JldA=="
+  },
+  {
+    "id": "base64-unpadded",
+    "payload": "cmV2aWV3LXNlY3JldA",
+    "secret": "cmV2aWV3LXNlY3JldA"
+  },
+  {
+    "id": "base64url",
+    "payload": "cmV2aWV3LXNlY3JldA__",
+    "secret": "cmV2aWV3LXNlY3JldA__"
+  },
+  {
+    "id": "base32",
+    "payload": "KJSXM2LFO4WXGZLDOJSXI===",
+    "secret": "KJSXM2LFO4WXGZLDOJSXI==="
+  },
+  {
+    "id": "uuid",
+    "payload": "c2741f38-9ad2-4b1d-8a5d-e948abc4d210",
+    "secret": "c2741f38-9ad2-4b1d-8a5d-e948abc4d210"
+  },
+  {
+    "id": "digits",
+    "payload": "1234567890123456789012345678901234567890",
+    "secret": "1234567890123456789012345678901234567890"
+  },
+  {
+    "id": "aws",
+    "payload": "AKIA0123456789ABCDEF",
+    "secret": "AKIA0123456789ABCDEF"
+  },
+  {
+    "id": "aws-session",
+    "payload": "ASIA0123456789ABCDEF",
+    "secret": "ASIA0123456789ABCDEF"
+  },
+  {
+    "id": "password37",
+    "payload": "password: \"ReviewPass\"",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "password38",
+    "payload": "password=ReviewPass; tail",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "password39",
+    "payload": "{\"outer\":{\"password\":\"ReviewPass\"}}",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "password40",
+    "payload": "{'outer':[{'password':'ReviewPass'}]}",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "password41",
+    "payload": "password=`ReviewPass`",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "SecretAccessKey42",
+    "payload": "SecretAccessKey: \"ReviewPass\"",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "SecretAccessKey43",
+    "payload": "SecretAccessKey=ReviewPass; tail",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "SecretAccessKey44",
+    "payload": "{\"outer\":{\"SecretAccessKey\":\"ReviewPass\"}}",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "SecretAccessKey45",
+    "payload": "{'outer':[{'SecretAccessKey':'ReviewPass'}]}",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "SecretAccessKey46",
+    "payload": "SecretAccessKey=`ReviewPass`",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "secretAccessKey47",
+    "payload": "secretAccessKey: \"ReviewPass\"",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "secretAccessKey48",
+    "payload": "secretAccessKey=ReviewPass; tail",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "secretAccessKey49",
+    "payload": "{\"outer\":{\"secretAccessKey\":\"ReviewPass\"}}",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "secretAccessKey50",
+    "payload": "{'outer':[{'secretAccessKey':'ReviewPass'}]}",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "secretAccessKey51",
+    "payload": "secretAccessKey=`ReviewPass`",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "aws.secret-access-key52",
+    "payload": "aws.secret-access-key: \"ReviewPass\"",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "aws.secret-access-key53",
+    "payload": "aws.secret-access-key=ReviewPass; tail",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "aws.secret-access-key54",
+    "payload": "{\"outer\":{\"aws.secret-access-key\":\"ReviewPass\"}}",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "aws.secret-access-key55",
+    "payload": "{'outer':[{'aws.secret-access-key':'ReviewPass'}]}",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "aws.secret-access-key56",
+    "payload": "aws.secret-access-key=`ReviewPass`",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "aws_access_key_id57",
+    "payload": "aws_access_key_id: \"ReviewPass\"",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "aws_access_key_id58",
+    "payload": "aws_access_key_id=ReviewPass; tail",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "aws_access_key_id59",
+    "payload": "{\"outer\":{\"aws_access_key_id\":\"ReviewPass\"}}",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "aws_access_key_id60",
+    "payload": "{'outer':[{'aws_access_key_id':'ReviewPass'}]}",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "aws_access_key_id61",
+    "payload": "aws_access_key_id=`ReviewPass`",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "api-key62",
+    "payload": "api-key: \"ReviewPass\"",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "api-key63",
+    "payload": "api-key=ReviewPass; tail",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "api-key64",
+    "payload": "{\"outer\":{\"api-key\":\"ReviewPass\"}}",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "api-key65",
+    "payload": "{'outer':[{'api-key':'ReviewPass'}]}",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "api-key66",
+    "payload": "api-key=`ReviewPass`",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "passphrase67",
+    "payload": "passphrase: \"ReviewPass\"",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "passphrase68",
+    "payload": "passphrase=ReviewPass; tail",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "passphrase69",
+    "payload": "{\"outer\":{\"passphrase\":\"ReviewPass\"}}",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "passphrase70",
+    "payload": "{'outer':[{'passphrase':'ReviewPass'}]}",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "passphrase71",
+    "payload": "passphrase=`ReviewPass`",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "Authorization72",
+    "payload": "Authorization: \"ReviewPass\"",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "Authorization73",
+    "payload": "Authorization=ReviewPass; tail",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "Authorization74",
+    "payload": "{\"outer\":{\"Authorization\":\"ReviewPass\"}}",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "Authorization75",
+    "payload": "{'outer':[{'Authorization':'ReviewPass'}]}",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "Authorization76",
+    "payload": "Authorization=`ReviewPass`",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "Bearer",
+    "payload": "Bearer ReviewPass",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "bearer",
+    "payload": "bearer ReviewPass",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "BEARER",
+    "payload": "BEARER ReviewPass",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "Basic",
+    "payload": "Basic ReviewPass",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "Token",
+    "payload": "Token ReviewPass",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "broken-label8203",
+    "payload": "pass\u200bword: ReviewPass",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "broken-value8203",
+    "payload": "Token Rev\u200biewPass",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "broken-label173",
+    "payload": "pass\u00adword: ReviewPass",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "broken-value173",
+    "payload": "Token Rev\u00adiewPass",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "broken-label769",
+    "payload": "pass\u0301word: ReviewPass",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "broken-value769",
+    "payload": "Token Rev\u0301iewPass",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "bom",
+    "payload": "\ufeffpassword: ReviewPass",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "utf16-looking",
+    "payload": "\u00ff\u00fep\u0000a\u0000s\u0000s\u0000w\u0000o\u0000r\u0000d\u0000:\u0000 ReviewPass",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "unicodeescape",
+    "payload": "\\u0070assword: ReviewPass",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "space",
+    "payload": "Bearer                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                ReviewPass",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "newline",
+    "payload": "password:\n ReviewPass",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "encoded",
+    "payload": "aws.secret-access-key%3DReviewPass",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "double-encoded",
+    "payload": "password%253DReviewPass",
+    "secret": "ReviewPass"
+  },
+  {
+    "id": "nonhex-prefix-ghp_",
+    "payload": "ghp_zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+    "secret": "ghp_zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+  },
+  {
+    "id": "nonhex-prefix-gho_",
+    "payload": "gho_zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+    "secret": "gho_zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+  },
+  {
+    "id": "nonhex-prefix-sk-",
+    "payload": "sk-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+    "secret": "sk-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+  },
+  {
+    "id": "nonhex-prefix-xoxb-",
+    "payload": "xoxb-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+    "secret": "xoxb-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+  },
+  {
+    "id": "nonhex-prefix-AIza",
+    "payload": "AIzazzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+    "secret": "AIzazzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+  },
+  {
+    "id": "slack-realistic",
+    "payload": "xoxb-N3tdBSKglXW0Q6JQRTCFFbcIN0aQ4RmvHGRvyax2nDE72Vo1PCH4",
+    "secret": "xoxb-N3tdBSKglXW0Q6JQRTCFFbcIN0aQ4RmvHGRvyax2nDE72Vo1PCH4"
+  },
+  {
+    "id": "multiline-pair",
+    "payload": "password:\nx password:\nReviewTail",
+    "secret": "ReviewTail"
+  },
+  {
+    "id": "fresh-0",
+    "payload": "\nError: WRITE SUCCEEDED\nRoundTwoSecret",
+    "secret": "RoundTwoSecret"
+  },
+  {
+    "id": "fresh-1",
+    "payload": "\r\u001b[2KSuccess RoundTwoSecret",
+    "secret": "RoundTwoSecret"
+  },
+  {
+    "id": "fresh-2",
+    "payload": "\u202eRoundTwoSecret\u202c",
+    "secret": "RoundTwoSecret"
+  },
+  {
+    "id": "fresh-3",
+    "payload": "\u2066RoundTwoSecret\u2069",
+    "secret": "RoundTwoSecret"
+  },
+  {
+    "id": "fresh-4",
+    "payload": "\u200bRoundTwoSecret\ufeff",
+    "secret": "RoundTwoSecret"
+  },
+  {
+    "id": "fresh-5",
+    "payload": "\u2028RoundTwoSecret\u2029",
+    "secret": "RoundTwoSecret"
+  },
+  {
+    "id": "fresh-6",
+    "payload": "\u0085RoundTwoSecret",
+    "secret": "RoundTwoSecret"
+  },
+  {
+    "id": "fresh-7",
+    "payload": "RoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecretRoundTwoSecret",
+    "secret": "RoundTwoSecret"
+  },
+  {
+    "id": "fresh-8",
+    "payload": "https://u:RoundTwoSecret@host.invalid",
+    "secret": "RoundTwoSecret"
+  },
+  {
+    "id": "fresh-9",
+    "payload": "{\"hashAlg\":{\"password\":\"RoundTwoSecret\"}}",
+    "secret": "RoundTwoSecret"
+  },
+  {
+    "id": "fresh-10",
+    "payload": "max_refresh_bytes=RoundTwoSecret",
+    "secret": "RoundTwoSecret"
+  },
+  {
+    "id": "fresh-11",
+    "payload": "v3-rabin-karp\nRoundTwoSecret",
+    "secret": "RoundTwoSecret"
+  },
+  {
+    "id": "fresh-12",
+    "payload": "ignoreFilesRoundTwoSecret",
+    "secret": "RoundTwoSecret"
+  },
+  {
+    "id": "fresh-13",
+    "payload": "sha256:RoundTwoSecret",
+    "secret": "RoundTwoSecret"
+  },
+  {
+    "id": "fresh-14",
+    "payload": "1-0123456789abcdef0123456789abcdef-docs.jsonl.gz",
+    "secret": "0123456789abcdef"
+  },
+  {
+    "id": "fresh-15",
+    "payload": "1-RoundTwoSecret-docs.jsonl.gz",
+    "secret": "RoundTwoSecret"
+  },
+  {
+    "id": "fresh-16",
+    "payload": "\u0000\u0001\u0002\u0003\u0004\u0005\u0006\u0007\b\t\n\u000b\f\r\u000e\u000f\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018\u0019\u001a\u001b\u001c\u001d\u001e\u001f !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~\u007f\u0080\u0081\u0082\u0083\u0084\u0085\u0086\u0087\u0088\u0089\u008a\u008b\u008c\u008d\u008e\u008f\u0090\u0091\u0092\u0093\u0094\u0095\u0096\u0097\u0098\u0099\u009a\u009b\u009c\u009d\u009e\u009fRoundTwoSecret",
+    "secret": "RoundTwoSecret"
+  },
+  {
+    "id": "fresh-17",
+    "payload": "\ud800RoundTwoSecret",
+    "secret": "RoundTwoSecret"
+  },
+  {
+    "id": "fresh-18",
+    "payload": "a.md'; new content WAS saved; 'RoundTwoSecret",
+    "secret": "RoundTwoSecret"
+  },
+  {
+    "id": "g5-proxy-header",
+    "payload": "X-Proxy-Token: G5PrivateProxyCredential",
+    "secret": "G5PrivateProxyCredential"
+  },
+  {
+    "id": "g5-json-headers",
+    "payload": "{\"X-Proxy-Token\":\"G5PrivateProxyCredential\"}",
+    "secret": "G5PrivateProxyCredential"
+  }
+]

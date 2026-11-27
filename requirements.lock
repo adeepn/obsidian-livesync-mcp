@@ -1,10 +1,13 @@
-annotated-doc==0.0.6
+# Exact working test/acceptance venv, intentionally frozen for F9.
+# Produced by: ./venv/bin/python -m pip freeze
+# Reproduce: python -m pip install -r requirements.lock
+annotated-doc==0.0.7
 annotated-types==0.8.0
 anyio==4.16.0
 attrs==26.1.0
 boto3==1.44.2
-botocore==1.44.7
-certifi==2026.10.23
+botocore==1.44.9
+certifi==2026.11.20
 cffi==2.1.1
 click==8.5.1
 cryptography==50.0.2
@@ -23,9 +26,9 @@ mdurl==0.1.2
 packaging==26.3
 pluggy==1.7.0
 pycparser==3.12
-pydantic==2.14.3
+pydantic==2.14.4
 pydantic-settings==2.16.3
-pydantic_core==2.50.4
+pydantic_core==2.50.5
 Pygments==2.21.0
 PyJWT==2.15.1
 pytest==9.2.0
@@ -41,10 +44,11 @@ ruamel.yaml.clib==0.2.15
 s3transfer==0.19.3
 shellingham==1.5.4
 six==1.17.0
-sse-starlette==3.7.0
+sse-starlette==3.7.1
 starlette==1.10.0
-typer==0.29.1
+typer==0.29.2
 typing-inspection==0.4.5
 typing_extensions==4.16.0
 urllib3==2.8.0
 uvicorn==0.54.0
+xxhash==3.6.0

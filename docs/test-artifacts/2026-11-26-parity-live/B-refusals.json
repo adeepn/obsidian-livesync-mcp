@@ -1,0 +1,10 @@
+{
+  "date": "2026-11-26",
+  "command": "oversize",
+  "passed": true,
+  "result": {
+    "limit_mib": 50.0,
+    "skipped": true,
+    "rename_refused": true
+  }
+}

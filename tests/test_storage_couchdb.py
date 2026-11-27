@@ -13,7 +13,6 @@ import pytest
 
 from livesync_format import ForbiddenPathError, chunk_id_for
 from storage_base import (
-    BinaryNoteError,
     ConcurrentModification,
     RenamePartialError,
     NoteExists,
@@ -112,7 +111,8 @@ async def test_startup_check_db_missing():
     message = str(excinfo.value)
     assert "couchdb.test" not in message
     assert "5984" not in message
-    assert "http" not in message.lower()
+    assert "http://" not in message.lower()
+    assert "HTTP 404" in message
     assert DATABASE not in message
 
 
@@ -153,47 +153,35 @@ async def test_startup_accepts_default_filename_and_normalization():
         await backend.startup_check()  # must not raise
 
 
-async def test_startup_rejects_case_sensitive_filenames():
-    # path2id lowercases; a vault with case-sensitive ids would collide
-    # distinct paths onto one document.
-    docs = {
-        "_local/obsydian_livesync_milestone": {
-            "tweak_values": {"PREFERRED": {"handleFilenameCaseSensitive": True}},
-        }
-    }
-    async with fake_backend(docs) as (backend, _log):
-        with pytest.raises(UnsupportedVault, match="case-sensitive"):
-            await backend.startup_check()
-
-
-async def test_startup_rejects_case_sensitive_setting_at_top_level():
-    # The milestone doc shape varies across LiveSync versions; the
-    # setting may sit at the top level instead of tweak_values.
-    docs = {
-        "_local/obsydian_livesync_milestone": {
-            "handleFilenameCaseSensitive": True,
-        }
-    }
-    async with fake_backend(docs) as (backend, _log):
-        with pytest.raises(UnsupportedVault, match="case-sensitive"):
-            await backend.startup_check()
-
-
-async def test_startup_rejects_nfc_path_normalization():
-    # pathNormalizationVersion>=1 derives ids from NFC-normalized paths;
-    # this server's path2id does not normalize, so ids would diverge.
-    docs = {
-        "_local/obsydian_livesync_milestone": {
-            "tweak_values": {"PREFERRED": {"pathNormalizationVersion": 1}},
-        }
-    }
-    async with fake_backend(docs) as (backend, _log):
-        with pytest.raises(UnsupportedVault, match="normali[sz]"):
-            await backend.startup_check()
+@pytest.mark.parametrize("nfc", [False, True])
+async def test_sensitive_couchdb_paths(nfc):
+    docs = {"_local/obsydian_livesync_milestone": {
+        "handleFilenameCaseSensitive": True, "pathNormalizationVersion": int(nfc)}}
+    async with fake_backend(docs) as (backend, _):
+        await backend.startup_check()
+        upper = await backend.write_note("Folder/A.md", "upper", create=True)
+        assert upper["doc_id"] == "Folder/A.md"
+        await backend.write_note("Folder/a.md", "lower", create=True)
+        assert (await backend.read_note("Folder/A.md"))["text"] == "upper"
+        assert (await backend.read_note("Folder/a.md"))["text"] == "lower"
+        assert len(await backend.list_notes(folder="Folder")) == 2
+        assert await backend.list_notes(folder="folder") == []
+        if nfc:
+            await backend.write_note("ééééé/sub/x.md", "nested", create=True)
+            folder_nfd = "e\u0301" * 5
+            assert await backend.list_notes(folder=folder_nfd, recursive=False) == []
+            nested = await backend.list_notes(folder=folder_nfd, recursive=True)
+            assert [m["path"] for m in nested] == ["ééééé/sub/x.md"]
+        await backend.write_note("Café.md", "one", create=True)
+        if nfc:
+            with pytest.raises(NoteExists):
+                await backend.write_note("Cafe\u0301.md", "two", create=True)
+        else:
+            await backend.write_note("Cafe\u0301.md", "two", create=True)
 
 
 async def test_startup_version_doc_is_informational(caplog):
-    # Any obsydian_livesync_version value is accepted; it is only logged.
+    # Any version is accepted; its presence, never its remote value, is logged.
     docs = {
         "obsydian_livesync_version": {"version": "1.9.2"},
         "_local/obsydian_livesync_milestone": {
@@ -203,7 +191,8 @@ async def test_startup_version_doc_is_informational(caplog):
     async with fake_backend(docs) as (backend, _log):
         with caplog.at_level(logging.INFO, logger="storage_couchdb"):
             await backend.startup_check()  # must not raise
-    assert any("1.9.2" in record.message for record in caplog.records)
+    assert any("version document" in record.message for record in caplog.records)
+    assert "1.9.2" not in caplog.text
 
 
 async def test_auth_error_maps_to_storage_unavailable():
@@ -221,15 +210,14 @@ async def test_server_error_maps_to_storage_unavailable():
 
 
 async def test_error_logs_carry_status_and_code_only(caplog):
-    # Log hygiene: the server log may carry the method, path, status and
-    # the body's error code — never the raw response body.
+    # P-19: only operation/status; even a body's error code is remote text.
     async with fake_backend({}, force_status=401) as (backend, _log):
         with caplog.at_level(logging.WARNING, logger="storage_couchdb"):
             with pytest.raises(StorageUnavailable):
                 await backend.startup_check()
     messages = [record.getMessage() for record in caplog.records]
     assert any("401" in message for message in messages)
-    assert any("forced" in message for message in messages)
+    assert not any("forced" in message for message in messages)
     assert not any("sentinel-raw-body" in message for message in messages)
 
 
@@ -525,8 +513,10 @@ async def test_listing_and_iteration_exclude_hidden_segments():
 
 def test_iterate_texts_signature_is_pinned():
     parameters = inspect.signature(CouchDBBackend.iterate_texts).parameters
-    assert list(parameters) == ["self", "extension"]
-    assert parameters["extension"].default == ".md"
+    assert list(parameters) == ["self", "extension", "after"]
+    assert parameters["after"].default == ""
+    assert parameters["after"].kind == inspect.Parameter.KEYWORD_ONLY
+    assert parameters["extension"].default == ""
 
 
 async def test_iterate_texts_skips_corrupt_notes(caplog):
@@ -541,11 +531,12 @@ async def test_iterate_texts_skips_corrupt_notes(caplog):
             results = {}
             async for meta, text in backend.iterate_texts():
                 results[meta["path"]] = text
-    # extension filter: data.txt is excluded from the ".md" iteration
-    assert sorted(results) == ["bad.md", "good.md"]
+    # Default scans include every extension.
+    assert sorted(results) == ["bad.md", "data.txt", "good.md"]
     assert results["good.md"] == "hello"
     assert results["bad.md"] is None
-    assert any("bad.md" in record.message for record in caplog.records)
+    assert any("skipping note" in record.message for record in caplog.records)
+    assert "bad.md" not in caplog.text
 
 
 async def test_iterate_texts_custom_extension_includes_text_types():
@@ -569,7 +560,7 @@ def test_write_signatures_are_pinned():
     write = inspect.signature(CouchDBBackend.write_note)
     assert list(write.parameters) == [
         "self", "path", "content", "create", "overwrite", "mtime",
-        "expected_rev",
+        "expected_rev", "lossy_text",
     ]
     assert write.parameters["create"].default is False
     assert write.parameters["overwrite"].default is False
@@ -634,7 +625,8 @@ async def test_write_409_concurrent():
     assert orphan["data"] == "loser body"  # orphaned chunk tolerated
     assert not any(r.method == "DELETE" for r in log[:ops_end])
     message = str(excinfo.value)
-    assert "http" not in message.lower()  # C7: no URL leak
+    assert "http://" not in message.lower()
+    assert "HTTP 409" in message  # C7: status is safe; URLs are not
     assert "fake1" not in message  # C7: no revision leak
 
 
@@ -679,28 +671,6 @@ async def test_overwrite_missing_refused():
         with pytest.raises(NoteNotFound):
             await backend.write_note("ghost.md", "x", overwrite=True)
     assert mutation_free(log, len(log))
-
-
-async def test_write_requires_text():
-    # Spec §5: binary paths cannot receive textual writes, and the
-    # refusal happens before any HTTP request (spec §7.5).
-    async with fake_backend({}) as (backend, log):
-        with pytest.raises(BinaryNoteError):
-            await backend.write_note("img.png", "not really a png")
-    assert log == []
-
-
-async def test_write_allows_textual_base_files():
-    # .base is textual YAML advertised by the tools (fetch/create);
-    # the write-side policy is a binary denylist, not the upstream
-    # read classification, so .base must be writable as plain text.
-    async with fake_backend({}) as (backend, _log):
-        meta = await backend.write_note(
-            "Tasks.base", "views: []", create=True
-        )
-        content = await backend.read_note("Tasks.base")
-    assert meta["type"] == "plain"
-    assert content["text"] == "views: []"
 
 
 async def test_write_size_is_decoded_bytes():
@@ -1127,7 +1097,7 @@ async def test_put_202_on_metadata_is_not_durable():
     async with fake_vault(docs, put_202_ids=("note.md",)) as (
         backend, raw, _log,
     ):
-        with pytest.raises(StorageUnavailable, match="durable"):
+        with pytest.raises(StorageUnavailable, match="outcome unknown"):
             await backend.write_note("note.md", "fresh", overwrite=True)
         stored = await stored_doc(raw, "note.md")
     assert stored["children"] == ["h:old"]  # nothing was committed
@@ -1137,7 +1107,7 @@ async def test_put_202_on_chunk_is_not_durable():
     async with fake_vault({}, put_202_ids=(chunk_id_for("fresh"),)) as (
         backend, raw, _log,
     ):
-        with pytest.raises(StorageUnavailable, match="durable"):
+        with pytest.raises(StorageUnavailable, match="note is unchanged"):
             await backend.write_note("note.md", "fresh", create=True)
         meta_response = await raw.get(
             f"{DATABASE}/{urllib.parse.quote('note.md', safe='')}"
@@ -1152,7 +1122,7 @@ async def test_rename_non_201_target_keeps_source():
     async with fake_vault(docs, put_202_ids=("b.md",)) as (
         backend, raw, _log,
     ):
-        with pytest.raises(StorageUnavailable, match="durable"):
+        with pytest.raises(StorageUnavailable, match="outcome unknown"):
             await backend.rename_note("a.md", "b.md")
         source = await stored_doc(raw, "a.md")
     assert "deleted" not in source  # still live, retirement skipped
@@ -1160,7 +1130,7 @@ async def test_rename_non_201_target_keeps_source():
 
 @pytest.mark.parametrize('key,value', [
     ('encrypt', True), ('usePathObfuscation', True),
-    ('handleFilenameCaseSensitive', True), ('pathNormalizationVersion', 1),
+    ('pathNormalizationVersion', 2),
 ])
 @pytest.mark.parametrize('preferred', [True, False])
 async def test_startup_per_device_incompatible_settings(key, value, preferred):
@@ -1181,14 +1151,15 @@ async def test_startup_unreadable_device_settings_fail_closed(entries):
             await backend.startup_check()
 
 
-async def test_startup_preferred_settings_override_device_entries():
+async def test_startup_preferred_does_not_hide_diverging_device():
     docs = {'_local/obsydian_livesync_milestone': {'tweak_values': {
         'PREFERRED': {'encrypt': False, 'handleFilenameCaseSensitive': False,
                       'pathNormalizationVersion': 0},
         'device-a': {'encrypt': True},
     }}}
     async with fake_backend(docs) as (backend, _):
-        await backend.startup_check()
+        with pytest.raises(UnsupportedVault, match='encrypt.*devices require alignment'):
+            await backend.startup_check()
 
 
 @pytest.mark.parametrize('wrapped', [False, True])
@@ -1239,14 +1210,6 @@ async def test_encrypted_inline_eden_refused():
     async with fake_backend(docs) as (backend, _):
         with pytest.raises(UnsupportedVault):
             await backend.read_note('a.md')
-
-
-@pytest.mark.parametrize('path', ['image.png/', 'image.png/.', 'image.PNG\\.'])
-async def test_write_normalized_binary_path_refused_before_io(path):
-    async with fake_backend() as (backend, log):
-        with pytest.raises(BinaryNoteError):
-            await backend.write_note(path, 'text', create=True)
-    assert not log
 
 
 @pytest.mark.parametrize('winner', [
@@ -1303,7 +1266,7 @@ async def test_folder_identity_is_case_insensitive(path, folder):
         assert [m['path'] for m in await backend.list_notes(folder=folder)] == [path]
 
 
-@pytest.mark.parametrize('extension,is_text', [('.md', True), ('.canvas', True),
+@pytest.mark.parametrize('extension,is_text', [('.md', False), ('.canvas', False),
                                               ('.png', False)])
 async def test_empty_newnote_classification(extension, is_text):
     path = 'empty' + extension
@@ -1595,3 +1558,26 @@ async def test_ordinary_refresh_does_not_scan_but_force_reloads_index():
         log.clear()
         await backend.refresh(force=True)
         assert any(r.method == "GET" and r.url.path.endswith("/_all_docs") for r in log)
+
+
+async def test_couchdb_rejects_metadata_identity_collision():
+    docs = {name: {"_id": name, "_rev": "1-a", "path": name,
+                   "type": "plain", "children": [], "size": 0}
+            for name in ("A.md", "a.md")}
+    async with fake_backend(docs) as (backend, _):
+        with pytest.raises(StorageError, match="identity|collision"):
+            await backend.list_notes()
+
+
+async def test_deleted_metadata_identity_refused_before_resurrection():
+    docs = {
+        "_local/obsydian_livesync_milestone": {"handleFilenameCaseSensitive": True},
+        "a.md": {"_id": "a.md", "_rev": "1-a", "path": "A.md",
+                 "type": "plain", "deleted": True, "children": [], "size": 0},
+    }
+    async with fake_backend(docs) as (backend, log):
+        await backend.startup_check()
+        before = len(log)
+        with pytest.raises(StorageError, match="identity mismatch"):
+            await backend.write_note("a.md", "replacement", create=True)
+        assert mutation_free(log, before)

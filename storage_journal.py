@@ -31,6 +31,21 @@ before applying it locally; rename publishes both revisions in one file.
 
 from __future__ import annotations
 
+from publication_notices import complete_publication, ingress_notices, split_notices
+
+from wire_encoding import text_encoder_string, surrogate_count
+
+from diagnostic_hygiene import (recommendation_fields, writer_diagnostic, diagnostic, settings_exception_diagnostic, PublicDiagnostic, setting_key,
+    DiagnosticCode, assessment_fields, setting_value, fingerprint, cause_name)
+
+from text_eligibility import TextAccessPolicy, project_note, scan_text
+from text_eligibility import (DEFAULT_TEXT_SCAN_MAX_BYTES,
+                              DEFAULT_TEXT_VERDICT_CACHE_ENTRIES)
+
+import asyncio
+from device_selection import DeviceSelection
+
+import hashlib
 import json
 import logging
 import math
@@ -51,37 +66,42 @@ from journal_codec import (
     serialize_journal,
 )
 from journal_store import EncryptedNoteError, JournalStore, parse_rev
+from content_splitter import ContentSplitter, SplitterRefusal, chunk_id_for_piece
 from livesync_format import (
     PATH_IDENTITY_LEGACY,
-    PATH_IDENTITY_NFC,
     ForbiddenPathError,
     UnsupportedVaultSettings,
+    UnsupportedWriterSettings,
     assemble_binary,
     canonical_path,
-    chunk_id_for,
+    resolve_content_splitter, resolve_tweak_startup,
+    resolve_writer_policy, writer_policy_summary, resolve_ignore_settings,
     clone_metadata,
-    doc_type_for,
-    encode_newnote,
+    prepare_file_content,
     is_note_document,
-    is_writable_text_path,
     new_metadata_doc,
-    path2id,
+    identity_path2id,
+    validate_document_identity,
     resolve_path_identity,
     soft_delete_revision,
     validate_vault_path,
 )
+from replay_limits import ReplayLimits, ReplayBudgetExceeded
 from object_storage import JournalObjectStorage, ObjectSizeLimit, MAX_OBJECT_BYTES
 from storage_base import (
-    MAX_ATTACHMENT_BYTES,
-    BinaryNoteError,
+    WriterParameterRefused,
+    check_file_size,
+    WriteSkipped,
+    RenameRefused,
     ConcurrentModification,
     NoteContent,
     NoteExists,
     NoteMeta,
     NoteNotFound,
-    StorageError,
+    StorageError, OutcomeUnknown, MutationNotApplied,
     StorageUnavailable,
     UnsupportedVault,
+    WriterUnsupported,
 )
 
 logger = logging.getLogger(__name__)
@@ -93,7 +113,7 @@ MILESTONE_KEY = "_00000000-milestone.json"
 SYNC_PARAMETERS_KEY = "_obsidian_livesync_journal_sync_parameters.json"
 
 # Journal names have an optional suffix after ms (journal_codec.journal_filename).
-# Server publications use a random 16-hex suffix; devices use the base form.
+# Server publications use a random 32-hex suffix; devices use the base form.
 # Replay orders candidates by the integer ms prefix; S3 listing order is
 # lexicographic, where "10-..." sorts *before* "9-..." (Plan B Review
 # Focus 3). Names without a numeric prefix are foreign to the journal
@@ -134,15 +154,16 @@ KNOWN_METADATA_KEYS = frozenset({
     "children", "eden", "deleted", "_deleted",
 })
 
-# Aggregate refresh limits, independent of the per-file codec/download caps.
-MAX_REFRESH_KEYS = 1_000_000
-MAX_REFRESH_BYTES = 4 * 1024**3
-MAX_REFRESH_SECONDS = 300.0
+# Operational refresh budgets; derivation and deliberate parity difference
+# are documented in replay_limits.py. No dependence on local file selection.
+MAX_REFRESH_KEYS = ReplayLimits.max_refresh_keys
+MAX_REFRESH_BYTES = ReplayLimits.max_refresh_bytes
+MAX_REFRESH_SECONDS = ReplayLimits.max_refresh_seconds
 _LIST_PAGE_SIZE = 1000
 
 
-class _RefreshBudgetStop(Exception):
-    """Internal clean partial-stop signal; never marks a file processed."""
+class _RefreshBudgetStop(ReplayBudgetExceeded):
+    """Public budget failure after preserving completed replay progress."""
 
 
 
@@ -152,6 +173,8 @@ def _has_hidden_segment(path: str) -> bool:
 
 
 def _matches_extension(path: str, extension: str) -> bool:
+    if not extension:
+        return True
     suffix = extension if extension.startswith(".") else "." + extension
     return path.lower().endswith(suffix.lower())
 
@@ -168,15 +191,15 @@ def _as_ms(value: object) -> int:
     return int(value)
 
 
-class JournalBackend:
+class JournalBackend(TextAccessPolicy, DeviceSelection):
     """``StorageBackend`` peer for an Obsidian LiveSync journal bucket.
 
     The store under ``state_dir`` is created on the first
     :meth:`startup_check`, after the milestone has fixed the vault's path
     identity; reopening the same state directory against a vault with a
-    different identity is a configuration error (``ValueError`` from the
-    store). All object access is synchronous per the
-    :class:`JournalObjectStorage` protocol.
+    different identity quarantines the old directory and starts fresh.
+    All object access is synchronous per the :class:`JournalObjectStorage`
+    protocol.
     """
 
     def __init__(
@@ -185,6 +208,7 @@ class JournalBackend:
         state_dir: Path,
         refresh_min_interval: float = 5.0,
         *,
+        text_verdict_cache_entries: int = DEFAULT_TEXT_VERDICT_CACHE_ENTRIES,
         state_size_warn_mb: int = 0,
         max_refresh_keys: int = MAX_REFRESH_KEYS,
         max_refresh_bytes: int = MAX_REFRESH_BYTES,
@@ -192,17 +216,22 @@ class JournalBackend:
         max_inflated_bytes: int = MAX_INFLATED_BYTES,
         max_records: int = MAX_RECORDS,
         max_line_bytes: int = MAX_LINE_BYTES,
+        max_json_depth: int = ReplayLimits.max_json_depth,
     ):
         for value in (max_refresh_keys, max_refresh_bytes, max_refresh_seconds,
-                      max_inflated_bytes, max_records, max_line_bytes):
-            if value <= 0 or not math.isfinite(value):
+                      max_inflated_bytes, max_records, max_line_bytes, max_json_depth):
+            if value <= 0 or (isinstance(value, float) and not math.isfinite(value)):
                 raise ValueError("journal limits must be positive and finite")
+        if text_verdict_cache_entries <= 0:
+            raise ValueError("text verdict cache entries must be positive")
+        self.text_verdict_cache_entries = text_verdict_cache_entries
         self.max_refresh_keys = max_refresh_keys
         self.max_refresh_bytes = max_refresh_bytes
         self.max_refresh_seconds = max_refresh_seconds
         self.max_inflated_bytes = max_inflated_bytes
         self.max_records = max_records
         self.max_line_bytes = max_line_bytes
+        self.max_json_depth = max_json_depth
         self._listing_cursor = ""
         self._refresh_deadline: float | None = None
         self._refresh_downloaded = 0
@@ -212,6 +241,11 @@ class JournalBackend:
         self.state_size_warn_mb = state_size_warn_mb
         self.refresh_min_interval = refresh_min_interval
         self._store: JournalStore | None = None
+        self._tweak_assessment = {"status": "OK", "differing_keys": []}
+        self._writer_unsupported_reason = None
+        self._splitter = ContentSplitter()
+        self.sync_max_size_mb = 50
+        self.sync_max_size_mb_override = None
         # Throttle clock (monotonic) and the wall-clock stamp for diagnostics.
         self._last_refresh_failure: Exception | None = None
         self._last_refresh: float | None = None
@@ -231,6 +265,8 @@ class JournalBackend:
         present. A bucket without milestone and journals is treated as a
         fresh vault with legacy path identity (logged).
         """
+        self._tweak_assessment = {"status": "OK", "differing_keys": []}
+        self._writer_unsupported_reason = None
         milestone = self._load_milestone()
         if milestone is None:
             if self._has_remote_journals():
@@ -238,29 +274,50 @@ class JournalBackend:
                     "vault milestone is missing while journal files exist; "
                     "rebuild from the authoritative vault"
                 )
-            logger.warning(
-                "journal bucket has no milestone and no journal files; "
-                "treating it as a fresh vault with legacy path identity"
-            )
+            logger.warning('journal bucket has no milestone and no journal files; treating it as a fresh vault with legacy path identity')
+            self.resolve_selection_settings({'pathNormalizationVersion': 0})
+            self._recommendation_policy = writer_policy_summary(resolve_writer_policy(
+                {'pathNormalizationVersion': 0}, size_override=self.sync_max_size_mb_override,
+                use_override=self._selection_overrides[0], names_override=self._selection_overrides[1]))
             identity = PATH_IDENTITY_LEGACY
+            self._splitter = ContentSplitter()
+            self.sync_max_size_mb = (50 if self.sync_max_size_mb_override is None
+                                     else self.sync_max_size_mb_override)
         else:
             if milestone.get("locked") is True:
-                logger.warning(
-                    "vault milestone has advisory locked: true flag; "
-                    "remote marked as rebuilt; peer performs full replay"
-                )
+                logger.warning('vault milestone has advisory locked: true flag; remote marked as rebuilt; peer performs full replay')
             try:
+                self.resolve_selection_settings(milestone)
+                policies = resolve_writer_policy(milestone, size_override=self.sync_max_size_mb_override,
+                    use_override=self._selection_overrides[0], names_override=self._selection_overrides[1])
+                self.sync_max_size_mb = policies[0].value
+                self._recommendation_policy = writer_policy_summary(policies)
+                resolved = resolve_tweak_startup(milestone,
+                    disable_checking_config_mismatch=getattr(self, 'disable_checking_config_mismatch', False),
+                    auto_accept_compatible_tweak=getattr(self, 'auto_accept_compatible_tweak', True))
+                self._tweak_assessment = resolved.summary()
+                for side in resolved.winners:
+                    logger.info("tweak alignment: %s; keys: %s", side if side in ("CURRENT", "REMOTE") else "<value hidden>", ", ".join(setting_key(k) for k in resolved.differing_keys))
+                milestone = dict(resolved.settings)
                 identity = resolve_path_identity(milestone)
+                self._splitter = resolve_content_splitter(milestone)
+            except UnsupportedWriterSettings as exc:
+                self._splitter = None
+                self._writer_unsupported_reason = PublicDiagnostic(DiagnosticCode.WRITER, issues=tuple(getattr(exc, "setting_issues", ())))
             except UnsupportedVaultSettings as exc:
-                raise UnsupportedVault(str(exc)) from exc
+                self._tweak_assessment = getattr(exc, "tweak_assessment", self._tweak_assessment)
+                raise UnsupportedVault(settings_exception_diagnostic(exc)) from exc
 
-        # A differing identity for an existing state directory is a
-        # configuration error and propagates as ValueError from the store.
+        await self.selection_startup()
+
+        # Identity changes quarantine the old state without mixing IDs.
         # A repeated startup replaces the previous connection cleanly.
         if self._store is not None:
             self._store.close()
             self._store = None
-        self._store = JournalStore(self._state_dir, identity)
+        self._store = JournalStore(
+            self._state_dir, identity,
+            text_verdict_cache_entries=self.text_verdict_cache_entries)
 
         epoch = self._load_sync_parameters_epoch()
         if epoch is None:
@@ -272,19 +329,14 @@ class JournalBackend:
                     "files exist; the vault may be encrypted or incompatible"
                 )
             self._probe_remote_wipe(epoch=None)
+            await self.refresh_selection_files()
             return
         if self._store.epoch != epoch:
-            # The setter wipes docs/processed/meta and chunk files, so the
-            # next refresh replays the whole history.
-            logger.info(
-                "journal epoch changed %r -> %r; local state was reset",
-                self._store.epoch,
-                epoch,
-            )
             self._store.epoch = epoch
             self._clear_refresh_clock()
-        else:
-            self._probe_remote_wipe(epoch)
+        self._probe_remote_wipe(epoch)
+
+        await self.refresh_selection_files()
 
     async def refresh(self, force: bool = False) -> None:
         """Replay journal files missing from the processed ledger.
@@ -309,10 +361,59 @@ class JournalBackend:
             and now - self._last_refresh < self.refresh_min_interval
         ):
             if self._last_refresh_failure is not None:
+                if isinstance(self._last_refresh_failure, ReplayBudgetExceeded):
+                    raise self._last_refresh_failure
                 raise StorageError(
                     "refresh failed previously; retry after interval or force"
                 ) from self._last_refresh_failure
             return
+        # C:serviceFeatures/targetFilter.ts:129-131 reloads realised settings.
+        # Journal control objects live outside the replay stream. Resolve on
+        # every unthrottled refresh, including recovery to the previous bytes
+        # after a rejected milestone. Only effective config changes recheck Node.
+        milestone = self._load_milestone()
+        try:
+            candidate_milestone = milestone if milestone is not None else {'pathNormalizationVersion': 0}
+            overrides = getattr(self, '_selection_overrides',
+                                (self.selection_use_ignore_files, self.selection_ignore_files))
+            candidate_selection = resolve_ignore_settings(candidate_milestone,
+                use_override=overrides[0], names_override=overrides[1])
+            # VaultService.ts:73-81 and targetFilter.ts:132-137 consume the
+            # same realised snapshot. Validate the complete tuple before any
+            # effective field is installed, including the derived text budget.
+            policies = resolve_writer_policy(candidate_milestone,
+                size_override=self.sync_max_size_mb_override,
+                use_override=overrides[0], names_override=overrides[1])
+            if milestone is not None and self.sync_max_size_mb_override is None:
+                # Preserve the existing compatibility gate; its selected map
+                # must not replace the independently resolved recommendations.
+                resolve_tweak_startup(milestone,
+                    disable_checking_config_mismatch=getattr(self, 'disable_checking_config_mismatch', False),
+                    auto_accept_compatible_tweak=getattr(self, 'auto_accept_compatible_tweak', True))
+            candidate_size = policies[0].value
+            candidate_text = TextAccessPolicy()
+            candidate_text._text_budget_override = self._text_budget_override
+            candidate_text.sync_max_size_mb = candidate_size
+            candidate_configuration = (self.selection_only, self.selection_ignore,
+                                       candidate_selection[0], candidate_selection[1])
+            # A failed candidate may close the worker; restoring the old
+            # checked tuple must still retry capability before clearing failure.
+            if (self._selection_checked_configuration != candidate_configuration
+                    or self._selection_resolution_diagnostic is not None):
+                await self.validate_selection_configuration(candidate_configuration)
+        except WriterUnsupported as exc:
+            self._selection_resolution_diagnostic = exc.diagnostic
+            raise
+        except UnsupportedVaultSettings as exc:
+            self._selection_resolution_diagnostic = settings_exception_diagnostic(exc)
+            raise UnsupportedVault(self._selection_resolution_diagnostic) from exc
+        self._selection_overrides = overrides
+        self.selection_use_ignore_files, self.selection_ignore_files = candidate_selection
+        self._recommendation_policy = writer_policy_summary(policies)
+        self._sync_max_size_mb = candidate_size
+        self._effective_text_budget = candidate_text.text_scan_max_bytes
+        self._selection_resolution_diagnostic = None
+        self._selection_checked_configuration = candidate_configuration
         self._refresh_deadline = now + self.max_refresh_seconds
         self._refresh_downloaded = 0
         recent_docs: list[dict] | None = None
@@ -322,17 +423,24 @@ class JournalBackend:
             if store.epoch != (epoch or ""):
                 store.epoch = epoch or ""
                 self._clear_refresh_clock()
+            self._reconcile_outbound(store)
             self._probe_remote_wipe(epoch)
             candidates, next_cursor = self._list_journals()
             for name in candidates:
                 self._check_refresh_time(name)
+                try:
+                    name.encode('utf-8')  # S3 names must be Unicode scalar values.
+                except UnicodeError as exc:
+                    raise StorageError(PublicDiagnostic(DiagnosticCode.REPLAY_FAILED,
+                        journal=name, cause=type(exc))) from None
                 if not store.processed(name):
                     recent_docs = self._replay_one(store, name)
             # Advance only after this entire window was replayed. A byte/time
             # stop or failure retries the same window, skipping its ledger.
             self._listing_cursor = next_cursor
-        except _RefreshBudgetStop as exc:
-            logger.warning("journal refresh budget stop: %s", exc)
+            if next_cursor:
+                raise _RefreshBudgetStop('max_refresh_keys', self.max_refresh_keys,
+                                         self.max_refresh_keys)
         except Exception as exc:
             self._last_refresh_failure = exc
             raise
@@ -350,7 +458,7 @@ class JournalBackend:
                 }
                 unknown = sorted(keys - KNOWN_METADATA_KEYS)
                 self._protocol_notes = (
-                    ["unknown metadata fields in recent journals: " + ", ".join(unknown)]
+                    [f"unknown metadata fields in recent journals: {len(unknown)}"]
                     if unknown else []
                 )
             self._refresh_deadline = None
@@ -358,9 +466,13 @@ class JournalBackend:
             self._last_refresh = time.monotonic()
             self._last_refresh_at = datetime.now(timezone.utc)
 
+        await self.refresh_selection_files()
+
     def _check_refresh_time(self, point: str) -> None:
         if self._refresh_deadline is not None and time.monotonic() >= self._refresh_deadline:
-            raise _RefreshBudgetStop(f"wall-clock at {point!r}")
+            raise _RefreshBudgetStop('max_refresh_seconds',
+                self.max_refresh_seconds + time.monotonic() - self._refresh_deadline,
+                self.max_refresh_seconds)
 
     def _get_object(self, key: str) -> bytes | None:
         if self._refresh_deadline is None:
@@ -368,12 +480,14 @@ class JournalBackend:
         self._check_refresh_time(key)
         remaining = self.max_refresh_bytes - self._refresh_downloaded
         if remaining <= 0:
-            raise _RefreshBudgetStop(f"download bytes at {key!r}")
+            raise _RefreshBudgetStop('max_refresh_bytes',
+                self._refresh_downloaded + 1, self.max_refresh_bytes)
         try:
             blob = self._object_storage.get(key, max_bytes=remaining)
-        except ObjectSizeLimit:
+        except ObjectSizeLimit as exc:
             if remaining < getattr(self._object_storage, "max_object_bytes", MAX_OBJECT_BYTES):
-                raise _RefreshBudgetStop(f"download bytes at {key!r}") from None
+                raise _RefreshBudgetStop('max_refresh_bytes',
+                    self._refresh_downloaded + exc.observed, self.max_refresh_bytes) from None
             raise
         self._refresh_downloaded += len(blob) if blob is not None else 0
         self._check_refresh_time(key)
@@ -382,14 +496,23 @@ class JournalBackend:
     async def backend_info(self) -> dict:
         """Diagnostics for ``vault_stats`` and startup logs."""
         store = self._store
+        selection = await self.selection_diagnostics()
         return {
+            **selection,
+            **self.text_limits(),
+            "recommendation_policy": recommendation_fields(getattr(self, "_recommendation_policy", {})),
+            "tweak_assessment": assessment_fields(self._tweak_assessment),
+            "writer_supported": self._writer_unsupported_reason is None and selection["selection_writer_supported"],
+            "writer_unsupported_reason": writer_diagnostic(self._writer_unsupported_reason or selection["selection_unsupported_reason"]),
             "backend": "s3-journal",
+            "custom_headers_configured": bool(getattr(self._object_storage, "custom_headers_count", 0)),
+            "custom_headers_count": getattr(self._object_storage, "custom_headers_count", 0),
             "protocol_notes": list(self._protocol_notes),
-            "state_dir_path": str(self._state_dir),
+            "state_dir_path": "<value hidden>",
             "state_dir_bytes": store.state_size_bytes() if store else 0,
             "state_size_warn_mb": self.state_size_warn_mb,
-            "path_identity": store.path_identity if store else None,
-            "epoch": store.epoch if store else None,
+            "path_identity": setting_value(store.path_identity) if store else None,
+            "epoch": fingerprint(store.epoch) if store else None,
             "files_processed": store.files_processed_count() if store else 0,
             # Live note documents in the store (tombstones and service
             # docs excluded); hidden dotfile notes count here but never
@@ -404,6 +527,7 @@ class JournalBackend:
 
     async def close(self) -> None:
         """Close the local store (idempotent)."""
+        await self.selection_close()
         if self._store is not None:
             self._store.close()
             self._store = None
@@ -467,28 +591,55 @@ class JournalBackend:
             for key in self._object_storage.list("", limit=1)
         )
 
-    def _probe_remote_wipe(self, epoch: str | None) -> bool:
-        """Reset local state when the last-sent journal has vanished.
+    def _outbound_checkpoint(self, store: JournalStore) -> str:
+        keys = [name for name, _, confirmed in store.outbound_journals() if confirmed]
+        if store.last_sent_key:
+            keys.append(store.last_sent_key)
+        return max(keys, key=journal_sort_key) if keys else ""
 
-        Returns whether a reset occurred. A missing object for the last
-        file this peer sent
-        means the bucket was wiped or rebuilt (objects are never deleted
-        individually, spec section 7), like upstream's
-        ``ensureCheckpointCachesAreFresh`` wipe probe. ``epoch``, when
-        known, is re-recorded after the reset so the next startup
-        compares against the correct value.
+    def _reconcile_outbound(self, store: JournalStore) -> None:
+        """Recover send ownership independently of fallible last-sent bookkeeping.
+
+        A pending key alone is not ownership: a conditional PUT may have lost
+        to another peer. Match the exact compressed payload before confirming.
+        Missing intents were never confirmed published and can be discarded.
+        Confirmed missing keys remain wipe sentinels, never replaced by older
+        surviving history. All replay downloads use the normal refresh budget.
+        """
+        for name, digest, confirmed in sorted(store.outbound_journals(), key=lambda row: journal_sort_key(row[0])):
+            self._check_refresh_time(name)
+            if not confirmed:
+                blob = self._get_object(name)
+                if blob is None or hashlib.sha256(blob).hexdigest() != digest:
+                    store.discard_outbound(name)
+                    continue
+                self._replay_one(store, name, blob=blob)
+                store.confirm_outbound(name)
+            elif not store.processed(name) and self._object_storage.exists(name):
+                self._replay_one(store, name)
+        newest = self._outbound_checkpoint(store)
+        if newest and any(name == newest and confirmed for name, _, confirmed in store.outbound_journals()):
+            store.last_sent_key = newest
+            store.compact_outbound(newest)
+
+    def _probe_remote_wipe(self, epoch: str | None) -> bool:
+        """Confirm a missing last-sent journal and clear only dedupe caches.
+
+        Refresh/startup use this mutating reconciliation; publication uses a
+        separate read-only precondition so a refused write changes nothing.
         """
         store = self._store
         if store is None:
             return False
-        key = store.last_sent_key
+        key = self._outbound_checkpoint(store)
+        # Startup may precede replay of an accepted send with a lost response.
+        # Defer a wipe decision until refresh has reconciled these intents.
+        if any(not confirmed and self._object_storage.exists(name)
+               for name, _, confirmed in store.outbound_journals()):
+            return False
         if not key or self._object_storage.exists(key):
             return False
-        logger.warning(
-            "journal object %r vanished; assuming a remote wipe and "
-            "resetting local state",
-            key,
-        )
+        logger.warning('journal object <omitted> vanished; assuming a remote wipe and clearing dedupe caches while retaining local notes')
         store.reset()
         if epoch is not None:
             store.epoch = epoch
@@ -527,14 +678,14 @@ class JournalBackend:
                 break
         else:
             next_cursor = cursor
-            logger.warning("journal refresh key budget stop at %r", cursor)
+            logger.warning('journal refresh key budget stop at <omitted>')
         for key in keys:
             match = _MS_PREFIX_RE.match(key)
             if match is not None:
                 self._max_seen_ms = max(self._max_seen_ms, int(match.group(1)))
         return sorted((key for key in keys if is_journal_key(key)), key=journal_sort_key), next_cursor
 
-    def _replay_one(self, store: JournalStore, name: str) -> list[dict]:
+    def _replay_one(self, store: JournalStore, name: str, *, blob: bytes | None = None) -> list[dict]:
         """Fetch, decode and apply one journal file.
 
         Storage-layer failures propagate unchanged (they already name the
@@ -543,33 +694,27 @@ class JournalBackend:
         refresh retries it.
         """
         try:
-            blob = self._get_object(name)
+            if blob is None:
+                blob = self._get_object(name)
             if blob is None:
                 raise StorageError(
                     f"journal file {name!r} disappeared during replay"
                 )
             journal = parse_journal(
                 inflate_journal(blob, max_output_bytes=self.max_inflated_bytes),
-                name=name, max_records=self.max_records, max_line_bytes=self.max_line_bytes,
+                name=name, max_records=self.max_records, max_line_bytes=self.max_line_bytes, max_json_depth=self.max_json_depth,
             )
+            for doc in journal.docs:
+                validate_document_identity(doc, store.path_identity)
             store.apply_journal(name, journal.chunks, journal.docs)
             return journal.docs[-100:]
-        except StorageUnavailable:
+        except (StorageUnavailable, ReplayBudgetExceeded):
             raise
         except (StorageError, ValueError, OSError, sqlite3.Error) as exc:
-            # The public message carries the file name and the error class
-            # only; details (document ids, paths, revisions) stay in the
-            # server log (audit C7).
-            logger.warning(
-                "journal file %r could not be replayed: %s: %s",
-                name,
-                type(exc).__name__,
-                exc,
-            )
-            raise StorageError(
-                f"journal file {name!r} could not be replayed: "
-                f"{type(exc).__name__}"
-            ) from exc
+            # Public diagnostics admit only a validated journal name and cause
+            # class. Default logs omit remote names, payloads and tracebacks.
+            logger.warning('journal file <omitted> could not be replayed: <omitted>: <omitted>; cause: %s', cause_name(type(exc)))
+            raise StorageError(PublicDiagnostic(DiagnosticCode.REPLAY_FAILED, journal=name, cause=type(exc))) from exc
 
     def _require_store(self, operation: str) -> JournalStore:
         if self._store is None:
@@ -589,7 +734,7 @@ class JournalBackend:
         """List live notes filtered by folder/extension, sorted by path.
 
         Same contracts as the CouchDB backend: the folder prefix matches
-        case-insensitively (original paths in the response),
+        using the vault identity (original paths in the response),
         ``recursive=False`` keeps direct children only — also at the vault
         root — and the extension matches as a case-insensitive suffix with
         or without the leading dot. Hidden dotfile segments never surface;
@@ -612,17 +757,17 @@ class JournalBackend:
                 meta = self._meta_from_doc(doc)
             except StorageError:
                 path_for_log = doc.get("path") or doc_id
-                logger.exception(
-                    "skipping note %s: invalid metadata", path_for_log
-                )
+                logger.error('skipping note <omitted>: invalid metadata')
                 continue
             path = meta["path"]
             if _has_hidden_segment(path):
                 continue  # hidden files never surface as notes
             if folder_prefix:
-                if not path.lower().startswith(folder_prefix.lower() + "/"):
+                path_key = self._path2id(store, path)
+                folder_key = self._path2id(store, folder_prefix)
+                if not path_key.startswith(folder_key + "/"):
                     continue
-                remainder = path[len(folder_prefix) + 1 :]
+                remainder = path_key[len(folder_key) + 1 :]
             else:
                 remainder = path
             if not recursive and "/" in remainder:
@@ -660,7 +805,7 @@ class JournalBackend:
         try:
             validate_vault_path(path)
         except ForbiddenPathError as exc:
-            logger.info("read refused for vault path %r: %s", path, exc)
+            logger.info('read refused for vault path <omitted>: <omitted>; cause: %s', cause_name(type(exc)))
             return None
         store = self._require_store("read_note")
         doc_id = self._path2id(store, path)
@@ -676,8 +821,21 @@ class JournalBackend:
             meta=meta, text=text, data=data, is_text=is_text, rev=meta["rev"]
         )
 
+    async def read_text_note(self, path: str) -> NoteContent | None:
+        self._validate_read_path(path)
+        store = self._require_store('read_text_note')
+        doc = store.winner(self._path2id(store, path))
+        if doc is None or not is_note_document(doc):
+            return None
+        if doc.get('type') != 'newnote':
+            return project_note(await self.read_note(path), self.text_scan_max_bytes)
+        text = store.scan_newnote(doc, self.text_scan_max_bytes, strict_budget=True)
+        meta = self._meta_from_doc(doc)
+        return NoteContent(meta=meta, text=text, data=None,
+                           is_text=text is not None, rev=meta['rev'])
+
     async def iterate_texts(
-        self, extension: str = ".md"
+        self, extension: str = "", *, after: str = ""
     ) -> AsyncIterator[tuple[NoteMeta, str | None]]:
         """Stream ``(meta, text)`` for every note matching ``extension``.
 
@@ -686,9 +844,9 @@ class JournalBackend:
         note's body is read from the local snapshot at its turn — a
         concurrent ``refresh``/reset may interleave, so cross-note
         snapshot consistency is not guaranteed (per-note only). Referenced
-        chunks live in the store until an epoch/wipe reset, whose worst
-        case here is a per-note ``(meta, None)`` after logging, never a
-        failed scan (audit C4). Never calls ``refresh``: tools own it.
+        chunks survive epoch/wipe dedupe resets. An unreadable note yields
+        per-note ``(meta, None)`` after logging rather than failing the
+        scan (audit C4). Never calls ``refresh``: tools own it.
         The extension match is case-insensitive, like the CouchDB peer.
         """
         store = self._require_store("iterate_texts")
@@ -699,6 +857,8 @@ class JournalBackend:
                 continue
             path = doc.get("path")
             path = path if isinstance(path, str) and path else doc_id
+            if path <= after:
+                continue
             if _has_hidden_segment(path):
                 continue
             if not _matches_extension(path, extension):
@@ -706,7 +866,7 @@ class JournalBackend:
             try:
                 candidates.append(self._meta_from_doc(doc))
             except StorageError:
-                logger.exception("skipping note %s: invalid metadata", path)
+                logger.error('skipping note <omitted>: invalid metadata')
                 continue
         candidates.sort(key=lambda meta: meta["path"])
         # Window over the candidates like the CouchDB peer's fetch windows:
@@ -722,19 +882,21 @@ class JournalBackend:
 
         Any per-note failure — corrupt bodies, encrypted bodies, or an
         unexpected store error (OSError, sqlite) — yields ``(meta, None)``
-        with the details logged, so one broken note never ends a
+        with a class-only event logged, so one broken note never ends a
         vault-wide scan. Only backend-wide storage unavailability aborts.
         """
         try:
+            doc = store.winner(meta["doc_id"])
+            if doc is not None and doc.get('type') == 'newnote':
+                return self._meta_from_doc(doc), store.scan_newnote(
+                    doc, getattr(self, 'text_scan_max_bytes', DEFAULT_TEXT_SCAN_MAX_BYTES))
             content = store.read_note(meta["doc_id"])
             if content is not None:
-                return self._meta_from_doc(content[0]), content[1]
-        except StorageUnavailable:
+                return self._meta_from_doc(content[0]), scan_text(content[1], self.text_scan_max_bytes)
+        except (StorageUnavailable, ReplayBudgetExceeded):
             raise  # backend-wide condition, not a per-note failure
         except Exception:
-            logger.exception(
-                "skipping note %s: scan read failed", meta["path"]
-            )
+            logger.error('skipping note <omitted>: scan read failed')
             return meta, None
         return meta, None
 
@@ -751,7 +913,7 @@ class JournalBackend:
         try:
             validate_vault_path(path)
         except ForbiddenPathError as exc:
-            logger.info("read refused for vault path %r: %s", path, exc)
+            logger.info('read refused for vault path <omitted>: <omitted>; cause: %s', cause_name(type(exc)))
             raise NoteNotFound(f"note not found: {path}") from None
 
     @staticmethod
@@ -762,7 +924,7 @@ class JournalBackend:
         path identity (NFC normalization for v1 vaults); resolving with
         any other identity would silently miss their documents.
         """
-        return path2id(path, nfc=store.path_identity == PATH_IDENTITY_NFC)
+        return identity_path2id(path, store.path_identity)
 
     @staticmethod
     def _translate_decode_error(exc: ValueError) -> StorageError:
@@ -771,13 +933,12 @@ class JournalBackend:
         Classification is structural — the store's
         :class:`~journal_store.EncryptedNoteError` keeps its
         UnsupportedVault semantics — never by message text, which embeds
-        the user-controlled note path. Corrupt-body messages already match
-        the CouchDB peer's phrasing and pass through unchanged (they name
-        the note path only — audit C7).
+        the remote note path. Corrupt-body diagnostics carry a closed reason
+        and an explicitly remote path; exception text never passes through.
         """
         if isinstance(exc, EncryptedNoteError):
-            return UnsupportedVault(str(exc))
-        return StorageError(str(exc))
+            return UnsupportedVault(getattr(exc, "diagnostic", None), cause=exc)
+        return StorageError(getattr(exc, "diagnostic", None), cause=exc)
 
     @staticmethod
     def _meta_from_doc(doc: dict) -> NoteMeta:
@@ -813,7 +974,15 @@ class JournalBackend:
 
     def _doc_id(self, path: str) -> str:
         store = self._require_store("write")
-        return path2id(path, nfc=store.path_identity == PATH_IDENTITY_NFC)
+        return identity_path2id(path, store.path_identity)
+
+    def _validate_identity(self, doc: dict | None) -> None:
+        if doc is not None:
+            try:
+                validate_document_identity(
+                    doc, self._require_store("identity").path_identity)
+            except ValueError as exc:
+                raise StorageError(DiagnosticCode.METADATA_PATH_IDENTITY_MISMATCH_OR_COLLISION_REBUILD_FETCH_REQUIRED, cause=exc) from exc
 
     @staticmethod
     def _check_expected_rev(doc: dict | None, expected_rev: str | None) -> None:
@@ -866,24 +1035,27 @@ class JournalBackend:
 
         Compact chunks live in files; full-JSON leaf records live in SQLite.
         Check both representations, including when both are present.
+        EntryManager/EntryManagerImpls.ts:133-159 shares content-addressed
+        leaves; LayeredChunkManager/DatabaseWriteLayer.ts:24-49 tolerates
+        duplicate IDs. Keep existing shared data intact and provide recovery.
         """
         store = self._require_store("write_note")
         try:
             chunk_file = store._chunk_path(chunk_id)
             if (
                 chunk_file.exists()
-                and chunk_file.read_bytes() != content.encode("utf-8")
+                and chunk_file.read_bytes() != text_encoder_string(content).encode("utf-8")
             ):
                 raise StorageError(
-                    "existing shared content chunk holds different data"
+                    DiagnosticCode.EXISTING_SHARED_CONTENT_CHUNK_HOLDS_DIFFERENT_DATA
                 )
             doc = store.winner(chunk_id)
             if doc is not None and (
                 doc.get("e_") or doc.get("deleted")
-                or doc.get("type") != "leaf" or doc.get("data") != content
+                or doc.get("type") != "leaf" or doc.get("data") != text_encoder_string(content)
             ):
                 raise StorageError(
-                    "existing shared content chunk is encrypted or holds different data"
+                    DiagnosticCode.EXISTING_SHARED_CONTENT_CHUNK_IS_ENCRYPTED_OR_HOLDS_DIFFERENT_DATA
                 )
         except (OSError, ValueError, sqlite3.Error) as exc:
             raise StorageError(
@@ -893,7 +1065,7 @@ class JournalBackend:
     def _publish(
         self, chunks: list[tuple[str, str]], docs: list[dict], *,
         attachment_data: bytes | None = None,
-    ) -> None:
+    ) -> int:
         """Confirm the exact journal before any local mutation.
 
         No await separates the precondition, put, verification and apply:
@@ -901,23 +1073,36 @@ class JournalBackend:
         event loop. Success confirms publication, not eventual winner status.
         A failed verification leaves local state untouched. The remote object
         is never deleted; a later refresh may replay a published orphan.
+        Return the number of surrogate units replaced in emitted compact frames.
         """
         store = self._require_store("publish")
+        published = False
         try:
             payload = serialize_journal(chunks, docs)
             if len(payload) > self.max_inflated_bytes:
-                raise StorageError("journal inflated output exceeds limit")
+                raise ReplayBudgetExceeded("max_inflated_bytes", len(payload), self.max_inflated_bytes)
             try:
                 journal = parse_journal(
                     payload, max_records=self.max_records,
-                    max_line_bytes=self.max_line_bytes,
+                    max_line_bytes=self.max_line_bytes, max_json_depth=self.max_json_depth,
                 )
+            except ReplayBudgetExceeded:
+                raise
             except ValueError as exc:
-                raise StorageError(f"journal publication preflight failed: {exc}") from exc
+                raise StorageError("journal publication preflight failed: invalid journal") from exc
+            for doc in journal.docs:
+                validate_document_identity(doc, store.path_identity)
             store.validate_journal(journal.chunks, journal.docs)
+            # journalRecords.ts:70-76: compact leaves are TextEncoder-lossy;
+            # metadata JSON is lossless. Validate the exact projected frame.
+            expected_chunks = {chunk_id: text_encoder_string(data)
+                               for chunk_id, data in chunks}
+            expected_docs = docs
+            replacements = sum(surrogate_count(chunk_id) + surrogate_count(data)
+                               for chunk_id, data in chunks)
             blob = deflate_journal(payload)
             if len(blob) > getattr(self._object_storage, "max_object_bytes", MAX_OBJECT_BYTES):
-                raise StorageError("journal compressed object size exceeds limit")
+                raise ReplayBudgetExceeded("max_object_bytes", len(blob), self._object_storage.max_object_bytes)
             # A fresh replay reads sync parameters before downloading journals.
             # Leave room for that control read and modest object growth.
             control_reserve = (
@@ -925,27 +1110,47 @@ class JournalBackend:
                 else self._sync_parameters_bytes + 1024
             )
             if len(blob) + control_reserve > self.max_refresh_bytes:
-                raise StorageError("journal download bytes exceeds refresh limit")
-            if self._probe_remote_wipe(store.epoch or None):
+                raise ReplayBudgetExceeded("max_refresh_bytes", len(blob) + control_reserve, self.max_refresh_bytes)
+            remote_epoch = self._load_sync_parameters_epoch()
+            last_sent = self._outbound_checkpoint(store)
+            if (store.epoch != (remote_epoch or "") or
+                    (last_sent and not self._object_storage.exists(last_sent))):
                 raise ConcurrentModification(
-                    "remote was rebuilt; retry the operation after refresh"
+                    "remote was rebuilt or journals are missing; refresh and retry"
                 )
             ms = max(int(time.time() * 1000), self._max_seen_ms + 1)
             # Reserve even failed attempts so a retry cannot reuse their key.
             self._max_seen_ms = ms
             for _ in range(10):
                 name = journal_filename(ms, suffix=secrets.token_hex(16))
-                outcome = self._object_storage.put_if_absent(name, blob)
+                store.record_outbound(name, hashlib.sha256(blob).hexdigest())
+                try:
+                    outcome = self._object_storage.put_if_absent(name, blob)
+                except MutationNotApplied:
+                    store.discard_outbound(name)
+                    raise
+                except (StorageError, OSError) as exc:
+                    raise OutcomeUnknown(getattr(exc, "diagnostic", None)) from exc
                 if outcome == "created":
+                    published = True
                     break
                 if outcome == "exists":
+                    store.discard_outbound(name)
                     continue
                 if outcome != "unsupported":
                     raise StorageError("invalid conditional publication result")
                 # B-10 compatibility fallback cannot exclude a racing writer.
                 if not self._object_storage.exists(name):
-                    self._object_storage.put(name, blob)
+                    try:
+                        self._object_storage.put(name, blob)
+                    except MutationNotApplied:
+                        store.discard_outbound(name)
+                        raise
+                    except (StorageError, OSError) as exc:
+                        raise OutcomeUnknown(getattr(exc, "diagnostic", None)) from exc
+                    published = True
                     break
+                store.discard_outbound(name)
             else:
                 raise StorageError("could not allocate an unused journal key")
             readback = self._object_storage.get(name)
@@ -956,12 +1161,12 @@ class JournalBackend:
             )
             journal = parse_journal(
                 decoded, name=name, max_records=self.max_records,
-                max_line_bytes=self.max_line_bytes,
+                max_line_bytes=self.max_line_bytes, max_json_depth=self.max_json_depth,
             )
             if (
                 decoded != payload
-                or journal.chunks != dict(chunks)
-                or journal.docs != docs
+                or journal.chunks != expected_chunks
+                or journal.docs != expected_docs
             ):
                 raise StorageError("journal read-back verification failed")
             if attachment_data is not None and assemble_binary([
@@ -969,57 +1174,78 @@ class JournalBackend:
                 for chunk_id in journal.docs[0]["children"]
             ]) != attachment_data:
                 raise StorageError("journal read-back verification failed")
+            for doc in journal.docs:
+                validate_document_identity(doc, store.path_identity)
+            store.confirm_outbound(name)
             store.apply_journal(name, journal.chunks, journal.docs)
-            store.last_sent_key = name
-        except StorageError:
-            raise
-        except (ValueError, OSError, sqlite3.Error) as exc:
+            def finish_send_tracking():
+                store.last_sent_key = name
+                store.compact_outbound(name)
+            store.finish_bookkeeping(finish_send_tracking)
+            return replacements
+        except (StorageError, ValueError, OSError, sqlite3.Error) as exc:
+            if published:
+                raise OutcomeUnknown(getattr(exc, "diagnostic", None)) from exc
+            if isinstance(exc, StorageError):
+                raise
             raise StorageError("journal publication or verification failed") from exc
+
+    def check_writer_support(self) -> None:
+        if self._writer_unsupported_reason is not None:
+            raise WriterUnsupported(self._writer_unsupported_reason if isinstance(self._writer_unsupported_reason, PublicDiagnostic) else None)
 
     async def write_note(
         self,
         path: str,
-        content: str,
+        content: str | bytes,
         *,
         create: bool = False,
         overwrite: bool = False,
         mtime: int | None = None,
         expected_rev: str | None = None,
+        lossy_text: bool = False,
     ) -> NoteMeta:
-        """Replace a text body; only explicit create resurrects a tombstone."""
+        """Ingest file content using device path-based disk-reading rules.
+
+        Only explicit create resurrects a tombstone. expected_rev protects
+        read-modify-write operations before publishing any chunks.
+        """
+        self.check_writer_support()
         validate_vault_path(path)
-        if not is_writable_text_path(path):
-            raise BinaryNoteError(
-                f"note {path!r} has a binary extension; "
-                "this server writes textual notes only"
-            )
-        return await self._write_content(
-            path, content, len(content.encode("utf-8")), doc_type_for(path),
+        await self.check_selection(path)
+        # Ordinary CREATE/CHANGED skips before content acquisition/publication.
+        # C:serviceModules/ServiceFileHandlerBase/events.ts:63-69.
+        if isinstance(content, bytes):
+            check_file_size(path, len(content), self.sync_max_size_mb)
+        body, doc_type, size = prepare_file_content(path, content, lossy_text=lossy_text)
+        # Device admission uses raw host stat.size; metadata uses Blob.size
+        # (C:EntryManagerImpls.ts:253-274). Lossy decoding can expand bytes.
+        # P-13: also gate the converted Blob before any chunks/publication.
+        check_file_size(path, size, self.sync_max_size_mb)
+        result = await self._write_content(
+            path, body, size, doc_type,
+            attachment_data=body if isinstance(body, bytes) else None,
             create=create, overwrite=overwrite, mtime=mtime,
             expected_rev=expected_rev,
         )
+        return complete_publication(result, ingress_notices(content)
+                                    if isinstance(content, str) or doc_type == 'plain' else [])
 
     async def write_attachment(
         self, path: str, data: bytes, *, create: bool = False,
         overwrite: bool = False, expected_rev: str | None = None,
+        lossy_text: bool = False,
     ) -> NoteMeta:
-        """Write a binary LiveSync newnote; cap decoded data at 32 MiB."""
+        """Byte-input alias for write_note; type still follows path."""
+        self.check_writer_support()
         validate_vault_path(path)
-        if is_writable_text_path(path):
-            raise BinaryNoteError(f"note {path!r}: textual path; use write_note")
-        if len(data) > MAX_ATTACHMENT_BYTES:
-            raise ValueError(
-                f"attachment exceeds 32 MiB cap ({MAX_ATTACHMENT_BYTES} bytes); "
-                f"actual size {len(data)} bytes"
-            )
-        return await self._write_content(
-            path, encode_newnote(data)[0], len(data), "newnote",
-            attachment_data=data,
-            create=create, overwrite=overwrite, expected_rev=expected_rev,
+        return await self.write_note(
+            path, data, create=create, overwrite=overwrite,
+            expected_rev=expected_rev, lossy_text=lossy_text,
         )
 
     async def _write_content(
-        self, path: str, content: str, size: int, doc_type: str, *,
+        self, path: str, content: str | bytes, size: int, doc_type: str, *,
         create: bool, overwrite: bool, mtime: int | None = None,
         expected_rev: str | None = None, attachment_data: bytes | None = None,
     ) -> NoteMeta:
@@ -1027,37 +1253,66 @@ class JournalBackend:
         store = self._require_store("write_note")
         doc_id = self._doc_id(path)
         parent = store.winner(doc_id)
+        self._validate_identity(parent)
         self._check_expected_rev(parent, expected_rev)
         live = parent is not None and not parent.get("deleted")
         if live and create and not overwrite:
             raise NoteExists(f"note already exists: {path}")
         if not live and not create:
             raise NoteNotFound(f"note not found: {path}")
-        chunk_id = chunk_id_for(content)
-        self._validate_chunk_reuse(chunk_id, content)
+        try:
+            pieces = [piece for piece in self._splitter.split(content, path=canonical_path(path)) if piece]
+        except SplitterRefusal as error:
+            # Keep codec modules storage-independent; project only typed fields.
+            raise WriterParameterRefused(
+                error.diagnostic, setting_keys=getattr(error, 'setting_keys', error.diagnostic.keys)
+            ) from None
+        # P-10 / EntryManagerImpls.ts:280: retain ingested Blob.size even
+        # when a legacy splitter's Blob.text() removes an initial BOM.
+        children = [chunk_id_for_piece(piece, hash_alg=self._splitter.hash_alg) for piece in pieces]
+        unique = {}
+        for chunk_id, piece in zip(children, pieces):
+            # journalRecords.ts:69-74: leaf equality is after TextEncoder projection.
+            if chunk_id in unique and text_encoder_string(unique[chunk_id]) != text_encoder_string(piece):
+                raise StorageError(PublicDiagnostic(DiagnosticCode.CHUNK_COLLISION_RECOVERY))
+            # Keep replacement evidence even if a literal U+FFFD arrived first
+            # (journalRecords.ts:69-74 projects both surrogate units to U+FFFD).
+            if chunk_id not in unique or surrogate_count(piece) > surrogate_count(unique[chunk_id]):
+                unique[chunk_id] = piece
+        chunks = list(unique.items())
+        for chunk_id, piece in chunks:
+            self._validate_chunk_reuse(chunk_id, piece)
         stamp = int(time.time() * 1000) if mtime is None else mtime
         if parent is None:
             body = new_metadata_doc(
-                path, [chunk_id], size,
+                path, children, size,
                 doc_type, stamp, stamp,
             )
         else:
             body = clone_metadata(parent)
             body.pop("deleted", None)
             body.update(
-                children=[chunk_id], eden={}, mtime=stamp,
+                children=children, eden={}, mtime=stamp,
                 size=size, type=doc_type,
             )
         body.update(_id=doc_id, path=canonical_path(path))
         body = self._next_revision(body, parent)
-        self._publish([(chunk_id, content)], [body], attachment_data=attachment_data)
-        return self._meta_from_doc(body)
+        replacements = self._publish(chunks, [body], attachment_data=attachment_data)
+        result = self._meta_from_doc(body)
+        if replacements:
+            result["transport_replacements"] = replacements
+        notices = split_notices(content, self._splitter.version)
+        if replacements:
+            notices.append({'code': 'journal_surrogates_replaced', 'count': replacements})
+        return complete_publication(result, notices)
 
     async def delete_note(
         self, path: str, expected_rev: str | None = None
     ) -> bool:
         """Append a soft deletion, preserving all body references."""
+        self.check_writer_support()
         validate_vault_path(path)
+        await self.check_selection(path)
         store = self._require_store("delete_note")
         parent = store.winner(self._doc_id(path))
         self._check_expected_rev(parent, expected_rev)
@@ -1078,6 +1333,7 @@ class JournalBackend:
     def _copy_revision(self, source: dict, new_path: str, overwrite: bool) -> dict:
         doc_id = self._doc_id(new_path)
         target = self._require_store("move/copy").winner(doc_id)
+        self._validate_identity(target)
         if target is not None and not target.get("deleted") and not overwrite:
             raise NoteExists(f"note already exists: {new_path}")
         body = clone_metadata(
@@ -1091,18 +1347,34 @@ class JournalBackend:
     ) -> NoteMeta:
         """Publish destination and source soft deletion in ONE journal.
 
+        Oversized destinations are refused before publication (P-13).
+
         Same-path is a no-op; identity-preserving renames update only the
         display path and mtime. Single-file publication has no partial phases,
         so RenamePartialError (mapped by the tool layer for contract parity)
-        is never raised by this backend. Failed verification reports
-        StorageError.
+        is never raised by this backend. Unconfirmed publication reports
+        OutcomeUnknown.
         """
+        self.check_writer_support()
         validate_vault_path(path)
         validate_vault_path(new_path)
+        await self.check_selection(new_path)
+        source_selection = await self.selection_for(path)
+        if not source_selection.writer_supported:
+            raise WriterUnsupported(source_selection.reason)
+        preserve_source = not source_selection.allowed
         new_path = canonical_path(new_path)
         if path == new_path:
             return await self.get_meta(path)
         source = self._source_doc(path)
+        # Device admission converts oversized RENAME to DELETE(source).
+        # P-13: this peer lacks the device's retained host file; refuse first.
+        try:
+            check_file_size(new_path, source.get('size', 0), self.sync_max_size_mb)
+        except WriteSkipped:
+            raise RenameRefused(path, new_path, source.get('size', 0),
+                                self.sync_max_size_mb) from None
+
         if self._doc_id(path) == self._doc_id(new_path):
             body = self._next_revision(
                 clone_metadata(
@@ -1116,16 +1388,40 @@ class JournalBackend:
             retired = self._next_revision(
                 soft_delete_revision(source, int(time.time() * 1000)), source
             )
-            self._publish([], [body, retired])
+            self._publish([], [body] if preserve_source else [body, retired])
         return self._meta_from_doc(body)
 
     async def copy_note(
         self, path: str, new_path: str, *, overwrite: bool = False
     ) -> NoteMeta:
         """Copy references (including eden), preserving body and ctime."""
+        self.check_writer_support()
         validate_vault_path(path)
         validate_vault_path(new_path)
+        await self.check_selection(new_path)
         source = self._source_doc(path)
+        # Copy creates a new storage file -> CREATE size gate (C:events.ts:63-69).
+        # C:serviceModules/ServiceFileHandlerBase/events.ts:63-77.
+        # Rename has a separate admission rule; deletes have no size gate.
+        check_file_size(new_path, source.get('size', 0), self.sync_max_size_mb)
         body = self._copy_revision(source, new_path, overwrite)
         self._publish([], [body])
         return self._meta_from_doc(body)
+
+    async def _read_selection_file(self, path):
+        from livesync_format import selection_lookup_path
+        path = selection_lookup_path(path)
+        if path is None:
+            return None
+        store = self._require_store('ignore files')
+        candidates = ['i:' + path, path] if _has_hidden_segment(path) else [path]
+        content = None
+        for candidate in candidates:
+            doc_id = self._path2id(store, candidate)
+            if store.winner(doc_id) is not None:
+                content = store.read_ignore_file(doc_id)
+                break
+        if content is None:
+            return None
+        _, text, data, is_text = content
+        return text if is_text else data.decode('utf-8', errors='replace')

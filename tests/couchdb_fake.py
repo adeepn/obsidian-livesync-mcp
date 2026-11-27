@@ -51,6 +51,12 @@ from urllib.parse import unquote
 import httpx
 
 
+def _json_response(status_code: int, body: dict) -> httpx.Response:
+    # ASCII JSON responses preserve ordinary Unicode, including paired escapes.
+    return httpx.Response(status_code, content=json.dumps(body, ensure_ascii=True).encode('utf-8'),
+                          headers={'Content-Type': 'application/json'})
+
+
 def _next_rev(rev: str) -> str:
     generation = rev.split("-", 1)[0]
     try:
@@ -135,9 +141,7 @@ def make_fake_couchdb(
                 )
                 for key in body["keys"]
             ]
-            return httpx.Response(
-                200, json={"total_rows": live_count(), "rows": rows}
-            )
+            return _json_response(200, {"total_rows": live_count(), "rows": rows})
 
         ordered = sorted(store, key=lambda key: key.encode("utf-8"))
         ordered = [k for k in ordered if not store[k].get("_deleted")]
@@ -153,10 +157,19 @@ def make_fake_couchdb(
         limit = params.get("limit")
         window = ordered[skip:] if limit is None else ordered[skip : skip + int(limit)]
         rows = [row_for(key, include_docs, by_keys=False) for key in window]
-        return httpx.Response(200, json={"total_rows": live_count(), "rows": rows})
+        return _json_response(200, {"total_rows": live_count(), "rows": rows})
 
     def handler(request: httpx.Request) -> httpx.Response:
+        request.extensions["raw_body"] = bytes(request.content)
         request_log.append(request)
+        # Verified CouchDB 3.5.3, 2026-11-25: all JSON endpoints reject lone
+        # surrogate escapes, but accept paired escapes and UTF-8 scalars.
+        if request.content:
+            try:
+                parsed = json.loads(request.content)
+                json.dumps(parsed, ensure_ascii=False).encode('utf-8')
+            except (ValueError, UnicodeError):
+                return httpx.Response(400, json={'error': 'bad_request', 'reason': 'invalid UTF-8 JSON'})
         if force_status is not None:
             # "reason" doubles as a raw-body sentinel for log-hygiene
             # tests: error logs may carry the error code, never the body.
@@ -200,6 +213,20 @@ def make_fake_couchdb(
                 return all_docs_response(request)
             return httpx.Response(405, json={"error": "method_not_allowed"})
 
+        if rest == '_bulk_docs' and request.method == 'POST':
+            results = []
+            for body in json.loads(request.content)['docs']:
+                doc_id = body['_id']
+                existing = store.get(doc_id)
+                if existing is not None and body.get('_rev') != existing['_rev']:
+                    results.append({'id': doc_id, 'error': 'conflict'})
+                    continue
+                rev = _next_rev(existing['_rev']) if existing else '1-fake1'
+                store[doc_id] = {**body, '_rev': rev}
+                state['update_seq'] += 1
+                results.append({'ok': True, 'id': doc_id, 'rev': rev})
+            return httpx.Response(201, json=results)
+
         doc_id = rest
         if request.method == "GET":
             doc = store.get(doc_id)
@@ -224,7 +251,8 @@ def make_fake_couchdb(
                 state["update_seq"] += 1
             if request.url.params.get("conflicts") != "true":
                 body.pop("_conflicts", None)  # served only on request
-            return httpx.Response(200, json=body)
+            return httpx.Response(200, content=json.dumps(body, ensure_ascii=True).encode("utf-8"),
+                                  headers={"content-type": "application/json"})
 
         if request.method == "PUT":
             if doc_id in put_conflict_ids:

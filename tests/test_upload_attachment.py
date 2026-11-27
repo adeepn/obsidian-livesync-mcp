@@ -8,13 +8,14 @@ import pytest
 import server
 from journal_codec import MAX_LINE_BYTES, parse_journal, serialize_journal
 from livesync_format import ForbiddenPathError
-from storage_base import BinaryNoteError, ConcurrentModification, NoteExists, NoteNotFound
+from storage_base import ConcurrentModification, NoteExists, NoteNotFound
 from storage_journal import JournalBackend
 from tests.fake_backend import FakeBackend
 from tests.test_storage_couchdb import fake_backend
 from tests.test_storage_journal import make_backend, healthy_bucket
 
-CAP = 32 * 1024 * 1024
+DEVICE_LIMIT_BYTES = 1024 * 1024
+LARGE_FILE_BYTES = 40 * 1024 * 1024
 DATA = b"%PDF-1.7\n\x00\xff\x80scan\r\n"
 
 
@@ -56,20 +57,19 @@ async def test_attachment_roundtrip_and_write_semantics(backend):
     assert (await backend.read_note("scan.pdf"))["data"] == DATA
 
 
-@pytest.mark.parametrize("path", ["note.md", "board.canvas", "db.base", "note.MD"])
-async def test_attachment_refuses_text(backend, path):
-    with pytest.raises(BinaryNoteError, match="textual path; use write_note"):
-        await backend.write_attachment(path, DATA, create=True)
-
-
 async def test_attachment_forbidden_before_text_or_size(backend):
+    backend.sync_max_size_mb_override = 1
+    backend.sync_max_size_mb = 1
     with pytest.raises(ForbiddenPathError):
-        await backend.write_attachment(".hidden.md", b"x" * (CAP + 1), create=True)
+        await backend.write_attachment(".hidden.md", b"x" * (DEVICE_LIMIT_BYTES + 1), create=True)
 
 
-async def test_attachment_cap(backend):
-    with pytest.raises(ValueError, match=r"32 MiB.*33554433"):
-        await backend.write_attachment("scan.pdf", b"x" * (CAP + 1), create=True)
+async def test_attachment_obeys_device_limit(backend):
+    from storage_base import WriteSkipped
+    backend.sync_max_size_mb_override = 1
+    backend.sync_max_size_mb = 1
+    with pytest.raises(WriteSkipped, match=r"syncMaxSizeInMB.*1"):
+        await backend.write_attachment("scan.pdf", b"x" * (DEVICE_LIMIT_BYTES + 1), create=True)
     assert await backend.read_note("scan.pdf") is None
 
 
@@ -90,11 +90,19 @@ async def test_journal_attachment_two_peer_replay(tmp_path):
         await reader.close()
 
 
-def test_max_attachment_fits_journal_line():
-    encoded = base64.b64encode(b"x" * CAP).decode("ascii")
-    payload = serialize_journal([("h:0123456789abcdef", encoded)], [])
-    assert max(map(len, payload.splitlines())) < MAX_LINE_BYTES == 64 * 1024 * 1024
-    assert parse_journal(payload).chunks["h:0123456789abcdef"] == encoded
+@pytest.mark.parametrize('encoding', ['base64', 'full-json-escaped-text'])
+def test_v3_piece_fits_encoded_journal_line_allowance(encoding):
+    if encoding == 'base64':
+        encoded = base64.b64encode(b"x" * (4 * 1024 * 1024)).decode("ascii")
+        payload = serialize_journal([("h:0123456789abcdef", encoded)], [])
+        assert parse_journal(payload).chunks["h:0123456789abcdef"] == encoded
+    else:
+        # UTF-8 boundary headroom and worst-case JSON escaping (6x per byte).
+        encoded = "\x00" * (4 * 1024 * 1024 + 3)
+        doc = {"_id": "h:0123456789abcdef", "_rev": "1-a", "data": encoded}
+        payload = serialize_journal([], [doc])
+        assert parse_journal(payload).docs[0]['data'] == encoded
+    assert max(map(len, payload.splitlines())) < 32 * 1024 * 1024 < MAX_LINE_BYTES
 
 
 @pytest.mark.parametrize("content", ["YQ", "!!!!", "YQ===", "é"])
@@ -119,25 +127,25 @@ async def test_tool_upload_response_and_fetch(monkeypatch):
 
 
 async def test_journal_verifies_original_bytes_before_local_apply(tmp_path, monkeypatch):
-    import storage_journal
     from storage_base import StorageError
     backend, _ = make_backend(tmp_path, healthy_bucket())
     try:
         await backend.startup_check()
-        monkeypatch.setattr(storage_journal, "encode_newnote", lambda data: ["d3Jvbmc="])
-        with pytest.raises(StorageError, match="read-back verification"):
+        monkeypatch.setattr(backend._splitter, "split", lambda data, **kwargs: ["d3Jvbmc="])
+        with pytest.raises(StorageError, match="outcome unknown"):
             await backend.write_attachment("scan.pdf", DATA, create=True)
         assert await backend.read_note("scan.pdf") is None
     finally:
         await backend.close()
 
 
-async def test_tool_size_guard(monkeypatch):
+async def test_tool_has_no_fixed_size_guard(monkeypatch):
     fake = FakeBackend()
     monkeypatch.setattr(server, "backend", fake)
-    result = await server.obsidian_upload_attachment("scan.pdf", base64.b64encode(b"x" * (CAP + 1)).decode())
-    assert "32 MiB" in result and "33554433" in result
-    assert not fake.notes
+    result = json.loads(await server.obsidian_upload_attachment(
+        "scan.pdf", base64.b64encode(b"x" * (LARGE_FILE_BYTES + 1)).decode()))
+    assert result['size'] == LARGE_FILE_BYTES + 1
+    assert len(fake.notes['scan.pdf']['data']) == LARGE_FILE_BYTES + 1
 
 
 async def test_tool_overwrite(monkeypatch):
@@ -194,12 +202,13 @@ async def test_couchdb_attachment_requires_201(target):
     from storage_base import StorageUnavailable
     chunk_id = chunk_id_for(base64.b64encode(DATA).decode())
     async with fake_backend(put_202_ids=(chunk_id if target == "chunk" else "scan.pdf",)) as (backend, _):
-        with pytest.raises(StorageUnavailable, match="durable"):
+        with pytest.raises(StorageUnavailable, match="note is unchanged" if target == "chunk" else "outcome unknown"):
             await backend.write_attachment("scan.pdf", DATA, create=True)
         assert await backend.read_note("scan.pdf") is None
 
 
-async def test_tool_textual_path_error(monkeypatch, backend):
+async def test_tool_upload_uses_plain_disk_path(monkeypatch, backend):
     monkeypatch.setattr(server, "backend", backend)
-    result = await server.obsidian_upload_attachment("note.md", "eA==")
-    assert "textual path" in result and "text note tools" in result
+    result = json.loads(await server.obsidian_upload_attachment("note.md", "eA=="))
+    assert result["size"] == 1
+    assert json.loads(await server.obsidian_fetch("note.md"))["content"] == "x"

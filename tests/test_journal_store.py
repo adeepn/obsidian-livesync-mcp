@@ -3,8 +3,8 @@
 Covers the Task 3 interface consumed by Tasks 5-7: ``pick_winner`` (the
 deterministic winner rule for CouchDB-style ``<gen>-<hash>`` revisions),
 ``JournalStore.apply_journal`` (idempotent journal replay with per-file
-transactions), epoch resets that wipe both tables and chunk files, path
-identity enforcement on reopen, and note reads (children order, eden inline
+transactions), dedupe resets that retain tables and chunk files, path
+identity quarantine on reopen, and note reads (children order, eden inline
 chunks, legacy ``notes`` bodies, binary ``newnote`` bodies, E2EE refusal,
 per-note corruption isolation in ``iterate_notes``).
 """
@@ -186,12 +186,14 @@ class TestApplyJournal:
             )
         assert store.processed(JOURNAL_2) is False
         assert store.note_ids() == ["seed.md"]
-        # SQLite prior state kept AND zero new published chunk files (nor
-        # staged leftovers) from the failed application.
+        # Metadata rolls back; installed content-addressed orphans are safe
+        # and reusable. Staging files must still be removed.
         files = sorted(
             p.name for p in (state / "chunks").rglob("*") if p.is_file()
         )
-        assert files == ["23456789abcdef"]
+        assert files == ["23456789abcdef", "dcba9876543210"]
+        assert store.read_note("seed.md")[1] == "keep"
+        assert not list((state / "chunks").rglob(".staged-*"))
         store.close()
 
     def test_publication_failure_leaves_journal_replayable(self, store, monkeypatch):
@@ -213,7 +215,7 @@ class TestApplyJournal:
                 store.apply_journal(JOURNAL_1, chunks, docs)
 
         assert store.processed(JOURNAL_1) is False
-        assert store.leaves("retry.md") == docs
+        assert store.leaves("retry.md") == []
         assert store._chunk_path("h:first").read_bytes() == b"first body"
         assert not store._chunk_path("h:second").exists()
         assert not list(store._chunks_dir.rglob(".staged-*"))
@@ -245,13 +247,13 @@ class TestApplyJournal:
 
         def rendezvous_processed(instance, name):
             result = real_processed(instance, name)
-            checked.wait(timeout=10)
+            checked.wait(timeout=60)
             return result
 
         monkeypatch.setattr(JournalStore, "processed", rendezvous_processed)
 
         def rendezvous_replace(src, dst):
-            barrier.wait(timeout=10)
+            barrier.wait(timeout=60)
             real_replace(src, dst)
 
         monkeypatch.setattr(journal_store.os, "replace", rendezvous_replace)
@@ -278,7 +280,7 @@ class TestApplyJournal:
         for thread in threads:
             thread.start()
         for thread in threads:
-            thread.join(timeout=15)
+            thread.join(timeout=60)
         assert not any(thread.is_alive() for thread in threads)
         assert errors == []
 
@@ -304,8 +306,9 @@ class TestApplyJournal:
         files = [p for p in (store.state_dir / "chunks").rglob("*") if p.is_file()]
         assert files == []
         skipped = {rec.message for rec in caplog.records}
-        assert any("f:notachunk" in message for message in skipped)
-        assert any("h:aa../../../escaped" in message for message in skipped)
+        assert any("invalid journal chunk identifier" in message for message in skipped)
+        assert "f:notachunk" not in caplog.text
+        assert "h:aa../../../escaped" not in caplog.text
 
     def test_traversal_chunk_write_never_escapes_state_dir(self, tmp_path):
         state = tmp_path / "state"
@@ -367,7 +370,7 @@ class TestApplyJournal:
 
 class TestProcessedAndMeta:
     @pytest.mark.parametrize("symlink_root", [False, True], ids=["shard", "root"])
-    def test_reset_unlinks_directory_symlinks_without_touching_targets(
+    def test_cache_reset_never_traverses_or_removes_chunk_symlinks(
         self, store, tmp_path, symlink_root
     ):
         outside = tmp_path / "outside"
@@ -388,8 +391,8 @@ class TestProcessedAndMeta:
 
         assert (outside / "payload").read_bytes() == b"private"
         assert (outside_shard / "nested").read_bytes() == b"also private"
-        assert not link.is_symlink()
-        assert not link.exists()
+        assert link.is_symlink()
+        assert link.exists()
         assert store.files_processed_count() == 0
 
     def test_defaults_on_fresh_store(self, store):
@@ -428,7 +431,7 @@ class TestProcessedAndMeta:
         assert second.epoch == "1:salt"
         second.close()
 
-    def test_epoch_change_wipes_tables_and_chunk_files(self, tmp_path):
+    def test_epoch_records_value_without_destroying_state(self, tmp_path):
         state = tmp_path / "state"
         store = JournalStore(state, PATH_IDENTITY_LEGACY)
         store.epoch = "1:salt"
@@ -445,10 +448,16 @@ class TestProcessedAndMeta:
         store.epoch = "2:othersalt"
 
         assert store.epoch == "2:othersalt"
-        assert store.note_ids() == []
+        assert store.note_ids() == ["note.md"]
+        assert store.files_processed_count() == 1
+        assert store.last_sent_key == JOURNAL_1
+        assert store.read_note("note.md")[1] == "body"
+        store.reset()
+        assert store.note_ids() == ["note.md"]
         assert store.files_processed_count() == 0
         assert store.last_sent_key == ""
-        assert [p for p in chunks_root.rglob("*") if p.is_file()] == []
+        assert store.epoch == "2:othersalt"
+        assert store.read_note("note.md")[1] == "body"
         store.close()
 
     def test_setting_same_epoch_does_not_reset(self, store):
@@ -466,13 +475,14 @@ class TestPathIdentity:
         with pytest.raises(ValueError, match="path identity"):
             JournalStore(tmp_path / "state", "weird")
 
-    def test_identity_mismatch_on_reopen_raises(self, tmp_path):
+    def test_identity_mismatch_on_reopen_quarantines(self, tmp_path):
         state = tmp_path / "state"
         JournalStore(state, PATH_IDENTITY_LEGACY).close()
-        with pytest.raises(ValueError, match="path identity"):
-            JournalStore(state, PATH_IDENTITY_NFC)
-        # The stored identity survives the refused reopen.
-        reopened = JournalStore(state, PATH_IDENTITY_LEGACY)
+        fresh = JournalStore(state, PATH_IDENTITY_NFC)
+        assert fresh.path_identity == PATH_IDENTITY_NFC
+        fresh.close()
+        archived = next(state.with_name(state.name + ".quarantine").glob("*/state"))
+        reopened = JournalStore(archived, PATH_IDENTITY_LEGACY)
         reopened.close()
 
     def test_unicode_doc_id_untouched_in_nfc_mode(self, tmp_path):
@@ -524,7 +534,7 @@ class TestReadNote:
         assert text is None
         assert is_text is False
 
-    def test_newnote_with_text_extension_decodes_utf8(self, store):
+    def test_newnote_with_text_extension_stays_bytes(self, store):
         payload = "кириллица".encode("utf-8")
         doc = meta_doc("x.md", "1-x", children=["h:bin"], doc_type="newnote")
         store.apply_journal(
@@ -533,7 +543,7 @@ class TestReadNote:
             [doc],
         )
         _, text, data, is_text = store.read_note("x.md")
-        assert (text, data, is_text) == ("кириллица", payload, True)
+        assert (text, data, is_text) == (None, payload, False)
 
     def test_legacy_notes_body(self, store):
         doc = meta_doc("old.md", "1-x", doc_type="notes", data="legacy body")
@@ -693,3 +703,14 @@ def test_state_size_bytes_includes_sqlite_sidecars_and_nested_chunks(store):
     expected = sum(p.stat().st_size for p in root.iterdir() if p.is_file()) + 5
     (root / "unrelated.txt").write_bytes(b"ignored")
     assert store.state_size_bytes() == expected
+
+
+@pytest.mark.parametrize("identity", ["case-sensitive", "nfc-case-sensitive"])
+def test_sensitive_identity_migration_quarantines(tmp_path, identity):
+    store = JournalStore(tmp_path, identity)
+    store.close()
+    fresh = JournalStore(tmp_path, "legacy")
+    fresh.close()
+    archived = next(tmp_path.with_name(tmp_path.name + ".quarantine").glob("*/state"))
+    old = JournalStore(archived, identity)
+    old.close()

@@ -13,10 +13,14 @@ import pytest
 import server
 
 from storage_base import (
-    BinaryNoteError, ConcurrentModification, NoteExists, NoteNotFound,
+    ConcurrentModification, NoteExists, NoteNotFound,
     StorageError, StorageUnavailable, UnsupportedVault,
 )
 from tests.fake_backend import FakeBackend
+
+
+def _without_scan(result):
+    return {key: value for key, value in result.items() if key not in ('scan', 'scope')}
 
 
 @pytest.fixture
@@ -39,11 +43,11 @@ async def test_fetch_returns_raw_content(tools):
 
 async def test_fetch_binary_meta(tools):
     server, fake = tools
-    fake.add("image.png", data=b"abc")
+    fake.add("image.png", data=b"\xffbc")
     result = json.loads(await server.obsidian_fetch("image.png"))
     assert result["path"] == "image.png"
     assert result["size"] == 3
-    assert result["sha256"] == hashlib.sha256(b"abc").hexdigest()
+    assert result["sha256"] == hashlib.sha256(b"\xffbc").hexdigest()
     assert not {"content", "data", "text"} & result.keys()
 
 
@@ -55,14 +59,14 @@ async def test_search_isolated(tools):
     result = json.loads(await server.obsidian_search("needle"))
     assert result["skipped"] == ["bad.md"]
     assert [n["path"] for n in result["results"]] == ["good.md"]
-    assert ("iterate_texts", (".md",)) in fake.calls
+    assert ("iterate_texts", ("",)) in fake.calls
 
 
 async def test_list_notes_recursive_default(tools):
     server, fake = tools
     for path in ("root.md", "projects/a.md", "projects/deep/b.md", "projects2/c.md"):
         fake.add(path, "")
-    result = json.loads(await server.obsidian_list_notes("projects"))
+    result = json.loads(await server.obsidian_list_notes("projects"))["results"]
     assert [n["path"] for n in result] == ["projects/a.md", "projects/deep/b.md"]
     assert ("list_notes", ("projects", None, True)) in fake.calls
 
@@ -84,9 +88,9 @@ async def test_hub_incoming(tools):
     for i in range(5):
         fake.add(f"{i}.md", "[[Hub]] [[Hub#heading]]")
     fake.add("alone.md", "[[missing]]")
-    hubs = json.loads(await server.obsidian_find_hub_notes())
+    hubs = json.loads(await server.obsidian_find_hub_notes())["results"]
     assert hubs == [{"path": "folder/Hub.md", "incoming": 5, "outgoing": 0, "total": 5}]
-    orphans = json.loads(await server.obsidian_find_orphaned_notes())
+    orphans = json.loads(await server.obsidian_find_orphaned_notes())["results"]
     assert orphans == ["alone.md"]
 
 
@@ -98,6 +102,28 @@ async def test_backlinks_finds_anchor_links(tools, link):
     result = json.loads(await server.obsidian_get_links("Hub.md"))
     assert result["backlinks"] == [{"path": "source.md"}]
     assert result["outgoing"] == []
+
+
+@pytest.mark.parametrize("nfc", [False, True])
+async def test_graph_tools_use_backend_case_identity(monkeypatch, nfc):
+    from tests.test_storage_couchdb import fake_backend
+
+    docs = {"_local/obsydian_livesync_milestone": {
+        "handleFilenameCaseSensitive": True, "pathNormalizationVersion": int(nfc)}}
+    async with fake_backend(docs) as (backend, _):
+        await backend.startup_check()
+        for path, text in [("Source.md", "[[A]] [[a]]"), ("A.md", ""), ("a.md", "")]:
+            await backend.write_note(path, text, create=True)
+        monkeypatch.setattr(server, "backend", backend, raising=False)
+        graph = json.loads(await server.obsidian_get_link_graph())
+        assert graph["edges"] == [
+            {"from": "Source.md", "to": "A.md"},
+            {"from": "Source.md", "to": "a.md"},
+        ]
+        for path in ("A.md", "a.md"):
+            result = json.loads(await server.obsidian_get_links(path))
+            assert result["path"] == path
+            assert result["backlinks"] == [{"path": "Source.md"}]
 
 
 async def test_refresh_calls_backend_refresh(tools):
@@ -112,6 +138,7 @@ async def test_tags_and_graph_isolate_unreadable_notes(tools):
     fake.add("good.md", "---\ntags: [one]\n---\n#two [[target]]")
     fake.add("target.md", "")
     tags = json.loads(await server.obsidian_get_all_tags())
+    tags.pop("scan")
     assert tags == {"tags": {"one": 1, "two": 1}, "skipped": ["bad.md"]}
     graph = json.loads(await server.obsidian_get_link_graph())
     assert graph["skipped"] == ["bad.md"]
@@ -130,7 +157,7 @@ async def test_graph_resolves_unreadable_target(tools):
     assert set(graph["nodes"]) == {"source.md", "target.md"}
     assert graph["edges"] == [{"from": "source.md", "to": "target.md"}]
     assert graph["skipped"] == ["target.md"]
-    assert json.loads(await module.obsidian_find_orphaned_notes()) == {
+    assert _without_scan(json.loads(await module.obsidian_find_orphaned_notes())) == {
         "orphans": [], "skipped": ["target.md"]}
 
 
@@ -159,7 +186,7 @@ async def test_malformed_frontmatter_is_clear_and_isolated(tools):
 
 
 @pytest.mark.parametrize("error", [StorageError, NoteNotFound, NoteExists,
-    BinaryNoteError, ConcurrentModification, UnsupportedVault, StorageUnavailable])
+    ConcurrentModification, UnsupportedVault, StorageUnavailable])
 async def test_storage_errors_are_sanitized(tools, error):
     server, fake = tools
     fake.errors["read_note"] = error("https://internal:secret/db _rev=private")
@@ -176,10 +203,11 @@ async def test_search_regex_and_invalid_pattern(tools):
 
 
 async def test_get_backend_couchdb():
-    from config import CouchDBConfig
+    from config import load_config
     from storage_couchdb import CouchDBBackend
-    cfg = SimpleNamespace(backend="couchdb", couchdb=CouchDBConfig(
-        url="http://localhost:5984", user="test", password="test", database="vault"), scan_max_notes=10000, scan_max_bytes=67108864)
+    cfg = load_config({'LIVESYNC_BACKEND': 'couchdb', 'COUCHDB_USER': 'test',
+        'COUCHDB_PASSWORD': 'test-password', 'COUCHDB_DATABASE': 'vault',
+        'MCP_API_KEY': 'test-key'})
     backend = server.get_backend(cfg)
     assert isinstance(backend, CouchDBBackend)
     await backend.close()
@@ -310,9 +338,9 @@ async def test_partial_graph_consumers_report_skipped(tools):
     module, fake = tools
     fake.add("bad.md", None)
     fake.add("good.md", "")
-    assert json.loads(await module.obsidian_find_orphaned_notes()) == {
+    assert _without_scan(json.loads(await module.obsidian_find_orphaned_notes())) == {
         "orphans": ["good.md"], "skipped": ["bad.md"]}
-    assert json.loads(await module.obsidian_find_hub_notes()) == {
+    assert _without_scan(json.loads(await module.obsidian_find_hub_notes())) == {
         "hubs": [], "skipped": ["bad.md"]}
 
 
@@ -324,29 +352,28 @@ async def test_legacy_canvas_add_can_update_existing_file(tools):
     assert json.loads(fake.notes["Board.canvas"]["text"])["nodes"][0]["text"] == "hello"
 
 
-async def test_default_lifespan_closes_on_startup_failure(monkeypatch):
+async def test_default_lifespan_closes_on_startup_failure(monkeypatch, caplog):
     fake = FakeBackend()
     fake.errors["startup_check"] = StorageUnavailable()
     monkeypatch.setattr(server, "get_backend", lambda cfg: fake)
-    with pytest.raises(StorageUnavailable):
+    with pytest.raises(RuntimeError, match="Application failed; inspect typed logs") as caught:
         async with server.mcp.settings.lifespan(server.mcp):
             pytest.fail("served after startup failure")
     assert server.backend is None
     assert fake.calls[-1] == ("close", ())
+    assert caught.value.__cause__ is None and caught.value.__suppress_context__
+    assert 'cause: StorageUnavailable' in caplog.text
+    assert all(record.exc_info is None for record in caplog.records)
 
 
 async def test_regex_worker_tool_timeout_and_normal(tools, monkeypatch):
-    import regex_runner
-    import time
+    from tests.regex_doubles import timeout_for
     server, fake = tools
     fake.add('a.md', 'a' * 1024 + '!')
-    monkeypatch.setattr(regex_runner, 'DEFAULT_TIMEOUT', .2)
-    start = time.monotonic()
+    timeout_for(monkeypatch, lambda pattern, text, op: pattern == '(a+)+$')
     assert 'regex pattern too complex' in await server.obsidian_search('(a+)+$', True)
     assert 'regex pattern too complex' in await server.obsidian_update_note(
         'a.md', 'search-replace', search='(a+)+$', replace='x', regex=True)
-    assert time.monotonic() - start < 5
-    monkeypatch.setattr(regex_runner, 'DEFAULT_TIMEOUT', 2)
     assert json.loads(await server.obsidian_search('a+', True))['results']
     assert '1 matches replaced' in await server.obsidian_update_note(
         'a.md', 'search-replace', search='a+', replace='x', regex=True)
@@ -379,13 +406,16 @@ async def test_scan_byte_budget_and_concurrency(tools, monkeypatch):
     assert result['truncated'] is True
     assert result['scan']['bytes'] <= 1000
     active = peak = 0
+    both_entered = asyncio.Event()
     original = fake.iterate_texts
     async def delayed(*args, **kwargs):
         nonlocal active, peak
         active += 1
         peak = max(peak, active)
         try:
-            await asyncio.sleep(.03)
+            if active == 2:
+                both_entered.set()
+            await asyncio.wait_for(both_entered.wait(), 30)
             async for item in original(*args, **kwargs):
                 yield item
         finally:
@@ -432,7 +462,8 @@ async def test_truncated_graph_does_not_label_unread_bodies_orphaned(tools, monk
     result = json.loads(await server.obsidian_find_orphaned_notes())
     assert result['truncated'] is True
     assert result['orphans'] == []
-    assert set(result['skipped']) == {'a.md', 'b.md'}
+    assert result['skipped'] == []
+    assert result['scope'] == 'scanned pages only'
 
 
 def test_app_factory_uses_injected_config_and_isolates_backends():
@@ -504,10 +535,12 @@ async def test_capped_listings_report_counts(tools, monkeypatch, name):
 
 
 @pytest.mark.parametrize('name', ['obsidian_list_notes', 'obsidian_list_templates'])
-async def test_uncapped_listings_keep_list_shape(tools, name):
+async def test_uncapped_listings_add_scan_envelope(tools, name):
     module, fake = tools
     fake.add('templates/a.md', 'body')
-    assert isinstance(json.loads(await getattr(module, name)()), list)
+    result = json.loads(await getattr(module, name)())
+    assert isinstance(result['results'], list)
+    assert result['scan']['stopped_because'] is None
 
 
 async def test_factory_scan_limits_are_frozen_and_reach_backend(monkeypatch):
@@ -598,7 +631,7 @@ async def test_vault_stats_local_state(tmp_path, monkeypatch, threshold, size, w
         result = json.loads(await server.obsidian_vault_stats())
         local = result["local_state"]
         assert local["bytes"] == size
-        assert local["path"] == str(tmp_path / "state")
+        assert local["path"] == "<value hidden>"
         assert local["warn_threshold_mb"] == threshold
         assert local["warning"] is warning
         assert "MiB" in local["human_readable_size"]

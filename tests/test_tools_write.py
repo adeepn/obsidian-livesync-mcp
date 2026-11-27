@@ -176,7 +176,7 @@ async def test_binary_duplicate_delete(vault):
 
 @pytest.mark.parametrize("error", [ConcurrentModification, StorageError])
 async def test_success_only_after_write(vault, error):
-    vault.errors["write_note"] = error("private")
+    vault.errors["write_note"] = error("storage refused request; https://internal:private/db")
     result = await server.obsidian_update_note("N.md", "overwrite", content="new")
     assert_error(result)
     assert "Updated" not in result and "private" not in result
@@ -254,7 +254,7 @@ async def test_mcp_schema_requires_mode(vault):
 )
 @pytest.mark.parametrize("error", [ConcurrentModification, StorageError])
 async def test_mutation_errors_never_report_success(vault, tool, args, method, error):
-    vault.errors[method] = error("private")
+    vault.errors[method] = error("storage refused request; https://internal:private/db")
     result = await getattr(server, tool)(*args)
     assert_error(result)
     for word in ["Updated", "Created", "Moved", "Duplicated", "Deleted", "private"]:
@@ -291,11 +291,11 @@ async def test_forbidden_path_is_sanitized(vault, tool, args, method):
     ],
 )
 async def test_text_edit_binary_refused(vault, tool, args):
-    vault.add("photo.png", data=b"photo")
+    vault.add("photo.png", data=b"\x89PNG\r\n\x1a\n")
     result = await getattr(server, tool)(*args)
     assert_error(result)
     assert "text note" in result.lower()
-    assert vault.notes["photo.png"]["data"] == b"photo"
+    assert vault.notes["photo.png"]["data"] == b"\x89PNG\r\n\x1a\n"
     assert "new.md" not in vault.notes
     assert_no_mutations(vault)
 

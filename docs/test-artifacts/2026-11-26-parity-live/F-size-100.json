@@ -1,0 +1,76 @@
+{
+  "date": "2026-11-26",
+  "command": "verify-size",
+  "passed": true,
+  "result": {
+    "files": [
+      {
+        "path": "parity-live/device-40m.bin",
+        "byte_exact": true,
+        "remote_present": true,
+        "remote_size": 41943040,
+        "remote_sha256": "c6390d38a94ac47e31960a940c7ef9fc7bd6ed6caad6e503a689dc37ef462c62",
+        "size": 41943040,
+        "ingested_blob_size": 41943040,
+        "metadata_size": 41943040,
+        "metadata_size_matches": true,
+        "type": "newnote",
+        "type_matches": true,
+        "piece_count": 410,
+        "piece_ids_match": true,
+        "sha256": "c6390d38a94ac47e31960a940c7ef9fc7bd6ed6caad6e503a689dc37ef462c62"
+      },
+      {
+        "path": "parity-live/exact.bin",
+        "byte_exact": true,
+        "remote_present": true,
+        "remote_size": 104857600,
+        "remote_sha256": "2f7ac4b31fe43d024f8a07b7479b773240071134337cd783521eb9808a08dee3",
+        "size": 104857600,
+        "ingested_blob_size": 104857600,
+        "metadata_size": 104857600,
+        "metadata_size_matches": true,
+        "type": "newnote",
+        "type_matches": true,
+        "piece_count": 1024,
+        "piece_ids_match": true,
+        "sha256": "2f7ac4b31fe43d024f8a07b7479b773240071134337cd783521eb9808a08dee3"
+      }
+    ],
+    "physical_files": {
+      "device-40m.bin": {
+        "size": 41943040,
+        "expected_size": 41943040
+      },
+      "exact.bin": {
+        "size": 104857600,
+        "expected_size": 104857600
+      },
+      "above.bin": {
+        "size": 104857601,
+        "expected_size": 104857601
+      }
+    },
+    "limit_mib": 100,
+    "recommendation_policy": {
+      "syncMaxSizeInMB": {
+        "source": "device",
+        "device_count": 1,
+        "disagree": false,
+        "value": 100.0
+      },
+      "useIgnoreFiles": {
+        "source": "device",
+        "device_count": 1,
+        "disagree": false,
+        "value": false
+      },
+      "ignoreFiles": {
+        "source": "device",
+        "device_count": 1,
+        "disagree": false,
+        "name_count": 1
+      }
+    }
+  }
+}

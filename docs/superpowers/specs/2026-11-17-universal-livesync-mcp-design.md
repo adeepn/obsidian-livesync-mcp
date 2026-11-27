@@ -1,5 +1,41 @@
 # Design: универсальный MCP-сервер для Self-hosted LiveSync (CouchDB + S3)
 
+## Amendments (2026-11-24, Settings-parity)
+
+Исторические решения ниже сохранены; пометки **Superseded (2026-11-24)**
+указывают на заменённые требования. Актуальное поведение:
+[settings-parity spec](2026-11-23-settings-parity.md) и
+[README: supported vault settings](../../../README.md#supported-vault-settings).
+
+| Прежнее решение | Что заменяет его сейчас |
+|---|---|
+| Смена epoch / wipe удаляет SQLite и chunks; append сам сбрасывает state | Только dedupe/checkpoint reset при доказанном wipe; epoch сам по себе сохраняет caches; append отказывает до refresh. Ревизии/чанки/локальные survivors сохраняются. [Спека §д и recovery amendments](2026-11-23-settings-parity.md), [README recovery](../../../README.md#local-state-and-recovery-s3) |
+| NFC — единственное поддержанное дополнительное identity, sensitive отложен/отклонён | Все четыре legacy/NFC × insensitive/sensitive; collision checks и quarantine всей старой реплики при смене identity. [Спека §г](2026-11-23-settings-parity.md), [README settings](../../../README.md#supported-vault-settings) |
+| Один SHA-256-derived чанк; upstream splitter отложен | V1/V2/V2-segmenter/V3 и legacy migration, все hashAlg; UTF-16/UTF-8 boundaries, оригинальный Blob.size, включая BOM. [Спека §а/б](2026-11-23-settings-parity.md), [README settings](../../../README.md#supported-vault-settings) |
+| BinaryNoteError, только текстовая запись, запрет text-tools по расширению | Общий str/bytes writer; path-based plain/newnote; textual newnotes допускаются по UTF-8/control/budget eligibility. Invalid plain UTF-8 требует явного lossy opt-in. [Спека §в](2026-11-23-settings-parity.md), [README differences](../../../README.md#how-the-peer-differs-from-a-device) |
+| size = длина восстановленного тела; Eden только E2EE | Metadata.size = ingested Blob.size; legacy stripping BOM может дать mismatch. Пустой Eden у текущего writer; historical unencrypted inline chunks читаются. [Спека §в/е](2026-11-23-settings-parity.md), [README settings](../../../README.md#supported-vault-settings) |
+| Фиксированные file caps или replay limits из размера файла | Device syncMaxSizeInMB для ordinary writes; отдельные operational replay budgets и decoder capacity. Oversized input skipped, oversized rename refused без потери source. [Спека §д](2026-11-23-settings-parity.md), [README size](../../size-policy.md) |
+| Binary metadata/read-only namespace означает отсутствие selection/tweak политики | Локальные фильтры с optional Node 22+, compatibility comparison/auto-alignment; никаких milestone writes. Нет filesystem reflection/hidden/plugin sync. [Спека §ж и compatibility](2026-11-23-settings-parity.md), [README differences](../../../README.md#how-the-peer-differs-from-a-device) |
+| Любой сбой записи — обычный отказ | Applied / refused without change / skipped / outcome unknown; неизвестность от metadata publication, re-read перед retry. [Спека outcome contract](2026-11-23-settings-parity.md), [README outcomes](../../../README.md#outcome-reporting) |
+
+E2EE и path obfuscation остаются неподдержанными (#3/#4), но **не являются
+единственными отличиями от устройства**: operational budgets, command/event
+rename protection, local-only survivors, invisible writer и отсутствие host
+reflection перечислены в README. Source audit 1.0.52 не заменяет live validation
+1.0.50; [pin](../../upstream-pin.md) и [Task 8](../../live-check-parity-checklist.md).
+
+
+> **SUPERSEDED — политика записи, Task 4 / fix round 1 (2026-11-24).**
+> Упоминания `BinaryNoteError`, запрета записи по расширению и запрета бинарных
+> upload ниже описывают историческое решение и больше не являются требованиями.
+> `write_note` принимает `str | bytes`; тип выбирается по upstream disk-ingestion
+> правилам. Newnote bytes сохраняются точно; invalid UTF-8 на plain-пути по
+> умолчанию отклоняется, явный `lossy_text=true` доступен в upload-инструменте.
+> Textual newnotes участвуют в text-tools по общей UTF-8/control/budget eligibility.
+> Актуальные контракты: [settings parity, §в](../specs/2026-11-23-settings-parity.md#в-plain--newnote)
+> и [README](../../scan-policy.md#text-scan-eligibility). Исходный текст сохранён
+> для истории; удалённые runtime-символы не восстанавливаются.
+
 Дата: 2026-11-17. Статус: черновик на согласование.
 Опорные материалы: `docs/AUDIT-2026-11-10.md` (аудит текущей CouchDB-заготовки, 69 подтверждённых находок), исходники upstream `vrtmrz/livesync-commonlib` (журнальный S3-режим).
 
@@ -28,6 +64,8 @@ MCP-сервер, дающий LLM-клиентам (Claude.ai, Codex и др.) 
 - E2EE: обнаруживать и отказывать в записи, не реализовывать (B5).
 - Обфускация путей (`f:`): обнаруживать и отказывать (B6).
 - Hidden File Sync / синк плагинов и кастомизации (`i:`, `ix:`, `ps:`): не читать как заметки, не писать (B7, B8).
+> **Superseded (2026-11-24, Settings-parity):** см. Amendments выше; следующий исходный текст оставлен для истории.
+
 - Порт дедуплицирующего chunk-сплиттера upstream (Rabin-Karp + xxhash64) — `[DEFER]`, см. §9.
 - Live-подписка на изменения (push). Достаточно refresh перед операцией.
 
@@ -69,15 +107,25 @@ LLM-клиент ──MCP──> server.py (FastMCP: auth, 20+ инструме
 
 Единственный источник правды о формате для обоих бэкендов (сегодня эти правила размазаны и искажены — аудит B9):
 
+> **Superseded (2026-11-24, Settings-parity):** см. Amendments выше; следующий исходный текст оставлен для истории.
+
 - `path2id` / `id2path` по образцу upstream (`src/string_and_binary/path.ts`): нормализация ввода (ведущий `/`, `./`, обратные слеши), экранирование ведущего `_` в `/_`, lowercase только при `handleFilenameCaseSensitive=false`, NFC-опционально (обнаруживать и отказывать, если включена).
+> **Superseded (2026-11-24, Settings-parity):** см. Amendments выше; следующий исходный текст оставлен для истории.
+
 - `is_text_doc(type, path)` — `plain` или расширение из `isPlainText` (`.md .txt .svg .html .csv .css .js .xml .canvas`).
+> **Superseded (2026-11-24, Settings-parity):** см. Amendments выше; следующий исходный текст оставлен для истории.
+
 - Кодек `newnote`: при чтении каждый чанк base64-декодируется отдельно, байты склеиваются; при записи — наоборот (аудит B4). Текстовые инструменты на бинарных файлах запрещены.
+> **Superseded (2026-11-24, Settings-parity):** см. Amendments выше; следующий исходный текст оставлен для истории.
+
 - Shape метадокумента: `_id, path, ctime, mtime (мс), size (байты декодированного тела), type, children, eden: {}`; soft delete — та же ревизия с `deleted: true` и новым `mtime`, тело сохраняется.
 - Валидатор пространства имён путей (аудит B7/B10): запрещены префиксы `i:`, `ix:`, `ps:`, `h:`, `f:`, `_`, сегменты, начинающиеся с точки (`.obsidian/`), `obsydian_livesync_version`, `syncinfo`.
 
 ### 4.2. `storage_base.py` — интерфейс
 
 Асинхронный протокол `StorageBackend`; инструменты работают только с ним:
+
+> **Superseded (2026-11-24, Settings-parity):** см. Amendments выше; следующий исходный текст оставлен для истории.
 
 - `startup_check()` — доступность, существование базы/бакета, чтение служебных документов; обнаружение E2EE/обфускации/case-sensitive/NFC → отказ в записи (B5/B6/B14);
 - `refresh()` — привести локальное представление в актуальное состояние (для CouchDB — сброс/обновление кэша индекса; для S3 — инкрементальный replay);
@@ -89,6 +137,8 @@ LLM-клиент ──MCP──> server.py (FastMCP: auth, 20+ инструме
 - `rename_note(path, new_path)` — копирование `children` (не пересборка контента), сохранение `ctime`, защита same-path/case-only (D1), отказ при существующей цели без `overwrite`;
 - `iterate_texts(extension)` — потоковая итерация текстов заметок с изоляцией ошибок по каждой заметке (C4): битая заметка не роняет поиск/теги/граф, а попадает в список пропущенных;
 - `backend_info()` — для диагностики и `vault_stats`.
+
+> **Superseded (2026-11-24, Settings-parity):** см. Amendments выше; следующий исходный текст оставлен для истории.
 
 Исключения: `NoteNotFound`, `NoteExists`, `BinaryNoteError`, `ConcurrentModification`, `UnsupportedVault` (E2EE/обфускация), `StorageUnavailable`. Сообщения без внутренних URL и ревизий (аудит C7).
 
@@ -121,6 +171,8 @@ LLM-клиент ──MCP──> server.py (FastMCP: auth, 20+ инструме
 - чекпойнт после каждого файла — прерванный replay продолжается с того же файла.
 
 **Запись (append)**:
+> **Superseded (2026-11-24, Settings-parity):** см. Amendments выше; следующий исходный текст оставлен для истории.
+
 - новые чанки: id `h:<sha256hex[:16] контента>` (уникальность и детерминизм; сплиттер upstream — `[DEFER]`); записи чанков — компакт-формат с escape;
 - метадокумент: `winner generation + 1` с полной цепочкой `_revisions` от текущего winner; поля по §4.1; soft delete тем же путём;
 > Superseded wording: - имя файла: `max(now_ms, max_seen_ms + 1)` + случайный 128-битный компонент; перед `PUT` проверяем `exists` нового ключа и при коллизии генерируем другой компонент (RULING B-10);
@@ -134,7 +186,11 @@ LLM-клиент ──MCP──> server.py (FastMCP: auth, 20+ инструме
 **Совместимость и эпохи (обязательно; воспроизводит поведение upstream):**
 
 - **Milestone-объект** `_00000000-milestone.json` (`LiveSyncJournalReplicator.ts:64`) читаем при старте: `locked: true` — advisory-флаг, нормальное состояние после Rebuild в плагине 1.0.50 (RULING B-11): пир принимает vault и логирует WARNING с именем флага; сам advisory-флаг не сбрасывает локальное состояние; E2EE/обфускация → отказ; **NFC path identity (v1) — поддерживаемый режим** (поправка 2026-11-19: боевой vault пользователя оказался NFC — `[DEFER]`-триггер сработал): `path2id` использует NFC-вариант, режим выводится из milestone и фиксируется в конфигурации пира; журналы есть, а milestone без деклараций узлов → отказ («Rebuild from the authoritative Vault»); `node_chunk_info` используется для распознавания версий формата устройств (плагин пользователя — из стора Obsidian, обновляется по релизам; отставание версии обнаруживается по milestone, а не ломается тихо). Сервер — «невидимый писатель»: сам milestone не пишет и узел не регистрирует. Приёмка незарегистрированного писателя живыми клиентами проверяется критерием §8.2(б); если клиент отвергает — добавляется регистрация узла через `uploadIfUnchanged` milestone'а отдельным шагом.
+> **Superseded (2026-11-24, Settings-parity):** см. Amendments выше; следующий исходный текст оставлен для истории.
+
 > Superseded wording: - **Эпоха и очистка бакета**: в чекпойнте храним `journalEpoch = protocolVersion:pbkdf2salt`. После полного listing при каждом refresh повторно читаем sync-parameters: смена эпохи сбрасывает локальное состояние (SQLite + чанк-стор), затем полностью переигрываем перечисленные журналы. Если последний отправленный нами файл задан, проверяем его существование по образцу `ensureCheckpointCachesAreFresh` (`JournalSyncCore.ts:343-401`): файл исчез → тот же сброс и полный replay. Перед каждым append — отдельная проверка существования последнего отправленного файла: если он исчез, сбрасываем состояние и отказываем в записи с `ConcurrentModification`, требуя refresh и повтор операции (защита от записи в стёртый мир).
+
+> **Superseded (2026-11-24, Settings-parity):** см. Amendments выше; следующий исходный текст оставлен для истории.
 
 **Amended by ruling B-8 (final architecture review):** sync-parameters и wipe проверяются перед выбором окна каждого refresh, а не после полного listing; reset запускает новый sweep. Перед append wipe-probe выполняется после preflight, до публикации. Остальные правила смены эпохи и исчезновения last-sent файла сохраняются.
 
@@ -152,6 +208,8 @@ LLM-клиент ──MCP──> server.py (FastMCP: auth, 20+ инструме
 - **D8/D9**: общий резолвер ссылок Obsidian (срез `#anchor`/`^block`, `.md`, basename/кратчайший уникальный путь, без учёта регистра; markdown-ссылки и canvas — по возможности).
 - **D10/D11**: буквальная подстановка замены в search-replace; `re.error` и подсчёт совпадений через `subn`/`finditer`.
 - **D12/D13/D14/D15/D16/D18/D19**: теги к списку строк, regex тегов по правилам Obsidian, заголовки `^#{1,6}\s+`, проверка типов JSON-параметров, рекурсивный `folder`, устойчивый canvas к `{}`/пустым полям, инструменты свойств/тегов только для `.md`, непустые id в canvas.
+> **Superseded (2026-11-24, Settings-parity):** см. Amendments выше; следующий исходный текст оставлен для истории.
+
 - **Бинарные файлы** (общая политика): `list/move/duplicate/delete/stats` работают; `fetch` отдаёт метаданные + размер + sha256, текст не пытается; text-edit/properties/tags — отказ с понятным сообщением. **Запись бинарного содержимого (создание/перезапись `.png`, `.pdf` и т.п.) не поддерживается**: `write_note` принимает только текст; бинарные пути в `create/overwrite` → `BinaryNoteError` (решение владельца может расширить; кодек `newnote` нужен для чтения и move/duplicate — переиздания существующих чанков).
 
 Новые инструменты: `obsidian_refresh` (обновить локальное представление; для CouchDB — no-op/кэш), поле `backend` в `vault_stats`.
@@ -202,8 +260,12 @@ LIVESYNC_S3_URI        # sls://s3?... — «Copy setup URI» из плагина
 
 ## 9. Отложено (`[DEFER]`, с триггером)
 
+> **Superseded (2026-11-24, Settings-parity):** см. Amendments выше; следующий исходный текст оставлен для истории.
+
 - Порт chunk-сплиттера upstream (дедупликация между файлами/ревизиями). Триггер: заметный рост объёма журнала/базы от серверных записей или запрос дедупликации. Без него корректность не страдает, только эффективность.
 - Поддержка E2EE (v1/v2 HKDF из `octagonal-wheels`). Триггер: появление зашифрованного vault в использовании.
+> **Superseded (2026-11-24, Settings-parity):** см. Amendments выше; следующий исходный текст оставлен для истории.
+
 - Case-sensitive режим path2id — читать и отказывать. (NFC-нормализация исключена из отложенных 2026-11-19: боевой vault пользователя — NFC; поддержка NFC входит в План B как обязательный пункт.)
 - Hidden File Sync только для чтения — по потребности.
 

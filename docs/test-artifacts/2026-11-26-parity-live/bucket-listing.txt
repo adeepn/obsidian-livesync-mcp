@@ -1,0 +1,31 @@
+Listing of the disposable test bucket, read-only (ListObjectsV2)
+===============================================================
+Taken 2026-11-26 16:49:00 MSK, after the owner's last sync at 16:20:30.
+Bucket plan-b-it, prefix livetest/. Server: container parity-s3-live,
+image chrislusf/seaweedfs@sha256:4b42c212543a0acd4c0e675215ecdcaf62a186ef98def76c7e12701871222d15, image id sha256:4b42c212543a0acd4c0e675215ecdcaf62a186ef98def76c7e12701871222d15, container created 2026-11-25T18:41:04.425235555Z.
+Total: 11 objects, 29,106 bytes.
+
+size (bytes)  last modified MSK     object
+      12,572  2026-11-26 10:51:42  1795679502038-docs.jsonl.gz
+       6,327  2026-11-26 11:46:50  1795682810621-docs.jsonl.gz
+       6,157  2026-11-26 12:18:59  1795684739923-ee3d70427a0833fc858be3ba5af029d8-docs.jsonl.gz
+         238  2026-11-26 12:23:41  1795685021043-663c7003724156fd98594264d9e3054b-docs.jsonl.gz
+         281  2026-11-26 12:23:41  1795685021098-cebb595acce4222d91eba4e4612fa1c1-docs.jsonl.gz
+         279  2026-11-26 12:23:41  1795685021140-5f7739a521c6ce27771d874f36234f43-docs.jsonl.gz
+         238  2026-11-26 12:23:41  1795685021176-7dc3d6fa592757398a688525b76fc867-docs.jsonl.gz
+         207  2026-11-26 12:23:41  1795685021210-15ca03c2a6385067c0f7cd7ba32b72f3-docs.jsonl.gz
+         441  2026-11-26 12:45:17  1795686317457-docs.jsonl.gz
+       2,211  2026-11-26 16:20:30  _00000000-milestone.json
+         155  2026-11-26 10:51:40  _obsidian_livesync_journal_sync_parameters.json
+
+Journal names start with the publication time in milliseconds. Device journals of this
+run carry no suffix; the peer's journals carry a 32-hex suffix. Writer per journal is the
+controller's attribution from its run log and from the client logs in client-logs.md:
+client: 1795679502038, 1795682810621, 1795686317457; peer: the other six.
+
+Before the owner's 16:20:30 sync. The controller listed the bucket at about 16:19 MSK,
+right after the refusal step of 16:18:12. Transcribed from that session output:
+11 objects, the same nine journals and the same sync parameters with the sizes and times
+above; _00000000-milestone.json 2,211 bytes, last modified 15:39:02 MSK. So the refusal
+step created or changed no object. The single later change is the milestone, rewritten by
+the client at its 16:20 sync, as it was at 15:39.

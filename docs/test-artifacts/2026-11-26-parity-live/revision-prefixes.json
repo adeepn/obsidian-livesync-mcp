@@ -1,0 +1,216 @@
+{
+  "taken": "2026-11-26 16:49:00",
+  "source": "Revision prefixes that the client printed while processing a file, compared with the revisions stored in the test bucket (read-only replay into a scratch state directory).",
+  "note": "The client prints the first three hex digits of a revision. Storage values are cut to six digits here. rev_in_storage_tree says whether the revision is in the document's revision tree.",
+  "files": [
+    {
+      "path": "Welcome.md",
+      "client_log_rev_prefix": "1-1c4",
+      "client_log_first": "26.11.2026, 15:22:1",
+      "client_log_lines": 2,
+      "storage_rev_prefix": "1-1c4659",
+      "storage_deleted": false,
+      "tree_revisions": 1,
+      "rev_in_storage_tree": true,
+      "match": true
+    },
+    {
+      "path": "parity-live/created.md",
+      "client_log_rev_prefix": "1-aa4",
+      "client_log_first": "26.11.2026, 12:24:2",
+      "client_log_lines": 1,
+      "storage_rev_prefix": "3-69f3cf",
+      "storage_deleted": true,
+      "tree_revisions": 3,
+      "rev_in_storage_tree": true,
+      "match": true
+    },
+    {
+      "path": "parity-live/created.md",
+      "client_log_rev_prefix": "2-508",
+      "client_log_first": "26.11.2026, 12:24:2",
+      "client_log_lines": 1,
+      "storage_rev_prefix": "3-69f3cf",
+      "storage_deleted": true,
+      "tree_revisions": 3,
+      "rev_in_storage_tree": true,
+      "match": true
+    },
+    {
+      "path": "parity-live/created.md",
+      "client_log_rev_prefix": "3-69f",
+      "client_log_first": "26.11.2026, 15:22:1",
+      "client_log_lines": 3,
+      "storage_rev_prefix": "3-69f3cf",
+      "storage_deleted": true,
+      "tree_revisions": 3,
+      "rev_in_storage_tree": true,
+      "match": true
+    },
+    {
+      "path": "parity-live/deleted.md",
+      "client_log_rev_prefix": "1-d0e",
+      "client_log_first": "26.11.2026, 12:24:2",
+      "client_log_lines": 1,
+      "storage_rev_prefix": "2-a40132",
+      "storage_deleted": true,
+      "tree_revisions": 2,
+      "rev_in_storage_tree": true,
+      "match": true
+    },
+    {
+      "path": "parity-live/deleted.md",
+      "client_log_rev_prefix": "2-a40",
+      "client_log_first": "26.11.2026, 15:22:1",
+      "client_log_lines": 3,
+      "storage_rev_prefix": "2-a40132",
+      "storage_deleted": true,
+      "tree_revisions": 2,
+      "rev_in_storage_tree": true,
+      "match": true
+    },
+    {
+      "path": "parity-live/device-40m.bin",
+      "client_log_rev_prefix": "1-1b2",
+      "client_log_first": "26.11.2026, 15:22:2",
+      "client_log_lines": 1,
+      "storage_rev_prefix": "1-1b2769",
+      "storage_deleted": false,
+      "tree_revisions": 1,
+      "rev_in_storage_tree": true,
+      "match": true
+    },
+    {
+      "path": "parity-live/invalid.md",
+      "client_log_rev_prefix": "1-64e",
+      "client_log_first": "26.11.2026, 15:22:1",
+      "client_log_lines": 2,
+      "storage_rev_prefix": "1-64e723",
+      "storage_deleted": false,
+      "tree_revisions": 1,
+      "rev_in_storage_tree": true,
+      "match": true
+    },
+    {
+      "path": "parity-live/moved.md",
+      "client_log_rev_prefix": "1-1e3",
+      "client_log_first": "26.11.2026, 15:22:1",
+      "client_log_lines": 3,
+      "storage_rev_prefix": "1-1e3747",
+      "storage_deleted": false,
+      "tree_revisions": 1,
+      "rev_in_storage_tree": true,
+      "match": true
+    },
+    {
+      "path": "parity-live/peer-40m.bin",
+      "client_log_rev_prefix": "1-22d",
+      "client_log_first": "26.11.2026, 12:19:4",
+      "client_log_lines": 2,
+      "storage_rev_prefix": "1-22dd34",
+      "storage_deleted": false,
+      "tree_revisions": 1,
+      "rev_in_storage_tree": true,
+      "match": true
+    },
+    {
+      "path": "parity-live/text.png",
+      "client_log_rev_prefix": "1-b84",
+      "client_log_first": "26.11.2026, 15:22:1",
+      "client_log_lines": 2,
+      "storage_rev_prefix": "1-b84095",
+      "storage_deleted": false,
+      "tree_revisions": 1,
+      "rev_in_storage_tree": true,
+      "match": true
+    },
+    {
+      "path": "parity-live/upper.MD",
+      "client_log_rev_prefix": "1-91a",
+      "client_log_first": "26.11.2026, 15:22:1",
+      "client_log_lines": 2,
+      "storage_rev_prefix": "1-91a444",
+      "storage_deleted": false,
+      "tree_revisions": 1,
+      "rev_in_storage_tree": true,
+      "match": true
+    },
+    {
+      "path": "test-image.png",
+      "client_log_rev_prefix": "1-d4e",
+      "client_log_first": "26.11.2026, 15:22:1",
+      "client_log_lines": 2,
+      "storage_rev_prefix": "1-d4e2e0",
+      "storage_deleted": false,
+      "tree_revisions": 1,
+      "rev_in_storage_tree": true,
+      "match": true
+    },
+    {
+      "path": "\u041a\u0430\u0440\u0442\u0438\u043d\u043a\u0430.md",
+      "client_log_rev_prefix": "1-58a",
+      "client_log_first": "26.11.2026, 15:22:1",
+      "client_log_lines": 2,
+      "storage_rev_prefix": "1-58affa",
+      "storage_deleted": false,
+      "tree_revisions": 1,
+      "rev_in_storage_tree": true,
+      "match": true
+    },
+    {
+      "path": "\u041e\u0442 \u043a\u043b\u0438\u0435\u043d\u0442\u0430.md",
+      "client_log_rev_prefix": "1-8f3",
+      "client_log_first": "26.11.2026, 15:22:1",
+      "client_log_lines": 2,
+      "storage_rev_prefix": "1-8f34eb",
+      "storage_deleted": false,
+      "tree_revisions": 1,
+      "rev_in_storage_tree": true,
+      "match": true
+    },
+    {
+      "path": "\u041f\u0430\u043f\u043a\u0430 S3/\u041f\u0435\u0440\u0435\u0435\u0445\u0430\u0432\u0448\u0430\u044f.md",
+      "client_log_rev_prefix": "1-f53",
+      "client_log_first": "26.11.2026, 15:22:1",
+      "client_log_lines": 2,
+      "storage_rev_prefix": "1-f533ab",
+      "storage_deleted": false,
+      "tree_revisions": 1,
+      "rev_in_storage_tree": true,
+      "match": true
+    },
+    {
+      "path": "\u041f\u0430\u043f\u043a\u0430/\u041f\u0435\u0440\u0435\u0435\u0445\u0430\u0432\u0448\u0430\u044f.md",
+      "client_log_rev_prefix": "1-14a",
+      "client_log_first": "26.11.2026, 15:22:1",
+      "client_log_lines": 2,
+      "storage_rev_prefix": "1-14ab37",
+      "storage_deleted": false,
+      "tree_revisions": 1,
+      "rev_in_storage_tree": true,
+      "match": true
+    },
+    {
+      "path": "\u0421\u0432\u044f\u0437\u0430\u043d\u043d\u0430\u044f \u0437\u0430\u043c\u0435\u0442\u043a\u0430.md",
+      "client_log_rev_prefix": "1-47a",
+      "client_log_first": "26.11.2026, 15:22:1",
+      "client_log_lines": 2,
+      "storage_rev_prefix": "1-47ada8",
+      "storage_deleted": false,
+      "tree_revisions": 1,
+      "rev_in_storage_tree": true,
+      "match": true
+    },
+    {
+      "path": "\u0422\u0435\u0441\u0442\u043e\u0432\u0430\u044f \u0437\u0430\u043c\u0435\u0442\u043a\u0430.md",
+      "client_log_rev_prefix": "1-641",
+      "client_log_first": "26.11.2026, 15:22:1",
+      "client_log_lines": 2,
+      "storage_rev_prefix": "1-641a9f",
+      "storage_deleted": false,
+      "tree_revisions": 1,
+      "rev_in_storage_tree": true,
+      "match": true
+    }
+  ]
+}

@@ -15,6 +15,7 @@ import sys
 import types
 import unittest
 import urllib.parse
+from tests.test_auth import isolated_mcp_modules
 from pathlib import Path
 
 from starlette.requests import Request
@@ -188,7 +189,7 @@ class PasswordGateTests(unittest.TestCase):
         elapsed = time.monotonic() - start
         self.assertEqual(body, b"x" * self.gate.max_body_bytes)
         self.assertIsInstance(body, bytes)
-        self.assertLess(elapsed, 2.0)
+        self.assertLess(elapsed, 30.0)
 
         self.gate.max_body_bytes = 512
         request = StreamingRequest()

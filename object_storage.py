@@ -25,28 +25,34 @@ Key semantics (both implementations):
 
 from __future__ import annotations
 
+from diagnostic_hygiene import PublicDiagnostic, cause_name
 import logging
 from contextlib import closing
 from typing import Protocol, runtime_checkable
 
 import boto3
 from botocore.config import Config
-from botocore.exceptions import BotoCoreError, ClientError
+from botocore.exceptions import (
+    BotoCoreError, ClientError, EndpointConnectionError, ConnectTimeoutError,
+    NoCredentialsError, PartialCredentialsError, ParamValidationError,
+)
 
-from config import S3Config
-from storage_base import StorageError, StorageUnavailable
+from config import S3Config, validate_transport_headers
+from storage_base import StorageError, StorageUnavailable, MutationNotApplied, OutcomeUnknown
+from replay_limits import ReplayLimits, ReplayBudgetExceeded
 
 logger = logging.getLogger(__name__)
 
 # S3 ListObjectsV2 never returns more than 1000 keys per page.
 _MAX_PAGE_KEYS = 1000
 
-# Maximum compressed object size, including control objects (512 MiB).
-MAX_OBJECT_BYTES = 512 * 1024**2
+# Operational compressed-object budget including control objects.
+# See replay_limits.py for derivation; this is not a device file-size cap.
+MAX_OBJECT_BYTES = ReplayLimits.max_object_bytes
 _READ_BLOCK_BYTES = 1024**2
 
 
-class ObjectSizeLimit(StorageError):
+class ObjectSizeLimit(ReplayBudgetExceeded):
     """An object exceeded the bounded download size."""
 
 
@@ -95,21 +101,22 @@ def _is_missing(exc: ClientError) -> bool:
 class Boto3ObjectStorage:
     """boto3 implementation of :class:`JournalObjectStorage`.
 
-    The client uses path-style addressing when ``cfg.endpoint`` is set
-    (MinIO and other S3-compatible stores; AWS proper with an empty
-    endpoint keeps boto3's default virtual-hosted addressing and needs
-    ``region`` in the URI). Connect/read timeouts are 5/30 seconds and
-    retries are disabled (one attempt) — the journal write path performs
-    its own read-back verification and prefers loud, immediate failure.
+    With a configured endpoint, ``cfg.force_path_style`` selects path or
+    virtual-host addressing (path by default). AWS proper with an empty
+    endpoint keeps boto3's default addressing and needs ``region`` in the URI.
+    Connect/read defaults are 5/30 seconds, configurable via S3Config. Reads
+    and conditional creates use the configured attempt count (default one);
+    unconditional writes always use one attempt to expose ambiguous outcomes.
 
     Keys are prefix-relative: the adapter prepends ``cfg.prefix`` on the
     wire and strips it from listing results. Failures other than a
     missing key raise :class:`~storage_base.StorageUnavailable` whose
-    message names only the bucket and key (never credentials or
-    endpoints); logs include only the operation, bucket, key and error class.
+    public diagnostics contain closed operation/status and cause-class fields.
+    Logs omit bucket, key, endpoint, credential values and remote error text.
     """
 
     def __init__(self, cfg: S3Config, *, max_object_bytes: int = MAX_OBJECT_BYTES):
+        validate_transport_headers(cfg.custom_headers, "S3_CUSTOM_HEADERS")
         if max_object_bytes < 1:
             raise ValueError("max_object_bytes must be positive")
         self.max_object_bytes = max_object_bytes
@@ -120,9 +127,9 @@ class Boto3ObjectStorage:
         self._prefix = cfg.prefix or ""
 
         client_config = Config(
-            connect_timeout=5,
-            read_timeout=30,
-            retries={"total_max_attempts": 1},
+            connect_timeout=cfg.connect_timeout_seconds,
+            read_timeout=cfg.read_timeout_seconds,
+            retries={"total_max_attempts": cfg.max_attempts},
         )
         client_kwargs: dict = {
             "aws_access_key_id": cfg.access_key,
@@ -134,9 +141,35 @@ class Boto3ObjectStorage:
         }
         if cfg.endpoint:
             client_kwargs["endpoint_url"] = cfg.endpoint
-            client_config.s3 = {"addressing_style": "path"}
+            # MinioStorageAdapter.ts:61-67 only sets forcePathStyle with an endpoint.
+            client_config.s3 = {"addressing_style": "path" if cfg.force_path_style else "virtual"}
 
         self._client = boto3.client("s3", **client_kwargs)
+        # Upstream MinioStorageAdapter.ts:70-80 requests four attempts. Reads
+        # and conditional writes may retry; unconditional publication must not:
+        # a lost response is OutcomeUnknown, even if a retry would succeed.
+        self._conditional_retries = cfg.max_attempts > 1
+        self._write_client = self._client
+        if cfg.max_attempts != 1:
+            write_kwargs = {**client_kwargs, "config": client_config.merge(
+                Config(retries={"total_max_attempts": 1}))}
+            self._write_client = boto3.client("s3", **write_kwargs)
+        self.custom_headers_count = len(cfg.custom_headers)
+        if cfg.custom_headers:
+            from diagnostic_hygiene import silence_transport_logging
+            silence_transport_logging()
+            headers = dict(cfg.custom_headers)
+
+            def add_custom_headers(request, **kwargs):
+                # botocore endpoint.py:265-281 emits before-send after signing
+                # and preparation, on each attempt. Mirror commonlib
+                # MinioStorageAdapter.ts:86-100 finalizeRequest priority low.
+                for key, value in headers.items():
+                    request.headers[key] = value.encode("latin-1")
+
+            self._client.meta.events.register_last("before-send.s3", add_custom_headers)
+            if self._write_client is not self._client:
+                self._write_client.meta.events.register_last("before-send.s3", add_custom_headers)
 
     # -- Key translation -----------------------------------------------------
 
@@ -162,7 +195,7 @@ class Boto3ObjectStorage:
                 if max_bytes is not None:
                     limit = min(limit, max_bytes)
                 if response.get("ContentLength", 0) > limit:
-                    raise ObjectSizeLimit(f"object {key!r} exceeds download limit")
+                    raise ObjectSizeLimit("max_object_bytes", response["ContentLength"], limit)
                 chunks = bytearray()
                 while True:
                     block = body.read(min(_READ_BLOCK_BYTES, limit + 1 - len(chunks)))
@@ -170,7 +203,7 @@ class Boto3ObjectStorage:
                         return bytes(chunks)
                     chunks.extend(block)
                     if len(chunks) > limit:
-                        raise ObjectSizeLimit(f"object {key!r} exceeds download limit")
+                        raise ObjectSizeLimit("max_object_bytes", len(chunks), limit)
         except ClientError as exc:
             if _is_missing(exc):
                 return None
@@ -178,13 +211,30 @@ class Boto3ObjectStorage:
         except BotoCoreError as exc:
             raise self._unavailable("GET", key, exc) from None
 
+    def _put_failure(self, key: str, exc: Exception, *, may_have_retried=False) -> StorageError:
+        public = self._unavailable("PUT", key, exc).diagnostic
+        # A terminal pre-dispatch error says nothing about earlier attempts.
+        # With retries enabled, retain uncertainty instead of discarding the
+        # pending outbound record when an earlier accepted response was lost.
+        if may_have_retried:
+            return OutcomeUnknown(public)
+        if isinstance(exc, (EndpointConnectionError, ConnectTimeoutError,
+                            NoCredentialsError, PartialCredentialsError,
+                            ParamValidationError)):
+            return MutationNotApplied(public)
+        if isinstance(exc, ClientError):
+            status = exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+            if isinstance(status, int) and 400 <= status < 500 and status != 408:
+                return MutationNotApplied(public)
+        return OutcomeUnknown(public)
+
     def put(self, key: str, data: bytes) -> None:
         try:
-            self._client.put_object(
+            self._write_client.put_object(
                 Bucket=self._bucket, Key=self._wire_key(key), Body=data
             )
         except (ClientError, BotoCoreError) as exc:
-            raise self._unavailable("PUT", key, exc) from None
+            raise self._put_failure(key, exc) from None
 
     def put_if_absent(self, key: str, data: bytes) -> str:
         """Create atomically when supported by the S3-compatible provider."""
@@ -198,17 +248,36 @@ class Boto3ObjectStorage:
             code = str(exc.response.get("Error", {}).get("Code", ""))
             status = exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
             if code in {"412", "PreconditionFailed"} or status == 412:
+                retries = exc.response.get("ResponseMetadata", {}).get("RetryAttempts", 0)
+                if type(retries) is int and retries > 0:
+                    # Upstream MinioStorageAdapter.ts:70-80,132-145 retries
+                    # uploads. A lost acknowledgement followed by 412 must not
+                    # become a second journal publication under another key.
+                    diagnostic = self._unavailable("PUT", key, exc).diagnostic
+                    try:
+                        identical = self.get(key) == data
+                    except (StorageError, OSError):
+                        raise OutcomeUnknown(diagnostic) from None
+                    if not identical:
+                        raise OutcomeUnknown(diagnostic) from None
+                    return "created"
                 return "exists"
             if code in {"NotImplemented", "NotSupported", "UnsupportedOperation",
                         "UnsupportedHeader", "NotImplementedException",
                         "XNotImplemented", "501"} or status == 501:
+                # A later unsupported response cannot undo an earlier accepted
+                # creation whose response was lost. Never enter the fallback
+                # (and discard recovery intent) in that case.
+                retries = exc.response.get("ResponseMetadata", {}).get("RetryAttempts", 0)
+                if type(retries) is int and retries > 0:
+                    raise OutcomeUnknown(self._unavailable("PUT", key, exc).diagnostic) from None
                 if not self._conditional_warning_logged:
-                    logger.warning("conditional journal publication unsupported; using B-10 fallback")
+                    logger.warning('conditional journal publication unsupported; using B-10 fallback; cause: %s', cause_name(type(exc)))
                     self._conditional_warning_logged = True
                 return "unsupported"
-            raise self._unavailable("PUT", key, exc) from None
+            raise self._put_failure(key, exc, may_have_retried=self._conditional_retries) from None
         except BotoCoreError as exc:
-            raise self._unavailable("PUT", key, exc) from None
+            raise self._put_failure(key, exc, may_have_retried=self._conditional_retries) from None
 
     def list(self, start_after: str = "", limit: int | None = None) -> list[str]:
         if limit is not None and limit < 1:
@@ -265,14 +334,9 @@ class Boto3ObjectStorage:
 
     def _unavailable(self, operation: str, key: str, exc: Exception) -> StorageUnavailable:
         """Report safe context without exception text or traceback details."""
-        logger.warning(
-            "object storage %s failed for bucket %r key %r: %s",
-            operation,
-            self._bucket,
-            key,
-            type(exc).__name__,
-        )
-        return StorageUnavailable(
-            f"object storage {operation} failed for bucket "
-            f"{self._bucket!r} key {key!r}"
-        )
+        logger.warning('object storage %s failed; cause: %s',
+            operation if operation in {'GET', 'PUT', 'HEAD', 'LIST'} else '<value hidden>',
+            cause_name(type(exc)))
+        status = exc.response.get('ResponseMetadata', {}).get('HTTPStatusCode') if isinstance(exc, ClientError) else None
+        return StorageUnavailable(PublicDiagnostic(operation=operation, transport='S3',
+            status=status, cause=type(exc)))

@@ -29,7 +29,6 @@ from journal_codec import (
 from journal_store import pick_winner
 from livesync_format import ForbiddenPathError, chunk_id_for, path2id
 from storage_base import (
-    BinaryNoteError,
     ConcurrentModification,
     NoteExists,
     NoteNotFound,
@@ -194,13 +193,15 @@ class TestStartup:
         backend, _ = make_backend(tmp_path, healthy_bucket())
         await backend.startup_check()
         assert (await backend.backend_info())["path_identity"] == "legacy"
+        await backend.close()
 
         backend, storage = make_backend(
             tmp_path, healthy_bucket(**{MILESTONE_KEY: milestone_blob(path_version=1)})
         )
-        # Same state dir, now NFC: a state-configuration error (ValueError).
-        with pytest.raises(ValueError, match="path identity"):
-            await backend.startup_check()
+        # Same state dir, now NFC: archive old state without mixing IDs.
+        await backend.startup_check()
+        assert backend._store.path_identity == "nfc"
+        assert list((tmp_path / "state.quarantine").glob("*/state/journal.sqlite3"))
         await backend.close()
 
     async def test_fresh_empty_bucket_defaults_to_legacy(self, tmp_path, caplog):
@@ -225,7 +226,7 @@ class TestStartup:
 
 
 class TestEpochAndWipe:
-    async def test_epoch_change_resets_state_and_replays_everything(self, tmp_path):
+    async def test_epoch_change_without_send_history_preserves_caches(self, tmp_path):
         backend, storage = make_backend(tmp_path, healthy_bucket())
         await backend.startup_check()
         await backend.refresh()
@@ -236,17 +237,16 @@ class TestEpochAndWipe:
         storage._objects[SYNC_PARAMETERS_KEY] = params_blob(salt="salt-b")
         await backend.startup_check()
         info = await backend.backend_info()
-        assert info["files_processed"] == 0
-        assert info["epoch"] == "2:salt-b"
+        assert info["files_processed"] == 3
+        assert info["epoch"] == __import__("diagnostic_hygiene").fingerprint("2:salt-b")
 
         storage.get_calls.clear()
         storage.list_calls.clear()
         await backend.refresh(force=True)
         assert await files_processed(backend) == 3
-        # The reset cleared the processed ledger: the replay lists from the
-        # beginning again and re-reads every journal.
+        # Epoch alone cannot confirm a wipe: keep the processed ledger.
         assert storage.list_calls == [""]
-        assert sorted(storage.get_calls) == sorted([SYNC_PARAMETERS_KEY, JOURNAL_1, JOURNAL_2, JOURNAL_3])
+        assert storage.get_calls == [MILESTONE_KEY, SYNC_PARAMETERS_KEY]
         await backend.close()
 
     async def test_same_epoch_keeps_state(self, tmp_path):
@@ -270,7 +270,7 @@ class TestEpochAndWipe:
         assert JOURNAL_3 in storage.exists_calls
         info = await backend.backend_info()
         assert info["files_processed"] == 0
-        assert info["epoch"] == "2:salt-a"
+        assert info["epoch"] == __import__("diagnostic_hygiene").fingerprint("2:salt-a")
         await backend.close()
 
     async def test_surviving_last_sent_file_no_wipe(self, tmp_path):
@@ -293,7 +293,7 @@ class TestReplay:
         storage.get_calls.clear()
 
         await backend.refresh()
-        assert storage.get_calls == [SYNC_PARAMETERS_KEY, JOURNAL_1, JOURNAL_2, JOURNAL_3]
+        assert storage.get_calls == [MILESTONE_KEY, SYNC_PARAMETERS_KEY, JOURNAL_1, JOURNAL_2, JOURNAL_3]
         assert await files_processed(backend) == 3
 
     async def test_second_refresh_after_full_replay_is_noop(self, tmp_path):
@@ -305,9 +305,9 @@ class TestReplay:
 
         await backend.refresh(force=True)
         # One complete listing (Ruling B-8: no StartAfter cursor); every
-        # listed journal is already processed; only sync params are fetched.
+        # listed journal is already processed; only milestone and sync params are fetched.
         assert storage.list_calls == [""]
-        assert storage.get_calls == [SYNC_PARAMETERS_KEY]
+        assert storage.get_calls == [MILESTONE_KEY, SYNC_PARAMETERS_KEY]
         assert await files_processed(backend) == 3
 
     async def test_numeric_ordering_beats_lexicographic(self, tmp_path):
@@ -349,7 +349,7 @@ class TestReplay:
         storage._objects[JOURNAL_10] = journal_blob([meta_doc("j.md", "1-j")])
         storage.get_calls.clear()
         await backend.refresh(force=True)
-        assert storage.get_calls == [SYNC_PARAMETERS_KEY, JOURNAL_10]
+        assert storage.get_calls == [MILESTONE_KEY, SYNC_PARAMETERS_KEY, JOURNAL_10]
         assert await files_processed(backend) == 2
 
     async def test_mixed_width_failure_and_repair_converges(self, tmp_path):
@@ -377,7 +377,7 @@ class TestReplay:
         storage._objects[JOURNAL_9] = journal_blob([meta_doc("i.md", "1-i")])
         storage.get_calls.clear()
         await backend.refresh(force=True)
-        assert storage.get_calls == [SYNC_PARAMETERS_KEY, JOURNAL_9, JOURNAL_10, journal_11]
+        assert storage.get_calls == [MILESTONE_KEY, SYNC_PARAMETERS_KEY, JOURNAL_9, JOURNAL_10, journal_11]
         assert await files_processed(backend) == 3
 
     async def test_replay_error_message_sanitized(self, tmp_path, monkeypatch):
@@ -416,7 +416,7 @@ class TestReplay:
         storage.get_calls.clear()
         with pytest.raises(StorageError, match=JOURNAL_2):
             await backend.refresh(force=True)
-        assert storage.get_calls == [SYNC_PARAMETERS_KEY, JOURNAL_2]
+        assert storage.get_calls == [MILESTONE_KEY, SYNC_PARAMETERS_KEY, JOURNAL_2]
 
     async def test_control_objects_are_never_parsed_as_journals(self, tmp_path):
         backend, storage = make_backend(
@@ -427,7 +427,7 @@ class TestReplay:
         storage.get_calls.clear()
 
         await backend.refresh()
-        assert storage.get_calls == [SYNC_PARAMETERS_KEY, JOURNAL_1, JOURNAL_2, JOURNAL_3]
+        assert storage.get_calls == [MILESTONE_KEY, SYNC_PARAMETERS_KEY, JOURNAL_1, JOURNAL_2, JOURNAL_3]
         assert await files_processed(backend) == 3
 
     async def test_unavailable_get_propagates_and_keeps_checkpoint(self, tmp_path):
@@ -438,7 +438,7 @@ class TestReplay:
         with pytest.raises(StorageUnavailable):
             await backend.refresh()
         assert await files_processed(backend) == 0
-        assert storage.get_calls == [SYNC_PARAMETERS_KEY]
+        assert storage.get_calls == [MILESTONE_KEY]
 
         # Once healthy again, replay completes from the checkpoint.
         await backend.refresh(force=True)
@@ -530,7 +530,7 @@ class TestLifecycle:
         await backend.refresh()
         info = await backend.backend_info()
         assert info["path_identity"] == "legacy"
-        assert info["epoch"] == "2:salt-a"
+        assert info["epoch"] == __import__("diagnostic_hygiene").fingerprint("2:salt-a")
         assert info["files_processed"] == 3
         datetime.fromisoformat(info["last_refresh"])  # ISO-8601 timestamp
         await backend.close()
@@ -995,7 +995,8 @@ class TestIterateTexts:
         assert results[BROKEN_PATH] is None
         # The rest of the vault still scanned to completion.
         assert len(results) == len(MD_PATHS)
-        assert any(BROKEN_PATH in record.message for record in caplog.records)
+        assert any("scan read failed" in record.message for record in caplog.records)
+        assert BROKEN_PATH not in caplog.text
 
     async def test_binary_png_never_surfaces_in_md_scan(self, tmp_path):
         backend, _ = await read_backend(tmp_path)
@@ -1059,9 +1060,8 @@ class TestIterateTexts:
             results = await self.collect(backend)
         assert list(results) == MD_PATHS  # iteration ran to completion
         assert results[README_PATH] is None
-        assert any(
-            README_PATH in record.message for record in caplog.records
-        )
+        assert any('scan read failed' in record.message for record in caplog.records)
+        assert README_PATH not in caplog.text
 
     async def test_storage_unavailability_still_aborts_iteration(
         self, tmp_path, monkeypatch
@@ -1103,7 +1103,7 @@ class TestJournalWrites:
         assert first['size'] == 13
         doc = backend._store.winner('a.md')
         assert doc['_revisions'] == {'start': 1, 'ids': [first['rev'].split('-', 1)[1]]}
-        assert storage.get_calls == [storage.put_calls[0][0]]
+        assert storage.get_calls == [SYNC_PARAMETERS_KEY, storage.put_calls[0][0]]
         second = await backend.write_note('A.md', 'new', expected_rev=first['rev'])
         doc = backend._store.winner('a.md')
         assert doc['_revisions']['start'] == 2
@@ -1238,12 +1238,6 @@ class TestJournalWrites:
                 method = backend.rename_note if operation.startswith('rename') else backend.copy_note
                 args = ('.obsidian/x.md', 'ok.md') if operation.endswith('source') else ('ok.md', '.obsidian/x.md')
                 await method(*args)
-        assert storage.put_calls == storage.get_calls == storage.list_calls == []
-
-    async def test_binary_write_refused_before_storage(self, tmp_path):
-        backend, storage = await write_backend(tmp_path)
-        with pytest.raises(BinaryNoteError):
-            await backend.write_note('a.png', 'text', create=True)
         assert storage.put_calls == storage.get_calls == storage.list_calls == []
 
     @pytest.mark.parametrize('full_json', [False, True])
@@ -1562,14 +1556,14 @@ class TestRuntimeHistoryGuards:
         storage.get_calls.clear()
         await backend.refresh(force=True)
         paths = {meta['path'] for meta in await backend.list_notes()}
-        assert 'replacement.md' in paths
-        assert 'a.md' not in paths
-        assert (sent['path'] in paths) == changed_epoch
+        assert ('replacement.md' in paths) == (not changed_epoch)
+        assert 'a.md' in paths
+        assert sent['path'] in paths
         assert storage.get_calls.count(SYNC_PARAMETERS_KEY) == 1
         assert backend._store.epoch == ('2:salt-b' if changed_epoch else '2:salt-a')
         await backend.close()
 
-    async def test_write_after_wipe_resets_and_refuses_publication(self, tmp_path):
+    async def test_write_after_wipe_refuses_without_changing_local_state(self, tmp_path):
         backend, storage = make_backend(tmp_path, healthy_bucket())
         await backend.startup_check()
         await backend.refresh()
@@ -1577,12 +1571,12 @@ class TestRuntimeHistoryGuards:
         del storage._objects[backend._store.last_sent_key]
         before = dict(storage._objects)
         puts = len(storage.put_calls)
-        with pytest.raises(ConcurrentModification, match='remote was rebuilt; retry the operation after refresh'):
+        with pytest.raises(ConcurrentModification, match='remote was rebuilt or journals are missing; refresh and retry'):
             await backend.write_note('sent.md', 'stale', expected_rev=original['rev'])
         assert storage._objects == before
         assert len(storage.put_calls) == puts
-        assert await backend.list_notes() == []
-        await backend.refresh()  # reset also clears the throttle
+        assert (await backend.read_note('sent.md'))['text'] == 'old'
+        await backend.refresh(force=True)  # explicit reconciliation after refusal
         assert await files_processed(backend) == 3
         await backend.close()
 
@@ -1611,10 +1605,10 @@ async def test_invalid_timestamps_are_isolated(tmp_path, field, value):
     await backend.close()
 
 @pytest.mark.parametrize("limit,value,match", [
-    ("max_line_bytes", 30, "line length"),
+    ("max_line_bytes", 30, "max_line_bytes"),
     ("max_inflated_bytes", 30, "inflated"),
-    ("max_records", 1, "record count"),
-    ("max_refresh_bytes", 1, "download"),
+    ("max_records", 1, "max_records"),
+    ("max_refresh_bytes", 1, "max_refresh_bytes"),
     ("max_object_bytes", 1, "object"),
 ])
 async def test_publication_preflight_limits(tmp_path, limit, value, match):
@@ -1631,8 +1625,9 @@ async def test_publication_preflight_limits(tmp_path, limit, value, match):
 async def test_publication_rejects_oversized_chunk_before_put(tmp_path):
     backend, storage = make_backend(tmp_path, healthy_bucket())
     await backend.startup_check()
-    with pytest.raises(StorageError, match="line length"):
-        await backend.write_note("big.md", "x" * (64 * 1024**2 + 1), create=True)
+    backend.max_line_bytes = 64 * 1024**2
+    with pytest.raises(StorageError, match="max_line_bytes"):
+        backend._publish([("h:oversized", "x" * (64 * 1024**2 + 1))], [])
     assert storage.put_calls == []
     assert backend._store.winner("big.md") is None
 
@@ -1663,13 +1658,13 @@ async def test_publication_reserves_control_read_bytes(tmp_path, observation):
     backend.max_refresh_bytes = len(blob) + reserve - 1
     before = dict(storage._objects)
     try:
-        with pytest.raises(StorageError, match="download"):
+        with pytest.raises(StorageError, match="max_refresh_bytes"):
             backend._publish([], docs)
         assert storage.put_calls == []
         assert storage._objects == before
         # Original reviewer case: payload alone fits the entire budget.
         backend.max_refresh_bytes = len(blob)
-        with pytest.raises(StorageError, match="download"):
+        with pytest.raises(StorageError, match="max_refresh_bytes"):
             backend._publish([], docs)
         assert storage.put_calls == []
     finally:
@@ -1735,7 +1730,7 @@ async def test_backend_info_state_size(tmp_path):
     await backend.startup_check()
     try:
         info = await backend.backend_info()
-        assert info["state_dir_path"] == str(tmp_path / "state")
+        assert info["state_dir_path"] == "<value hidden>"
         assert info["state_dir_bytes"] > 0
         assert info["state_dir_bytes"] == backend._store.state_size_bytes()
     finally:
@@ -1762,7 +1757,7 @@ class TestMetadataCanary:
         }))
         await backend.startup_check()
         await backend.refresh(force=True)
-        expected = ["unknown metadata fields in recent journals: foo, zeta"]
+        expected = ["unknown metadata fields in recent journals: 2"]
         assert (await backend.backend_info()).get("protocol_notes") == expected
         await backend.refresh(force=True)
         assert (await backend.backend_info()).get("protocol_notes") == expected
@@ -1786,4 +1781,106 @@ class TestMetadataCanary:
         await backend.startup_check()
         await backend.refresh(force=True)
         assert not (await backend.backend_info()).get("protocol_notes")
+        await backend.close()
+
+
+@pytest.mark.parametrize("nfc", [False, True])
+async def test_sensitive_paths_and_folder_identity(tmp_path, nfc):
+    milestone = json.loads(milestone_blob(path_version=int(nfc)))
+    milestone["tweak_values"]["PREFERRED"]["handleFilenameCaseSensitive"] = True
+    backend, _ = make_backend(tmp_path, healthy_bucket(**{
+        MILESTONE_KEY: json.dumps(milestone).encode(),
+    }))
+    try:
+        await backend.startup_check()
+        upper = await backend.write_note("Folder/A.md", "upper", create=True)
+        assert upper["doc_id"] == "Folder/A.md"
+        await backend.write_note("Folder/a.md", "lower", create=True)
+        assert (await backend.read_note("Folder/A.md"))["text"] == "upper"
+        assert (await backend.read_note("Folder/a.md"))["text"] == "lower"
+        assert [m["path"] for m in await backend.list_notes(folder="Folder")] == [
+            "Folder/A.md", "Folder/a.md"]
+        assert await backend.list_notes(folder="folder") == []
+        if nfc:
+            await backend.write_note("ééééé/sub/x.md", "nested", create=True)
+            folder_nfd = "e\u0301" * 5
+            assert await backend.list_notes(folder=folder_nfd, recursive=False) == []
+            nested = await backend.list_notes(folder=folder_nfd, recursive=True)
+            assert [m["path"] for m in nested] == ["ééééé/sub/x.md"]
+        await backend.write_note("Café.md", "one", create=True)
+        if nfc:
+            with pytest.raises(NoteExists):
+                await backend.write_note("Cafe\u0301.md", "two", create=True)
+        else:
+            await backend.write_note("Cafe\u0301.md", "two", create=True)
+    finally:
+        await backend.close()
+
+
+def test_identity_paths_have_no_unconditional_lowercase():
+    import ast
+    import pathlib
+    for name in ("storage_journal.py", "storage_couchdb.py", "journal_store.py", "links.py"):
+        tree = ast.parse(pathlib.Path(name).read_text())
+
+        def inspect(node, function=None):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                function = node.name
+            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                    and node.func.attr in {"lower", "casefold"}):
+                # Extension matching stays insensitive. The link comparison
+                # helper is identity-aware and covered by four-mode tests.
+                allowed = ({"_without_md", "_comparison_key"} if name == "links.py"
+                           else {"_matches_extension"})
+                # RemoteService.ts:360-369 uses case-insensitive Fetch Headers.
+                # HTTP field names/encoding tokens are case-insensitive;
+                # these exact transport expressions never normalize paths.
+                http_header = name == "storage_couchdb.py" and (
+                    (function == "_bounded_http_body" and ast.unparse(node.func.value)
+                     == "response.headers.get('content-encoding', 'identity').strip()")
+                    or (function == "_request" and ast.unparse(node.func.value) == "key")
+                )
+                assert function in allowed or http_header, (name, node.lineno, function)
+            for child in ast.iter_child_nodes(node):
+                inspect(child, function)
+
+        inspect(tree)
+
+
+@pytest.mark.parametrize("deleted", [False, True])
+async def test_replay_rejects_metadata_identity_collision(tmp_path, deleted):
+    backend, _ = make_backend(tmp_path, healthy_bucket(**{
+        JOURNAL_1: journal_blob([
+            dict(meta_doc("A.md", "1-a"), deleted=deleted),
+            dict(meta_doc("a.md", "1-b"), deleted=deleted),
+        ]),
+    }))
+    try:
+        await backend.startup_check()
+        with pytest.raises(StorageError, match="could not be replayed"):
+            await backend.refresh(force=True)
+        assert not backend._store.processed(JOURNAL_1)
+    finally:
+        await backend.close()
+
+
+async def test_deleted_metadata_identity_refused_before_resurrection(tmp_path):
+    milestone = json.loads(milestone_blob())
+    milestone["tweak_values"]["PREFERRED"]["handleFilenameCaseSensitive"] = True
+    backend, objects = make_backend(tmp_path, healthy_bucket(**{
+        MILESTONE_KEY: json.dumps(milestone).encode(),
+    }))
+    try:
+        await backend.startup_check()
+        # Seed an already-cached tombstone to exercise publication, not replay.
+        backend._store.apply_journal("cached", {}, [{
+            "_id": "a.md", "_rev": "1-a", "path": "A.md", "type": "plain",
+            "deleted": True, "children": [], "size": 0,
+        }])
+        before = list(objects.put_calls)
+        with pytest.raises(StorageError, match="identity mismatch"):
+            await backend.write_note("a.md", "replacement", create=True)
+        assert objects.put_calls == before
+        assert backend._store.winner("a.md")["_rev"] == "1-a"
+    finally:
         await backend.close()

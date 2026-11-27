@@ -1,0 +1,156 @@
+F4 FINAL automated acceptance — 2026-11-25
+Supersedes the earlier T8a incomplete reports in this file.
+Real servers: SeaweedFS S3 and CouchDB 3.5.3 (controller-provided identity).
+Production fixes: ebb76a6, 08e69ce, 2517d70; unchanged by this acceptance.
+Follow-up test correction: 220f4db.
+Only disposable fixture-owned it/<random>/ prefixes and mcp_test_<random>
+databases were used. No production vault, container configuration or service
+was changed. No request to 127.0.0.1:19000 was made. Credentials were sourced
+only inside invoking commands; no credential values are retained here.
+
+FINAL real-server table (one combined invocation):
+Scenario | Result/count | Summed JUnit testcase duration (setup/call/teardown)
+1 S3 lifecycle + text/binary every row | 120 PASS | 85.199 s
+1 CouchDB lifecycle + plain/newnote/leaf/local every row | 120 PASS | 130.129 s
+2 Large binary 40/100 MiB; 201 MiB skip; oversized rename | 2 PASS | 7.769 s
+2 Exact 12 MiB .json real MCP workflow | 1 PASS | 12.710 s
+3 Wipe/epoch revisions+chunks, identity quarantine/rebuild | 2 PASS | 0.515 s
+3 Interrupted replay resumes without partial application | 1 PASS | 0.148 s
+4 S3 signed outgoing requests/custom headers/default path addressing | 1 PASS | 0.068 s
+5 CouchDB compression + seeded upstream vectors, false/true | 1 PASS | 0.625 s
+6 CouchDB surrogate preflight + raw device-shaped HTTP 400 | 1 PASS | 0.125 s
+7 JWT HS256/HS512/ES256/ES512, wrong key, expired clock | 6 PASS | 0.729 s
+8 CouchDB GET/POST/PUT headers incl. local/leaf/metadata/listing | 1 PASS | 0.179 s
+Supplement S3 journal surrogate replacement + concurrent writers | 2 PASS | 0.413 s
+Supplement existing round trips and offline spy contract | 3 PASS | 0.629 s
+TOTAL: 261 passed, 0 failed, 0 skipped; 240.73 s wall duration.
+Strengthened fresh-reader oracle assertions and explicit .json newnote typing:
+63 passed, 63 deselected, 47.82 s (fresh-oracle-final.log).
+The final invocation includes 60 settings rows per storage, plus 60 additional
+per-row document-class tests per storage. Every row checks exact committed
+native-oracle pieces/ordered children; fresh peers read independently. S3
+keys only grow during the lifecycles and publication spies reject overwrites.
+Large binary inputs use a 200 MiB vault setting and native V2 splitter vectors;
+40/100 MiB uploads use write_attachment and byte-exact fresh-backend read-back.
+The 201 MiB skip leaves the remote key set unchanged. The oversized rename
+reduces the policy below a stored 40 MiB source, refuses, and preserves its bytes.
+The exact 12 MiB .json newnote traverses create_app tool dispatch: create,
+whole/window fetch, near-end search, append and search-replace, then fresh read.
+Wipe recovery includes the vanished peer-owned outbound sentinel and checks
+zero processed history while retaining exact revisions/chunk-file digests.
+Identity migration verifies the actual quarantine SQLite/chunk files and
+replays new remote history without mixing the old identity.
+Compression includes marked real-server writes, a fresh reader, and committed
+native compressed documents read with enable_compression both false and true.
+Headers are asserted in botocore before-send after authentication preparation
+and httpx request hooks; no header or authentication values are logged.
+
+Generated binary input SHA256 (inputs generated in memory, not retained files):
+test_real_s3_large_binary[40] input_sha256=aa1da718da51e9179a4bfb5745e36e913ccee3b736325ff6b441ef36b595cc64
+test_real_s3_large_binary[40] oversize_sha256=150eec359a6212785781e2582aa00ae7c3e9a32a98d1d7e2ffae8366c1edbeca
+test_real_s3_large_binary[100] input_sha256=138199b0ccbc3ac70d9751562270ba14ef9fd1833b20f92e169d158e8e4ffce0
+
+Oracle provenance:
+The native harness executes read-only commonlib
+484c164450d61deb2e301582b60cb9b5f9fa977f; plugin reference
+5070b67beae3b60e3a79132386a08da3f1ef213a. Node 26.13.1.
+New generator: scripts/extract_acceptance_vectors.mjs delegates to the existing
+source-verifying scripts/extract_settings_oracle.mjs in isolated G3_CELL mode.
+Fixture retains both generator SHA256s, upstream source hashes, ordered child
+IDs, native base64-piece digests, and published dependency version/integrity.
+No expected partitions or IDs originate from production Python.
+acceptance_upstream.json SHA256=6927beae83595a110627e8e54fb4dc165ee8f60bb290b5411200fd6aee72a8b3
+Existing matrix, compression and surrogate oracle bytes are unchanged.
+Native citations read/used (commonlib src/):
+- string_and_binary/chunks.ts:218-252,342-433,698-699
+- ContentSplitter/ContentSplitterV2.ts:20-32
+- managers/EntryManager/EntryManagerImpls.ts:130-159,274-283
+- services/base/VaultService.ts:73-81
+- replication/journal/JournalSyncCore.ts:329-408
+- replication/journal/journalCompatibility.ts:60-75
+- replication/journal/journalRecords.ts:69-108
+- replication/journal/objectstore/MinioStorageAdapter.ts:61-100
+- pouchdb/compress.ts:49-71
+- replication/httplib.ts:84-97,110-196
+- services/base/RemoteService.ts:479-485
+- replication/couchdb/LiveSyncReplicator.ts:2071-2098
+
+Findings closed by this acceptance:
+1. ebb76a6: CouchDB lone-surrogate writes now refuse before any peer request.
+   Raw device-shaped PUT on real CouchDB returns exactly HTTP 400 with
+   {"error":"bad_request","reason":"invalid UTF-8 JSON"}; no document exists.
+   Devices fail the same way; v1 non-plain splitting can cause the boundary.
+   Journal native TextEncoder replacement remains independently verified.
+2. 08e69ce: wrong-key JWT HTTP 400 and expired-clock 401 now produce the typed
+   authorization diagnostic. All four algorithms authenticate the configured
+   subject through startup_check; JWT backends have no Basic credentials.
+3. 2517d70: PKCS8 EC test keys authenticate with ES256 (no kid) and ES512
+   (kid es512); SEC1 actionable guidance remains covered offline.
+The first resumed offline suite found three remaining stale lossless-CouchDB
+storage assertions (25079 passed, 3 failed, 133 skipped, 3 subtests; 559.05 s).
+220f4db corrects those expectations; focused rerun: 198 passed, 248 deselected.
+G3 stored-child mutation coverage is now journal-only; codec oracle stays exact.
+
+Mutation table (all in memory; production files never rewritten):
+Mutation | Catching test ID | Result
+preflight removed | test_couchdb_surrogate_refusal.py::test_whole_write_refuses_before_any_request | KILLED
+fake accepts lone escapes | test_couchdb_surrogate_refusal.py::test_fake_models_real_utf8_json | KILLED
+preflight after first GET | test_couchdb_surrogate_refusal.py::test_whole_write_refuses_before_any_request | KILLED
+JWT 400 generic | test_couchdb_jwt_authentication.py::test_later_error_probes_session_without_echo | KILLED
+_session subject not compared | test_couchdb_jwt_authentication.py::test_startup_requires_authenticated_subject | KILLED
+server reason echoed | test_couchdb_jwt_authentication.py::test_later_error_probes_session_without_echo | KILLED
+extra-row wrong child ID | test_integration_parity_s3.py::test_real_s3_each_row_text_and_binary | KILLED
+fresh binary read corrupted | test_integration_parity_s3.py::test_real_s3_large_binary | KILLED
+G3 encoder comparison | test_settings_differential.py and test_settings_matrix.py journal encoder-exact128 witnesses | KILLED (both)
+Mandatory mutation controls: 25 passed. Additional acceptance controls pass.
+Observability/helpers/oracle guard checks: 81 passed; final provenance guard:
+2 passed. Documentation contract: 68 passed.
+
+Evidence (ignored working directory, relative to repository root):
+.superpowers/sdd/2026-11-23-settings-parity/f4/real-final.log
+.superpowers/sdd/2026-11-23-settings-parity/f4/real-final.xml
+.superpowers/sdd/2026-11-23-settings-parity/f4/fresh-oracle-final.log
+.superpowers/sdd/2026-11-23-settings-parity/f4/mutations.json
+.superpowers/sdd/2026-11-23-settings-parity/f4/mutation-*.log
+.superpowers/sdd/2026-11-23-settings-parity/f4/acceptance-mutations.log
+.superpowers/sdd/2026-11-23-settings-parity/f4/g3-mutated.json
+.superpowers/sdd/2026-11-23-settings-parity/f4/oracle-generation-final.log
+.superpowers/sdd/2026-11-23-settings-parity/f4/offline-before-commit.log
+.superpowers/sdd/2026-11-23-settings-parity/f4/offline-final.log
+Pre-commit offline suite: 25083 passed, 263 skipped, 3 subtests passed;
+443.85 s. The additional provenance guard was added after this invocation's
+collection and passed separately (2 guard tests); the post-commit full suite
+includes it. Final post-commit counts/hygiene are reported in the task result.
+Skipped files without the real-server environment:
+tests/test_couchdb_jwt.py
+tests/test_integration_couchdb.py
+tests/test_integration_minio.py
+tests/test_integration_parity_couchdb.py
+tests/test_integration_parity_s3.py
+tests/test_object_storage.py
+
+Image digests (controller-provided, carried forward; not independently
+re-inspected by this invocation):
+seaweedfs=chrislusf/seaweedfs@sha256:4b42c212543a0acd4c0e675215ecdcaf62a186ef98def76c7e12701871222d15
+couchdb=couchdb@sha256:907eab5b7e55ab7cfd241d39b90b2a335ea40bef82acee5a37388c08bf201dda
+
+Reproduction, from the parity worktree:
+1. Populate a private shell-only environment file with the documented test
+   variables and rotated PKCS8 keys. Do not print or copy it into artifacts.
+2. source <private-environment-file> && ./venv/bin/python -m pytest tests/test_integration_minio.py tests/test_integration_couchdb.py tests/test_integration_parity_s3.py tests/test_integration_parity_couchdb.py -q --tb=no -o junit_family=legacy --junitxml=<ignored-evidence-dir>/real-final.xml
+3. In a fresh shell WITHOUT the test environment:
+   ./venv/bin/python -m pytest tests/ -q -ra > <ignored-evidence-dir>/offline-final.log 2>&1
+4. node scripts/extract_acceptance_vectors.mjs <pinned-commonlib> <verified-wasm-esm> <verified-wheels-dir> <verified-wheels-tgz> <verified-wasm-tgz> tests/fixtures/acceptance_upstream.json
+5. ./venv/bin/python -m compileall -q
+   git diff --check
+   git ls-files -i -c --exclude-standard
+   git status --short
+
+Remaining scope/doubts:
+No requested default 60-row acceptance scenario remains unexecuted.
+This finite acceptance cannot prove every possible JSON setting or server
+combination. Optional MINIO_TEST_MATRIX=full supplemental branch rows were
+not part of this final default-matrix invocation. Images were identified by
+the controller; no image inventory API was queried again. Large inputs are
+reproducible in-memory recipes, and their recorded digests identify those
+bytes; no permanent 40/100/201 MiB files were created.

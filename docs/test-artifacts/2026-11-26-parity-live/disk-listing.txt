@@ -1,0 +1,21 @@
+Files of the test vault folder parity-live on disk, read-only
+============================================================
+Taken 2026-11-26 16:49:00 MSK by the controller, after the owner's last sync at 16:20:30.
+Obsidian's file explorer does not list .bin files, so the owner asked the controller to check.
+
+size (bytes)  modified MSK     sha256 (first 16)  name
+ 104,857,601  2026-11-26 11:34:40  6d67b168a1cf1877  above.bin
+  41,943,040  2026-11-26 11:34:40  c6390d38a94ac47e  device-40m.bin
+ 104,857,600  2026-11-26 11:34:40  2f7ac4b31fe43d02  exact.bin
+          15  2026-11-26 12:25:15  69b6f4f3113b8593  invalid.md
+          72  2026-11-26 12:23:41  d94ff38ef94e1a4a  moved.md
+  41,943,040  2026-11-26 12:18:59  c6390d38a94ac47e  peer-40m.bin
+          28  2026-11-26 12:25:15  16655dd4043226c4  text.png
+          32  2026-11-26 12:25:15  dbd31727692cb065  upper.MD
+
+Newest modification time in the folder: 2026-11-26 12:25:15 MSK.
+No file carries a modification time from the refusal step (16:18:12) or the sync after it.
+skipped.bin and refused-move.bin are absent; exact.bin is present.
+The digest prefixes of the seven files that the peer's reports cover equal the sha256 values
+of those reports. above.bin is above the size policy: its digest is recorded only in this listing.
+Hidden files and the .obsidian folder of the vault are outside this listing.

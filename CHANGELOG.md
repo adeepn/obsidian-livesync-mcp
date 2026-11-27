@@ -6,44 +6,107 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-### Added
+### Settings parity
 
-- Added `obsidian_download_attachment` for complete binary downloads over base64 with raw size/SHA-256, an optional caller size limit, and a symmetric 32 MiB hard cap for CouchDB and S3 journals
+- Clarify that agreeing newest devices win despite older disagreement; distinguish
+  nonfatal ignore-name shapes from typed policy ambiguity and its overrides.
 
-- Added `obsidian_upload_attachment` for binary PDF/scan uploads up to 32 MiB decoded through CouchDB or S3 journals, using LiveSync `newnote` base64 storage and returning size/SHA-256 metadata
+- Compare reconnect files with device-ingested text, type and Blob size; report
+  typed transformations and isolate file failures while retaining raw digests.
 
-- Added S3 local peer state size/path diagnostics and `vault_stats.local_state` warnings controlled by `S3_STATE_SIZE_WARN_MB` (disabled by default)
-- Added shared bearer API key authentication via `MCP_API_KEY` for MCP clients that use `Authorization: Bearer <token>`
-- Added the S3 journal backend with append-only publication, local SQLite/chunk state, URI or individual-variable configuration, and legacy/NFC path identity support
-- Added `LIVESYNC_BACKEND` configuration to select CouchDB or S3 journal storage at startup
-- Added strict startup configuration validation (`config.load_config`): missing variables, incomplete auth, and placeholder secrets from `.env.example` abort startup with a clear message
-- Added a `backend` field to `vault_stats` output identifying the active storage backend
+- Resolve recommendation-only size and ignore-file policies from advertising
+  devices before stale PREFERRED; arbitrate disagreements by positive numeric
+  tweakModified, then PREFERRED or a typed ambiguity with operator recovery.
+  Refresh journal policy, text budget and typed provenance atomically.
 
-### Changed
+- Keep valid surrogate pairs together in V1 non-plain and plain zero-cap text
+  writes by extending the cut one UTF-16 unit and resetting the next nominal
+  size. Recompute moved-piece IDs; preserve safe partitions, binary splits,
+  reads and caller lone-unit ingestion/wire handling.
 
-- Expanded the connection guide with plugin credential sources, both S3 configuration forms, a complete environment reference, local replica monitoring/reset procedures, and the native-peer architecture rationale
-- Rewrote the storage layer: all 20 tools now operate through a storage-agnostic `StorageBackend` interface, with a LiveSync-aware `CouchDBBackend` implementation (soft-delete visibility, chunked documents, optimistic locking, error messages free of internal URLs and revisions)
-- Rewrote frontmatter handling on `ruamel.yaml` round-trip editing: comments, quoting and key order are preserved; tag add/remove coerce types instead of corrupting YAML
-- Rebuilt the link graph with an Obsidian-compatible resolver (heading anchors, aliases, markdown links); unreadable notes stay in resolution instead of being dropped
-- `COUCHDB_URL` now defaults to `http://localhost:5984`, matching README and `.env.example`; all remaining defaults are documented in the README environment table (audit A4)
-- Pinned dependencies (`mcp[cli]==1.30.0`) and added a frozen `requirements.lock` (audit A1)
+- Classify CouchDB response failures by endpoint purpose: read-only POST remains
+  a typed refusal; write acknowledgements retain uncertainty and recovery.
+  Refuse undeclared operations before sending with upgrade guidance.
 
-### Fixed
+- Classify unreadable CouchDB PUT/POST/DELETE acknowledgements as outcome unknown
+  with typed budget/encoding recovery and non-idempotent retry guidance. Preserve
+  read refusals, uncertain orphan-leaf handling and move source-removal context.
 
-- Write tools enforce data-safety semantics: no-op writes are skipped, create/overwrite contracts are explicit, and failed writes can no longer point a note at missing chunks
-- Canvas tools refuse empty or malformed structures without mutating the file, and preserve unknown keys of spec-valid documents
-- OAuth mode gates `/authorize` behind the `OAUTH_PASSWORD` form before issuing any code; dynamic client registration stays disabled
-- A missing CouchDB database is reported as a storage error at startup instead of surfacing as "note not found"
+- Match source-audited ordinary-file identities and writes at plugin 1.0.52 /
+  commonlib 484c164: legacy/NFC and case-sensitive/insensitive paths, all V1/V2/
+  V2-segmenter/V3 splitters, legacy migration, five chunk hash modes and Eden.
+  Preserve JavaScript scalar coercion, UTF-16 lengths, Unicode boundaries,
+  duplicate child order and empty tails. Refuse proven native loops, ambiguous
+  chunk collisions and lossy binary parameter combinations with recovery guidance.
+- Follow device disk-ingestion suffixes for text and binary content. Add binary
+  attachment upload/download and editing of strictly valid UTF-8 textual newnotes.
+  Admit files under vault syncMaxSizeInMB (default 50 MiB, equality admitted,
+  <=0 unlimited), with structured skipped writes and readable oversized revisions.
+  Invalid plain-path UTF-8 requires explicit lossy conversion.
+- Derive useIgnoreFiles/ignoreFiles, size and text policy from vault settings,
+  retaining independent local overrides. Keep syncOnlyRegEx/syncIgnoreRegEx as
+  operator environment settings; they are not published in the milestone.
+  Active selection uses verified
+  pinned ECMAScript/minimatch code and requires Node 22+; inactive selection needs
+  no Node. Refresh journal policies atomically and refuse incompatible active rules.
+- Support CouchDB Basic/JWT authentication (HS256/HS512/ES256/ES512), per-backend
+  token caching, startup session-identity checks and PKCS8 EC keys. Add CouchDB/S3
+  custom headers for auth proxies and configurable S3 path/virtual-host addressing.
+  For transport safety, refuse Content-Length, Transfer-Encoding, Host, hop-by-hop
+  and Proxy-* overrides, including injected configurations.
+- Read compressed CouchDB documents regardless of the write setting. Enable
+  shorter-only compression under enableCompression while preserving CR/LF and BOM
+  bytes. Bound inflation before read projection or reserved-prefix publication;
+  LIVESYNC_COUCHDB_MAX_INFLATED_BYTES overrides a splitter-derived 32 MiB floor.
+  Force HTTP identity encoding and bound streamed wire/decoded response bytes
+  before JSON parsing; refuse unsupported encodings with recovery guidance.
+- Use device JSON/TextEncoder wire encodings and retain original chunk IDs.
+  Report BOM removal, invalid UTF-8/surrogate replacement, reserved compression
+  prefix interpretation and journal transport_replacements through typed notices
+  without rewriting the original tool result. Refuse CouchDB lone-surrogate
+  publications before sending leaves because the real server rejects them.
+- Complete aggregate scans and resumable CouchDB indexing by default, with unlimited
+  note/byte scan defaults, configurable time budgets, cursors, page limits and fetch
+  line windows. Share a whole-note text budget (max of positive vault policy and
+  256 MiB; 0 unlimited override) across text tools and scans; complete byte downloads
+  remain available. Isolate regex execution with configurable deadlines/output bounds.
+- Resolve YAML aliases in properties/tags, preserve untouched key bytes during edits,
+  and bound expanded nodes (20000), UTF-8 key/string bytes (4 MiB) and depth (200)
+  through named environment overrides; raw-note access remains available.
+- Make HTTP request-body admission explicit: LIVESYNC_MAX_REQUEST_BYTES defaults
+  to 1 GiB, 0 unlimited. Bodies are held in memory; HTTP 413 requires raising the
+  policy or any proxy limit. The OAuth authorization form retains its separate cap.
+  Make storage and selection deadlines and safe S3 retry counts configurable.
+- Retain revision history, historical/shared chunks and local-only survivors across
+  wipe/epoch recovery. Quarantine state on identity changes and report state size.
+  Confirm ambiguous conditional publication at the original key; retain outcome
+  uncertainty when read-back cannot prove success. Protect rename sources when
+  destinations are excluded or oversized; report partial moves and safe retry steps.
+- Expose only typed diagnostic fields in configuration, tools and hosting logs;
+  withhold remote values, headers, exception text and tracebacks. Verify installed
+  selection module/worker hashes before execution. Freeze the tested environment in
+  requirements.lock and pin the upstream watcher runner to Ubuntu 24.04.
+- Deliberate differences remain: E2EE/path obfuscation are unsupported (#3/#4);
+  filesystem reflection and internal/plugin sync are outside ordinary-tool scope;
+  conflict automation and metadata deletion remain conservative. The peer never
+  registers as a device or publishes tweak alignment. Operational replay, inflate,
+  scan and property budgets are distinct from device file admission and name overrides.
+- Persist each peer's S3_STATE_DIR and back it up before upgrades. Restart after
+  configuration changes and align incompatible device tweaks. Use the focused
+  configuration, differences, recovery and oracle-regeneration references. After a
+  confirmed disposable-server wipe, ordinary sync creates service records; rebuilding
+  from device files is the explicit recovery step before checking files.
 
-### Removed
+### Earlier unreleased infrastructure
 
-- Removed the legacy `couchdb.py` client; `storage_couchdb.CouchDBBackend` supersedes it
-
-### Docs
-
-- Documented verified Codex streamable HTTP MCP configuration using `bearer_token_env_var = "MCP_API_KEY"`
-- Added explicit custom header key/value guidance for MCP clients that configure headers manually
-- README: added a "Backends" section (CouchDB and S3 journal storage), a defaults column in the environment table, and honest install/run steps
+- Add storage-agnostic CouchDB/S3 backends, strict startup configuration,
+  LIVESYNC_BACKEND, bearer auth and backend diagnostics. Default CouchDB URL to
+  http://localhost:5984 and provide frozen dependency installation.
+- Enforce create/overwrite, optimistic locking, soft-delete visibility and safe
+  chunk publication; reject missing databases, malformed canvas and unsafe writes.
+- Use round-trip YAML frontmatter and Obsidian-compatible links/graph resolution.
+  Enforce OAuth password authorization with PKCE and preconfigured Claude callbacks;
+  keep dynamic client registration disabled and document Codex bearer/HTTP setup.
 
 ## [1.0.1] - 2026-04-10
 

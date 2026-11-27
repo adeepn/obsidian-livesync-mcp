@@ -10,3 +10,17 @@ src/common/utils.ts
 src/common/models/tweak.definition.ts
 src/common/types.ts
 src/string_and_binary/path.ts
+src/string_and_binary/chunks.ts
+src/ContentSplitter/ContentSplitter.ts
+src/ContentSplitter/ContentSplitterBase.ts
+src/ContentSplitter/ContentSplitterV1.ts
+src/ContentSplitter/ContentSplitterV2.ts
+src/ContentSplitter/ContentSplitterRabinKarp.ts
+src/ContentSplitter/ContentSplitters.ts
+src/managers/HashManager/HashManager.ts
+src/managers/HashManager/HashManagerCore.ts
+src/managers/HashManager/XXHashHashManager.ts
+src/managers/HashManager/PureJSHashManager.ts
+src/common/idDerivation.ts
+src/common/configForDoc.ts
+src/common/models/setting.const.ts

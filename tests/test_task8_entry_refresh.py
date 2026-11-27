@@ -30,12 +30,12 @@ async def test_tool_refreshes_before_read(monkeypatch):
 async def test_refresh_failure_prevents_stale_read(monkeypatch):
     backend = FakeBackend()
     backend.add("remote.md", "stale content")
-    backend.errors["refresh"] = StorageUnavailable("private endpoint")
+    backend.errors["refresh"] = StorageUnavailable("https://user:secret@private-endpoint/db")
     monkeypatch.setattr(server, "backend", backend)
     result = await server.obsidian_fetch("remote.md")
     assert result.startswith("Error:")
     assert "stale content" not in result
-    assert "private endpoint" not in result
+    assert "private-endpoint" not in result
     assert not any(call[0] == "read_note" for call in backend.calls)
 
 

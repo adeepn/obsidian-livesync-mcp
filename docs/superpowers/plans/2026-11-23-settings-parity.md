@@ -1,5 +1,10 @@
 # Settings-Parity: пир ведёт себя идентично плагину при любых настройках — Implementation Plan
 
+> Historical baseline cap references and the original Task 5 size/replay
+> assumptions below are superseded by the Task 5 fix-round-1 contracts in
+> spec §д: vault size policy, separate raw/Blob gates, P-13 rename refusal,
+> independent replay budgets and explicitly reported Python decoder capacity.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Устранить все самодельные ограничения и решения пира: поведение при ЛЮБЫХ настройках vault (syncMaxSizeInMB, chunk-сплиттер, case-sensitive, NFC) идентично поведению плагина — те же чанки, те же id, те же решения plain/newnote, те же правила размеров; никаких самодельных капов.
@@ -66,6 +71,49 @@
 - [ ] **Step 1: failing tests** — векторы upstream (если есть в спеках) + node-дифф оракул: `node -e "import {ContentSplitterV3}..."` генерирует границы для 10 случайных входов (текст/бинарник, разные настройки) → наш сплиттер даёт идентичные куски и id.
 - [ ] **Step 2: FAIL → Step 3: implement (rabin-karp по upstream-коду, xxhash64 через `xxhash` пакет — пин в requirements) → Step 4: PASS → Step 5: Commit** — `feat: upstream content splitter and chunk id derivation`
 
+Статус Task 3 (поправка 2026-11-24, Ruling P-2/P-3): ядро v3+xxhash64 принято ревью (23 граничных вектора + 10 дифференциальных последовательностей), НО исполнитель ограничил сплиттер значениями `v3-rabin-karp`/`xxhash64` и применил ограничение на старте сервера. Это отменено: upstream выбираемы четыре сплиттера (`v1`, `v2`, `v2-segmenter`, `v3-rabin-karp`) и hashAlg `xxhash32`/`xxhash64`/`mixed-purejs`/`sha1`/`""`. Все воспроизводимы точно на пине (исследование: ledger-файл `codex-legacy-research.out`). Паритет недостижим, пока writer поддерживает одно значение из четырёх — поэтому план расширен задачами 3a–3c.
+
+### Task 3a: чтение не зависит от writer-алгоритма (разделение гейта)
+
+**Files:**
+- Modify: `storage_couchdb.py`, `storage_journal.py` (gate на startup), `livesync_format.py` (`resolve_content_splitter`), `content_splitter.py`, `tests/*`
+
+**Interfaces:**
+- Produces: startup_check НЕ отказывает на неподдерживаемом writer-алгоритме (чтение, replay и реконструкция контента сплиттером не пользуются — работают для любого); неподдерживаемый для ЗАПИСИ алгоритм → чистая ошибка инструмента (StorageError-семейство, без traceback и без падения lifespan) ровно в момент вызова write-инструмента, с текстом «vault uses chunkSplitterVersion=X / hashAlg=Y; peer writes for this mode are not implemented yet — reads work»; `backend_info` отдаёт `writer_supported: bool` + причину. Numeric validation: `OverflowError`/`ValueError` на аномальных значениях customChunkSize/minimumChunkSize → нормализованы в keyed `ValueError` → UnsupportedVault/StorageError.
+
+- [ ] **Step 1: failing tests** — vault с `chunkSplitterVersion=v2`: startup OK, list/read/replay работают, `writer_supported=false`; write_note → StorageError без публикации/мутаций, сервер (lifespan) не падает; `customChunkSize=1e308`, `minimumChunkSize=10**400` → чистая ошибка без OverflowError; при `v3`+`xxhash64` — `writer_supported=true`, запись работает.
+- [ ] **Step 2: FAIL → Step 3: implement → Step 4: PASS → Step 5: Commit** — `fix: decouple reads from writer algorithm support`
+
+### Task 3b: остальные варианты hashAlg (точный паритет id)
+
+**Files:**
+- Modify: `content_splitter.py` (диспетчер хэшей), `tests/test_content_splitter.py`, `tests/fixtures/` (дифференциальные векторы)
+- Reference: `C:managers/HashManager/{XXHashHashManager,PureJSHashManager}.ts`, `octagonal-wheels@0.1.57 hash/purejs.js`, `C:managers/HashManager/HashManager.unit.spec.ts`
+
+**Interfaces:**
+- Consumes: исследования (таблица точных конструкций id: xxhash32 `B36(XXH32(utf8(p+"-"+L)))`; legacy `""` → `B36(Int32(XXH32(utf8(p)) XOR L))` signed; mixed-purejs → `F(p+"-"+L)` с binary64-округлением и `Math.imul`; sha1 → стандартный base64 SHA-1 через `writeString` с веткой ≤128 UTF-16 юнитов).
+- Produces: `chunk_id_for_piece(piece, *, hash_alg)` для всех пяти значений; векторы: `helloWorld` → `1n069eb` (xxhash32), `-vyucau` (legacy), `1b68nom123qfyd` (mixed), `2pGPxorWFQvCZq2k1uh76tH9ABc=` (sha1) + дифференциальный корпус против upstream-кода под Node (UTF-16 cut, суррогаты, пустая строка, CRLF, PDF/JSON-разделители) — та же инфраструктура, что в Task 3.
+- Обязательные векторы: из `HashManager.unit.spec.ts:17–31,200–307`.
+
+- [ ] **Step 1: failing tests** — все четыре таблицы-вектора; дифференциальный корпус; `backend_info` writer_supported для каждого hashAlg.
+- [ ] **Step 2: FAIL → Step 3: implement (binary64-семантика для mixed через `struct`/`math` — обычное умножение с округлением, `Math.imul` через ctypes/инт) → Step 4: PASS → Step 5: Commit** — `feat: upstream chunk id derivation for all hash algorithms`
+
+### Task 3c: сплиттеры V2, V2.5 и V1 (точный паритет границ)
+
+**Files:**
+- Create/Modify: `content_splitter.py` (классы по алгоритмам, общий препроцессинг), `tests/test_content_splitter.py`, `tests/fixtures/` (дифференциальные векторы)
+- Reference: `C:string_and_binary/chunks.ts:13–72,218–254` (V1 текст), `:436–493` (V1 бинарник), `:256–323,341–434` (V2 текст/бинарник), `C:ContentSplitter/ContentSplitterV1.ts`, `ContentSplitterV2.ts`
+
+**References:**
+- `chunkSplitterVersion` dispatch: V1 принимает `"v1"`, `""`, `undefined`; V2 принимает `"v2"` и `"v2-segmenter"`; Rabin-Karp — `"v3-rabin-karp"`. ВНИМАНИЕ: `v2-segmenter` на этом пине ведёт себя ИДЕНТИЧНО V2 (аргумент `useSegmenter` не читается в `splitPieces2V2`) — реализовывать «лексическую» сегментацию по лейблу UI было бы отличием от устройства; паритет = точная копия V2. ICU-зависимый helper сегментации предложений недостижим при нормальном dispatch и в паритет не входит (если будущий upstream начнёт его использовать — сторож upstream-watch должен это поймать: `chunks.ts` в манифесте, Task 7).
+
+**Interfaces:**
+- Produces: `ContentSplitter.split` диспетчеризует по `chunkSplitterVersion` на V1/V2/V3 (V2.5 → V2); общий препроцессинг `pieceSize = floor(102400 × (customChunkSize + 1))`, `plainSplit = path ends with .md/.txt/.canvas` (case-sensitive). Quirks, которые обязаны сохраниться (из исследования): V1 — fence-цикл, regex `/(.*?[;,:<])/g`, cut перед разделителем, LF-fallback без обновления splitSize, пустой бинарник → одна пустая base64-строка; V2 — строгий `>` при flush, adaptive minimum, бинарник ищет preferred-разделитель во всём буфере от `offset+minimum` (дальний preferred подавляет ближний LF); worker vs direct на пустом входе (`""`).
+- Доказательство паритета: upstream не содержит точных граничных векторов для V1/V2 → единственное доказательство — дифференциальный корпус против pinned upstream-кода под Node (сгенерированные фикстуры коммитятся: границы+id для корпуса входов).
+
+- [ ] **Step 1: failing tests** — дифференциальный корпус V1/V2/V2.5 (текст с fences/заголовками `#`, plain и не-plain, UTF-16 суррогатные пары на границе cut, CRLF, пустой ввод; бинарники `.pdf`/`.json`/прочие с разделителями NUL, `/`, `,`, LF; переходы minimum; customChunkSize 0/1/N); V2.5 == V2 на всём корпусе; V3 — прежние векторы без регрессии.
+- [ ] **Step 2: FAIL → Step 3: implement → Step 4: PASS → Step 5: Commit** — `feat: upstream v1 and v2 content splitters`
+
 ### Task 4: plain/newnote решение по правилам upstream
 
 **Files:**
@@ -78,17 +126,44 @@
 - [ ] **Step 1: failing tests** — upstream-векторы doc-type (текстовые расширения, бинарные, «текст в бинарном расширении» — как решает устройство); write_note(bytes) на обоих бэкендах → newnote с корректным size; прежние все сценарии (text write, upload, cap-тесты) зелёные без изменений семантики cap'ов (капы удалены в Task 5 — здесь только тип).
 - [ ] **Step 2: FAIL → Step 3: implement → Step 4: PASS → Step 5: Commit** — `feat: upstream document type resolution`
 
+### Task 4b: фильтры выбора файлов устройства (parity-spec §ж, residual gap)
+
+**Files:**
+- Modify: `config.py` (новые опциональные переменные), `livesync_format.py` (target filter), `storage_couchdb.py`, `storage_journal.py` (writer применяет фильтр до мутаций), `tests/*`, `.env.example`, `README.md`
+
+**Interfaces:**
+- Consumes: parity-spec §ж (`U:managers/EntryManager/EntryManagerImpls.ts:247-249,343-369`; `U:serviceFeatures/targetFilter.ts:68-75`; list parser `U:common/utils.ts:545-556`; ignore matcher `U:string_and_binary/path.ts:183-231`, gate `U:serviceFeatures/targetFilter.ts:132-146`).
+- Produces: `is_target_file(path: str) -> bool` по upstream-семантике: при наличии скомпилированных allow-шаблонов путь обязан совпасть хотя бы с одним; любое совпадение с ignore-шаблоном → отказ; флаги регистра зависят от `handleFilenameCaseSensitive`; парсинг списков — как в upstream (не предполагать эквивалентность JS- и Python-regex без проверки). Это ЛОКАЛЬНЫЕ настройки устройства, их нет в milestone → у пира они задаются явными env-переменными (по умолчанию пусто = устройство без фильтров); значения из milestone не выводить. Writer обоих бэкендов применяет фильтр ДО чанков/метаданных; исключённый путь → чистая ошибка инструмента с названием сработавшего правила.
+
+- [ ] **Step 1: failing tests** — allow-list совпадение/несовпадение; ignore-list приоритет; комбинированный список через upstream-парсер (запятые, переносы, кавычки); регистр при case-sensitive и insensitive; JS-regex-конструкции, отличающиеся от Python (флаги, `\d`/`\w` на не-ASCII, lookbehind) — векторы сравнить с upstream-исполнением под Node; пустые настройки → всё разрешено; writer: исключённый путь → ошибка, ноль мутаций, оба бэкенда.
+- [ ] **Step 2: FAIL → Step 3: implement → Step 4: PASS → Step 5: Commit** — `feat: device file selection filters for peer writes`
+
 ### Task 5: syncMaxSizeInMB и производные лимиты вместо самодельных капов
 
 **Files:**
 - Modify: `storage_journal.py`, `storage_couchdb.py`, `journal_codec.py`, `journal_store.py`, `config.py`, `tests/*`
 
 **Interfaces:**
-- Consumes: Task 1 §д (точное правило устройства для oversized); сплиттер (максимум куска выводится из настроек — для лимита строки).
-- Produces: удаление MAX_ATTACHMENT_BYTES/MAX_DOWNLOAD_BYTES/линии-64MiB как констант; новые производные: `replay_line_limit` = base64(макс. piece по настройкам vault)×1.37+margin (env-override `S3_REPLAY_LINE_LIMIT`); правило oversized = поведение устройства из Task 1 §д (например, отказ create с тем же смыслом, что отказ устройства добавить файл — формулировка из исследования); бюджеты refresh масштабируются от syncMaxSizeInMB (env-override остаётся); download-лимит = тот же oversized-путь.
+- Consumes: parity-spec §д (проверено верификацией Task 1): предикат `max > 0 && size > 0 && size > max*1024*1024` (строго больше; равенство допускается; `<= 0` выключает); oversized NEW/CHANGED → устройство пропускает ДО записи в локальную БД (ни ревизии, ни записей журнала, без ошибки); oversized ревизия, УЖЕ попавшая в БД, из журнала не исключается; приём из журнала сохраняет записи независимо от лимита.
+- Produces:
+  - Writer (оба бэкенда): точный предикат устройства вместо `MAX_ATTACHMENT_BYTES`; oversized запись → **skipped outcome**: ничего не публикуется и не мутирует, прежняя ревизия остаётся; MCP-инструмент возвращает явный «skipped: превышает syncMaxSizeInMB=N» (не «success», не BinaryNoteError). `syncMaxSizeInMB` читается из настроек vault (PREFERRED), env-override опционален.
+  - Download: `MAX_DOWNLOAD_BYTES` удалён; инструментарий не ограничивает размер сильнее устройства (параметр `max_bytes` остаётся опцией вызывающего).
+  - Replay: сохранение принятых записей НЕ зависит от лимита (уже так — закрепить тестом: журнал с `metadata.size` сверх лимита пира не отвергается целиком).
+  - Операционные бюджеты replay (строка/inflate/объект/refresh) — **НЕ правило протокола** (parity-spec §д, последняя строка): устройство их не имеет. Они остаются как явно документированное осознанное отличие (защита от повреждённых/враждебных журналов) с env-override на каждый, без «тихого» срабатывания: при достижении бюджета — чистая ошибка с именем бюджета и способом его поднять; дефолты пересчитаны так, чтобы не резать ничего, что реалистичный vault с любым `syncMaxSizeInMB` производит (границы piece'ов ограничены алгоритмом сплиттера, а не размером файла).
+- [ ] **Step 1: failing tests** — предикат на границе (ровно N MiB допускается; N MiB + 1 байт — skip; дробные N; 0 и отрицательные — без лимита); oversized write_note / write_attachment → skipped, ноль публикаций, прежняя ревизия целы; файл 40 MiB при лимите 50 → пишется полностью (multi-piece, оба бэкенда, two-peer replay байт-в-байт); 200 MiB при лимите 0 → пишется; replay журнала с metadata.size сверх лимита → сохраняется, читается; каждый бюджет: срабатывание даёт именованную ошибку с подсказкой, env-override меняет порог.
+- [ ] **Step 2: FAIL → Step 3: implement → Step 4: PASS → Step 5: Commit** — `feat: device size policy replaces self-imposed caps`
 
-- [ ] **Step 1: failing tests** — oversized-файл (сверх syncMaxSizeInMB) → поведение = устройство (из §д); файл в пределах размера → пишется как устройство, включая размер чанков; replay журнала клиента с файлом на границе размера (синтетика по §д-правилам) не падает по нашей линии; budgets scale.
-- [ ] **Step 2: FAIL → Step 3: implement → Step 4: PASS → Step 5: Commit** — `feat: settings-derived limits replace self-imposed caps`
+### Task 5b: сравнение настроек с PREFERRED при старте (parity-spec «Tweak compatibility»)
+
+**Files:**
+- Modify: `livesync_format.py` (`assess_tweak_compatibility`), `storage_journal.py`, `storage_couchdb.py` (startup), `tests/*`
+
+**Interfaces:**
+- Consumes: parity-spec «Tweak compatibility and peer startup requirements» (`U:pouchdb/LiveSyncDBFunctions.ts:79-118`; `U:common/models/tweak.compatibility.ts:57-65,148-191`; `U:common/models/tweak.definition.ts:24-67`; `P:modules/coreFeatures/ModuleResolveMismatchedTweaks.ts:120-151`).
+- Produces: `assess_tweak_compatibility(preferred: dict, candidate: dict) -> TweakAssessment` с upstream-смыслом: absent / known-default / unadvertised различаются; representation-only разница ≠ семантический mismatch; `pathNormalizationVersion` расходится → MISMATCHED до гейта; `idDerivationVersion` → отдельный ID_KEY_MISMATCH; совместимо-lossy ключи (`customChunkSize`, `hashAlg`, `chunkSplitterVersion`) — по upstream-логике auto-accept (greater positive `tweakModified` выигрывает; ties/absent → REMOTE; `autoAcceptCompatibleTweak` undefined = true). Startup: пир оценивает свои эффективные настройки (значения, по которым он будет писать) против PREFERRED и каждой записи устройств в milestone; семантический mismatch → отказ с перечнем ключей (без значений-секретов) и пояснением, что нужно выравнивание; не принимать настройки молча.
+
+- [ ] **Step 1: failing tests** — векторы из upstream-спек `tweak.compatibility` (если есть) + табличные случаи: equal / different / unadvertised; missing-with-known-default = equal; lossy-only differences → auto-accept по tweakModified (все четыре случая сторон/ties); pathNormalization mismatch → MISMATCHED даже при выключенном гейте; startup обоих бэкендов: MISMATCHED → UnsupportedVault с ключами; пер-устройство vs PREFERRED расхождение в milestone → отказ.
+- [ ] **Step 2: FAIL → Step 3: implement → Step 4: PASS → Step 5: Commit** — `feat: device tweak compatibility assessment at startup`
 
 ### Task 6: Settings-matrix test harness
 

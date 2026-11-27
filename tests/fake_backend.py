@@ -2,7 +2,7 @@
 
 from copy import deepcopy
 
-from livesync_format import is_text_doc
+from livesync_format import is_text_doc, prepare_file_content
 from storage_base import (
     ConcurrentModification, NoteExists, NoteNotFound, StorageError,
 )
@@ -64,6 +64,9 @@ class FakeBackend:
     async def close(self):
         self._call("close")
 
+    def check_writer_support(self) -> None:
+        pass
+
     async def backend_info(self):
         self._call("backend_info")
         return {"backend": "fake"}
@@ -89,10 +92,10 @@ class FakeBackend:
             note["is_text"] = is_text_doc(note["meta"]["type"], path)
         return note
 
-    async def iterate_texts(self, extension=".md"):
+    async def iterate_texts(self, extension="", *, after=""):
         self._call("iterate_texts", extension)
-        for path, note in self.notes.items():
-            if not path.endswith(extension):
+        for path, note in sorted(self.notes.items()):
+            if path <= after or not path.endswith(extension):
                 continue
             try:
                 content = await self.read_note(path)
@@ -102,7 +105,7 @@ class FakeBackend:
             yield deepcopy(note["meta"]), text
 
     async def write_note(self, path, content, *, create=False,
-                         overwrite=False, mtime=None, expected_rev=None):
+                         overwrite=False, mtime=None, expected_rev=None, lossy_text=False):
         self._call("write_note", path, content, create, overwrite, mtime,
                    expected_rev)
         if expected_rev is not None and self._current_rev(path) != expected_rev:
@@ -113,11 +116,14 @@ class FakeBackend:
             raise NoteExists(path)
         if path not in self.notes and not create:
             raise NoteNotFound(path)
-        self.add(path, content, mtime=mtime if mtime is not None else 2)
+        body, doc_type, _ = prepare_file_content(path, content, lossy_text=lossy_text)
+        self.add(path, text=body if doc_type == "plain" else None,
+                 data=body if doc_type == "newnote" else None,
+                 mtime=mtime if mtime is not None else 2)
         return deepcopy(self.notes[path]["meta"])
 
     async def write_attachment(self, path, data, *, create=False,
-                               overwrite=False, expected_rev=None):
+                               overwrite=False, expected_rev=None, lossy_text=False):
         self._call("write_attachment", path, data, create, overwrite, expected_rev)
         if expected_rev is not None and self._current_rev(path) != expected_rev:
             raise ConcurrentModification("note changed concurrently; re-read and retry")
@@ -125,7 +131,9 @@ class FakeBackend:
             raise NoteExists(path)
         if path not in self.notes and not create:
             raise NoteNotFound(path)
-        self.add(path, data=data)
+        body, doc_type, _ = prepare_file_content(path, data, lossy_text=lossy_text)
+        self.add(path, text=body if doc_type == "plain" else None,
+                 data=body if doc_type == "newnote" else None)
         return deepcopy(self.notes[path]["meta"])
 
     async def delete_note(self, path, expected_rev=None):

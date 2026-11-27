@@ -1,0 +1,184 @@
+{
+  "pin": "484c164450d61deb2e301582b60cb9b5f9fa977f",
+  "source_sha256": {
+    "string_and_binary/path.ts": "5deb06668cae485345c3904072c537791294ff7f374bd16066f3b2da6a9ffdde",
+    "common/utils.ts": "162d7416ff00469d98e38a8be62854cc62eaba689605889937f37cf9243c3fed",
+    "serviceModules/FileAccessBase.ts": "c09d13d9c596045c191d7108bac6f93abe576db74720b2da4b61c5cacb6db891",
+    "string_and_binary/chunks.ts": "8cccf58cd8306d8504bcc41d5e2c303361936f8691abebf40764856805cf54aa",
+    "managers/EntryManager/EntryManagerImpls.ts": "c839aaf2ed759c9980edd5a2fba83783c55c807d07f97ce8fd7b4a2cc0aab607",
+    "serviceModules/ServiceFileHandlerBase/reflection.ts": "4a3d8711bc7a3b985074f73b3d0c60341d306117bea2ab7bf7dc72a4a906b7f3"
+  },
+  "dependency": {
+    "package": "octagonal-wheels",
+    "version": "0.1.57",
+    "integrity": "sha512-CijSXOtflv60HaqrsyHxJ7jBwE/8v+RX5JjIDnJaibXM8qgG5IV1RJAHFEKDyqA/nhJb46TZf+eVa+2LBRf2vQ==",
+    "source_sha256": {
+      "package/dist/binary/base64.js": "0675e7a75edeb8eabc7f867ac18a44bd50bf4f493a5356d3760fb2b167fa82bc",
+      "package/dist/common/logger.js": "cc929b9b9a685fb060c6c382f53a3e61e67b05a4ae299fe846966a6d7332f58f",
+      "package/dist/binary/blob.js": "21ef13f0c43ecaf20fa4875395d849dab74f1046a676b769586feeef91e9270d",
+      "package/dist/binary/typedArray.js": "a6af3f42ca6d4b8cdd79947dca8719d220d97595cdf0be7a948a8404ad5e0f58"
+    }
+  },
+  "vectors": [
+    {
+      "version": "v1",
+      "input": "abc",
+      "size": 3,
+      "pieces": [
+        "abc"
+      ],
+      "text": "abc",
+      "reflected": "accepted"
+    },
+    {
+      "version": "v1",
+      "input": "﻿abc",
+      "size": 6,
+      "pieces": [
+        "abc"
+      ],
+      "text": "abc",
+      "reflected": "size-mismatch"
+    },
+    {
+      "version": "v1",
+      "input": "Привет",
+      "size": 12,
+      "pieces": [
+        "Привет"
+      ],
+      "text": "Привет",
+      "reflected": "accepted"
+    },
+    {
+      "version": "v1",
+      "input": "A🙂B",
+      "size": 6,
+      "pieces": [
+        "A🙂B"
+      ],
+      "text": "A🙂B",
+      "reflected": "accepted"
+    },
+    {
+      "version": "v2",
+      "input": "abc",
+      "size": 3,
+      "pieces": [
+        "abc"
+      ],
+      "text": "abc",
+      "reflected": "accepted"
+    },
+    {
+      "version": "v2",
+      "input": "﻿abc",
+      "size": 6,
+      "pieces": [
+        "abc"
+      ],
+      "text": "abc",
+      "reflected": "size-mismatch"
+    },
+    {
+      "version": "v2",
+      "input": "Привет",
+      "size": 12,
+      "pieces": [
+        "Привет"
+      ],
+      "text": "Привет",
+      "reflected": "accepted"
+    },
+    {
+      "version": "v2",
+      "input": "A🙂B",
+      "size": 6,
+      "pieces": [
+        "A🙂B"
+      ],
+      "text": "A🙂B",
+      "reflected": "accepted"
+    },
+    {
+      "version": "v2-segmenter",
+      "input": "abc",
+      "size": 3,
+      "pieces": [
+        "abc"
+      ],
+      "text": "abc",
+      "reflected": "accepted"
+    },
+    {
+      "version": "v2-segmenter",
+      "input": "﻿abc",
+      "size": 6,
+      "pieces": [
+        "abc"
+      ],
+      "text": "abc",
+      "reflected": "size-mismatch"
+    },
+    {
+      "version": "v2-segmenter",
+      "input": "Привет",
+      "size": 12,
+      "pieces": [
+        "Привет"
+      ],
+      "text": "Привет",
+      "reflected": "accepted"
+    },
+    {
+      "version": "v2-segmenter",
+      "input": "A🙂B",
+      "size": 6,
+      "pieces": [
+        "A🙂B"
+      ],
+      "text": "A🙂B",
+      "reflected": "accepted"
+    },
+    {
+      "version": "v3-rabin-karp",
+      "input": "abc",
+      "size": 3,
+      "pieces": [
+        "abc"
+      ],
+      "text": "abc",
+      "reflected": "accepted"
+    },
+    {
+      "version": "v3-rabin-karp",
+      "input": "﻿abc",
+      "size": 6,
+      "pieces": [
+        "﻿abc"
+      ],
+      "text": "﻿abc",
+      "reflected": "accepted"
+    },
+    {
+      "version": "v3-rabin-karp",
+      "input": "Привет",
+      "size": 12,
+      "pieces": [
+        "Привет"
+      ],
+      "text": "Привет",
+      "reflected": "accepted"
+    },
+    {
+      "version": "v3-rabin-karp",
+      "input": "A🙂B",
+      "size": 6,
+      "pieces": [
+        "A🙂B"
+      ],
+      "text": "A🙂B",
+      "reflected": "accepted"
+    }
+  ]
+}

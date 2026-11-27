@@ -1,0 +1,208 @@
+{
+  "upstream_commit": "484c164450d61deb2e301582b60cb9b5f9fa977f",
+  "node": "v26.13.1",
+  "node_flags": [
+    "--stack-size=16384"
+  ],
+  "sources": {
+    "services/base/VaultService.ts": "33cde242bd041fa4dec3e1bf66412a53795e2caf6f26955070024e2df88db079",
+    "ContentSplitter/ContentSplitterBase.ts": "495f5884048e6ab7192afcefcfe871cd853154230655f1602dd0b344a1952276",
+    "common/models/shared.const.behabiour.ts": "72a60cdb46d46deec169bc18da86c89f9ef2e14ba33aa33aea547348f382894e",
+    "string_and_binary/chunks.ts": "8cccf58cd8306d8504bcc41d5e2c303361936f8691abebf40764856805cf54aa"
+  },
+  "dependencies": [],
+  "generator_sha256": "9f8ecfec0a63ffe52f5fc1d50b0f454cd146226d14c9eecd7cecdc6a47c4648f",
+  "rows": [
+    {
+      "recipe": {
+        "depth": 480,
+        "seed": 1
+      },
+      "primitive": "1",
+      "number": "1",
+      "addition": "11",
+      "piece_size": "204800",
+      "adjusted": "11",
+      "predicates": [
+        {
+          "bytes": 1048576,
+          "too_large": false
+        },
+        {
+          "bytes": 1048577,
+          "too_large": true
+        }
+      ]
+    },
+    {
+      "recipe": {
+        "depth": 500,
+        "seed": 1
+      },
+      "primitive": "1",
+      "number": "1",
+      "addition": "11",
+      "piece_size": "204800",
+      "adjusted": "11",
+      "predicates": [
+        {
+          "bytes": 1048576,
+          "too_large": false
+        },
+        {
+          "bytes": 1048577,
+          "too_large": true
+        }
+      ]
+    },
+    {
+      "recipe": {
+        "depth": 1000,
+        "seed": 1
+      },
+      "primitive": "1",
+      "number": "1",
+      "addition": "11",
+      "piece_size": "204800",
+      "adjusted": "11",
+      "predicates": [
+        {
+          "bytes": 1048576,
+          "too_large": false
+        },
+        {
+          "bytes": 1048577,
+          "too_large": true
+        }
+      ]
+    },
+    {
+      "recipe": {
+        "depth": 5000,
+        "seed": 1
+      },
+      "primitive": "1",
+      "number": "1",
+      "addition": "11",
+      "piece_size": "204800",
+      "adjusted": "11",
+      "predicates": [
+        {
+          "bytes": 1048576,
+          "too_large": false
+        },
+        {
+          "bytes": 1048577,
+          "too_large": true
+        }
+      ]
+    },
+    {
+      "recipe": {
+        "seed": [
+          null,
+          [
+            null,
+            2
+          ],
+          []
+        ]
+      },
+      "primitive": ",,2,",
+      "number": "NaN",
+      "addition": ",,2,,,2,",
+      "piece_size": "NaN",
+      "adjusted": null,
+      "predicates": [
+        {
+          "bytes": 1048576,
+          "too_large": false
+        },
+        {
+          "bytes": 1048577,
+          "too_large": false
+        }
+      ]
+    },
+    {
+      "recipe": {
+        "seed": []
+      },
+      "primitive": "",
+      "number": "0",
+      "addition": "",
+      "piece_size": "102400",
+      "adjusted": null,
+      "predicates": [
+        {
+          "bytes": 1048576,
+          "too_large": false
+        },
+        {
+          "bytes": 1048577,
+          "too_large": false
+        }
+      ]
+    },
+    {
+      "recipe": {
+        "cycle": true
+      },
+      "primitive": "1,,,2",
+      "number": "NaN",
+      "addition": "1,,,21,,,2",
+      "piece_size": "NaN",
+      "adjusted": null,
+      "predicates": [
+        {
+          "bytes": 1048576,
+          "too_large": false
+        },
+        {
+          "bytes": 1048577,
+          "too_large": false
+        }
+      ]
+    },
+    {
+      "recipe": {
+        "shared": true
+      },
+      "primitive": "1,,1,",
+      "number": "NaN",
+      "addition": "1,,1,1,,1,",
+      "piece_size": "NaN",
+      "adjusted": null,
+      "predicates": [
+        {
+          "bytes": 1048576,
+          "too_large": false
+        },
+        {
+          "bytes": 1048577,
+          "too_large": false
+        }
+      ]
+    },
+    {
+      "recipe": {
+        "undefined": true
+      },
+      "primitive": ",,,1",
+      "number": "NaN",
+      "addition": ",,,1,,,1",
+      "piece_size": "NaN",
+      "adjusted": null,
+      "predicates": [
+        {
+          "bytes": 1048576,
+          "too_large": false
+        },
+        {
+          "bytes": 1048577,
+          "too_large": false
+        }
+      ]
+    }
+  ]
+}

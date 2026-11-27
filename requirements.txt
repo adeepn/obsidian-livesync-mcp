@@ -4,5 +4,10 @@ boto3==1.44.2
 mcp[cli]==1.30.0
 pydantic>=2,<3
 python-dotenv>=1,<2
-ruamel.yaml>=0.18,<0.19
+# Compact round-trip hooks are verified against this exact release.
+ruamel.yaml==0.18.17
 httpx==0.28.1
+xxhash==3.6.0
+# CouchDB JWT mode needs these direct dependencies.
+PyJWT==2.15.1
+cryptography==50.0.2

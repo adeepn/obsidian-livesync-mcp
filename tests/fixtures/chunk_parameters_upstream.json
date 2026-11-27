@@ -1,0 +1,329 @@
+{
+  "upstream_commit": "484c164450d61deb2e301582b60cb9b5f9fa977f",
+  "node": "v26.13.1",
+  "source_sha256": {
+    "ContentSplitter/ContentSplitterBase.ts": "495f5884048e6ab7192afcefcfe871cd853154230655f1602dd0b344a1952276",
+    "common/models/shared.const.behabiour.ts": "72a60cdb46d46deec169bc18da86c89f9ef2e14ba33aa33aea547348f382894e"
+  },
+  "generator_sha256": "9fb46e771a2524e94723ce4d772e2c808b077000005f491cd49ecced1e221c34",
+  "dependencies": [],
+  "runtime": "Native ECMAScript Math/truthiness/ToNumber; no package dependencies",
+  "rows": [
+    {
+      "input_json": "0",
+      "piece_size": 102400,
+      "primitive": "0",
+      "number": "0",
+      "addition": "0",
+      "addition_type": "number"
+    },
+    {
+      "input_json": "0.5",
+      "piece_size": 153600,
+      "primitive": "0.5",
+      "number": "0.5",
+      "addition": "1",
+      "addition_type": "number"
+    },
+    {
+      "input_json": "1",
+      "piece_size": 204800,
+      "primitive": "1",
+      "number": "1",
+      "addition": "2",
+      "addition_type": "number"
+    },
+    {
+      "input_json": "-1",
+      "piece_size": 0,
+      "primitive": "-1",
+      "number": "-1",
+      "addition": "-2",
+      "addition_type": "number"
+    },
+    {
+      "input_json": "-2",
+      "piece_size": -102400,
+      "primitive": "-2",
+      "number": "-2",
+      "addition": "-4",
+      "addition_type": "number"
+    },
+    {
+      "input_json": "true",
+      "piece_size": 204800,
+      "primitive": "true",
+      "number": "1",
+      "addition": "2",
+      "addition_type": "number"
+    },
+    {
+      "input_json": "false",
+      "piece_size": 102400,
+      "primitive": "false",
+      "number": "0",
+      "addition": "0",
+      "addition_type": "number"
+    },
+    {
+      "input_json": "null",
+      "piece_size": 102400,
+      "primitive": "null",
+      "number": "0",
+      "addition": "0",
+      "addition_type": "number"
+    },
+    {
+      "input_json": "\"0\"",
+      "piece_size": 102400,
+      "primitive": "0",
+      "number": "0",
+      "addition": "00",
+      "addition_type": "string"
+    },
+    {
+      "input_json": "\" 0.5 \"",
+      "piece_size": 153600,
+      "primitive": " 0.5 ",
+      "number": "0.5",
+      "addition": " 0.5  0.5 ",
+      "addition_type": "string"
+    },
+    {
+      "input_json": "\"﻿0x1﻿\"",
+      "piece_size": 204800,
+      "primitive": "﻿0x1﻿",
+      "number": "1",
+      "addition": "﻿0x1﻿﻿0x1﻿",
+      "addition_type": "string"
+    },
+    {
+      "input_json": "\"1e0\"",
+      "piece_size": 204800,
+      "primitive": "1e0",
+      "number": "1",
+      "addition": "1e01e0",
+      "addition_type": "string"
+    },
+    {
+      "input_json": "\"0b10\"",
+      "piece_size": 307200,
+      "primitive": "0b10",
+      "number": "2",
+      "addition": "0b100b10",
+      "addition_type": "string"
+    },
+    {
+      "input_json": "\"0o10\"",
+      "piece_size": 921600,
+      "primitive": "0o10",
+      "number": "8",
+      "addition": "0o100o10",
+      "addition_type": "string"
+    },
+    {
+      "input_json": "\"+1.5\"",
+      "piece_size": 256000,
+      "primitive": "+1.5",
+      "number": "1.5",
+      "addition": "+1.5+1.5",
+      "addition_type": "string"
+    },
+    {
+      "input_json": "\"bad\"",
+      "piece_size": "NaN",
+      "primitive": "bad",
+      "number": "NaN",
+      "addition": "badbad",
+      "addition_type": "string"
+    },
+    {
+      "input_json": "\"\"",
+      "piece_size": 102400,
+      "primitive": "",
+      "number": "0",
+      "addition": "",
+      "addition_type": "string"
+    },
+    {
+      "input_json": "\"Infinity\"",
+      "piece_size": "Infinity",
+      "primitive": "Infinity",
+      "number": "Infinity",
+      "addition": "InfinityInfinity",
+      "addition_type": "string"
+    },
+    {
+      "input_json": "\"-Infinity\"",
+      "piece_size": "-Infinity",
+      "primitive": "-Infinity",
+      "number": "-Infinity",
+      "addition": "-Infinity-Infinity",
+      "addition_type": "string"
+    },
+    {
+      "input_json": "[]",
+      "piece_size": 102400,
+      "primitive": "",
+      "number": "0",
+      "addition": "",
+      "addition_type": "string"
+    },
+    {
+      "input_json": "[0]",
+      "piece_size": 102400,
+      "primitive": "0",
+      "number": "0",
+      "addition": "00",
+      "addition_type": "string"
+    },
+    {
+      "input_json": "[1]",
+      "piece_size": 204800,
+      "primitive": "1",
+      "number": "1",
+      "addition": "11",
+      "addition_type": "string"
+    },
+    {
+      "input_json": "[1]",
+      "piece_size": 204800,
+      "primitive": "1",
+      "number": "1",
+      "addition": "11",
+      "addition_type": "string"
+    },
+    {
+      "input_json": "[0.5]",
+      "piece_size": 153600,
+      "primitive": "0.5",
+      "number": "0.5",
+      "addition": "0.50.5",
+      "addition_type": "string"
+    },
+    {
+      "input_json": "[1,2]",
+      "piece_size": "NaN",
+      "primitive": "1,2",
+      "number": "NaN",
+      "addition": "1,21,2",
+      "addition_type": "string"
+    },
+    {
+      "input_json": "{}",
+      "piece_size": "NaN",
+      "primitive": "[object Object]",
+      "number": "NaN",
+      "addition": "[object Object][object Object]",
+      "addition_type": "string"
+    },
+    {
+      "input_json": "{\"toString\":0}",
+      "error_class": "TypeError"
+    },
+    {
+      "input_json": "{\"valueOf\":1}",
+      "piece_size": "NaN",
+      "primitive": "[object Object]",
+      "number": "NaN",
+      "addition": "[object Object][object Object]",
+      "addition_type": "string"
+    },
+    {
+      "input_json": "[1e309]",
+      "piece_size": "Infinity",
+      "primitive": "Infinity",
+      "number": "Infinity",
+      "addition": "InfinityInfinity",
+      "addition_type": "string"
+    },
+    {
+      "input_json": "[-1e309]",
+      "piece_size": "-Infinity",
+      "primitive": "-Infinity",
+      "number": "-Infinity",
+      "addition": "-Infinity-Infinity",
+      "addition_type": "string"
+    },
+    {
+      "input_json": "[1e21]",
+      "piece_size": 1.024e+26,
+      "primitive": "1e+21",
+      "number": "1e+21",
+      "addition": "1e+211e+21",
+      "addition_type": "string"
+    },
+    {
+      "input_json": "[1e-7]",
+      "piece_size": 102400,
+      "primitive": "1e-7",
+      "number": "1e-7",
+      "addition": "1e-71e-7",
+      "addition_type": "string"
+    },
+    {
+      "input_json": "[1.0]",
+      "piece_size": 204800,
+      "primitive": "1",
+      "number": "1",
+      "addition": "11",
+      "addition_type": "string"
+    },
+    {
+      "input_json": "0.000001",
+      "piece_size": 102400,
+      "primitive": "0.000001",
+      "number": "0.000001",
+      "addition": "0.000002",
+      "addition_type": "number"
+    },
+    {
+      "input_json": "[0.000001]",
+      "piece_size": 102400,
+      "primitive": "0.000001",
+      "number": "0.000001",
+      "addition": "0.0000010.000001",
+      "addition_type": "string"
+    },
+    {
+      "input_json": "-0",
+      "piece_size": 102400,
+      "primitive": "0",
+      "number": "0",
+      "addition": "0",
+      "addition_type": "number"
+    },
+    {
+      "input_json": "[-0]",
+      "piece_size": 102400,
+      "primitive": "0",
+      "number": "0",
+      "addition": "00",
+      "addition_type": "string"
+    },
+    {
+      "input_json": "1e308",
+      "piece_size": "Infinity",
+      "primitive": "1e+308",
+      "number": "1e+308",
+      "addition": "Infinity",
+      "addition_type": "number"
+    },
+    {
+      "input_json": "10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "piece_size": "Infinity",
+      "primitive": "Infinity",
+      "number": "Infinity",
+      "addition": "Infinity",
+      "addition_type": "number"
+    },
+    {
+      "input_json": "-10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "piece_size": "-Infinity",
+      "primitive": "-Infinity",
+      "number": "-Infinity",
+      "addition": "-Infinity",
+      "addition_type": "number"
+    }
+  ]
+}

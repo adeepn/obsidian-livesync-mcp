@@ -174,13 +174,13 @@ class TestFakeSemantics:
         assert storage.list_calls == [JOURNAL_2]
         assert storage.exists_calls == [JOURNAL_2]
 
-    def test_latency_applies_per_operation(self):
+    def test_latency_applies_per_operation(self, monkeypatch):
         storage = FakeObjectStorage(latency=0.03)
-        start = time.monotonic()
+        sleeps = []
+        monkeypatch.setattr('tests.fake_object_storage.time.sleep', sleeps.append)
         storage.get("missing")  # latency applies to misses too
         storage.exists("missing")
-        elapsed = time.monotonic() - start
-        assert elapsed >= 2 * 0.03 * 0.9  # two ops, small clock tolerance
+        assert sleeps == [0.03, 0.03]
 
     def test_key_validation_rejects_empty_and_non_string(self):
         storage = FakeObjectStorage()
@@ -362,7 +362,7 @@ class TestBoto3WireOperations:
         # logs its class name, never the service message or exception text.
         adapter_logs = [r for r in caplog.records if r.name == "object_storage"]
         assert [r.getMessage() for r in adapter_logs] == [
-            f"object storage {operation} failed for bucket 'test-bucket' key 'k': AccessDenied"
+            f"object storage {operation} failed; cause: AccessDenied"
         ]
         assert adapter_logs[0].exc_info is None
         assert "ak:sk" not in caplog.text

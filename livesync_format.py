@@ -7,8 +7,8 @@ every storage backend (audit B2/B3/B4/B7/B9/B10).
 Mirrors upstream livesync-commonlib ``src/string_and_binary/path.ts``,
 ``src/common/pathNormalization.ts``, and
 ``src/managers/EntryManager/EntryManagerImpls.ts`` for the configuration
-this server supports: ``handleFilenameCaseSensitive=false`` (ids are
-lowercased) and path obfuscation disabled. Vaults that use obfuscation or
+this server supports: either filename case setting and path obfuscation
+disabled. Vaults that use obfuscation or
 E2EE are rejected at backend startup instead. Path identity comes in two
 flavors (upstream ``pathNormalizationVersion``): legacy v0 keeps paths as
 typed, v1 compares Unicode NFC forms — see ``path2id`` and
@@ -17,11 +17,21 @@ typed, v1 compares Unicode NFC forms — see ``path2id`` and
 
 from __future__ import annotations
 
+from diagnostic_hygiene import invalid_setting, diagnostic, PublicDiagnostic, DiagnosticCode
+
+from dataclasses import dataclass, field
+from collections.abc import Mapping
+from types import MappingProxyType
+
 import base64
 import binascii
-import hashlib
+import math
 import unicodedata
 from copy import deepcopy
+
+from content_splitter import (ContentSplitter, UnsupportedWriterMode, SplitterRefusal,
+                              chunk_id_for_piece, _js_truthy, _minimum_number)
+from wire_encoding import combine_pairs, text_encoder_string
 
 # Upstream isPlainText (path.ts): extensions stored as plain text chunks.
 TEXT_EXTENSIONS = frozenset(
@@ -29,22 +39,6 @@ TEXT_EXTENSIONS = frozenset(
 )
 
 _TEXT_SUFFIXES = tuple(TEXT_EXTENSIONS)
-
-# Write-side binary denylist. The read classification (TEXT_EXTENSIONS)
-# describes how *upstream* stored a document; it must not gate writes,
-# or textual-but-unclassified formats (.base, .json, .yaml) become
-# unwritable. Writes are therefore allowed for every path except an
-# explicit list of binary extensions. SVG is deliberately absent: it
-# is XML text.
-WRITABLE_BINARY_EXTENSIONS = frozenset(
-    {
-        ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".ico",
-        ".pdf", ".zip", ".gz",
-        ".mp3", ".mp4", ".mov", ".avi", ".wav", ".flac", ".ogg",
-        ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
-        ".epub", ".mobi",
-    }
-)
 
 # LiveSync metadata namespaces (upstream fileaccess.const.ts): hidden files,
 # chunk documents, machine info, obfuscated ids. Case is ignored on purpose
@@ -62,9 +56,43 @@ SERVICE_DOC_IDS = frozenset({"obsydian_livesync_version", "syncinfo"})
 # Path identity modes (upstream common/pathNormalization.ts): version 0
 # keeps the path as typed when deriving document ids; version 1 compares
 # Unicode NFC forms. Backends fix one mode per vault at startup via
-# ``resolve_path_identity`` and pass it to ``path2id`` as ``nfc=``.
+# ``resolve_path_identity`` and apply both axes via ``identity_path2id``.
 PATH_IDENTITY_LEGACY = "legacy"
 PATH_IDENTITY_NFC = "nfc"
+PATH_IDENTITY_CASE_SENSITIVE = "case-sensitive"
+PATH_IDENTITY_NFC_CASE_SENSITIVE = "nfc-case-sensitive"
+
+
+def identity_path2id(path: str, identity: str) -> str:
+    """Apply the independent NFC and case axes of a resolved identity."""
+    return path2id(
+        path,
+        nfc=identity in (PATH_IDENTITY_NFC, PATH_IDENTITY_NFC_CASE_SENSITIVE),
+        case_sensitive=identity in (
+            PATH_IDENTITY_CASE_SENSITIVE, PATH_IDENTITY_NFC_CASE_SENSITIVE,
+        ),
+    )
+
+
+def validate_document_identity(doc: dict, identity: str) -> None:
+    """Refuse metadata from another identity before it can alias a note.
+
+    common/pathIdentity.ts:25-51 requires matching stored IDs; rebuild or
+    fetch under the selected identity instead of merging distinct entries.
+    """
+    path = doc.get("path")
+    if isinstance(path, str):
+        try:
+            validate_vault_path(path)
+        except ForbiddenPathError:
+            return  # hidden/service paths are handled by the existing read gate
+    metadata = (doc.get("type") in ("plain", "newnote", "notes")
+                and not is_service_document_id(str(doc.get("_id", ""))))
+    if metadata and isinstance(path, str) and path:
+        if doc.get("_id") != identity_path2id(path, identity):
+            raise ValueError(
+                "metadata path identity mismatch or collision; rebuild/fetch required"
+            )
 
 
 class ForbiddenPathError(Exception):
@@ -72,17 +100,13 @@ class ForbiddenPathError(Exception):
 
 
 class UnsupportedVaultSettings(ValueError):
-    """Milestone settings describe a vault this server cannot serve.
+    """Codec-owned reason and fields; backends project these without str()."""
 
-    Raised by ``resolve_path_identity`` with the reason in the message.
-    This module must stay dependency-free (storage layers import it, not
-    the other way round), so the exception is a plain ``ValueError``.
-
-    Mapping rule for backends: catch and re-raise as the storage-layer
-    ``UnsupportedVault`` preserving the text, e.g.
-    ``except UnsupportedVaultSettings as exc:
-    raise UnsupportedVault(str(exc)) from exc``.
-    """
+    def __init__(self, reason):
+        self.diagnostic = diagnostic(reason)
+        if self.diagnostic.code is DiagnosticCode.FAILED:
+            self.diagnostic = PublicDiagnostic(DiagnosticCode.SETTINGS_UNREADABLE, cause=type(self))
+        super().__init__(reason)
 
 
 def _normalize_path(path: str) -> str:
@@ -111,11 +135,11 @@ def canonical_path(path: str) -> str:
     return _normalize_path(path)
 
 
-def path2id(path: str, *, nfc: bool = False) -> str:
+def path2id(path: str, *, nfc: bool = False, case_sensitive: bool = False) -> str:
     """Map a vault path to a LiveSync document id.
 
-    Upstream ``path2id_base`` with ``caseInsensitive=true`` and no
-    obfuscation: lowercase, and a leading ``_`` is escaped to ``/_`` because
+    Upstream ``path2id_base`` with no obfuscation: lowercase unless
+    ``case_sensitive=True``, and a leading ``_`` is escaped to ``/_`` because
     CouchDB reserves ids starting with ``_``.
 
     ``nfc=True`` selects the v1 path identity (``pathNormalizationVersion``
@@ -125,9 +149,13 @@ def path2id(path: str, *, nfc: bool = False) -> str:
     decomposed and precomposed spellings share one id. The default keeps
     the legacy (v0) behavior: decomposed spellings stay distinct.
     """
+    if path.startswith("f:"):
+        return path
     if nfc:
         path = unicodedata.normalize("NFC", path)
-    normalized = _normalize_path(path).lower()
+    normalized = _normalize_path(path)
+    if not case_sensitive:
+        normalized = normalized.lower()
     if normalized.startswith("_"):
         return "/" + normalized
     return normalized
@@ -148,6 +176,17 @@ _RECOGNIZED_TWEAK_KEYS = frozenset(
         "encrypt",
         "usePathObfuscation",
         "handleFilenameCaseSensitive",
+        "chunkSplitterVersion",
+        "enableChunkSplitterV2",
+        "useSegmenter",
+        "hashAlg",
+        "minimumChunkSize",
+        "customChunkSize",
+        "syncMaxSizeInMB",
+        "useIgnoreFiles",
+        "ignoreFiles",
+        "idDerivationVersion",
+        "idDerivationKey",
     }
 )
 
@@ -165,13 +204,6 @@ _UNSUPPORTED_SETTINGS = (
         "usePathObfuscation",
         "the vault uses path obfuscation, "
         "which this server does not support",
-    ),
-    (
-        "handleFilenameCaseSensitive",
-        "the vault uses case-sensitive filenames "
-        "(handleFilenameCaseSensitive); this server maps paths "
-        "to document ids case-insensitively and cannot serve "
-        "such a vault",
     ),
 )
 
@@ -211,7 +243,7 @@ def _milestone_setting_maps(milestone_settings: dict) -> list[dict]:
     maps = [
         settings
         for settings in candidates
-        if _RECOGNIZED_TWEAK_KEYS & settings.keys()
+        if (_RECOGNIZED_TWEAK_KEYS | {rule.key for rule in TWEAK_COMPATIBILITY_RULES}) & settings.keys()
     ]
     if not maps:
         raise UnsupportedVaultSettings(_UNREADABLE_SETTINGS_REASON)
@@ -221,7 +253,9 @@ def _milestone_setting_maps(milestone_settings: dict) -> list[dict]:
 def resolve_path_identity(milestone_settings: dict) -> str:
     """Derive the vault's path identity mode from milestone settings.
 
-    Returns ``PATH_IDENTITY_NFC`` when any resolved settings map sets
+    Case-sensitive settings select ``PATH_IDENTITY_CASE_SENSITIVE`` or
+    ``PATH_IDENTITY_NFC_CASE_SENSITIVE`` independently of normalization.
+    Otherwise returns ``PATH_IDENTITY_NFC`` when any resolved settings map sets
     ``pathNormalizationVersion`` to 1 (upstream v1 compares NFC forms when
     deriving document ids) and ``PATH_IDENTITY_LEGACY`` for 0 or absent
     (upstream treats an undefined version as 0). Like upstream
@@ -229,17 +263,20 @@ def resolve_path_identity(milestone_settings: dict) -> str:
     numbers, non-numbers, explicit null — is refused.
 
     Refuses with ``UnsupportedVaultSettings`` — reason in the message —
-    when a resolved map turns on ``encrypt``, ``usePathObfuscation``, or
-    ``handleFilenameCaseSensitive``, when the version is not 0/1/absent,
+    when a resolved map turns on ``encrypt``, ``usePathObfuscation``,
+    when the version is not 0/1/absent,
     or when no readable settings exist; backends re-raise that as their
     storage-layer ``UnsupportedVault`` (see the mapping rule on
     ``UnsupportedVaultSettings``).
     """
+    # Case and NFC are independent axes (PathService.ts:51-63,91-106).
     nfc = False
+    case_sensitive = False
     for settings in _milestone_setting_maps(milestone_settings):
         for key, reason in _UNSUPPORTED_SETTINGS:
             if settings.get(key):
                 raise UnsupportedVaultSettings(reason)
+        case_sensitive |= bool(settings.get("handleFilenameCaseSensitive"))
         if "pathNormalizationVersion" not in settings:
             continue  # absent means legacy (upstream: undefined -> 0)
         version = settings["pathNormalizationVersion"]
@@ -248,12 +285,16 @@ def resolve_path_identity(milestone_settings: dict) -> str:
             or not isinstance(version, (int, float))
             or version not in (0, 1)
         ):
-            raise UnsupportedVaultSettings(
-                f"unsupported pathNormalizationVersion {version!r}; "
+            error = UnsupportedVaultSettings(
+                "unsupported " + invalid_setting("pathNormalizationVersion", version) + "; "
                 "this server supports 0 (legacy) and 1 (NFC)"
             )
+            error.setting_keys = ('pathNormalizationVersion',)
+            raise error
         if version == 1:
             nfc = True
+    if case_sensitive:
+        return PATH_IDENTITY_NFC_CASE_SENSITIVE if nfc else PATH_IDENTITY_CASE_SENSITIVE
     return PATH_IDENTITY_NFC if nfc else PATH_IDENTITY_LEGACY
 
 
@@ -297,32 +338,86 @@ def validate_vault_path(path: str) -> None:
 
 
 def is_text_doc(doc_type: str | None, path: str) -> bool:
-    """Whether a document is textual and safe for text tools.
+    """Classify storage representation: plain text or newnote bytes.
 
-    Upstream ``isPlainText`` semantics: doc type ``plain`` is always text
-    (it was stored as text chunks regardless of extension); otherwise the
-    extension decides. The check is case-sensitive like upstream.
+    The path never overrides an explicit newnote type. UTF-8 presentation
+    belongs to the tool layer, not the chunk decoder.
     """
+    return doc_type == "plain"
+
+
+def resolve_doc_type(path: str, data: str | bytes) -> str:
+    """Resolve device *disk ingestion*, independent of content or Python type.
+
+    Pinned commonlib 484c164: string_and_binary/path.ts:164-174 and
+    serviceModules/FileAccessBase.ts:162-167,201-206 select host text reading
+    only for the exact case-sensitive suffixes. ServiceFileAccessBase.ts:
+    265-276 wraps that result in createBlob; common/utils.ts:97-98 and
+    managers/EntryManager/EntryManagerImpls.ts:252-256 then classify the
+    text/plain Blob as plain, every other Blob as newnote. The programmatic
+    determineType entry point is deliberately not used here.
+    """
+    return "plain" if _normalize_path(path).endswith(_TEXT_SUFFIXES) else "newnote"
+
+
+class InvalidPlainTextBytes(ValueError):
+    """Reject malformed byte ingress with a typed invalid-byte count."""
+
+    def __init__(self, invalid_bytes: int):
+        self.invalid_bytes = invalid_bytes
+        super().__init__(self.format())
+
+    def format(self):
+        return (
+            f'invalid UTF-8: {self.invalid_bytes} invalid bytes; the path extension selects '
+            'plain text. A device text read can store malformed bytes lossily '
+            '(native host semantics remain unverified). Use a non-plain path '
+            'for binary content or explicitly convert with lossy_text=true.'
+        )
+
+
+def plain_ingress_utf8(raw: bytes, *, lossy_text: bool = False) -> tuple[str, int]:
+    """Our explicit byte-input policy, NOT wheels readString.
+
+    FileAccessBase.ts:201-206 delegates disk text reads to the native host;
+    its malformed-byte behavior remains a Task 8 live question. Replacement
+    here is opt-in policy, not a verified emulation of that host adapter.
+    Wheels Blob-to-string decoding inside chunk preparation is independently
+    implemented by content_splitter._wheels_read_string and must remain unchanged.
+    """
+    try:
+        return raw.decode('utf-8'), 0
+    except UnicodeDecodeError:
+        invalid_bytes = len(raw) - len(raw.decode('utf-8', errors='ignore').encode('utf-8'))
+        if not lossy_text:
+            raise InvalidPlainTextBytes(invalid_bytes) from None
+        return raw.decode('utf-8', errors='replace'), invalid_bytes
+
+
+def prepare_file_content(
+    path: str, content: str | bytes, *, lossy_text: bool = False,
+) -> tuple[str | bytes, str, int]:
+    """Model host reading followed by Blob creation; return body, type, size.
+
+    Host decoding is outside commonlib (FileAccessBase.ts:201-206).
+    Refuse malformed plain byte input by default (P-9); explicit lossy
+    conversion belongs to the upload tool. This is separate from wheels
+    readString used by chunk preparation. See plain_ingress_utf8.
+    """
+    doc_type = resolve_doc_type(path, content)
+    if isinstance(content, str):
+        try:
+            raw = content.encode("utf-8")
+        except UnicodeEncodeError:
+            # createBlob/toBlob (common/utils.ts:100-115) uses Blob's
+            # USVString conversion: combine pairs and replace lone surrogates.
+            content = text_encoder_string(content)
+            raw = content.encode("utf-8")
+        return (content if doc_type == "plain" else raw), doc_type, len(raw)
     if doc_type == "plain":
-        return True
-    return _normalize_path(path).endswith(_TEXT_SUFFIXES)
-
-
-def is_writable_text_path(path: str) -> bool:
-    """Write-side policy: whether a path may receive a textual body.
-
-    Inverse of the read classification: a path is writable unless its
-    extension is in the explicit binary denylist
-    (``WRITABLE_BINARY_EXTENSIONS``). Textual formats upstream never
-    classifies — ``.base`` (YAML), ``.json``, ``.yaml``, ``.svg`` —
-    stay writable, because every write this server performs is plain
-    text regardless of extension (audit B3). Case-insensitive: a
-    binary ``Photo.PNG`` must not slip through spelling.
-    """
-    lowered = _normalize_path(path).lower()
-    return not any(
-        lowered.endswith(extension) for extension in WRITABLE_BINARY_EXTENSIONS
-    )
+        text, _ = plain_ingress_utf8(content, lossy_text=lossy_text)
+        return text, doc_type, len(text.encode("utf-8"))
+    return content, doc_type, len(content)
 
 
 def assemble_text(chunk_datas: list[str]) -> str:
@@ -331,7 +426,9 @@ def assemble_text(chunk_datas: list[str]) -> str:
     ``plain`` documents store each chunk verbatim (no encoding), so the
     body is the plain join of the chunk data strings in order.
     """
-    return "".join(chunk_datas)
+    # commonlib common/utils.ts:83-84 joins JS UTF-16 strings. Combine pairs
+    # across chunk boundaries into Python scalar values without moving cuts.
+    return combine_pairs("".join(chunk_datas))
 
 
 def assemble_binary(chunk_datas: list[str]) -> bytes:
@@ -351,24 +448,211 @@ def assemble_binary(chunk_datas: list[str]) -> bytes:
     return b"".join(parts)
 
 
-def encode_newnote(data: bytes) -> list[str]:
-    """Encode a body as newnote chunk data (v1: a single chunk).
-
-    The inverse of ``assemble_binary``: the whole body becomes one
-    base64-encoded chunk. Multi-chunk splitting can be added later without
-    changing readers, because decoding is per chunk either way.
-    """
-    return [base64.b64encode(data).decode("ascii")]
-
-
 def chunk_id_for(data: str) -> str:
-    """Deterministic chunk document id for chunk data.
+    """Compatibility name for the upstream xxhash64 piece ID derivation."""
+    return chunk_id_for_piece(data)
 
-    ``h:`` plus the first 16 hex characters of sha256 over the chunk
-    data's UTF-8 bytes. The ``h:`` namespace is reserved for chunk
-    documents (see ``SERVICE_NAMESPACE_PREFIXES`` / validate_vault_path).
+
+class UnsupportedWriterSettings(UnsupportedVaultSettings):
+    """Writer-only incompatibility; existing content remains readable."""
+
+
+# ECMAScript TrimString whitespace (targetFilter.ts:95 uses String.trim).
+_JS_TRIM = ("\u0009\u000a\u000b\u000c\u000d\u0020\u00a0\u1680"
+            "\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff")
+
+
+def split_ignore_names(raw: str) -> tuple[str, ...]:
+    """targetFilter.ts:95-98: split commas, JS trim, retain empty names."""
+    return tuple(name.strip(_JS_TRIM) for name in raw.split(','))
+
+
+def selection_lookup_path(path: str) -> str | None:
+    """Resolve inside vault-note storage, never host files or service documents.
+
+    targetFilter.ts:108-128 treats unusable/missing storage names as absent.
+    path.ts:255-257 supplies raw names; normalize only at the storage boundary.
     """
-    return "h:" + hashlib.sha256(data.encode("utf-8")).hexdigest()[:16]
+    normalized = _normalize_path(path)
+    if (not normalized or '..' in normalized.split('/')
+            or is_service_document_id(normalized)):
+        return None
+    return normalized
+
+
+# C:common/models/tweak.definition.ts:116-135 recommends these writer policies;
+# C:common/models/tweak.compatibility.ts:153-201 never compares them.
+# P:modules/coreFeatures/ModuleResolveMismatchedTweaks.ts:403-405 keeps the
+# device's current settings when matched. Multi-device arbitration is P-48.
+_RECOMMENDATION_POLICIES = {
+    'syncMaxSizeInMB': (50, 'LIVESYNC_SYNC_MAX_SIZE_MB',
+                      DiagnosticCode.CONFLICTING_SYNCMAXSIZEINMB_SETTINGS),
+    'useIgnoreFiles': (False, 'LIVESYNC_USE_IGNORE_FILES', DiagnosticCode.IGNORE_USE_CONFLICT),
+    'ignoreFiles': ('.gitignore', 'LIVESYNC_IGNORE_FILES', DiagnosticCode.IGNORE_NAMES_CONFLICT),
+}
+
+
+@dataclass(frozen=True)
+class RecommendationPolicy:
+    value: object
+    source: str
+    device_count: int
+    disagree: bool
+
+    def summary(self, key):
+        # Names and device IDs are remote text, never public policy fields.
+        result = dict(source=self.source, device_count=self.device_count, disagree=self.disagree)
+        if key == 'ignoreFiles':
+            result['name_count'] = len(self.value)
+        else:
+            result['value'] = self.value
+        return result
+
+
+def _size_policy_value(raw):
+    try:
+        value = _minimum_number(raw, setting='syncMaxSizeInMB')
+    except SplitterRefusal:
+        # The splitter diagnostic names no operator override; the size policy has one.
+        error = UnsupportedVaultSettings(DiagnosticCode.SYNCMAXSIZE_PRIMITIVE.value)
+        error.diagnostic = PublicDiagnostic(DiagnosticCode.SYNCMAXSIZE_PRIMITIVE, keys=('syncMaxSizeInMB',))
+        raise error from None
+    return value if value > 0 else 0
+
+
+def _size_policy_threshold(value):
+    product = value * 1024 * 1024
+    return math.floor(product) if math.isfinite(product) and value > 0 else None
+
+
+def resolve_recommendation_policy(milestone, key, *, override=None, active=True):
+    default, _, conflict = _RECOMMENDATION_POLICIES[key]
+    # Validate the container using the unchanged legacy/required setting rules.
+    _milestone_setting_maps(milestone)
+    entries = milestone.get('tweak_values')
+    if entries is None and 'tweak_values' not in milestone:
+        devices = [milestone] if key in milestone else []
+        preferred = milestone
+    else:
+        devices = [v for k, v in entries.items()
+                   if k != _PREFERRED_DEVICE_ID and isinstance(v, dict) and key in v]
+        preferred = entries.get(_PREFERRED_DEVICE_ID, {})
+
+    def coerce(raw):
+        if key == 'syncMaxSizeInMB':
+            return _size_policy_value(raw)
+        if key == 'useIgnoreFiles':
+            # C:serviceFeatures/targetFilter.ts:134: native JS truthiness.
+            return _js_truthy(raw)
+        if not isinstance(raw, str):
+            if not active:
+                return ()  # targetFilter.ts:129-131: inactive names are not used.
+            error = UnsupportedVaultSettings(DiagnosticCode.IGNORE_STRING.value)
+            error.diagnostic = PublicDiagnostic(DiagnosticCode.IGNORE_STRING)
+            raise error
+        # C:serviceFeatures/targetFilter.ts:93-97: split/trim, retain empties.
+        return split_ignore_names(raw)
+
+    def comparable(value):
+        return _size_policy_threshold(value) if key == 'syncMaxSizeInMB' else value
+
+    # Overrides bypass remote coercion/refusals. Counts and disagreement remain
+    # observable for well-formed remote policies without exposing their values.
+    try:
+        values = [coerce(device[key]) for device in devices]
+    except UnsupportedVaultSettings:
+        if override is None:
+            raise
+        values = []
+    disagree = bool(values) and any(comparable(v) != comparable(values[0]) for v in values[1:])
+    if override is not None:
+        return RecommendationPolicy(override, 'override', len(devices), disagree)
+    if values and not disagree:
+        return RecommendationPolicy(values[0], 'device', len(devices), False)
+    if disagree:
+        # Use the same JS-number timestamp rule as the upstream newer-side
+        # selector (P:ModuleResolveMismatchedTweaks.ts:120-132), not JSON strings.
+        winner = devices[0]
+        for device in devices[1:]:
+            if select_newer_tweak_side(device, winner) == 'CURRENT':
+                winner = device
+        positive = select_newer_tweak_side(winner, {}) == 'CURRENT'
+        newest = [i for i, device in enumerate(devices)
+                  if select_newer_tweak_side(winner, device) == 'REMOTE'] if positive else []
+        if newest and all(comparable(values[i]) == comparable(values[newest[0]]) for i in newest):
+            return RecommendationPolicy(values[newest[0]], 'device', len(devices), True)
+        if key not in preferred:
+            error = UnsupportedVaultSettings(conflict.value)
+            error.diagnostic = PublicDiagnostic(conflict)
+            raise error
+    return RecommendationPolicy(coerce(preferred.get(key, default)), 'preferred', len(devices), disagree)
+
+
+def resolve_ignore_settings(
+    milestone_settings: dict, *, use_override: bool | None = None,
+    names_override: tuple[str, ...] | None = None,
+) -> tuple[bool, tuple[str, ...]]:
+    use = resolve_recommendation_policy(milestone_settings, 'useIgnoreFiles', override=use_override).value
+    names = resolve_recommendation_policy(milestone_settings, 'ignoreFiles',
+        override=names_override, active=use).value
+    return use, names
+
+
+def resolve_writer_policy(milestone, *, size_override=None, use_override=None, names_override=None):
+    size = resolve_recommendation_policy(milestone, 'syncMaxSizeInMB', override=size_override)
+    use = resolve_recommendation_policy(milestone, 'useIgnoreFiles', override=use_override)
+    names = resolve_recommendation_policy(milestone, 'ignoreFiles',
+        override=names_override, active=use.value)
+    return size, use, names
+
+
+def writer_policy_summary(policies):
+    return {key: policy.summary(key) for key, policy in zip(_RECOMMENDATION_POLICIES, policies)}
+
+
+def resolve_enable_compression(milestone_settings: dict) -> bool:
+    """Preferred, otherwise first readable map; absent means false.
+
+    C:common/models/setting.const.defaults.ts:153 and
+    C:pouchdb/compress.ts:85-98: mixed compressed/plain writers are readable.
+    Disagreement is therefore safe; unlike size admission it needs no gate.
+    """
+    values = [settings.get('enableCompression', False)
+              for settings in _milestone_setting_maps(milestone_settings)]
+    if any(type(value) is not bool for value in values):
+        error = UnsupportedVaultSettings(DiagnosticCode.COMPRESSION_BOOLEAN.value)
+        error.diagnostic = PublicDiagnostic(DiagnosticCode.COMPRESSION_BOOLEAN)
+        raise error
+    return values[0]
+
+
+def resolve_sync_max_size(milestone_settings: dict, *, override=None) -> float:
+    """C:services/base/VaultService.ts:73-81 admission; P-48 arbitration."""
+    return resolve_recommendation_policy(milestone_settings, 'syncMaxSizeInMB', override=override).value
+
+
+def resolve_content_splitter(milestone_settings: dict) -> ContentSplitter:
+    """Resolve preferred tweaks, refusing ambiguous per-device split settings."""
+    try:
+        splitters = [ContentSplitter(settings, normalize_settings=True)
+                     for settings in _milestone_setting_maps(milestone_settings)]
+    except UnsupportedWriterMode as exc:
+        error = UnsupportedWriterSettings(str(exc))
+        error.setting_keys = getattr(exc, "setting_keys", ())
+        error.setting_issues = getattr(exc, "setting_issues", ())
+        raise error from exc
+    except SplitterRefusal as exc:
+        raise UnsupportedVaultSettings(exc.diagnostic) from exc
+    except ValueError as exc:
+        error = UnsupportedVaultSettings(str(exc))
+        error.setting_keys = getattr(exc, "setting_keys", ())
+        raise error from exc
+    first = splitters[0]
+    if any((s.version, s.minimum_chunk_size, s.absolute_max_piece_size, s.hash_alg) !=
+           (first.version, first.minimum_chunk_size, first.absolute_max_piece_size, first.hash_alg)
+           for s in splitters[1:]):
+        raise UnsupportedVaultSettings('conflicting chunk splitter settings')
+    return first
 
 
 def new_metadata_doc(
@@ -383,10 +667,10 @@ def new_metadata_doc(
 
     Upstream ``EntryManagerImpls`` writes exactly the fields ``_id, path,
     children, ctime, mtime, size, type, eden``. Times are millisecond
-    ints. ``size`` is the decoded body byte length (spec §7), not the
-    encoded chunk length. ``_id`` comes from path2id; ``eden`` starts
-    empty (it only carries E2EE-related chunks, which this server does
-    not support).
+    ints. ``size`` is the ingested Blob byte length before splitting,
+    including any initial BOM, not the encoded chunk length. ``_id``
+    comes from path2id. Current pinned writers leave ``eden`` empty;
+    historical unencrypted inline chunks are supported on read.
     """
     return {
         "_id": path2id(path),
@@ -410,18 +694,6 @@ def soft_delete_revision(doc: dict, mtime_ms: int) -> dict:
     delete can be undone and conflict diffs stay meaningful.
     """
     return clone_metadata(doc, deleted=True, mtime=mtime_ms)
-
-
-def doc_type_for(path: str) -> str:
-    """LiveSync document type for a body written by this server.
-
-    Audit B3: any text is written as type ``plain`` regardless of
-    extension; the extension only matters when *reading* documents written
-    elsewhere, which is ``is_text_doc``'s job. This server only writes
-    textual bodies today, so every path maps to ``plain``; the parameter
-    is kept for future binary (``newnote``) support.
-    """
-    return "plain"
 
 
 class EncryptedInlineChunk(ValueError):
@@ -488,3 +760,350 @@ def clone_metadata(doc: dict, **overrides) -> dict:
     callers explicitly override or remove them for the intended operation.
     """
     return deepcopy({**doc, **overrides})
+
+
+@dataclass(frozen=True)
+class TargetVerdict:
+    """Device selection decision, including fail-closed engine diagnostics."""
+
+    allowed: bool
+    rule: str | None = None
+    writer_supported: bool = True
+    reason: str | None = None
+
+
+def parse_custom_regexp_list(source: str) -> tuple[str, ...]:
+    """common/utils.ts: remove only LF and ASCII space; preserve duplicates."""
+    return tuple(item for item in source.replace('\n', '').replace(' ', '').split('|[]|') if item)
+
+
+def is_target_file(path: str, *, only_patterns: str = '', ignore_patterns: str = '',
+                   case_sensitive: bool = False, ignore_files: dict | None = None,
+                   ignore_names: tuple[str, ...] = ()) -> TargetVerdict:
+    """Execute pinned device selection using ECMAScript and upstream minimatch.
+
+    No storage access or mutation. Node is needed only for active filters;
+    Python regex is deliberately never substituted for ECMAScript RegExp.
+    """
+    from selection_engine import evaluate, EngineFailure
+
+    if not only_patterns and not ignore_patterns and ignore_files is None:
+        return TargetVerdict(True)
+    payload = dict(path=path, only_patterns=only_patterns, ignore_patterns=ignore_patterns,
+                   case_sensitive=case_sensitive, ignore_files=ignore_files,
+                   ignore_names=ignore_names)
+    try:
+        return evaluate(payload)
+    except EngineFailure as exc:
+        return TargetVerdict(False, writer_supported=False, reason=str(exc))
+
+
+# C:common/models/tweak.definition.ts:24-67, pinned in docs/upstream-pin.md.
+# (key, template value, reconstruction, known default, compatible lossy order)
+_TWEAK_UNDEFINED = object()
+
+
+@dataclass(frozen=True)
+class TweakRule:
+    key: str
+    template_value: object
+    reconstruction: str = 'none'
+    known_default: object = _TWEAK_UNDEFINED
+    compatible_lossy_order: int | None = None
+
+
+TWEAK_COMPATIBILITY_RULES = (
+    TweakRule('minimumChunkSize', 20), TweakRule('longLineThreshold', 250),
+    TweakRule('encrypt', False, 'required'),
+    TweakRule('usePathObfuscation', False, 'required'),
+    TweakRule('idDerivationVersion', 0, 'required', 0),
+    TweakRule('pathNormalizationVersion', 0, 'required', 0),
+    TweakRule('encryptInternalMetadata', False, 'none', False),
+    TweakRule('enableCompression', False), TweakRule('useEden', False),
+    TweakRule('customChunkSize', 0, 'recommended', compatible_lossy_order=1),
+    TweakRule('useDynamicIterationCount', False, 'required'),
+    TweakRule('hashAlg', 'xxhash64', 'recommended', compatible_lossy_order=0),
+    TweakRule('enableChunkSplitterV2', False), TweakRule('maxChunksInEden', 10),
+    TweakRule('maxTotalLengthInEden', 1024), TweakRule('maxAgeInEden', 10),
+    TweakRule('usePluginSyncV2', False, 'none', False),
+    TweakRule('handleFilenameCaseSensitive', False, 'required', False),
+    TweakRule('useSegmenter', False), TweakRule('E2EEAlgorithm', 'v2', 'none', 'v2'),
+    TweakRule('chunkSplitterVersion', 'v3-rabin-karp', 'recommended',
+              'v3-rabin-karp', 2),
+)
+
+# C:tweak.definition.ts:113-150. Recommendations are snapshotted for adoption,
+# but never participate in semantic comparison.
+_TWEAK_TEMPLATE_KEYS = frozenset(rule.key for rule in TWEAK_COMPATIBILITY_RULES) | {
+    'useIgnoreFiles', 'useCustomRequestHandler', 'batch_size', 'batches_limit',
+    'useTimeouts', 'readChunksOnline', 'hashCacheMaxCount', 'hashCacheMaxAmount',
+    'concurrencyOfReadChunksOnline', 'minimumIntervalOfReadChunksOnline',
+    'ignoreFiles', 'syncMaxSizeInMB', 'tweakModified',
+}
+
+
+def _tweak_number(value: int | float) -> float:
+    """JSON numbers have binary64 precision in the upstream JS runtime."""
+    try:
+        return float(value)
+    except OverflowError:
+        return -math.inf if value < 0 else math.inf
+
+
+def _tweak_equal(left: object, right: object) -> bool:
+    """JS strict equality for JSON primitives; objects compare by identity."""
+    if isinstance(left, bool) or isinstance(right, bool):
+        return type(left) is type(right) and left == right
+    if isinstance(left, (int, float)) and isinstance(right, (int, float)):
+        return _tweak_number(left) == _tweak_number(right)
+    if isinstance(left, (dict, list)) or isinstance(right, (dict, list)):
+        return left is right
+    return type(left) is type(right) and left == right
+
+
+@dataclass(frozen=True)
+class TweakValue:
+    present: bool
+    raw_value: object
+    effective_value: object
+
+
+@dataclass(frozen=True)
+class TweakEntry:
+    key: str
+    current: TweakValue
+    preferred: TweakValue
+    relation: str
+
+
+@dataclass(frozen=True)
+class TweakTransition:
+    changes: Mapping
+    reconstruction: str
+    reasons: tuple[tuple[str, str], ...]
+
+
+@dataclass(frozen=True)
+class TweakAssessment:
+    status: str
+    differing_keys: tuple[str, ...]
+    alignment: str
+    representation_differs: bool
+    entries: tuple[TweakEntry, ...]
+    adopt_preferred: TweakTransition
+    adopt_current: TweakTransition
+    only_compatible_lossy_differences: bool
+    current_values: Mapping = field(repr=False)
+    preferred_values: Mapping = field(repr=False)
+
+    def summary(self) -> dict:
+        return dict(status=self.status, differing_keys=list(self.differing_keys))
+
+
+def _tweak_transition(entries, source_side, target_side) -> TweakTransition:
+    changes, reasons = {}, []
+    reconstruction = 'none'
+    for entry, rule in zip(entries, TWEAK_COMPATIBILITY_RULES):
+        source, target = getattr(entry, source_side), getattr(entry, target_side)
+        differs = not _tweak_equal(source.effective_value, target.effective_value)
+        fill = not target.present and source.present
+        if source.effective_value is _TWEAK_UNDEFINED or not (differs or fill):
+            continue
+        if entry.key != 'idDerivationVersion':
+            changes[entry.key] = source.effective_value
+        if entry.relation == 'equal' or rule.reconstruction == 'none':
+            continue
+        reasons.append((entry.key, rule.reconstruction))
+        if reconstruction != 'required':
+            reconstruction = rule.reconstruction
+    return TweakTransition(MappingProxyType(changes), reconstruction, tuple(reasons))
+
+
+def assess_tweak_compatibility(preferred: Mapping, candidate: Mapping) -> TweakAssessment:
+    """Assess one-pass normalized settings without mutating or exposing secrets.
+
+    C:common/models/tweak.compatibility.ts:47-65,148-191. The public argument
+    order is preferred, candidate (upstream takes current, preferred).
+    SettingService.ts:141-158 migration runs once on each input first, using
+    the Task 3c helper. Template values are NOT implied compatibility defaults.
+    """
+    from content_splitter import normalize_splitter_settings
+    try:
+        return _assess_normalized_tweaks(normalize_splitter_settings(preferred),
+                                         normalize_splitter_settings(candidate))
+    except SplitterRefusal as error:
+        raise UnsupportedVaultSettings(error.diagnostic) from None
+
+
+def _assess_normalized_tweaks(preferred: Mapping, candidate: Mapping) -> TweakAssessment:
+    def snapshot(values):
+        return {k: _tweak_number(v) if type(v) is int else v
+                for k, v in values.items() if k in _TWEAK_TEMPLATE_KEYS}
+    current, remote = snapshot(candidate), snapshot(preferred)
+    current_keyed = current.get('encrypt') is not False and current.get('usePathObfuscation') is not False
+    remote_keyed = remote.get('encrypt') is not False and remote.get('usePathObfuscation') is not False
+    entries = []
+    representation_differs = False
+    for rule in TWEAK_COMPATIBILITY_RULES:
+        def value(side):
+            raw = side.get(rule.key, _TWEAK_UNDEFINED)
+            return TweakValue(rule.key in side, raw,
+                              rule.known_default if raw is _TWEAK_UNDEFINED else raw)
+        local, preferred_value = value(current), value(remote)
+        if rule.key == 'idDerivationVersion' and not current_keyed and not remote_keyed:
+            relation = 'equal'
+        elif (not local.present or not preferred_value.present) and rule.known_default is _TWEAK_UNDEFINED:
+            relation = 'unadvertised'
+        else:
+            relation = 'equal' if _tweak_equal(local.effective_value, preferred_value.effective_value) else 'different'
+        representation_differs |= (local.present != preferred_value.present or
+            not _tweak_equal(local.raw_value, preferred_value.raw_value))
+        entries.append(TweakEntry(rule.key, local, preferred_value, relation))
+    entries = tuple(entries)
+    keys = tuple(e.key for e in entries if e.relation == 'different')
+    lossy_keys = {r.key for r in TWEAK_COMPATIBILITY_RULES if r.compatible_lossy_order is not None}
+    lossy = bool(keys) and set(keys) <= lossy_keys and not any(e.relation == 'unadvertised' for e in entries)
+    status = ('ID_KEY_MISMATCH' if 'idDerivationVersion' in keys else
+              'PATH_IDENTITY_MISMATCH' if 'pathNormalizationVersion' in keys else
+              'LOSSY_AUTO_ACCEPTABLE' if lossy else 'MISMATCHED' if keys else 'OK')
+    return TweakAssessment(status, keys, 'mismatched' if keys else 'matched',
+        representation_differs, entries,
+        _tweak_transition(entries, 'preferred', 'current'),
+        _tweak_transition(entries, 'current', 'preferred'), lossy,
+        MappingProxyType(current), MappingProxyType(remote))
+
+
+def select_newer_tweak_side(current: Mapping, preferred: Mapping) -> str:
+    """P:ModuleResolveMismatchedTweaks.ts:120-132; booleans aren't numbers."""
+    def modified(side):
+        value = side.get('tweakModified')
+        return _tweak_number(value) if type(value) in (int, float) and value > 0 else 0
+    return 'CURRENT' if modified(current) > modified(preferred) else 'REMOTE'
+
+
+@dataclass(frozen=True)
+class TweakStartup:
+    settings: Mapping = field(repr=False)
+    status: str = 'OK'
+    differing_keys: tuple[str, ...] = ()
+    winners: tuple[str, ...] = ()
+
+    def summary(self):
+        return dict(status=self.status, differing_keys=list(self.differing_keys))
+
+
+def _effective_peer_tweaks(settings: Mapping, *, couchdb_mode: bool) -> dict:
+    """Concrete writer defaults; never advertise an unavailable adapter feature."""
+    effective = dict(settings)
+    for key, value in dict(minimumChunkSize=20, customChunkSize=0, hashAlg='xxhash64',
+            idDerivationVersion=0, pathNormalizationVersion=0, encrypt=False,
+            usePathObfuscation=False, handleFilenameCaseSensitive=False).items():
+        effective.setdefault(key, value)
+    effective['encryptInternalMetadata'] = False
+    if couchdb_mode:
+        # C:pouchdb/compress.ts:85-98: compress writes, always decode reads.
+        effective.setdefault('enableCompression', False)
+    return effective
+
+
+def resolve_tweak_startup(milestone: Mapping, *, couchdb_mode: bool = False,
+        disable_checking_config_mismatch: bool = False,
+        auto_accept_compatible_tweak: bool = True) -> TweakStartup:
+    """Resolve writer settings and assess every advertised device before I/O.
+
+    C:LiveSyncDBFunctions.ts:79-118 uses PREFERRED or the current settings in
+    both transports. Checking other advertised devices is this peer's explicit
+    startup policy; it does not edit their snapshots or publish PREFERRED.
+    """
+    maps = _milestone_setting_maps(milestone)
+    preferred = maps[0]
+    if couchdb_mode:
+        resolve_enable_compression(milestone)
+
+    def assess_startup(left, right):
+        # C:pouchdb/compress.ts:89-96: both representations are readable by
+        # every device, so compression differences never block CouchDB startup.
+        if couchdb_mode:
+            right = {**right, 'enableCompression': left.get('enableCompression', False)}
+        return assess_tweak_compatibility(left, right)
+    devices = milestone.get('tweak_values', {})
+    # getEffectiveTweakValues advertises internal metadata encryption only
+    # for an encrypted, obfuscated CouchDB vault. This peer serves plaintext
+    # only; journal devices always advertise false (C:LiveSyncDBFunctions:19-24).
+    peer = _effective_peer_tweaks(preferred, couchdb_mode=couchdb_mode)
+    candidates = [peer]
+    if isinstance(devices, dict):
+        candidates.extend(v for k, v in devices.items()
+                          if k != _PREFERRED_DEVICE_ID and isinstance(v, dict))
+    winner = preferred
+    winner_assessment = None
+    has_lossy_alignment = False
+    winners, keys, blocked = [], set(), []
+    priority = {'OK': 0, 'LOSSY_AUTO_ACCEPTABLE': 1, 'MISMATCHED': 2,
+                'PATH_IDENTITY_MISMATCH': 3, 'ID_KEY_MISMATCH': 4}
+    overall = 'OK'
+    for candidate in candidates:
+        assessment = assess_startup(preferred, candidate)
+        keys.update(assessment.differing_keys)
+        if priority[assessment.status] > priority[overall]:
+            overall = assessment.status
+        gated = (disable_checking_config_mismatch is True and
+                 assessment.status not in ('ID_KEY_MISMATCH', 'PATH_IDENTITY_MISMATCH'))
+        if assessment.status != 'OK' and not gated:
+            if assessment.only_compatible_lossy_differences and auto_accept_compatible_tweak is True:
+                has_lossy_alignment = True
+                winners.append(select_newer_tweak_side(candidate, preferred))
+            else:
+                blocked.append(assessment)
+    if has_lossy_alignment:
+        for candidate in candidates:
+            if select_newer_tweak_side(candidate, winner) == 'CURRENT':
+                winner = candidate
+                winner_assessment = assess_startup(preferred, candidate)
+
+    differing_keys = tuple(rule.key for rule in TWEAK_COMPATIBILITY_RULES if rule.key in keys)
+    if blocked:
+        error = UnsupportedVaultSettings(
+            'vault tweak settings differ: ' + ', '.join(differing_keys) +
+            '; devices require alignment with PREFERRED before synchronizing')
+        error.tweak_assessment = dict(status=overall, differing_keys=list(differing_keys))
+        raise error
+    # Encryption and obfuscation remain unsupported even with the gate off.
+    for candidate in candidates:
+        for key, reason in _UNSUPPORTED_SETTINGS:
+            if candidate.get(key):
+                # Preserve the separate cryptographic-ID classification above.
+                raise UnsupportedVaultSettings(reason)
+    settings = dict(preferred)
+    if winner_assessment is not None:
+        # P:ModuleResolveMismatchedTweaks.ts:66-81: preserve omitted target
+        # settings, adopt recommendations, and never transfer the ID key/mode.
+        compared = {rule.key for rule in TWEAK_COMPATIBILITY_RULES}
+        settings.update({k: v for k, v in winner.items()
+                         if k in _TWEAK_TEMPLATE_KEYS and k not in compared})
+        for key, value in winner_assessment.adopt_current.changes.items():
+            if key == 'chunkSplitterVersion' and key not in winner:
+                settings.pop(key, None)
+            else:
+                # Keep the raw splitter input so the writer migration runs
+                # exactly once, including unknown-version -> empty cases.
+                settings[key] = winner.get(key, value)
+    effective_peer = _effective_peer_tweaks(settings, couchdb_mode=couchdb_mode)
+    for device in candidates[1:]:
+        assessment = assess_startup(device, effective_peer)
+        keys.update(assessment.differing_keys)
+        if priority[assessment.status] > priority[overall]:
+            overall = assessment.status
+        gated = (disable_checking_config_mismatch is True and
+                 assessment.status not in ('ID_KEY_MISMATCH', 'PATH_IDENTITY_MISMATCH'))
+        if assessment.status != 'OK' and not gated and not (
+                assessment.only_compatible_lossy_differences and auto_accept_compatible_tweak is True):
+            blocked.append(assessment)
+    differing_keys = tuple(rule.key for rule in TWEAK_COMPATIBILITY_RULES if rule.key in keys)
+    if blocked:
+        error = UnsupportedVaultSettings(
+            'vault tweak settings differ: ' + ', '.join(differing_keys) +
+            '; devices require alignment with PREFERRED before synchronizing')
+        error.tweak_assessment = dict(status=overall, differing_keys=list(differing_keys))
+        raise error
+    return TweakStartup(MappingProxyType(settings), overall, differing_keys, tuple(winners))

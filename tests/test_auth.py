@@ -4,6 +4,23 @@ import sys
 import types
 import unittest
 
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def isolated_mcp_modules():
+    """Restore legacy SDK stubs before later real HTTP transport tests."""
+    def owned(name):
+        return name == "mcp" or name.startswith("mcp.") or name in ("auth_config", "oauth_provider")
+    original = {name: module for name, module in sys.modules.items() if owned(name)}
+    try:
+        yield
+    finally:
+        for name in tuple(sys.modules):
+            if owned(name):
+                del sys.modules[name]
+        sys.modules.update(original)
+
 
 class AccessToken:
     def __init__(self, token, client_id, scopes, expires_at=None, resource=None):

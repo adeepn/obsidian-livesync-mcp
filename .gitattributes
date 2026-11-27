@@ -1,0 +1,11 @@
+# Text files keep LF in every working tree, whatever the local core.autocrlf and
+# core.eol say. Generators, harnesses and fixtures are verified by the hash of their
+# bytes, so a checkout must not change them.
+* text=auto eol=lf
+
+# Preserve generated/upstream distributions byte by byte: no whitespace
+# normalization in diffs and no line-ending conversion in either direction, so
+# that the installed-byte hashes hold on every platform.
+vendor/selection/** -whitespace -text
+selection_worker.mjs -whitespace -text
+scripts/selection_provenance.mjs -whitespace -text

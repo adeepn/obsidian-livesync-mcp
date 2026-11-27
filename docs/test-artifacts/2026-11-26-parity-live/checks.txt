@@ -1,0 +1,197 @@
+Helper output of every peer run, verbatim
+=========================================
+Source: stdout and stderr of scripts/live_check_parity.py as captured by the controller
+(its working directory, files <name>.stdout and <name>.stderr). "Captured" is the modification
+time of the captured stdout file on the controller's machine (local clock, MSK = UTC+3).
+"Report" is the JSON file in this directory. "Checkout" is the peer commit of the controller's
+detached working copy at that time, taken from the controller's run log: a statement of the
+controller, not part of the output. The PASS lines are counted as emitted in summary.txt;
+they are emitted checks, not independent assertions.
+
+== A-reconnect | command: reconnect | checkout: 3d812ff | captured: 2026-11-26 10:53:08 | report: A-reconnect.json
+PASS startup + forced refresh
+PASS bytes + Blob metadata + piece IDs Welcome.md pieces=1
+PASS bytes + Blob metadata + piece IDs test-image.png pieces=1
+PASS bytes + Blob metadata + piece IDs Картинка.md pieces=2
+PASS bytes + Blob metadata + piece IDs От клиента.md pieces=1
+PASS bytes + Blob metadata + piece IDs Папка/Переехавшая.md pieces=1
+PASS bytes + Blob metadata + piece IDs Папка S3/Переехавшая.md pieces=1
+PASS bytes + Blob metadata + piece IDs Связанная заметка.md pieces=1
+PASS bytes + Blob metadata + piece IDs Тестовая заметка.md pieces=1
+PASS policy: expected=8 excluded=0 missing=0 size_or_hash_mismatch=0
+PASS settings table reconciliation; unknown key count=0
+PASS scope: 10 hidden files outside peer scope
+PASS overall reconnect
+[stderr] vault milestone has advisory locked: true flag; remote marked as rebuilt; peer performs full replay
+
+== B-prepared | command: prepare-size --limit-mib 100 | checkout: local only | captured: 2026-11-26 11:34:40 | report: B-prepared.json
+PASS created local parity-live/device-40m.bin
+PASS created local parity-live/exact.bin
+PASS created local parity-live/above.bin
+PASS overall prepare-size
+[stderr] (empty)
+
+== B-size | command: verify-size --limit-mib 100 | checkout: 3d812ff | captured: 2026-11-26 11:47:19 | report: B-size.json
+PASS startup + forced refresh
+FAIL resolved vault size limit differs from expected owner setting
+FAIL overall verify-size
+[stderr] vault milestone has advisory locked: true flag; remote marked as rebuilt; peer performs full replay
+
+== B-reconnect-after-size | command: reconnect | checkout: 3d812ff | captured: 2026-11-26 11:48:38 | report: B-reconnect-before-fix.json
+PASS startup + forced refresh
+PASS bytes + Blob metadata + piece IDs Welcome.md pieces=1
+PASS bytes + Blob metadata + piece IDs parity-live/device-40m.bin pieces=410
+PASS bytes + Blob metadata + piece IDs test-image.png pieces=1
+PASS bytes + Blob metadata + piece IDs Картинка.md pieces=2
+PASS bytes + Blob metadata + piece IDs От клиента.md pieces=1
+PASS bytes + Blob metadata + piece IDs Папка/Переехавшая.md pieces=1
+PASS bytes + Blob metadata + piece IDs Папка S3/Переехавшая.md pieces=1
+PASS bytes + Blob metadata + piece IDs Связанная заметка.md pieces=1
+PASS bytes + Blob metadata + piece IDs Тестовая заметка.md pieces=1
+PASS policy: expected=9 excluded=2 missing=0 size_or_hash_mismatch=0
+PASS settings table reconciliation; unknown key count=0
+PASS scope: 10 hidden files outside peer scope
+PASS overall reconnect
+[stderr] vault milestone has advisory locked: true flag; remote marked as rebuilt; peer performs full replay
+
+== B-visible-device-files | command: verify-visible --path parity-live/device-40m.bin --path parity-live/exact.bin | checkout: 3d812ff | captured: 2026-11-26 11:49:10 | report: B-visible-device-files.json
+PASS startup + forced refresh
+PASS bytes + Blob metadata + piece IDs parity-live/device-40m.bin pieces=410
+PASS bytes + Blob metadata + piece IDs parity-live/exact.bin pieces=1024
+PASS overall verify-visible
+[stderr] vault milestone has advisory locked: true flag; remote marked as rebuilt; peer performs full replay
+
+== B-upload | command: write-large --allow-remote-write --confirm-target plan-b-it/livetest/ | checkout: 3d812ff | captured: 2026-11-26 12:19:00 | report: B-upload.json
+PASS startup + forced refresh
+PASS write_attachment 40 MiB byte-exact read-back
+PASS overall write-large
+[stderr] vault milestone has advisory locked: true flag; remote marked as rebuilt; peer performs full replay
+
+== B-visible | command: verify-visible --path parity-live/peer-40m.bin | checkout: 3d812ff | captured: 2026-11-26 12:20:44 | report: B-visible.json
+PASS startup + forced refresh
+PASS bytes + Blob metadata + piece IDs parity-live/peer-40m.bin pieces=410
+PASS overall verify-visible
+[stderr] vault milestone has advisory locked: true flag; remote marked as rebuilt; peer performs full replay
+
+== C-write | command: write-phase --allow-remote-write --allow-remote-delete --confirm-target plan-b-it/livetest/ | checkout: 3d812ff | captured: 2026-11-26 12:23:41 | report: C-write.json
+PASS startup + forced refresh
+PASS create created.md
+PASS update created.md
+PASS move created.md -> moved.md
+PASS soft-delete deleted.md
+PASS source and deleted path absent
+PASS updated destination read-back
+PASS overall write-phase
+[stderr] vault milestone has advisory locked: true flag; remote marked as rebuilt; peer performs full replay
+
+== C-visible | command: verify-visible --path parity-live/moved.md | checkout: 3d812ff | captured: 2026-11-26 12:24:57 | report: C-visible.json
+PASS startup + forced refresh
+PASS bytes + Blob metadata + piece IDs parity-live/moved.md pieces=1
+PASS overall verify-visible
+[stderr] vault milestone has advisory locked: true flag; remote marked as rebuilt; peer performs full replay
+
+== D-prepared | command: prepare-decoding | checkout: local only | captured: 2026-11-26 12:25:15 | report: D-prepared.json
+PASS created local parity-live/invalid.md
+PASS created local parity-live/text.png
+PASS created local parity-live/upper.MD
+PASS overall prepare-decoding
+[stderr] (empty)
+
+== D-device-decoding | command: inspect-decoding | checkout: 3d812ff | captured: 2026-11-26 12:45:46 | report: D-device-decoding.json
+PASS startup + forced refresh
+PASS native decoding parity-live/invalid.md type=plain pieces=1
+PASS native decoding parity-live/text.png type=newnote pieces=1
+PASS native decoding parity-live/upper.MD type=newnote pieces=1
+PASS overall inspect-decoding
+[stderr] vault milestone has advisory locked: true flag; remote marked as rebuilt; peer performs full replay
+
+== F-size-100 | command: verify-size --limit-mib 100 | checkout: 37f63b0 | captured: 2026-11-26 13:16:48 | report: F-size-100.json
+PASS startup + forced refresh
+PASS physical size parity-live/device-40m.bin
+PASS physical size parity-live/exact.bin
+PASS physical size parity-live/above.bin
+PASS bytes + Blob metadata + piece IDs parity-live/device-40m.bin pieces=410
+PASS bytes + Blob metadata + piece IDs parity-live/exact.bin pieces=1024
+PASS device did not publish above-limit file
+PASS overall verify-size
+[stderr] vault milestone has advisory locked: true flag; remote marked as rebuilt; peer performs full replay
+
+== F-reconnect | command: reconnect | checkout: 2cb6eee | captured: 2026-11-26 13:53:23 | report: F-reconnect.json
+PASS startup + forced refresh
+PASS bytes + Blob metadata + piece IDs Welcome.md pieces=1
+PASS bytes + Blob metadata + piece IDs parity-live/device-40m.bin pieces=410
+PASS bytes + Blob metadata + piece IDs parity-live/exact.bin pieces=1024
+PASS bytes + Blob metadata + piece IDs parity-live/invalid.md pieces=1
+PASS bytes + Blob metadata + piece IDs parity-live/moved.md pieces=1
+PASS bytes + Blob metadata + piece IDs parity-live/peer-40m.bin pieces=410
+PASS bytes + Blob metadata + piece IDs parity-live/text.png pieces=1
+PASS bytes + Blob metadata + piece IDs parity-live/upper.MD pieces=1
+PASS bytes + Blob metadata + piece IDs test-image.png pieces=1
+PASS bytes + Blob metadata + piece IDs Картинка.md pieces=2
+PASS bytes + Blob metadata + piece IDs От клиента.md pieces=1
+PASS bytes + Blob metadata + piece IDs Папка/Переехавшая.md pieces=1
+PASS bytes + Blob metadata + piece IDs Папка S3/Переехавшая.md pieces=1
+PASS bytes + Blob metadata + piece IDs Связанная заметка.md pieces=1
+PASS bytes + Blob metadata + piece IDs Тестовая заметка.md pieces=1
+PASS policy: expected=15 excluded=1 missing=0 size_or_hash_mismatch=0
+PASS settings table reconciliation; unknown key count=0
+PASS scope: 11 hidden files outside peer scope
+PASS overall reconnect
+[stderr] vault milestone has advisory locked: true flag; remote marked as rebuilt; peer performs full replay
+
+== G-reconnect-limit-50 | command: reconnect | checkout: 2cb6eee | captured: 2026-11-26 15:23:26 | report: B50-reconnect.json
+PASS startup + forced refresh
+PASS bytes + Blob metadata + piece IDs Welcome.md pieces=1
+PASS bytes + Blob metadata + piece IDs parity-live/device-40m.bin pieces=410
+PASS bytes + Blob metadata + piece IDs parity-live/invalid.md pieces=1
+PASS bytes + Blob metadata + piece IDs parity-live/moved.md pieces=1
+PASS bytes + Blob metadata + piece IDs parity-live/peer-40m.bin pieces=410
+PASS bytes + Blob metadata + piece IDs parity-live/text.png pieces=1
+PASS bytes + Blob metadata + piece IDs parity-live/upper.MD pieces=1
+PASS bytes + Blob metadata + piece IDs test-image.png pieces=1
+PASS bytes + Blob metadata + piece IDs Картинка.md pieces=2
+PASS bytes + Blob metadata + piece IDs От клиента.md pieces=1
+PASS bytes + Blob metadata + piece IDs Папка/Переехавшая.md pieces=1
+PASS bytes + Blob metadata + piece IDs Папка S3/Переехавшая.md pieces=1
+PASS bytes + Blob metadata + piece IDs Связанная заметка.md pieces=1
+PASS bytes + Blob metadata + piece IDs Тестовая заметка.md pieces=1
+PASS policy: expected=14 excluded=2 missing=0 size_or_hash_mismatch=0
+PASS settings table reconciliation; unknown key count=0
+PASS scope: 11 hidden files outside peer scope
+PASS overall reconnect
+[stderr] vault milestone has advisory locked: true flag; remote marked as rebuilt; peer performs full replay
+
+== B-refusals | command: oversize --source parity-live/exact.bin --limit-mib 50 --allow-remote-write --allow-remote-delete --confirm-target plan-b-it/livetest/ | checkout: 2cb6eee | captured: 2026-11-26 16:18:13 | report: B-refusals.json
+PASS startup + forced refresh
+PASS oversized upload skipped without publication
+PASS oversized rename refused; source revision/bytes intact; destination absent
+PASS overall oversize
+[stderr] vault milestone has advisory locked: true flag; remote marked as rebuilt; peer performs full replay
+
+== H-reconnect-after-refusals | command: reconnect | checkout: 2cb6eee | captured: 2026-11-26 16:21:53 | report: B-refusals-reconnect.json
+PASS startup + forced refresh
+PASS bytes + Blob metadata + piece IDs Welcome.md pieces=1
+PASS bytes + Blob metadata + piece IDs parity-live/device-40m.bin pieces=410
+PASS bytes + Blob metadata + piece IDs parity-live/invalid.md pieces=1
+PASS bytes + Blob metadata + piece IDs parity-live/moved.md pieces=1
+PASS bytes + Blob metadata + piece IDs parity-live/peer-40m.bin pieces=410
+PASS bytes + Blob metadata + piece IDs parity-live/text.png pieces=1
+PASS bytes + Blob metadata + piece IDs parity-live/upper.MD pieces=1
+PASS bytes + Blob metadata + piece IDs test-image.png pieces=1
+PASS bytes + Blob metadata + piece IDs Картинка.md pieces=2
+PASS bytes + Blob metadata + piece IDs От клиента.md pieces=1
+PASS bytes + Blob metadata + piece IDs Папка/Переехавшая.md pieces=1
+PASS bytes + Blob metadata + piece IDs Папка S3/Переехавшая.md pieces=1
+PASS bytes + Blob metadata + piece IDs Связанная заметка.md pieces=1
+PASS bytes + Blob metadata + piece IDs Тестовая заметка.md pieces=1
+PASS policy: expected=14 excluded=2 missing=0 size_or_hash_mismatch=0
+PASS settings table reconciliation; unknown key count=0
+PASS scope: 11 hidden files outside peer scope
+PASS overall reconnect
+[stderr] vault milestone has advisory locked: true flag; remote marked as rebuilt; peer performs full replay
+
+Runs without a retained transcript (controller's statement)
+- reconnect on 37f63b0, about 13:20 MSK: ended with the exception InvalidPlainTextBytes for
+  parity-live/invalid.md. The helper compared plain-suffix files with the bytes on disk and
+  stopped on this file, which the client had stored with invalid bytes replaced. No output
+  file was kept. caf8665 changed the helper; the next run is F-reconnect above.

@@ -1,0 +1,52 @@
+{
+  "date": "2026-11-26",
+  "command": "inspect-decoding",
+  "passed": true,
+  "result": {
+    "parity-live/invalid.md": {
+      "type": "plain",
+      "size": 21,
+      "piece_count": 1,
+      "observed_size": 21,
+      "observed_sha256": "6d9e717a9584e0f479240743cc3668575bc421fd12a52d38437ec73e3e3389da",
+      "disk_input_b64": "cHJlZml4/8MogHRhaWwK",
+      "children": [
+        "h:122xzp2ppz8yx"
+      ],
+      "chunk_data": [
+        "prefix\ufffd\ufffd(\ufffdtail\n"
+      ],
+      "capture": "recognized public fixture observation"
+    },
+    "parity-live/text.png": {
+      "type": "newnote",
+      "size": 28,
+      "piece_count": 1,
+      "observed_size": 28,
+      "observed_sha256": "16655dd4043226c4eb4a742a1627db2581622dd7bd0a6d0585adbd2df3c59e78",
+      "disk_input_b64": "dGV4dCBieXRlcyDQn9GA0LjQstC10YLwn5mCCg==",
+      "children": [
+        "h:127fn6ivxiont"
+      ],
+      "chunk_data": [
+        "dGV4dCBieXRlcyDQn9GA0LjQstC10YLwn5mCCg=="
+      ],
+      "capture": "recognized public fixture observation"
+    },
+    "parity-live/upper.MD": {
+      "type": "newnote",
+      "size": 32,
+      "piece_count": 1,
+      "observed_size": 32,
+      "observed_sha256": "dbd31727692cb0656bf0478085d9b27def9ec3c080059da03d0da4997c94c955",
+      "disk_input_b64": "dXBwZXJjYXNlIHRleHQg0J/RgNC40LLQtdGC8J+Zggo=",
+      "children": [
+        "h:c7kb41i5zco3"
+      ],
+      "chunk_data": [
+        "dXBwZXJjYXNlIHRleHQg0J/RgNC40LLQtdGC8J+Zggo="
+      ],
+      "capture": "recognized public fixture observation"
+    }
+  }
+}

@@ -100,7 +100,7 @@ class FakeObjectStorage:
             data = self._objects.get(key)
             limit = self.max_object_bytes if max_bytes is None else min(max_bytes, self.max_object_bytes)
             if data is not None and len(data) > limit:
-                raise ObjectSizeLimit(f"object {key!r} exceeds download limit")
+                raise ObjectSizeLimit("max_object_bytes", len(data), limit)
             return data
 
     def put(self, key: str, data: bytes) -> None:

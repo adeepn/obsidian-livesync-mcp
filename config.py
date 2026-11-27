@@ -8,11 +8,15 @@ copied from ``.env.example`` are rejected at startup (spec section 6).
 
 from __future__ import annotations
 
+import json
 import math
 import os
-from dataclasses import dataclass, replace
+import re
+from dataclasses import dataclass, field, replace
 from typing import Literal, Mapping
 from urllib.parse import parse_qs
+
+from replay_limits import ReplayConfigError, ReplayLimits
 
 S3_URI_SCHEME = "sls://"
 
@@ -55,6 +59,15 @@ class CouchDBConfig:
     user: str
     password: str
     database: str
+    # common/models/setting.const.defaults.ts:196-197: empty connection headers.
+    custom_headers: tuple[tuple[str, str], ...] = field(default=(), repr=False)
+    jwt_algorithm: str = ""
+    jwt_key: str = field(default="", repr=False)
+    jwt_subject: str = field(default="", repr=False)
+    jwt_key_id: str = field(default="", repr=False)
+    jwt_expiry_minutes: float = 5.0
+    connect_timeout_seconds: float = 5.0
+    io_timeout_seconds: float = 30.0
 
 
 @dataclass(frozen=True)
@@ -77,6 +90,13 @@ class S3Config:
     state_dir: str = S3_STATE_DIR_DEFAULT
     refresh_min_interval_sec: float = S3_REFRESH_MIN_INTERVAL_DEFAULT
     state_size_warn_mb: int = 0
+    # common/models/setting.const.defaults.ts:196-197: empty connection headers.
+    custom_headers: tuple[tuple[str, str], ...] = field(default=(), repr=False)
+    # common/models/setting.const.defaults.ts:210.
+    force_path_style: bool = True
+    connect_timeout_seconds: float = 5.0
+    read_timeout_seconds: float = 30.0
+    max_attempts: int = 1
 
 
 @dataclass(frozen=True)
@@ -93,8 +113,42 @@ class Config:
     oauth_password: str
     oauth_client_id: str
     oauth_client_secret: str
-    scan_max_notes: int = 10000
-    scan_max_bytes: int = 64 * 1024 * 1024
+    replay_limits: ReplayLimits = ReplayLimits()
+    sync_max_size_mb: float | None = None
+    disable_checking_config_mismatch: bool = False
+    auto_accept_compatible_tweak: bool = True
+    selection_only: str = ''
+    selection_ignore: str = ''
+    selection_use_ignore_files: bool | None = None
+    selection_ignore_files: tuple[str, ...] | None = None
+    text_verdict_cache_entries: int = 65536
+    text_scan_max_bytes: int | None = None
+    regex_max_output_bytes: int = 0
+    regex_timeout_seconds: float = 10.0
+    selection_timeout_seconds: float = 5.0
+    frontmatter_max_nodes: int = 20_000
+    frontmatter_max_depth: int = 200
+    frontmatter_max_bytes: int = 4 * 1024**2
+    couchdb_max_inflated_bytes: int | None = None
+    max_request_bytes: int = 1024**3
+    scan_max_notes: int = 0
+    scan_max_bytes: int = 0
+    scan_max_seconds: float = 20.0
+
+
+def _positive_transport(env, name, default, *, integer=False):
+    """Validate operational overrides without reflecting supplied values."""
+    raw = env.get(name, default)
+    try:
+        if type(raw) not in (str, int, float) or (integer and type(raw) is float):
+            raise ValueError
+        value = int(raw) if integer else float(raw)
+        if value <= 0 or not math.isfinite(value):
+            raise ValueError
+    except (ValueError, TypeError, OverflowError):
+        rule = "a positive integer" if integer else "positive and finite seconds"
+        raise ConfigError(f"{name} must be {rule}") from None
+    return value
 
 
 def parse_s3_uri(uri: str) -> S3Config:
@@ -143,6 +197,99 @@ def parse_s3_uri(uri: str) -> S3Config:
     )
 
 
+# Commonlib common/utils.ts:459-469 (484c164): split(":", 2) discards
+# additional colon segments; trim is ECMAScript String.trim, not Python strip.
+_JS_SPACE = " \t\n\r\v\f\u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff"
+_FIELD_NAME = re.compile(r"[!#$%&'*+.^_`|~0-9A-Za-z-]+", re.ASCII)
+
+
+_TRANSPORT_HEADERS = frozenset(('content-length', 'transfer-encoding', 'host',
+    'connection', 'keep-alive', 'te', 'trailer', 'upgrade'))
+
+
+def validate_transport_headers(headers, variable):
+    # MinioStorageAdapter.ts:86-100 accepts arbitrary finalizeRequest headers.
+    # Deliberate safety boundary: routing/framing/hop-by-hop fields belong to
+    # the HTTP transport, including future Proxy-* extension fields.
+    for ordinal, (key, _) in enumerate(headers, 1):
+        if key.lower() in _TRANSPORT_HEADERS or key.lower().startswith('proxy-'):
+            raise ConfigError(f'{variable} entry {ordinal}: transport-owned header; '
+                              'remove the entry and configure routing/proxy transport separately.') from None
+
+
+def _load_custom_headers(env: Mapping[str, str], name: str) -> tuple[tuple[str, str], ...]:
+    raw = env.get(name, "")
+
+    def fail(ordinal: int, rule: str):
+        raise ConfigError(f"{name} entry {ordinal}: {rule}; correct the header configuration.") from None
+
+    if raw.lstrip(_JS_SPACE).startswith(("{", "[")):
+        try:
+            # Preserve pairs so duplicate JSON keys cannot disappear in json.loads.
+            pairs = json.loads(raw, object_pairs_hook=lambda items: items)
+        except json.JSONDecodeError as exc:
+            # Count only top-level commas preceding the syntax error; never
+            # include the decoder's message or document in a public exception.
+            ordinal, depth, quoted, escaped = 1, 0, False, False
+            for char in raw[:exc.pos]:
+                if quoted:
+                    if escaped:
+                        escaped = False
+                    elif char == "\\":
+                        escaped = True
+                    elif char == '"':
+                        quoted = False
+                elif char == '"':
+                    quoted = True
+                elif char in "{[":
+                    depth += 1
+                elif char in "}]":
+                    depth -= 1
+                elif char == "," and depth == 1:
+                    ordinal += 1
+            fail(ordinal, "invalid JSON object")
+        except (ValueError, TypeError, RecursionError):
+            fail(1, "invalid JSON object")
+        if not raw.lstrip(_JS_SPACE).startswith("{") or not isinstance(pairs, list):
+            fail(1, "expected JSON object of strings")
+        entries = []
+        seen = set()
+        for ordinal, pair in enumerate(pairs, 1):
+            key, value = pair
+            if key in seen:
+                fail(ordinal, "duplicate JSON name")
+            seen.add(key)
+            if type(value) is not str:
+                fail(ordinal, "JSON values must be strings")
+            entries.append((ordinal, key, value))
+    else:
+        entries = []
+        for ordinal, line in enumerate(raw.split("\n"), 1):
+            parts = line.split(":", 2)
+            if len(parts) < 2:
+                continue
+            key, value = (part.strip(_JS_SPACE) for part in parts[:2])
+            if key and value:
+                entries.append((ordinal, key, value))
+    headers = {}
+    for ordinal, key, value in entries:
+        if not _FIELD_NAME.fullmatch(key):
+            fail(ordinal, "HTTP field name must be an RFC 9110 token")
+        if any(ord(c) < 32 or 127 <= ord(c) <= 159 for c in value):
+            fail(ordinal, "HTTP value must not contain control characters")
+        # RemoteService.ts:360 creates native Fetch Headers (ByteString).
+        # The S3 Node HTTP transport likewise requires one-byte field octets.
+        if any(ord(c) > 255 for c in value):
+            fail(ordinal, "HTTP transport requires Latin-1 values; encode proxy credentials as ASCII")
+        # JS {} has a prototype setter; assigning a string to __proto__ does
+        # not create an own header (utils.ts:460,465). JSON has no such setter.
+        if key == "__proto__" and not raw.lstrip(_JS_SPACE).startswith("{"):
+            continue
+        headers[key] = value
+    validate_transport_headers(headers.items(), name)
+    return tuple(headers.items())
+
+
 def _read(env: Mapping[str, str], name: str) -> str:
     value = env.get(name, "")
     if not value:
@@ -159,13 +306,44 @@ def _reject_placeholder(value: str, name: str) -> None:
 
 
 def _load_couchdb(env: Mapping[str, str]) -> CouchDBConfig:
+    from couchdb_jwt import ALGORITHMS, JWTConfigError, JWTTokenGenerator
+    algorithm = env.get("COUCHDB_JWT_ALGORITHM", "")
+    jwt_names = ("COUCHDB_JWT_KEY", "COUCHDB_JWT_SUBJECT",
+                 "COUCHDB_JWT_KEY_ID", "COUCHDB_JWT_EXPIRY_MINUTES")
+    if not algorithm and any(env.get(n, "") for n in jwt_names):
+        raise ConfigError("COUCHDB_JWT_ALGORITHM is required with COUCHDB_JWT_*; choose exactly one CouchDB auth mode.")
+    if algorithm:
+        if algorithm not in ALGORITHMS:
+            raise ConfigError("COUCHDB_JWT_ALGORITHM must be HS256, HS512, ES256 or ES512.")
+        conflicts = [n for n in ("COUCHDB_USER", "COUCHDB_PASSWORD") if n in env]
+        if conflicts:
+            raise ConfigError("COUCHDB_JWT_ALGORITHM conflicts with " + ", ".join(conflicts) + "; remove Basic auth variables.")
+        try:
+            expiry = float(env.get("COUCHDB_JWT_EXPIRY_MINUTES", "5"))
+            if not math.isfinite(expiry) or expiry < 0:
+                raise ValueError
+        except (ValueError, TypeError, OverflowError):
+            raise ConfigError("COUCHDB_JWT_EXPIRY_MINUTES must be a nonnegative finite number; zero uses five minutes; negative durations are refused because upstream would mint already-expired tokens.") from None
+        cfg = CouchDBConfig(
+            url=env.get("COUCHDB_URL", "").strip() or COUCHDB_URL_DEFAULT,
+            user="", password="", database=_read(env, "COUCHDB_DATABASE"),
+            custom_headers=_load_custom_headers(env, "COUCHDB_CUSTOM_HEADERS"),
+            jwt_algorithm=algorithm, jwt_key=env.get("COUCHDB_JWT_KEY", ""),
+            jwt_subject=env.get("COUCHDB_JWT_SUBJECT", ""),
+            jwt_key_id=env.get("COUCHDB_JWT_KEY_ID", ""), jwt_expiry_minutes=expiry,
+        )
+        try:
+            JWTTokenGenerator(cfg)
+        except JWTConfigError as exc:
+            raise ConfigError(exc.public_message) from None
+        return cfg
     password = _read(env, "COUCHDB_PASSWORD")
     _reject_placeholder(password, "COUCHDB_PASSWORD")
     return CouchDBConfig(
         url=env.get("COUCHDB_URL", "").strip() or COUCHDB_URL_DEFAULT,
-        user=_read(env, "COUCHDB_USER"),
-        password=password,
+        user=_read(env, "COUCHDB_USER"), password=password,
         database=_read(env, "COUCHDB_DATABASE"),
+        custom_headers=_load_custom_headers(env, "COUCHDB_CUSTOM_HEADERS"),
     )
 
 
@@ -174,22 +352,32 @@ def _load_s3_state(env: Mapping[str, str]) -> tuple[str, float]:
 
     Blank values fall back to the defaults (same convention as
     ``COUCHDB_URL``). The refresh interval must be a positive, finite
-    number; the error names the variable and echoes only the offending
-    non-secret value.
+    number below 2**63; the error names the variable without echoing input.
     """
     state_dir = env.get("S3_STATE_DIR", "").strip() or S3_STATE_DIR_DEFAULT
 
-    raw = env.get("S3_REFRESH_MIN_INTERVAL_SEC", "").strip()
-    if not raw:
-        return state_dir, S3_REFRESH_MIN_INTERVAL_DEFAULT
+    raw = env.get("S3_REFRESH_MIN_INTERVAL_SEC", "")
+    if type(raw) is str:
+        raw = raw.strip()
+        if not raw:
+            return state_dir, S3_REFRESH_MIN_INTERVAL_DEFAULT
     try:
-        interval = float(raw)
-        if not math.isfinite(interval) or interval <= 0:
+        if type(raw) not in (str, int, float):
             raise ValueError
-    except ValueError:
+        if type(raw) is int:
+            interval = raw
+        elif type(raw) is str:
+            try:
+                interval = int(raw)
+            except ValueError:
+                interval = float(raw)
+        else:
+            interval = raw
+        if not 0 < interval < 2**63 or (type(interval) is float and not math.isfinite(interval)):
+            raise ValueError
+    except (ValueError, TypeError, OverflowError):
         raise ConfigError(
-            f"S3_REFRESH_MIN_INTERVAL_SEC must be a positive number "
-            f"(got {raw!r})."
+            "S3_REFRESH_MIN_INTERVAL_SEC must be a positive finite number below 2**63"
         ) from None
     return state_dir, interval
 
@@ -236,8 +424,13 @@ def _load_s3(env: Mapping[str, str]) -> S3Config:
             raise ValueError
     except ValueError:
         raise ConfigError("S3_STATE_SIZE_WARN_MB must be a non-negative integer") from None
+    style = env.get("S3_FORCE_PATH_STYLE", "true")
+    if style not in ("true", "false"):
+        raise ConfigError("S3_FORCE_PATH_STYLE must be true or false")
     return replace(
         connection,
+        custom_headers=_load_custom_headers(env, "S3_CUSTOM_HEADERS"),
+        force_path_style=style == "true",
         state_dir=state_dir,
         refresh_min_interval_sec=refresh_sec,
         state_size_warn_mb=warn_mb,
@@ -281,7 +474,8 @@ def _load_port(env: Mapping[str, str]) -> int:
     try:
         port = int(raw)
     except ValueError:
-        raise ConfigError(f"MCP_PORT must be an integer (got {raw!r}).") from None
+        # Peer-only listener policy (P-19/P-21/P-22), not a vault setting.
+        raise ConfigError("MCP_PORT must be an integer.") from None
 
     if not 1 <= port <= 65535:
         raise ConfigError("MCP_PORT must be in 1..65535.")
@@ -297,16 +491,70 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
     """
     if env is None:
         env = os.environ
+    try:
+        replay_limits = ReplayLimits.from_env(env)
+    except ReplayConfigError as exc:
+        raise ConfigError(exc.public_message) from None
+    tweak_policy = {}
+    for key, default in (('LIVESYNC_DISABLE_CHECKING_CONFIG_MISMATCH', 'false'),
+                         ('LIVESYNC_AUTO_ACCEPT_COMPATIBLE_TWEAK', 'true')):
+        value = env.get(key, default).strip().lower()
+        if value not in ('true', 'false'):
+            raise ConfigError(f'{key} must be true or false')
+        tweak_policy[key] = value == 'true'
+    size_override = env.get('LIVESYNC_SYNC_MAX_SIZE_MB', '').strip()
+    try:
+        sync_max_size_mb = float(size_override) if size_override else None
+        if sync_max_size_mb is not None and not math.isfinite(sync_max_size_mb):
+            raise ValueError
+    except ValueError:
+        raise ConfigError('LIVESYNC_SYNC_MAX_SIZE_MB must be a finite number or empty') from None
+    request_raw = env.get("LIVESYNC_MAX_REQUEST_BYTES", 1024**3)
+    try:
+        if type(request_raw) not in (str, int):
+            raise ValueError
+        max_request_bytes = int(request_raw)
+        if max_request_bytes < 0:
+            raise ValueError
+    except (ValueError, TypeError):
+        raise ConfigError("LIVESYNC_MAX_REQUEST_BYTES must be a nonnegative integer; 0 is unlimited") from None
     scan_limits = []
-    for key, default in (("LIVESYNC_SCAN_MAX_NOTES", 10000),
-                         ("LIVESYNC_SCAN_MAX_BYTES", 64 * 1024 * 1024)):
+    for key, default in (("LIVESYNC_SCAN_MAX_NOTES", 0),
+                         ("LIVESYNC_SCAN_MAX_BYTES", 0),
+                         ("LIVESYNC_TEXT_SCAN_MAX_BYTES", None),
+                         ("LIVESYNC_TEXT_VERDICT_CACHE_ENTRIES", 65536)):
         try:
-            value = int(env.get(key, default))
-            if value <= 0:
+            raw = env.get(key, default)
+            value = None if key == "LIVESYNC_TEXT_SCAN_MAX_BYTES" and raw in (None, '') else int(raw)
+            if value is not None and (value < 0 or (value == 0 and key == "LIVESYNC_TEXT_VERDICT_CACHE_ENTRIES")):
                 raise ValueError
         except (ValueError, TypeError):
-            raise ConfigError(f"{key} must be a positive integer") from None
+            if key == "LIVESYNC_TEXT_SCAN_MAX_BYTES":
+                rule = "a nonnegative integer or empty"
+            elif key == "LIVESYNC_TEXT_VERDICT_CACHE_ENTRIES":
+                rule = "a positive integer"
+            else:
+                rule = "a nonnegative integer"
+            raise ConfigError(f"{key} must be {rule}") from None
         scan_limits.append(value)
+    try:
+        regex_max_output_bytes = int(env.get('LIVESYNC_REGEX_MAX_OUTPUT_BYTES', 0))
+        if regex_max_output_bytes < 0:
+            raise ValueError
+    except (ValueError, TypeError):
+        raise ConfigError('LIVESYNC_REGEX_MAX_OUTPUT_BYTES must be a nonnegative integer') from None
+    try:
+        regex_timeout_seconds = float(env.get('LIVESYNC_REGEX_TIMEOUT_SECONDS', 10))
+        if not math.isfinite(regex_timeout_seconds) or regex_timeout_seconds <= 0:
+            raise ValueError
+    except (ValueError, TypeError):
+        raise ConfigError('LIVESYNC_REGEX_TIMEOUT_SECONDS must be positive and finite') from None
+    try:
+        scan_max_seconds = float(env.get('LIVESYNC_SCAN_MAX_SECONDS', 20))
+        if not math.isfinite(scan_max_seconds) or scan_max_seconds < 0:
+            raise ValueError
+    except (ValueError, TypeError):
+        raise ConfigError('LIVESYNC_SCAN_MAX_SECONDS must be nonnegative and finite') from None
     backend = env.get("LIVESYNC_BACKEND", "")
     if not backend:
         raise ConfigError(
@@ -314,7 +562,7 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
         )
     if backend not in BACKENDS:
         raise ConfigError(
-            f"LIVESYNC_BACKEND must be 'couchdb' or 's3' (got {backend!r})."
+            "LIVESYNC_BACKEND must be 'couchdb' or 's3'."
         )
 
     couchdb: CouchDBConfig | None = None
@@ -324,11 +572,47 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
     else:
         s3 = _load_s3(env)
 
+    if couchdb is not None:
+        couchdb = replace(couchdb,
+            connect_timeout_seconds=_positive_transport(env, "COUCHDB_CONNECT_TIMEOUT_SECONDS", 5),
+            io_timeout_seconds=_positive_transport(env, "COUCHDB_IO_TIMEOUT_SECONDS", 30))
+    if s3 is not None:
+        s3 = replace(s3,
+            connect_timeout_seconds=_positive_transport(env, "S3_CONNECT_TIMEOUT_SECONDS", 5),
+            read_timeout_seconds=_positive_transport(env, "S3_READ_TIMEOUT_SECONDS", 30),
+            max_attempts=_positive_transport(env, "S3_MAX_ATTEMPTS", 1, integer=True))
+    selection_timeout_seconds = _positive_transport(env, "LIVESYNC_SELECTION_TIMEOUT_SECONDS", 5)
     api_key, oauth_password, oauth_client_id, oauth_client_secret = _load_auth(env)
 
+    use_ignore = env.get('LIVESYNC_USE_IGNORE_FILES', '').lower()
+    if use_ignore not in ('', 'true', 'false'):
+        raise ConfigError('LIVESYNC_USE_IGNORE_FILES must be true or false.')
+    from livesync_format import split_ignore_names
+    ignore_files = split_ignore_names(env.get('LIVESYNC_IGNORE_FILES', ''))
+
     return Config(
+        replay_limits=replay_limits,
+        sync_max_size_mb=sync_max_size_mb,
+        disable_checking_config_mismatch=tweak_policy['LIVESYNC_DISABLE_CHECKING_CONFIG_MISMATCH'],
+        auto_accept_compatible_tweak=tweak_policy['LIVESYNC_AUTO_ACCEPT_COMPATIBLE_TWEAK'],
+        selection_only=env.get('LIVESYNC_SYNC_ONLY_REGEX', ''),
+        selection_ignore=env.get('LIVESYNC_SYNC_IGNORE_REGEX', ''),
+        selection_use_ignore_files=None if not use_ignore else use_ignore == 'true',
+        selection_ignore_files=ignore_files if env.get('LIVESYNC_IGNORE_FILES', '') else None,
+        text_verdict_cache_entries=scan_limits[3],
+        text_scan_max_bytes=scan_limits[2],
+        regex_max_output_bytes=regex_max_output_bytes,
+        regex_timeout_seconds=regex_timeout_seconds,
+        selection_timeout_seconds=selection_timeout_seconds,
+        frontmatter_max_nodes=_positive_transport(env, "LIVESYNC_FRONTMATTER_MAX_NODES", 20_000, integer=True),
+        frontmatter_max_bytes=_positive_transport(env, "LIVESYNC_FRONTMATTER_MAX_BYTES", 4 * 1024**2, integer=True),
+        frontmatter_max_depth=_positive_transport(env, "LIVESYNC_FRONTMATTER_MAX_DEPTH", 200, integer=True),
+        couchdb_max_inflated_bytes=(None if env.get("LIVESYNC_COUCHDB_MAX_INFLATED_BYTES", "") == ""
+            else _positive_transport(env, "LIVESYNC_COUCHDB_MAX_INFLATED_BYTES", None, integer=True)),
+        max_request_bytes=max_request_bytes,
         scan_max_notes=scan_limits[0],
         scan_max_bytes=scan_limits[1],
+        scan_max_seconds=scan_max_seconds,
         backend=backend,
         couchdb=couchdb,
         s3=s3,

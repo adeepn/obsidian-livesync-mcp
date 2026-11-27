@@ -35,7 +35,9 @@ from __future__ import annotations
 
 import json
 import zlib
+from wire_encoding import json_stringify, text_encoder_string
 from dataclasses import dataclass, field
+from replay_limits import ReplayLimits, ReplayBudgetExceeded
 
 # journalRecords.ts: RECORD_SPLIT and UNIT_SPLIT.
 _RECORD_SPLIT = "\n"
@@ -51,10 +53,10 @@ _DEFLATE_LEVEL = 8
 
 # Per-file replay limits; callers may override keyword arguments. Byte limits
 # apply before decoding UTF-8 or constructing JSON objects.
-MAX_INFLATED_BYTES = 1024**3
-MAX_RECORDS = 100_000
-MAX_JSON_DEPTH = 512
-MAX_LINE_BYTES = 64 * 1024**2
+MAX_INFLATED_BYTES = ReplayLimits.max_inflated_bytes
+MAX_RECORDS = ReplayLimits.max_records
+MAX_JSON_DEPTH = ReplayLimits.max_json_depth
+MAX_LINE_BYTES = ReplayLimits.max_line_bytes
 
 _CORRUPT_BLOB_MESSAGE = "incompatible or corrupt journal blob"
 
@@ -125,7 +127,9 @@ def serialize_journal(chunks: list[tuple[str, str]], docs: list[dict]) -> bytes:
     Chunk pairs are ``(chunk_id, data)``. Metadata documents must carry a
     string ``_rev`` (non-chunk records without one are rejected upstream, so
     they are rejected here at write time). Output matches
-    ``JSON.stringify``: compact separators, non-ASCII kept as UTF-8.
+    ``JSON.stringify``: compact separators, non-ASCII kept as UTF-8,
+    surrogate code points escaped. Compact leaves instead follow TextEncoder
+    (journalRecords.ts:69-77), replacing each surrogate with U+FFFD.
     """
     lines: list[str] = []
     for chunk_id, data in chunks:
@@ -133,19 +137,14 @@ def serialize_journal(chunks: list[tuple[str, str]], docs: list[dict]) -> bytes:
             raise ValueError(f"Invalid journal chunk identifier: {chunk_id!r}")
         if not isinstance(data, str):
             raise ValueError(f"Journal chunk {chunk_id!r} data must be a string")
-        lines.append(f"{_COMPACT_PREFIX}{chunk_id}{_UNIT_SPLIT}{_escape_chunk_data(data)}")
+        # commonlib journalRecords.ts:70-74: encode compact lines directly.
+        lines.append(text_encoder_string(
+            f"{_COMPACT_PREFIX}{chunk_id}{_UNIT_SPLIT}{_escape_chunk_data(data)}"))
     for doc in docs:
         if not isinstance(doc, dict) or not isinstance(doc.get("_rev"), str):
             raise ValueError("Journal metadata document requires a string _rev")
         try:
-            lines.append(
-                json.dumps(
-                    doc,
-                    ensure_ascii=False,
-                    separators=(",", ":"),
-                    allow_nan=False,
-                )
-            )
+            lines.append(json_stringify(doc))
         except ValueError as exc:
             # JSON.stringify cannot emit NaN/Infinity; Python's permissive
             # default must not leak them into a file devices refuse to parse.
@@ -176,7 +175,7 @@ def inflate_journal(blob: bytes, *, max_output_bytes: int = MAX_INFLATED_BYTES) 
     try:
         out = decompressor.decompress(blob, max_output_bytes + 1)
         if len(out) > max_output_bytes or decompressor.unconsumed_tail:
-            raise ValueError("journal inflated output exceeds limit")
+            raise ReplayBudgetExceeded("max_inflated_bytes", len(out), max_output_bytes)
     except zlib.error as exc:
         raise ValueError(_CORRUPT_BLOB_MESSAGE) from exc
     if not decompressor.eof or decompressor.unused_data:
@@ -188,7 +187,7 @@ def inflate_journal(blob: bytes, *, max_output_bytes: int = MAX_INFLATED_BYTES) 
 
 def parse_journal(
     data: bytes, *, name: str = "", max_records: int = MAX_RECORDS,
-    max_line_bytes: int = MAX_LINE_BYTES,
+    max_line_bytes: int = MAX_LINE_BYTES, max_json_depth: int = MAX_JSON_DEPTH,
 ) -> JournalFile:
     """Parse inflated journal bytes into a :class:`JournalFile`.
 
@@ -212,10 +211,11 @@ def parse_journal(
     while start < len(data):
         lineno += 1
         if lineno > max_records:
-            raise ValueError(f"{name}: line {lineno}: journal record count exceeds limit")
+            raise ReplayBudgetExceeded("max_records", lineno, max_records)
         end = data.find(b"\n", start, start + max_line_bytes + 1)
         if end == -1:
-            raise ValueError(f"{name}: line {lineno}: journal line length exceeds limit")
+            raise ReplayBudgetExceeded("max_line_bytes",
+                                       data.find(b"\n", start) - start, max_line_bytes)
         raw_line = data[start:end]
         start = end + 1
         if not raw_line:
@@ -227,7 +227,7 @@ def parse_journal(
         if line.startswith(_COMPACT_PREFIX):
             _parse_compact_line(result, name, lineno, line)
         else:
-            _parse_metadata_line(result, name, lineno, line)
+            _parse_metadata_line(result, name, lineno, line, max_json_depth)
     return result
 
 
@@ -246,36 +246,52 @@ def _reject_json_constant(name: str, lineno: int, token: str) -> None:
     raise ValueError(f"{name}: line {lineno}: invalid JSON constant {token}")
 
 
-def _parse_metadata_line(
-    target: JournalFile, name: str, lineno: int, line: str
-) -> None:
-    # Python versions differ in where the C decoder raises RecursionError.
-    # Bound nesting before parsing, while ignoring brackets inside strings.
-    if line.count("[") + line.count("{") > MAX_JSON_DEPTH:
-        depth = 0
-        quoted = escaped = False
-        for char in line:
-            if quoted:
-                if escaped:
-                    escaped = False
-                elif char == "\\":
-                    escaped = True
-                elif char == '"':
-                    quoted = False
+def _metadata_depth(line: str, limit: int) -> int:
+    """Measure nesting outside strings without using the recursive JSON parser."""
+    depth = peak = 0
+    quoted = escaped = False
+    for char in line:
+        if quoted:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
             elif char == '"':
-                quoted = True
-            elif char in "[{":
-                depth += 1
-                if depth > MAX_JSON_DEPTH:
-                    raise ValueError(f"{name}: line {lineno}: JSON nesting exceeds limit")
-            elif char in "]}":
-                depth -= 1
+                quoted = False
+        elif char == '"':
+            quoted = True
+        elif char in "[{":
+            depth += 1
+            peak = max(peak, depth)
+            if depth > limit:
+                raise ReplayBudgetExceeded("max_json_depth", depth, limit)
+        elif char in "]}":
+            depth -= 1
+    return peak
+
+
+def _parse_metadata_line(
+    target: JournalFile, name: str, lineno: int, line: str, max_json_depth: int
+) -> None:
+    # The configured admission budget and Python decoder capacity are distinct.
+    # Avoid scanning ordinary records twice when their bracket count is small.
+    observed_depth = None
+    if line.count("[") + line.count("{") > max_json_depth:
+        observed_depth = _metadata_depth(line, max_json_depth)
     try:
         doc = json.loads(
             line,
             parse_constant=lambda token: _reject_json_constant(name, lineno, token),
         )
-    except (json.JSONDecodeError, RecursionError) as exc:
+    except RecursionError as exc:
+        import sys
+        if observed_depth is None:
+            observed_depth = _metadata_depth(line, max_json_depth)
+        raise ReplayBudgetExceeded(
+            "max_json_depth", observed_depth, max_json_depth,
+            decoder_capacity=sys.getrecursionlimit(),
+        ) from exc
+    except json.JSONDecodeError as exc:
         raise ValueError(f"{name}: line {lineno}: invalid journal record") from exc
     if not isinstance(doc, dict):
         raise ValueError(f"{name}: line {lineno}: invalid journal record")
@@ -302,7 +318,7 @@ def journal_filename(
 
     Devices upload ``<ms>-docs.jsonl.gz`` (JournalSyncCore.ts:675,
     ``Date.now()``-based). Server publications use
-    ``<ms>-<random 16 hex>-docs.jsonl.gz`` (Plan B ruling B-10), checking
+    ``<ms>-<random 32 hex>-docs.jsonl.gz`` (Plan B ruling B-10), checking
     existence before upload and regenerating an occupied suffix. Replay
     orders by numeric ms prefix, then full name for deterministic ties.
     The zero-padded counter form remains available for legacy callers;

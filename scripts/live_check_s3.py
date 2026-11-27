@@ -127,7 +127,7 @@ async def run(args: argparse.Namespace) -> bool:
             paths = args.path
         else:
             paths = sorted(p.relative_to(args.vault).as_posix() for p in args.vault.rglob('*')
-                           if p.is_file() and p.suffix.lower() in {'.md', '.png'}
+                           if p.is_file()
                            and not any(part.startswith('.') for part in p.relative_to(args.vault).parts))
         return await verify(backend, args.vault, paths)
     finally:

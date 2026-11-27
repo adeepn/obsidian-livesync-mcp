@@ -4,7 +4,13 @@ from collections import namedtuple
 from collections.abc import Iterable
 import posixpath
 import re
+import unicodedata
 from urllib.parse import unquote
+
+from livesync_format import (
+    PATH_IDENTITY_LEGACY, PATH_IDENTITY_NFC, PATH_IDENTITY_CASE_SENSITIVE,
+    PATH_IDENTITY_NFC_CASE_SENSITIVE,
+)
 
 Link = namedtuple("Link", ["target", "kind"])
 
@@ -189,12 +195,13 @@ def extract_links(text: str) -> list[Link]:
 class _PathIndex:
     """Index unique original paths; None records an ambiguous lookup."""
 
-    def __init__(self, paths: Iterable[str]):
+    def __init__(self, paths: Iterable[str], path_identity: str):
+        self.path_identity = path_identity
         self.exact = {}
         self.basename = {}
         self.suffix = {}
         for path in dict.fromkeys(paths):
-            name = _without_md(path).casefold()
+            name = self._comparison_key(_without_md(path))
             parts = name.split("/")
             for table, key in [(self.exact, name),
                                (self.basename, parts[-1])]:
@@ -203,27 +210,41 @@ class _PathIndex:
                 key = "/".join(parts[i:])
                 self.suffix[key] = None if key in self.suffix else path
 
+    def _comparison_key(self, path: str) -> str:
+        if self.path_identity in (
+            PATH_IDENTITY_NFC, PATH_IDENTITY_NFC_CASE_SENSITIVE,
+        ):
+            path = unicodedata.normalize("NFC", path)
+        if self.path_identity in (
+            PATH_IDENTITY_CASE_SENSITIVE, PATH_IDENTITY_NFC_CASE_SENSITIVE,
+        ):
+            return path
+        return path.casefold()
+
     def resolve(self, target: str, source: str | None = None) -> str | None:
-        key = _without_md(target.strip()).casefold()
+        key = self._comparison_key(_without_md(target.strip()))
         if not key:
             return None
         if source is not None and key.startswith(("./", "../")):
             key = posixpath.normpath(posixpath.join(
                 posixpath.dirname(source), target.strip()))
-            return self.exact.get(_without_md(key).casefold())
+            return self.exact.get(self._comparison_key(_without_md(key)))
         for table in (self.exact, self.basename, self.suffix):
             if key in table:
                 return table[key]
         return None
 
 
-def resolve_link(target: str, paths: list[str]) -> str | None:
+def resolve_link(
+    target: str, paths: list[str], *, path_identity: str = PATH_IDENTITY_LEGACY,
+) -> str | None:
     """Resolve exact paths, basenames, then suffixes; reject ambiguities."""
-    return _PathIndex(paths).resolve(target)
+    return _PathIndex(paths, path_identity).resolve(target)
 
 
 def build_graph(
-    texts: Iterable[tuple[str, str]], all_paths: Iterable[str] | None = None
+    texts: Iterable[tuple[str, str]], all_paths: Iterable[str] | None = None,
+    *, path_identity: str = PATH_IDENTITY_LEGACY,
 ) -> dict:
     """Build resolved, distinct edges from readable bodies.
 
@@ -231,7 +252,7 @@ def build_graph(
     including notes whose bodies could not be read.
     """
     if all_paths is not None:
-        graph = GraphBuilder(all_paths)
+        graph = GraphBuilder(all_paths, path_identity=path_identity)
         for path, text in texts:
             graph.add(path, text)
         return graph.result()
@@ -239,7 +260,7 @@ def build_graph(
     # never the bodies supplied by a one-shot iterable.
     extracted = [(path, _extract_links(text, distinguish_embeds=True))
                  for path, text in texts]
-    graph = GraphBuilder(path for path, _ in extracted)
+    graph = GraphBuilder((path for path, _ in extracted), path_identity=path_identity)
     for path, links in extracted:
         graph.add_links(path, links)
     return graph.result()
@@ -247,9 +268,9 @@ def build_graph(
 
 class GraphBuilder:
     """Incrementally extract and resolve edges without retaining bodies."""
-    def __init__(self, paths):
+    def __init__(self, paths, *, path_identity: str = PATH_IDENTITY_LEGACY):
         self.paths = list(dict.fromkeys(paths))
-        self.index = _PathIndex(self.paths)
+        self.index = _PathIndex(self.paths, path_identity)
         self.edges = []
         self.seen = set()
 
