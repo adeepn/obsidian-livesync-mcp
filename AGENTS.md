@@ -139,6 +139,12 @@ Use Python 3.11+ and PEP 8 conventions: 4-space indentation, clear names, and sn
 
 No formatter or linter config is committed. If adding one, document the command here and avoid reformatting unrelated files.
 
+`.gitattributes` fixes line endings for the repository: text files keep LF in every working tree
+(`* text=auto eol=lf`), and the vendored selection tree, the selection worker and its verifier
+script are never converted (`-text`). Generators, harnesses and fixtures are verified by the hash
+of their bytes; `tests/test_repository_attributes.py` checks that a checkout with
+`core.autocrlf=true` reproduces the committed bytes.
+
 ## Testing Guidelines
 
 `tests/test_config_public.py` inventories validated and unrestricted environment
