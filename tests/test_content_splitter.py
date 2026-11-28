@@ -117,7 +117,7 @@ async def test_writers_publish_ordered_pieces_with_repeated_ids(tmp_path, backen
             async def get_doc(key):
                 return backend._store.winner(key)
             async def get_chunk(key):
-                return backend._store._chunk_path(key).read_text()
+                return backend._store.winner(key)['data']
             await check(backend, get_doc, get_chunk)
         finally:
             await backend.close()

@@ -23,10 +23,10 @@ import pytest
 
 import storage_journal
 import journal_store
+from journal_store import JournalStore
 from journal_codec import (
     deflate_journal, inflate_journal, parse_journal, serialize_journal,
 )
-from journal_store import pick_winner
 from livesync_format import ForbiddenPathError, chunk_id_for, path2id
 from storage_base import (
     ConcurrentModification,
@@ -1101,21 +1101,23 @@ class TestJournalWrites:
         first = await backend.write_note('A.md', 'привет\n', create=True, mtime=123)
         assert first['ctime'] == first['mtime'] == 123
         assert first['size'] == 13
-        doc = backend._store.winner('a.md')
-        assert doc['_revisions'] == {'start': 1, 'ids': [first['rev'].split('-', 1)[1]]}
+        store = backend._store
+        chain = store.revision_chain
+        assert chain('a.md', first['rev']) == {'start': 1, 'ids': [first['rev'].split('-', 1)[1]]}
         assert storage.get_calls == [SYNC_PARAMETERS_KEY, storage.put_calls[0][0]]
         second = await backend.write_note('A.md', 'new', expected_rev=first['rev'])
-        doc = backend._store.winner('a.md')
-        assert doc['_revisions']['start'] == 2
-        assert doc['_revisions']['ids'] == [second['rev'].split('-', 1)[1], first['rev'].split('-', 1)[1]]
+        doc = store.winner('a.md')
+        # A stored body keeps no reserved keys; the chain is the tree's path.
+        assert '_revisions' not in doc
+        assert chain('a.md', second['rev']) == {'start': 2, 'ids': [second['rev'].split('-', 1)[1], first['rev'].split('-', 1)[1]]}
         assert (await backend.read_note('A.md'))['text'] == 'new'
         before = doc.copy()
         assert await backend.delete_note('A.md', expected_rev=second['rev'])
-        deleted = backend._store.winner('a.md')
+        deleted = store.winner('a.md')
         assert deleted['deleted'] is True
         for field in ('children', 'eden', 'type', 'path', 'ctime'):
             assert deleted[field] == before[field]
-        assert deleted['_revisions']['start'] == 3
+        assert chain('a.md', deleted['_rev'])['start'] == 3
         assert await backend.read_note('A.md') is None
         assert not await backend.delete_note('A.md')
         with pytest.raises(NoteNotFound):
@@ -1179,7 +1181,7 @@ class TestJournalWrites:
         assert backend._store.files_processed_count() == count
         assert (await backend.get_meta('a.md')) == old
         assert (await backend.read_note('a.md'))['text'] == 'original'
-        assert not backend._store._chunk_path(chunk_id_for('replacement')).exists()
+        assert backend._store._tree(chunk_id_for('replacement')) is None
 
     async def test_fresh_peer_roundtrip_three_notes(self, tmp_path):
         writer, storage = await write_backend(tmp_path / 'writer')
@@ -1222,7 +1224,10 @@ class TestJournalWrites:
         await backend.refresh(force=True)
         leaves = backend._store.leaves('a.md')
         assert {doc['_rev'] for doc in leaves} == {ours['_rev'], device['_rev']}
-        assert backend._store.winner('a.md') == pick_winner(leaves)
+        winner = backend._store.winner('a.md')
+        assert winner in leaves
+        assert [doc['_rev'] for doc in backend._store.conflicts('a.md')] == [
+            doc['_rev'] for doc in leaves if doc['_rev'] != winner['_rev']]
         assert backend._store.note_ids() == ['a.md']
         assert len(await backend.list_notes()) == 1
 
@@ -1281,9 +1286,8 @@ class TestJournalMoves:
             await method('missing.md', 'c.md')
         assert len(storage.put_calls) == count
         result = await method('a.md', 'b.md', overwrite=True)
-        doc = backend._store.winner('b.md')
         assert result['rev'].startswith('2-')
-        assert doc['_revisions']['ids'][1] == target['rev'].split('-', 1)[1]
+        assert backend._store.revision_chain('b.md', result['rev'])['ids'][1] == target['rev'].split('-', 1)[1]
         assert (await backend.read_note('b.md'))['text'] == 'source'
         assert (await backend.read_note('a.md') is None) == (operation == 'rename_note')
 
@@ -1302,10 +1306,12 @@ class TestJournalMoves:
         assert doc['children'] == source['children']
         assert doc['eden'] == source['eden']
         assert doc['ctime'] == 12
-        assert doc['_revisions']['start'] == 1
         assert (await backend.read_note('b.md'))['text'] == 'inline'
         assert len(storage.put_calls) == 1
         journal = parse_journal(inflate_journal(storage.put_calls[0][1]))
+        # The destination starts a new tree: nothing of the source's lineage is carried over.
+        assert journal.docs[0]['_revisions']['start'] == 1
+        assert len(journal.docs[0]['_revisions']['ids']) == 1
         assert journal.chunks == {}
         assert len(journal.docs) == (2 if operation == 'rename_note' else 1)
         if operation == 'rename_note':
@@ -1406,34 +1412,38 @@ class TestJournalWriteEdges:
         finally:
             await backend.close()
 
-    @pytest.mark.parametrize('failure', [
-        'before-apply', 'before-chunk-replace', 'after-chunk-replace',
-    ])
+    @pytest.mark.parametrize('failure', ['before-apply', 'before-metadata'])
     async def test_verified_publication_recovers_after_apply_failure(
         self, tmp_path, monkeypatch, failure,
     ):
+        # A local apply can stop between its two commits: the chunk batch is
+        # stored, the metadata batch is not. The remote file is complete, so
+        # the next replay applies it; the chunk is held, not written again.
         backend, storage = await write_backend(tmp_path)
         store = backend._store
         checkpoint = store.last_sent_key
-        real_replace = journal_store.os.replace
+        real_write = JournalStore._write_plan
+        calls = 0
 
-        def fail_apply(name, chunks, docs):
+        def fail_apply(name, chunks, docs, records=None):
             assert storage.get_calls[-1] == name
             assert storage.get(name) is not None
             raise OSError('scripted local apply failure')
 
-        def fail_replace(source, target):
+        def fail_second_batch(inner, rows, trees):
+            nonlocal calls
             assert len(storage.put_calls) == 1
-            if failure == 'after-chunk-replace':
-                real_replace(source, target)
-            raise OSError('scripted chunk publication failure')
+            calls += 1
+            if calls == 2:
+                raise OSError('scripted metadata commit failure')
+            return real_write(inner, rows, trees)
 
         try:
             with monkeypatch.context() as injection:
                 if failure == 'before-apply':
                     injection.setattr(store, 'apply_journal', fail_apply)
                 else:
-                    injection.setattr(journal_store.os, 'replace', fail_replace)
+                    injection.setattr(JournalStore, '_write_plan', fail_second_batch)
                 with pytest.raises(StorageError):
                     await backend.write_note('a.md', 'recover me', create=True)
             assert len(storage.put_calls) == 1
@@ -1443,18 +1453,20 @@ class TestJournalWriteEdges:
             assert not store.processed(key)
             assert store.files_processed_count() == 0
             assert store.last_sent_key == checkpoint
-            assert store._chunk_path(chunk_id_for('recover me')).exists() == (
-                failure == 'after-chunk-replace'
+            assert (store._tree(chunk_id_for('recover me')) is not None) == (
+                failure == 'before-metadata'
             )
+            assert store.winner('a.md') is None
             await backend.refresh(force=True)
             assert (await backend.read_note('a.md'))['text'] == 'recover me'
             assert (await backend.get_meta('a.md'))['rev'] == published['_rev']
-            assert store.winner('a.md') == published
-            assert store.leaves('a.md') == [published]
+            stored = {key: value for key, value in published.items() if key != '_revisions'}
+            assert store.winner('a.md') == stored
+            assert store.leaves('a.md') == [stored]
             assert store.processed(key)
             assert store.files_processed_count() == 1
             await backend.refresh(force=True)
-            assert store.leaves('a.md') == [published]
+            assert store.leaves('a.md') == [stored]
             assert store.files_processed_count() == 1
         finally:
             await backend.close()
@@ -1485,7 +1497,8 @@ class TestJournalWriteEdges:
         await backend.write_note('b.md', 'body', create=True)
         assert (await backend.read_note('a.md'))['text'] == 'body'
         assert (await backend.read_note('b.md'))['text'] == 'body'
-        assert backend._store._chunk_path(chunk).read_bytes() == b'body'
+        assert backend._store.winner(chunk)['data'] == 'body'
+        assert len(backend._store.revisions(chunk)) == 1
 
     @pytest.mark.parametrize('operation', ['rename_note', 'copy_note'])
     async def test_binary_reference_copy_and_tombstoned_target(self, tmp_path, operation):
@@ -1500,7 +1513,8 @@ class TestJournalWriteEdges:
         assert copied['type'] == 'newnote'
         assert copied['ctime'] == original['ctime']
         assert not copied.get('deleted')
-        assert copied['_revisions']['ids'][1] == tombstone['_rev'].split('-', 1)[1]
+        # A logically deleted note is still read by devices, so its revision is extended.
+        assert backend._store.revision_chain('target.md', copied['_rev'])['ids'][1] == tombstone['_rev'].split('-', 1)[1]
         assert (await backend.read_note('target.md'))['data'] == LOGO_BYTES
 
     @pytest.mark.parametrize('operation', ['rename_note', 'copy_note'])
@@ -1529,12 +1543,23 @@ class TestJournalWriteEdges:
         assert backend._store.note_ids() == [path2id(PRIEM_PATH, nfc=True)]
         assert (await backend.read_note(PRIEM_PATH_NFD))['text'] == 'second'
 
-    @pytest.mark.parametrize('chain', [ {'start': 4, 'ids': ['parent']}, {'start': 1, 'ids': ['wrong']}, {'start': 1, 'ids': []} ])
-    async def test_bad_parent_ancestry_refused_before_put(self, tmp_path, chain):
+    @pytest.mark.parametrize('chain', [{'start': 4, 'ids': ['parent']}, {'start': 1, 'ids': ['wrong']}])
+    async def test_write_extends_the_revision_the_device_keeps(self, tmp_path, chain):
+        # The device keeps "4-parent" / "1-wrong" (parseDoc prefers _revisions),
+        # so a new revision descends from exactly that revision.
         backend, storage = await write_backend(tmp_path)
         backend._store.apply_journal('seed', {}, [nfc_note_doc('a.md', '1-parent', _revisions=chain)])
-        with pytest.raises(StorageError, match='ancestry'):
-            await backend.write_note('a.md', 'body')
+        result = await backend.write_note('a.md', 'body')
+        published = parse_journal(inflate_journal(storage.put_calls[0][1])).docs[0]
+        assert published['_revisions'] == {'start': chain['start'] + 1,
+                                           'ids': [published['_rev'].split('-', 1)[1], chain['ids'][0]]}
+        assert result['rev'] == published['_rev']
+
+    async def test_chain_without_an_element_is_refused_before_put(self, tmp_path):
+        from revision_tree import RecordRefused
+        backend, storage = await write_backend(tmp_path)
+        with pytest.raises(RecordRefused):
+            backend._store.apply_journal('seed', {}, [nfc_note_doc('a.md', '1-parent', _revisions={'start': 1, 'ids': []})])
         assert storage.put_calls == []
 
 

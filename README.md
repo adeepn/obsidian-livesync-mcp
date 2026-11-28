@@ -83,7 +83,7 @@ no local replica directory is required. [Connection details](docs/connecting-sto
 
 ### S3 journal
 
-The peer replays append-only journals into SQLite and chunk files, then appends
+The peer replays append-only journals into SQLite (chunk documents included), then appends
 new journals. Tools refresh automatically, subject to the refresh interval;
 there is no background polling. [Connection details](docs/connecting-storage.md#s3-journal),
 [refresh, publication and conflict semantics](docs/s3-journal.md).
@@ -160,9 +160,9 @@ re-read affected paths before retrying, especially non-idempotent edits.
 
 ## Local state and recovery (S3)
 
-Persist a dedicated `S3_STATE_DIR` per peer/vault. `journal.sqlite3`, WAL/SHM
-sidecars and `chunks/` form a rebuildable replica with history, not an eviction
-cache; disk can exceed vault size. Do not share it between processes.
+Persist a dedicated `S3_STATE_DIR` per peer/vault. `journal.sqlite3` with its WAL/SHM
+sidecars is a rebuildable replica with history, not an eviction cache; disk can exceed
+vault size. `chunks/` holds files of releases before chunk documents, read only. Do not share it between processes.
 Wipe clears replication tracking only; an epoch change alone preserves dedupe.
 Path identity changes archive the whole old directory under
 `<state_dir>.quarantine/<UTC timestamp and unique suffix>/state`, then rebuild.

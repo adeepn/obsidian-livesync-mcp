@@ -65,8 +65,9 @@ from journal_codec import (
     parse_journal,
     serialize_journal,
 )
-from journal_store import EncryptedNoteError, JournalStore, parse_rev
-from content_splitter import ContentSplitter, SplitterRefusal, chunk_id_for_piece
+from content_splitter import ContentSplitter, SplitterRefusal, _js_truthy, chunk_id_for_piece
+from journal_store import EncryptedNoteError, JournalStore
+from revision_tree import REVS_LIMIT, forced_ancestor, valid_rev
 from livesync_format import (
     PATH_IDENTITY_LEGACY,
     ForbiddenPathError,
@@ -706,7 +707,7 @@ class JournalBackend(TextAccessPolicy, DeviceSelection):
             )
             for doc in journal.docs:
                 validate_document_identity(doc, store.path_identity)
-            store.apply_journal(name, journal.chunks, journal.docs)
+            store.apply_journal(name, journal.chunks, journal.docs, records=journal.records)
             return journal.docs[-100:]
         except (StorageUnavailable, ReplayBudgetExceeded):
             raise
@@ -750,7 +751,11 @@ class JournalBackend(TextAccessPolicy, DeviceSelection):
         )
         metas: list[NoteMeta] = []
         for doc_id in store.note_ids():
-            doc = store.winner(doc_id)
+            try:
+                doc = store.winner(doc_id)
+            except ValueError:
+                logger.error('skipping note <omitted>: winning revision is not named by the tree')
+                continue
             if doc is None:
                 continue
             try:
@@ -790,7 +795,7 @@ class JournalBackend(TextAccessPolicy, DeviceSelection):
         """
         self._validate_read_path(path)
         store = self._require_store("get_meta")
-        doc = store.winner(self._path2id(store, path))
+        doc = self._winner(store, self._path2id(store, path))
         if doc is None or not is_note_document(doc):
             raise NoteNotFound(f"note not found: {path}")
         return self._meta_from_doc(doc)
@@ -824,7 +829,7 @@ class JournalBackend(TextAccessPolicy, DeviceSelection):
     async def read_text_note(self, path: str) -> NoteContent | None:
         self._validate_read_path(path)
         store = self._require_store('read_text_note')
-        doc = store.winner(self._path2id(store, path))
+        doc = self._winner(store, self._path2id(store, path))
         if doc is None or not is_note_document(doc):
             return None
         if doc.get('type') != 'newnote':
@@ -852,7 +857,11 @@ class JournalBackend(TextAccessPolicy, DeviceSelection):
         store = self._require_store("iterate_texts")
         candidates: list[NoteMeta] = []
         for doc_id in store.note_ids():
-            doc = store.winner(doc_id)
+            try:
+                doc = store.winner(doc_id)
+            except ValueError:
+                logger.error('skipping note <omitted>: winning revision is not named by the tree')
+                continue
             if doc is None:
                 continue
             path = doc.get("path")
@@ -927,6 +936,32 @@ class JournalBackend(TextAccessPolicy, DeviceSelection):
         return identity_path2id(path, store.path_identity)
 
     @staticmethod
+    def _winner(store: JournalStore, doc_id: str) -> dict | None:
+        """The store's winner, its refusal of an unnamed revision as a typed error."""
+        try:
+            return store.winner(doc_id)
+        except ValueError as exc:
+            raise JournalBackend._translate_decode_error(exc) from None
+
+    @staticmethod
+    def _raw(store: JournalStore, doc_id: str, path: str) -> dict | None:
+        """The object a device's deletion is put back with: a raw ``get``, its
+        refusal of a revision core refuses as a typed error."""
+        try:
+            return store.delete_base(doc_id, path)
+        except ValueError as exc:
+            raise JournalBackend._translate_decode_error(exc) from None
+
+    @staticmethod
+    def _put_base(store: JournalStore, doc_id: str, path: str) -> dict | None:
+        """The base a device's put takes its revision from, the store's
+        refusal of a document PouchDB answers with a conflict as a typed error."""
+        try:
+            return store.put_base(doc_id, path)
+        except ValueError as exc:
+            raise JournalBackend._translate_decode_error(exc) from None
+
+    @staticmethod
     def _translate_decode_error(exc: ValueError) -> StorageError:
         """Map the store's ValueError to the public storage exception.
 
@@ -976,8 +1011,12 @@ class JournalBackend(TextAccessPolicy, DeviceSelection):
         store = self._require_store("write")
         return identity_path2id(path, store.path_identity)
 
-    def _validate_identity(self, doc: dict | None) -> None:
-        if doc is not None:
+    def _validate_identity(self, doc: dict | None, doc_id: str | None = None) -> None:
+        """Refuse a document whose stored metadata names another path than its own.
+        Given ``doc_id``, a body another document left in the winner's slot (a
+        shared by-sequence slot) is not judged: the plugin takes its revision
+        and nothing else."""
+        if doc is not None and (doc_id is None or doc.get("_id") == doc_id):
             try:
                 validate_document_identity(
                     doc, self._require_store("identity").path_identity)
@@ -993,35 +1032,36 @@ class JournalBackend(TextAccessPolicy, DeviceSelection):
                 "note changed concurrently; re-read and retry"
             )
 
-    @staticmethod
-    def _next_revision(body: dict, parent: dict | None) -> dict:
-        """Extend the destination's lineage, never a copied source's lineage.
+    def _next_revision(self, body: dict, base: dict | None) -> dict:
+        """Give ``body`` a new revision below ``base``, never below a copied source.
 
-        Older imported documents may lack parentage; in that case only the
-        known winner hash can be carried forward. Never invent ancestors.
+        A device's ``put`` with ``force`` takes the base's revision for the
+        new revision's only ancestor and lets the tree merge find it
+        (pouchdb-core ``transformForceOptionToNewEditsOption``) in the tree of
+        the document written, which over a shared slot is not the document
+        the base was read from. Where that tree names it, the chain published is the one a device then reports
+        (the stemmed path from the tree's root, pouchdb-core ``get`` with
+        ``revs: true``), cut so the new revision keeps at most the device's
+        limit. Where the tree does not name it, the new revision is a root
+        above the hash the base spells, as it is on a device; the leaves
+        there stay as conflicts. An absent base starts a new tree. A revision
+        of a format core refuses, or a generation beyond 2^53 that a double
+        cannot hold the next of, is refused.
         """
         generation, ids = 0, []
-        if parent is not None:
+        if base is not None:
+            rev = base.get("_rev")
+            if not valid_rev(rev):
+                raise StorageError("existing note has an invalid revision")
+            position, parent = forced_ancestor(rev)
             try:
-                generation, parent_hash = parse_rev(parent.get("_rev"))
-            except ValueError as exc:
-                raise StorageError("existing note has an invalid revision") from exc
-            chain = parent.get("_revisions")
-            if chain is None:
-                ids = [parent_hash]
-            elif (
-                not isinstance(chain, dict)
-                or type(chain.get("start")) is not int
-                or chain["start"] != generation
-                or not isinstance(chain.get("ids"), list)
-                or not chain["ids"]
-                or len(chain["ids"]) > generation
-                or chain["ids"][0] != parent_hash
-                or not all(isinstance(item, str) and item for item in chain["ids"])
-            ):
-                raise StorageError("existing note has invalid revision ancestry")
+                reported = self._require_store("write").revision_chain(body["_id"], rev)
+            except ValueError:
+                generation, ids = position, [parent]
             else:
-                ids = chain["ids"]
+                generation, ids = reported["start"], reported["ids"][:REVS_LIMIT - 1]
+            if type(generation) is not int or not 1 <= generation < 2 ** 53:
+                raise StorageError("existing note has an invalid revision")
         result = clone_metadata(body)
         result.pop("_conflicts", None)
         result.pop("_deleted_conflicts", None)
@@ -1033,8 +1073,8 @@ class JournalBackend(TextAccessPolicy, DeviceSelection):
     def _validate_chunk_reuse(self, chunk_id: str, content: str) -> None:
         """Refuse collisions rather than overwrite a shared immutable chunk.
 
-        Compact chunks live in files; full-JSON leaf records live in SQLite.
-        Check both representations, including when both are present.
+        A chunk is held as a document in the store; a release before chunk
+        documents left some as files, which are checked as well.
         EntryManager/EntryManagerImpls.ts:133-159 shares content-addressed
         leaves; LayeredChunkManager/DatabaseWriteLayer.ts:24-49 tolerates
         duplicate IDs. Keep existing shared data intact and provide recovery.
@@ -1050,8 +1090,10 @@ class JournalBackend(TextAccessPolicy, DeviceSelection):
                     DiagnosticCode.EXISTING_SHARED_CONTENT_CHUNK_HOLDS_DIFFERENT_DATA
                 )
             doc = store.winner(chunk_id)
+            # A deleted chunk is missing on every device; never reference it again.
             if doc is not None and (
-                doc.get("e_") or doc.get("deleted")
+                doc.get("e_") or _js_truthy(doc.get("deleted"))
+                or _js_truthy(doc.get("_deleted"))
                 or doc.get("type") != "leaf" or doc.get("data") != text_encoder_string(content)
             ):
                 raise StorageError(
@@ -1092,7 +1134,7 @@ class JournalBackend(TextAccessPolicy, DeviceSelection):
                 raise StorageError("journal publication preflight failed: invalid journal") from exc
             for doc in journal.docs:
                 validate_document_identity(doc, store.path_identity)
-            store.validate_journal(journal.chunks, journal.docs)
+            store.validate_journal(journal.chunks, journal.docs, records=journal.records)
             # journalRecords.ts:70-76: compact leaves are TextEncoder-lossy;
             # metadata JSON is lossless. Validate the exact projected frame.
             expected_chunks = {chunk_id: text_encoder_string(data)
@@ -1177,7 +1219,7 @@ class JournalBackend(TextAccessPolicy, DeviceSelection):
             for doc in journal.docs:
                 validate_document_identity(doc, store.path_identity)
             store.confirm_outbound(name)
-            store.apply_journal(name, journal.chunks, journal.docs)
+            store.apply_journal(name, journal.chunks, journal.docs, records=journal.records)
             def finish_send_tracking():
                 store.last_sent_key = name
                 store.compact_outbound(name)
@@ -1252,10 +1294,16 @@ class JournalBackend(TextAccessPolicy, DeviceSelection):
         """Publish encoded chunk data through the shared write transaction."""
         store = self._require_store("write_note")
         doc_id = self._doc_id(path)
-        parent = store.winner(doc_id)
-        self._validate_identity(parent)
+        parent = self._put_base(store, doc_id, path)
+        self._validate_identity(parent, doc_id)
         self._check_expected_rev(parent, expected_rev)
-        live = parent is not None and not parent.get("deleted")
+        # A new revision always descends from the base a device's put takes
+        # its revision from, whatever its state or type: that is what a
+        # device does when a file appears over an existing entry
+        # (saving.ts:391-404, createStorageRevision → putDBEntry mode
+        # "latest"). A new tree starts only where no document is.
+        base = parent
+        live = parent is not None and is_note_document(parent)
         if live and create and not overwrite:
             raise NoteExists(f"note already exists: {path}")
         if not live and not create:
@@ -1283,20 +1331,25 @@ class JournalBackend(TextAccessPolicy, DeviceSelection):
         for chunk_id, piece in chunks:
             self._validate_chunk_reuse(chunk_id, piece)
         stamp = int(time.time() * 1000) if mtime is None else mtime
-        if parent is None:
+        # A device builds the new document from the file alone; the base gives
+        # it nothing but its revision. The note's own stored body is kept for
+        # its creation time, as nothing else says when the note was made.
+        if base is None or base["_id"] != doc_id:
             body = new_metadata_doc(
                 path, children, size,
                 doc_type, stamp, stamp,
             )
         else:
-            body = clone_metadata(parent)
+            body = clone_metadata(base)
             body.pop("deleted", None)
+            body.pop("_deleted", None)
             body.update(
                 children=children, eden={}, mtime=stamp,
                 size=size, type=doc_type,
             )
+            body.setdefault("ctime", stamp)
         body.update(_id=doc_id, path=canonical_path(path))
-        body = self._next_revision(body, parent)
+        body = self._next_revision(body, base)
         replacements = self._publish(chunks, [body], attachment_data=attachment_data)
         result = self._meta_from_doc(body)
         if replacements:
@@ -1314,27 +1367,32 @@ class JournalBackend(TextAccessPolicy, DeviceSelection):
         validate_vault_path(path)
         await self.check_selection(path)
         store = self._require_store("delete_note")
-        parent = store.winner(self._doc_id(path))
+        parent = self._raw(store, self._doc_id(path), path)
         self._check_expected_rev(parent, expected_rev)
-        if parent is None or parent.get("deleted"):
+        if parent is None or not is_note_document(parent):
             return False
         body = self._next_revision(
             soft_delete_revision(parent, int(time.time() * 1000)), parent
         )
+        # The plugin puts the fetched object as it is. Where the winner's slot
+        # holds another document's body, that object goes into the other
+        # document carrying this note's path, a record its own rebuild check
+        # rejects (pathIdentity.ts:51-55); the peer refuses it instead.
+        self._validate_identity(body)
         self._publish([], [body])
         return True
 
     def _source_doc(self, path: str) -> dict:
-        doc = self._require_store("move/copy").winner(self._doc_id(path))
+        doc = self._winner(self._require_store("move/copy"), self._doc_id(path))
         if doc is None or not is_note_document(doc):
             raise NoteNotFound(f"note not found: {path}")
         return doc
 
     def _copy_revision(self, source: dict, new_path: str, overwrite: bool) -> dict:
         doc_id = self._doc_id(new_path)
-        target = self._require_store("move/copy").winner(doc_id)
-        self._validate_identity(target)
-        if target is not None and not target.get("deleted") and not overwrite:
+        target = self._put_base(self._require_store("move/copy"), doc_id, new_path)
+        self._validate_identity(target, doc_id)
+        if target is not None and is_note_document(target) and not overwrite:
             raise NoteExists(f"note already exists: {new_path}")
         body = clone_metadata(
             source, _id=doc_id, path=canonical_path(new_path),
@@ -1418,8 +1476,11 @@ class JournalBackend(TextAccessPolicy, DeviceSelection):
         content = None
         for candidate in candidates:
             doc_id = self._path2id(store, candidate)
-            if store.winner(doc_id) is not None:
+            try:
                 content = store.read_ignore_file(doc_id)
+            except ValueError:
+                content = None
+            if content is not None:
                 break
         if content is None:
             return None

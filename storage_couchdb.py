@@ -69,7 +69,7 @@ import base64
 
 import httpx
 
-from content_splitter import ContentSplitter, SplitterRefusal, chunk_id_for_piece
+from content_splitter import ContentSplitter, SplitterRefusal, _js_truthy, chunk_id_for_piece
 from livesync_format import (
     ForbiddenPathError, EncryptedInlineChunk,
     clone_metadata, extract_inline_chunks, legacy_body,
@@ -1173,7 +1173,7 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
             chunk = docs_by_id.get(child_id)
             if (
                 chunk is None
-                or chunk.get("deleted")
+                or _js_truthy(chunk.get("deleted")) or _js_truthy(chunk.get("_deleted"))
                 or not isinstance(chunk.get("data"), str)
             ):
                 logger.warning('note <omitted>: chunk <omitted> is missing or corrupt')
@@ -1272,7 +1272,7 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
         if existing is not None:
             if (
                 not existing.get("e_")
-                and not existing.get("deleted")
+                and not _js_truthy(existing.get("deleted")) and not _js_truthy(existing.get("_deleted"))
                 and existing.get("type") == "leaf"
                 and existing.get("data") == expected_data
             ):
@@ -1293,7 +1293,7 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
             if not (
                 winner is not None
                 and not winner.get("e_")
-                and not winner.get("deleted")
+                and not _js_truthy(winner.get("deleted")) and not _js_truthy(winner.get("_deleted"))
                 and winner.get("type") == "leaf"
                 and winner.get("data") == expected_data
             ):
@@ -1319,7 +1319,7 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
         target = await self._get_doc(self._path2id(new_path), conflicts=True)
         if target is not None:
             self._refuse_unresolved_conflicts(target, new_path)
-            if not target.get("deleted") and not overwrite:
+            if not (_js_truthy(target.get("deleted")) or _js_truthy(target.get("_deleted"))) and not overwrite:
                 raise NoteExists(PublicDiagnostic(DiagnosticCode.ALREADY_EXISTS, paths=(DiagnosticPath(new_path, remote=False),)))
         return target
 
@@ -1418,7 +1418,8 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
         if doc is not None:
             self._refuse_unresolved_conflicts(doc, path)
         self._check_expected_rev(doc, path, expected_rev)
-        live = doc is not None and not doc.get("deleted")
+        # Both deletion flags with JavaScript truthiness, as the shared read predicate reads them.
+        live = doc is not None and is_note_document(doc)
         if live and create and not overwrite:
             raise NoteExists(PublicDiagnostic(DiagnosticCode.ALREADY_EXISTS, paths=(DiagnosticPath(path, remote=False),)))
         if not live and not create:
@@ -1494,7 +1495,7 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
         await self.check_selection(path)
         doc = await self._get_doc(self._path2id(path), conflicts=True)
         self._check_expected_rev(doc, path, expected_rev)
-        if doc is None or doc.get("deleted"):
+        if doc is None or not is_note_document(doc):
             return False
         self._refuse_unresolved_conflicts(doc, path)
         await self._soft_delete(doc, path, _now_ms())
@@ -1597,7 +1598,7 @@ class CouchDBBackend(TextAccessPolicy, DeviceSelection):
             doc = await self._get_doc(self._path2id(candidate))
             if doc is not None:
                 break
-        if doc is None or doc.get('deleted') or doc.get('_deleted') or doc.get('e_'):
+        if doc is None or _js_truthy(doc.get('deleted')) or _js_truthy(doc.get('_deleted')) or doc.get('e_'):
             return None
         content = await self._content_from_doc(doc)
         if content is None:

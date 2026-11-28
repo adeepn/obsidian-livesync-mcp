@@ -85,7 +85,7 @@ async def test_witness_publication_and_fresh_reader(tmp_path, kind, monkeypatch)
             reader = JournalBackend(storage, tmp_path / 'reader')
             await reader.startup_check()
             await reader.refresh()
-            leaves = [reader._store._chunk_path(c).read_text(encoding='utf-8') for c in W['ids']]
+            leaves = [reader._store.winner(c)['data'] for c in W['ids']]
             expected_pieces = [d['data'] for d in FIXTURE['vectors'][0]['decoded']]
             assert leaves == expected_pieces
             expected = ''.join(expected_pieces)

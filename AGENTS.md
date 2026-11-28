@@ -13,6 +13,7 @@ This repository is a small Python MCP server for accessing an Obsidian LiveSync 
 - `wire_encoding.py`: shared well-formed JSON serialization and journal TextEncoder surrogate projection.
 - `journal_codec.py`: LiveSync journal record parsing and serialization.
 - `journal_store.py`: local SQLite revision state and on-disk chunk cache; `state_size_bytes()` measures SQLite/sidecar and chunk bytes for backend/tool observability.
+- `revision_tree.py`: the published PouchDB receive path over journal records (chunk batch, `revsDiff` filter, batch order, `parseDoc`, merge, stemming to 100) over JSON values with ECMAScript semantics; `plan_file` plans one file and `JournalStore` stores it.
 - `object_storage.py`: S3 object storage adapter using boto3.
 - `storage_journal.py`: append-only LiveSync S3 journal storage backend.
 - `livesync_format.py`: LiveSync document/chunk codecs, device disk-ingestion document typing, path rules, and vault validation.
@@ -73,6 +74,22 @@ partitions, IDs, backend lifecycles and pre-mutation loop refusals.
 hash and outputs. `tests/test_custom_headers.py` covers config, wire and secrets.
 
 `scripts/extract_surrogate_vectors.mjs` executes pinned journal records, legacy splitting and verified published dependencies to produce `tests/fixtures/surrogate_wire_upstream.json`.
+
+`scripts/extract_winner_vectors.mjs` receives journal files through the plugin's own
+decoder and selection functions and the published PouchDB 9.0.0 database to produce
+`tests/fixtures/journal_winner_upstream.json.gz`: the IDB adapter (devices' default)
+runs unmodified on a pinned IndexedDB implementation and is the reference; the
+unmodified memory adapter is run beside it as a cross-check. The fixture also records `Number` and `parseInt` of a corpus
+of strings and the characters `Number` trims, the plugin's own write and delete
+paths over twenty starting states and the platform's base64 decode. `tests/test_journal_winner.py`
+holds the journal store to the same winner, leaves, conflicts, chain, stored bodies
+and file outcome after every file, applied or refused, every write and deletion to the
+same base, generation, ancestry and conflicts, and the port's number conversions
+to the engine's.
+`tests/test_revision_tree_fuzz.py` holds that no JSON value fails the port with
+anything but a typed refusal.
+`scripts/check_winner_mutations.py` checks that those tests catch a wrong receive path:
+each mutation changes one source fragment in memory and must fail at least one test.
 
 Tests live in `tests/` as `tests/test_<module>.py` (pytest + pytest-asyncio, auto mode via `pytest.ini`); shared doubles are `tests/fake_backend.py` (in-memory backend) and `tests/couchdb_fake.py` (HTTP-level CouchDB double). `tests/settings_oracle_inputs.py` contains deterministic input recipes only; `tests/settings_oracle.py` loads interned compressed upstream expectations from `tests/fixtures/`. `tests/fake_object_storage.py` supplies an S3 double. Keep new modules focused and colocated unless the project grows enough to justify a package layout.
 
@@ -237,7 +254,7 @@ upstream with the verified published dependencies.
 |---|---|---|
 | Offline oracle generators | `scripts/extract_*.mjs`, `scripts/probe_*.mjs` | Scratch fixture/probe outputs; `extract_selection_runtime.mjs` instead rewrites tracked vendor runtime and provenance |
 | Provenance helpers | `scripts/splitter_oracle_dependencies.mjs`, `scripts/vendor_selection.py` | Dependency helper verifies archives/imported members; vendor helper downloads exact lockfile versions and writes tracked vendor files; no vault access |
-| Offline mutation campaign | `scripts/check_splitter_mutations.py` | In-memory source mutations and isolated test runs; ignored evidence output; never rewrites production source |
+| Offline mutation campaign | `scripts/check_splitter_mutations.py`, `scripts/check_winner_mutations.py` | In-memory source mutations and isolated test runs; ignored evidence output; never rewrites production source |
 | Offline benchmarks | `scripts/benchmark_splitters.py`, `scripts/benchmark_selection.py`, `scripts/benchmark_diagnostics.py` | Synthetic local inputs; JSON on stdout; redirect evidence to ignored scratch space |
 | Upstream watcher | `scripts/check_upstream.sh` | Network GitHub reads; its CI workflow maintains drift issues; not an offline command; needs authenticated `gh` |
 | Owner acceptance | `scripts/live_check_parity.py`, `scripts/live_check_s3.py` | Real storage access; parity defaults read-only and requires explicit write/delete gates; legacy S3 helper's write-phase mutates storage without those new gates; use only the documented dedicated test vault |
@@ -246,6 +263,7 @@ Run the complete offline splitter campaign from the repository root:
 
 ```bash
 ./venv/bin/python scripts/check_splitter_mutations.py .superpowers/sdd/2026-11-23-settings-parity/d/campaign
+./venv/bin/python scripts/check_winner_mutations.py
 ```
 
 For application tests and embedding, `server.create_app(cfg)` accepts a validated

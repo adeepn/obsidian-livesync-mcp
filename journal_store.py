@@ -4,24 +4,32 @@ content-addressed on-disk chunk store (Plan B, Task 3).
 This is the journal analogue of an Obsidian client's local database: every
 journal file that :mod:`journal_codec` parses is replayed into
 
-- one SQLite database (``journal.sqlite3``) holding every metadata document
-  revision ever seen, keyed ``(doc_id, gen, rev_hash)`` so re-applying a file
-  is a no-op, plus the ``processed`` journal-name ledger and a ``meta`` table
-  (epoch, last-sent key, path identity); and
-- ``chunks/<hh>/<rest>`` files under the state directory holding chunk data
-  verbatim (UTF-8), deduplicated by existence because chunk ids are
-  content-addressed (``h:`` + hash prefix, see
-  :func:`livesync_format.chunk_id_for`).
+- one SQLite database (``journal.sqlite3``) holding every stored revision's
+  body in the slot the IndexedDB adapter stores it in (``id::rev``, read back
+  as that adapter reads it), each document's revision tree, the ``processed`` journal-name ledger
+  (re-applying a file is a no-op) and a ``meta`` table (epoch, last-sent key,
+  path identity); and
+- ``chunks/<hh>/<rest>`` files under the state directory, written by
+  releases that held a compact chunk as a file alone. They are read only
+  for a chunk no document names; a chunk received since is held as a
+  document in the database, as a device holds it, and no file is written
+  for it.
 
 Design notes:
 
-- *Leaves*: journal records carry a CouchDB-style ``_rev`` but no
-  ``_revisions`` parentage, so — exactly like upstream's
-  ``new_edits=false`` inserts into PouchDB — every stored revision is kept
-  as an independent leaf; :func:`pick_winner` (max generation, then
-  lexicographically largest hash) decides the winner. Sibling leaves from
-  concurrent devices coexist and the loser stays queryable via
-  :meth:`JournalStore.leaves`.
+- *Revision trees*: each journal file is replayed the way a device receives
+  it (:mod:`revision_tree` ports the published PouchDB code): chunk documents,
+  compact records and full-JSON ones alike, are created once, metadata is
+  filtered, sorted and merged into the
+  document's revision tree, which is stemmed to the device's limit of 100
+  revisions per path. The ``rev_trees`` table holds one tree per document and
+  the ``docs`` table every stored revision's body, keyed by the revision the
+  device keeps. The winning revision is the leaf that is not
+  revision-deleted (``_deleted``), then the one at the highest position, then
+  the greatest hash. LiveSync's ``deleted`` flag is the note's own state and
+  takes no part in the choice. Sibling leaves from concurrent devices coexist
+  and stay queryable through :meth:`JournalStore.leaves`;
+  :meth:`JournalStore.revisions` lists every stored revision.
 - *Epoch resets*: the epoch is ``protocolVersion:pbkdf2salt`` from the
   journal sync parameters. The backend confirms wipes against send history;
   resets clear only processed-journal and last-sent tracking. Local revision
@@ -31,8 +39,9 @@ Design notes:
   reopening with a different mode quarantines the whole old state directory
   beside it before starting fresh. IDs are never mixed or rewritten.
 
-The store uses only the standard library; identity quarantine is a sibling
-of ``state_dir`` so old documents and chunks remain recoverable.
+The store and :mod:`revision_tree` use only the standard library; identity
+quarantine is a sibling of ``state_dir`` so old documents and chunks remain
+recoverable.
 """
 
 from __future__ import annotations
@@ -51,6 +60,20 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
+from content_splitter import _js_truthy
+from revision_tree import (
+    RecordRefused,
+    collect_conflicts,
+    collect_leaves,
+    is_deleted,
+    plan_file,
+    _DATA_WORDS,
+    _RESERVED_WORDS,
+    revision_chain,
+    valid_rev,
+    winning_rev,
+    write_batch,
+)
 from livesync_format import (
     PATH_IDENTITY_CASE_SENSITIVE,
     PATH_IDENTITY_NFC_CASE_SENSITIVE,
@@ -78,9 +101,6 @@ _META_PATH_IDENTITY = "path_identity"
 _META_EPOCH = "epoch"
 _META_LAST_SENT_KEY = "last_sent_key"
 
-# CouchDB/LiveSync revision strings: "<generation>-<hash>".
-_REV_RE = re.compile(r"^(\d+)-(.+)$")
-
 # Accept bounded historical IDs and standard SHA-1 base64 IDs. Upstream:
 # commonlib@484c164450d61deb2e301582b60cb9b5f9fa977f
 # managers/HashManager/PureJSHashManager.ts:77-87.
@@ -90,6 +110,158 @@ _ENCRYPTED_MESSAGE = (
     "note {path!r} uses end-to-end encryption, "
     "which this server does not support"
 )
+
+# A revision name may hold a lone UTF-16 unit: a hash that is one, or a string
+# used as `ids`, whose characters become the hashes. SQLite TEXT is UTF-8 and
+# cannot hold it. Such a key is stored with its units spelled out behind a
+# marker; every other key is stored as it is, so state written before is read
+# unchanged. The name itself is kept as the device spells it.
+_KEY_ESCAPED = "\x00units:"
+
+
+def _db_key(text: str) -> str:
+    """A document, revision or digest name as SQLite can hold it."""
+    if text.startswith(_KEY_ESCAPED) or any(0xD800 <= ord(char) <= 0xDFFF for char in text):
+        body = text.replace("\\", "\\\\")
+        body = "".join(f"\\u{ord(char):04x}" if 0xD800 <= ord(char) <= 0xDFFF else char
+                       for char in body)
+        return _KEY_ESCAPED + body
+    return text
+
+
+def _db_unkey(text: str) -> str:
+    """The name :func:`_db_key` stored."""
+    if not text.startswith(_KEY_ESCAPED):
+        return text
+    body = text[len(_KEY_ESCAPED):]
+    units, index = [], 0
+    while index < len(body):
+        if body[index] == "\\":
+            if body[index + 1] == "\\":
+                units.append("\\")
+                index += 2
+            elif body[index + 1] == "u":
+                units.append(chr(int(body[index + 2:index + 6], 16)))
+                index += 6
+            else:
+                raise ValueError("corrupt journal state key")
+        else:
+            units.append(body[index])
+            index += 1
+    return "".join(units)
+
+
+# A chunk this state holds as a file only, written by releases that did not
+# hold chunk documents: held for admission, as the device holds it.
+_CACHE_ONLY = object()
+
+
+def _replay_changed(record: dict, body: dict) -> bool:
+    """Whether replaying a legacy record stored something else than the record
+    itself. What the new state keeps elsewhere is not a change: the identity
+    of a document lives in its slot's key, its chain in its tree, and a
+    revision's deletion in its tree, from where the body takes its stamp.
+    Every other key counts on both sides, a stub as it was written no less
+    than attachment data made a stub of."""
+    def kept(value, dropped):
+        return {key: item for key, item in value.items() if key not in dropped}
+
+    elsewhere = _RESERVED_WORDS - _DATA_WORDS
+    return kept(record, elsewhere) != kept(body, {"_id", "_rev", "_deleted"})
+
+
+class UnsupportedStateLayout(Exception):
+    """A state directory no release wrote; it is kept beside a fresh one."""
+
+
+class _Slots:
+    """The stores the IndexedDB adapter's transaction writes to, for
+    :func:`revision_tree.write_batch`: the by-sequence bodies, the attachment
+    mappings and the attachment data. Records which bodies were written and
+    which slots were emptied."""
+
+    def __init__(self, conn):
+        self._conn = conn
+        self.bodies: dict = {}
+        self.removed: set = set()
+
+    @property
+    def written(self) -> set:
+        return set(self.bodies)
+
+    def merge(self, other: "_Slots") -> None:
+        self.bodies.update(other.bodies)
+        self.removed |= other.removed
+
+    def slot(self, doc_id, rev) -> str:
+        return _db_key(_seq_key(doc_id, rev))
+
+    def stored(self, doc_id, rev):
+        key = self.slot(doc_id, rev)
+        found = self._conn.execute("SELECT 1 FROM docs WHERE seq_key = ?", (key,)).fetchone()
+        return key if found else None
+
+    def store_body(self, doc_id, rev, body: dict) -> None:
+        key = self.slot(doc_id, rev)
+        self._conn.execute(
+            "INSERT OR REPLACE INTO docs(seq_key, doc_id, rev, doc_json) VALUES (?, ?, ?, ?)",
+            (key, _db_key(doc_id), _db_key(rev), _dump_doc(body)),
+        )
+        self._conn.execute("DELETE FROM text_verdicts WHERE doc_id=?", (_db_key(doc_id),))
+        self.bodies[(doc_id, rev)] = body
+
+    def drop_body(self, key: str) -> None:
+        self._conn.execute("DELETE FROM docs WHERE seq_key = ?", (key,))
+        self.removed.add(key)
+
+    def following(self, key: str, after):
+        """The mapping of the slot ``key`` stored after position ``after``, as
+        ``(position, digest)``; the store holds mappings in the order they were
+        put in, as the adapter's does (an auto-increment key)."""
+        row = self._conn.execute(
+            "SELECT rowid, digest FROM attachment_digests WHERE seq_key = ? AND rowid > ?"
+            " ORDER BY rowid LIMIT 1", (key, after if after is not None else 0)).fetchone()
+        return None if row is None else (row[0], _db_unkey(row[1]))
+
+    def map(self, digest: str, key: str) -> None:
+        self._conn.execute(
+            "INSERT OR IGNORE INTO attachment_digests(digest, seq_key) VALUES (?, ?)",
+            (_db_key(digest), key))
+
+    def unmap(self, digest: str, key: str) -> None:
+        self._conn.execute("DELETE FROM attachment_digests WHERE digest = ? AND seq_key = ?",
+                           (_db_key(digest), key))
+
+    def mapped(self, digest: str) -> int:
+        return self._conn.execute("SELECT COUNT(*) FROM attachment_digests WHERE digest = ?",
+                                  (_db_key(digest),)).fetchone()[0]
+
+    def hold(self, digest: str) -> None:
+        self._conn.execute("INSERT OR IGNORE INTO attachment_data(digest) VALUES (?)", (_db_key(digest),))
+
+    def held(self, digest: str) -> bool:
+        return self._conn.execute("SELECT 1 FROM attachment_data WHERE digest = ?",
+                                  (_db_key(digest),)).fetchone() is not None
+
+    def forget(self, digest: str) -> None:
+        self._conn.execute("DELETE FROM attachment_data WHERE digest = ?", (_db_key(digest),))
+
+
+def _seq_key(doc_id: str, rev: str) -> str:
+    """The by-sequence slot the IndexedDB adapter stores a body in
+    (pouchdb-adapter-idb 9.0.0 `lib/index.js:472`). Two documents whose id
+    and revision spell one slot share it, as they do on a device."""
+    return doc_id + "::" + rev
+
+
+def _decoded(body: dict, seq_key: str) -> dict:
+    """The body as that adapter hands it back (``decodeDoc``, `lib/index.js:75-83`):
+    it stores no ``_id`` and ``_rev`` and reads both off the slot's key, cut at
+    the key's last colon. A revision that holds a colon does not survive that."""
+    cut = seq_key.rfind(":")
+    body["_id"] = seq_key[:max(cut - 1, 0)]
+    body["_rev"] = seq_key[cut + 1:]
+    return body
 
 
 class NoteDecodeError(ValueError):
@@ -109,14 +281,20 @@ class EncryptedNoteError(NoteDecodeError):
                 paths=(DiagnosticPath(path, remote=True),) if path is not None else ()))
 
 
-_SCHEMA_V1 = """
+_CREATE_REVISIONS = """
 CREATE TABLE IF NOT EXISTS docs (
+    seq_key TEXT NOT NULL PRIMARY KEY,
     doc_id TEXT NOT NULL,
-    gen INTEGER NOT NULL,
-    rev_hash TEXT NOT NULL,
-    doc_json TEXT NOT NULL,
-    PRIMARY KEY (doc_id, gen, rev_hash)
+    rev TEXT NOT NULL,
+    doc_json TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS rev_trees (
+    doc_id TEXT PRIMARY KEY,
+    tree TEXT NOT NULL
+);
+"""
+
+_SCHEMA_V1 = _CREATE_REVISIONS + """
 CREATE TABLE IF NOT EXISTS processed (
     name TEXT NOT NULL PRIMARY KEY
 );
@@ -129,39 +307,15 @@ CREATE TABLE IF NOT EXISTS meta (
     key TEXT NOT NULL PRIMARY KEY,
     value TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS attachment_digests (
+    digest TEXT NOT NULL,
+    seq_key TEXT NOT NULL,
+    PRIMARY KEY (digest, seq_key)
+);
+CREATE TABLE IF NOT EXISTS attachment_data (
+    digest TEXT NOT NULL PRIMARY KEY
+);
 """
-
-
-def parse_rev(rev: object) -> tuple[int, str]:
-    """Split a revision ``"<gen>-<hash>"`` into ``(gen, hash)``.
-
-    Raises ``ValueError`` for anything else (the journal codec guarantees a
-    non-empty string, but not the CouchDB shape).
-    """
-    match = _REV_RE.match(rev) if isinstance(rev, str) else None
-    if match is None:
-        raise ValueError(f"invalid revision {rev!r}; expected '<gen>-<hash>'")
-    generation = int(match.group(1))
-    if not 0 <= generation <= 2**63 - 1:
-        raise ValueError("revision generation exceeds SQLite INTEGER range")
-    return generation, match.group(2)
-
-
-def pick_winner(leaves: list[dict]) -> dict | None:
-    """Deterministic winner among leaf revisions.
-
-    Highest generation wins; equal generations break on the
-    lexicographically *largest* hash. An empty list returns ``None``; a
-    malformed ``_rev`` raises ``ValueError``.
-    """
-    if not leaves:
-        return None
-
-    def rank(doc: dict) -> tuple[int, str]:
-        gen, rev_hash = parse_rev(doc.get("_rev"))
-        return gen, rev_hash
-
-    return max(leaves, key=rank)
 
 
 def _private_directory(path: Path) -> None:
@@ -250,17 +404,10 @@ class JournalStore:
         stored_identity = self._meta_get(_META_PATH_IDENTITY) if has_meta else None
         if stored_identity is not None and stored_identity != path_identity:
             self._conn.close()
-            quarantine_root = self.state_dir.with_name(self.state_dir.name + ".quarantine")
-            if quarantine_root.is_symlink():
-                raise StorageError("quarantine directory is a symlink; refusing to move state")
-            _private_directory(quarantine_root)
-            # Reserve a unique sibling destination; never overwrite an archive.
-            stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ-")
-            destination = Path(tempfile.mkdtemp(prefix=stamp, dir=quarantine_root))
-            # If the move fails, retain both the source and reservation.
-            self.state_dir.rename(destination / "state")
-            archived = destination / "state"
-            logger.warning('journal path identity changed <omitted> -> <omitted>; old state quarantined at <omitted>. To restore: stop all peers using this state directory, move the current state aside, move <omitted> back to <omitted> and configure identity <omitted>')
+            self._quarantine(
+                'journal path identity changed <omitted> -> <omitted>; old state quarantined at '
+                '<omitted>. To restore: stop all peers using this state directory, move the '
+                'current state aside, move <omitted> back to <omitted> and configure identity <omitted>')
             self.__init__(self.state_dir, path_identity,
                           text_verdict_cache_entries=text_verdict_cache_entries)
             return
@@ -284,92 +431,270 @@ class JournalStore:
         self._conn.execute("""CREATE TABLE IF NOT EXISTS selection_verdicts (
             cache_key TEXT PRIMARY KEY, rules TEXT, verdict TEXT, used INTEGER)""")
         self._conn.commit()
+        try:
+            self._rebuild_legacy_state()
+        except (RecordRefused, UnsupportedStateLayout) as exc:
+            # A device refuses a record this state was built from, or no release wrote
+            # this layout: keep it beside a fresh one, which the next replay builds
+            # exactly as the device does.
+            self._conn.close()
+            self._quarantine('journal state holds a record a device refuses; it was quarantined at '
+                             '<omitted> and will be rebuilt from the journal'
+                             if isinstance(exc, RecordRefused) else
+                             'journal state was written by an unreleased build; it was quarantined at '
+                             '<omitted> and will be rebuilt from the journal')
+            self.__init__(self.state_dir, path_identity,
+                          text_verdict_cache_entries=text_verdict_cache_entries)
+            return
 
         stored_identity = self._meta_get(_META_PATH_IDENTITY)
         if stored_identity is None:
             self._meta_set(_META_PATH_IDENTITY, path_identity)
 
+    def _quarantine(self, message: str) -> None:
+        """Move the whole state directory aside, never over an earlier archive."""
+        quarantine_root = self.state_dir.with_name(self.state_dir.name + ".quarantine")
+        if quarantine_root.is_symlink():
+            raise StorageError("quarantine directory is a symlink; refusing to move state")
+        _private_directory(quarantine_root)
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ-")
+        destination = Path(tempfile.mkdtemp(prefix=stamp, dir=quarantine_root))
+        # If the move fails, retain both the source and reservation.
+        self.state_dir.rename(destination / "state")
+        logger.warning(message)
+
+    def _rebuild_legacy_state(self) -> None:
+        """Rebuild trees for state written before files were replayed as a device does.
+
+        Earlier releases stored every record under its ``_rev`` in arrival
+        order. Each one is replayed again, on its own, through the same
+        planning a journal file gets; a record that is written is stored under
+        the revision the device keeps. Everything else keeps its body as
+        history. No body the old state held is dropped: a row whose body no
+        stored revision holds any more, because a later row's replay took its
+        place or stemmed its revision out of the tree, is kept as it was in
+        ``legacy_bodies``; so is a row whose replay stored something else
+        than the record, attachment data made a stub of. The result is exact
+        for well-formed histories; an arrival order that only stemming
+        distinguishes is rebuilt by a full replay after a wipe. A layout no
+        release wrote raises :class:`UnsupportedStateLayout`.
+        """
+        # One explicit transaction: the driver's implicit one excludes DDL, a
+        # crash between the rename and the copy must leave the old table in
+        # place, and a second process opening the same directory meanwhile
+        # waits here and then finds the migrated schema.
+        self._conn.execute("BEGIN IMMEDIATE")
+        try:
+            columns = {row[1] for row in self._conn.execute("PRAGMA table_info(docs)")}
+            if "seq_key" in columns:
+                self._conn.execute("COMMIT")
+                return
+            if "rev" in columns:
+                # A development build between the releases stored bodies by revision.
+                raise UnsupportedStateLayout
+            self._conn.execute("ALTER TABLE docs RENAME TO docs_legacy")
+            for statement in _CREATE_REVISIONS.split(";"):
+                if statement.strip():
+                    self._conn.execute(statement)
+            trees: dict = {}
+            rows = self._conn.execute(
+                "SELECT rowid, doc_id, gen, rev_hash, doc_json FROM docs_legacy ORDER BY rowid"
+            ).fetchall()
+            # Which by-sequence slot, as it is spelled in the table, holds whose body, so
+            # that a legacy row whose body is overwritten, compacted or never kept is kept
+            # aside before the old table goes.
+            holder: dict = {}
+            held: dict = {}
+            archived: set = set()
+
+            def keep(key, index):
+                previous = holder.get(key)
+                if previous is not None and previous != index:
+                    held[previous].discard(key)
+                    if not held[previous] and previous not in archived:
+                        archive(previous)
+                holder[key] = index
+                held.setdefault(index, set()).add(key)
+
+            def drop(key):
+                # A merge stemmed the revision of that slot away: the body it
+                # held is gone, as it is on a device.
+                previous = holder.pop(key, None)
+                if previous is not None:
+                    held[previous].discard(key)
+                    if not held[previous] and previous not in archived:
+                        archive(previous)
+
+            def archive(index):
+                if not archived:
+                    self._conn.execute("""CREATE TABLE legacy_bodies (
+    doc_id TEXT NOT NULL,
+    gen INTEGER NOT NULL,
+    rev_hash TEXT NOT NULL,
+    doc_json TEXT NOT NULL,
+    PRIMARY KEY (doc_id, gen, rev_hash)
+)""")
+                archived.add(index)
+                _, old_id, old_gen, old_hash, old_json = rows[index]
+                self._conn.execute(
+                    "INSERT OR REPLACE INTO legacy_bodies(doc_id, gen, rev_hash, doc_json)"
+                    " VALUES (?, ?, ?, ?)", (old_id, old_gen, old_hash, old_json))
+
+            for index, (_, doc_id, gen, rev_hash, doc_json) in enumerate(rows):
+                doc = json.loads(doc_json)
+                # A stub may name an attachment a row replayed just before stored.
+                plan = plan_file([doc], trees.get, has_attachment=self._has_attachment)
+                if plan.failed:
+                    raise plan.refusal
+                kept = self._write_plan(plan.chunk_rows, plan.chunk_trees)
+                kept.merge(self._write_plan(plan.rows, plan.trees))
+                trees.update(plan.chunk_trees)
+                trees.update(plan.trees)
+                for doc_id_written, rev_written in kept.written:
+                    keep(_db_key(_seq_key(doc_id_written, rev_written)), index)
+                for key in kept.removed:
+                    drop(key)
+                name = f"{gen}-{rev_hash}"
+                stored = kept.bodies.get((doc_id, name))
+                original = _db_key(_seq_key(doc_id, name))
+                if stored is None:
+                    if original not in holder:
+                        self._conn.execute(
+                            "INSERT OR IGNORE INTO docs(seq_key, doc_id, rev, doc_json) VALUES (?, ?, ?, ?)",
+                            (original, _db_key(doc_id), _db_key(name), doc_json),
+                        )
+                        keep(original, index)
+                elif _replay_changed(doc, stored):
+                    archive(index)
+                if not held.get(index) and index not in archived:
+                    archive(index)
+            self._conn.execute("DROP TABLE docs_legacy")
+            for doc_id, tree in trees.items():
+                self._conn.execute(
+                    "INSERT OR REPLACE INTO rev_trees(doc_id, tree) VALUES (?, ?)",
+                    (_db_key(doc_id), json.dumps(tree)),
+                )
+        except BaseException:
+            self._conn.execute("ROLLBACK")
+            raise
+        self._conn.execute("COMMIT")
+
+    def _tree(self, doc_id: str):
+        row = self._conn.execute(
+            "SELECT tree FROM rev_trees WHERE doc_id = ?", (_db_key(doc_id),)
+        ).fetchone()
+        return None if row is None else json.loads(row[0])
+
+    def _body(self, doc_id: str, rev: str) -> dict | None:
+        """The body stored in the by-sequence slot ``doc_id::rev``, read as the
+        IndexedDB adapter reads it, or ``None`` when nothing is stored there."""
+        row = self._conn.execute(
+            "SELECT seq_key, doc_json FROM docs WHERE seq_key = ?",
+            (_db_key(_seq_key(doc_id, rev)),),
+        ).fetchone()
+        if row is None:
+            return None
+        return _decoded(json.loads(row[1]), _db_unkey(row[0]))
+
+    def _write_plan(self, rows, trees) -> _Slots:
+        """Store one planned batch in the order a device's transaction stores
+        it (:func:`revision_tree.write_batch`: the records of every document
+        start together, and a shared slot holds the body stored last in the
+        adapter's request order), then the trees. Returns what was written:
+        the bodies by ``(doc_id, rev)`` and the by-sequence slots emptied.
+        """
+        slots = _Slots(self._conn)
+        write_batch(rows, slots)
+        for doc_id, tree in trees.items():
+            self._conn.execute(
+                "INSERT OR REPLACE INTO rev_trees(doc_id, tree) VALUES (?, ?)",
+                (_db_key(doc_id), json.dumps(tree)),
+            )
+        return slots
+
     # -- Journal replay ------------------------------------------------------
 
     def apply_journal(
-        self, name: str, chunks: dict[str, str], docs: list[dict]
+        self, name: str, chunks: dict[str, str], docs: list[dict],
+        records: list[dict] | None = None,
     ) -> None:
-        """Replay one parsed journal file; idempotent per ``name``.
+        """Replay one parsed journal file the way a device receives it; idempotent per ``name``.
 
-        Stage and install content-addressed chunks before committing metadata.
-        A failed install cannot expose a revision whose children are missing.
-        Failed transactions may leave harmless orphan chunks, reused on retry.
-        Mark processed only after both chunks and metadata are installed.
+        ``records`` is the file's documents in order, the documents the decoder
+        makes of compact chunk records included: the chunk batch is taken from
+        it, so a chunk the state holds is kept as a device keeps it and two
+        records for one chunk fail the file. Without ``records``, ``docs`` are
+        the records and ``chunks`` the compact ones ahead of them. The records
+        are planned (:func:`revision_tree.plan_file`) and stored in two
+        commits, the chunk batch and then the metadata batch, as a device
+        commits them before it judges the file: a refused metadata batch
+        leaves the chunk batch in place, a batch with one refused record keeps
+        its other records, and the file stays unprocessed for the retry.
+        Chunk documents live in the database as every document does; no file
+        is written for them. Raises :class:`~revision_tree.RecordRefused`
+        where a device fails the file.
         """
         if self.processed(name):
             return
-        staged: list[tuple[Path, Path]] = []
+        if records is None:
+            records = [
+                {"_id": chunk_id, "data": data, "type": "leaf", "_rev": ""}
+                for chunk_id, data in (chunks or {}).items()
+            ] + list(docs or [])
+        plan = self._plan(list(records))
+        # Each batch is stored as a device commits it, before the file is
+        # judged: a refused metadata batch holds nothing here, a batch with
+        # one refused record holds the other records.
+        with self._conn:
+            self._write_plan(plan.chunk_rows, plan.chunk_trees)
+        with self._conn:
+            self._write_plan(plan.rows, plan.trees)
+        if plan.failed:
+            raise plan.refusal
+        self.finish_bookkeeping(lambda: self.mark_processed(name))
+
+    def _cache_only(self, doc_id: str) -> bool:
+        """A chunk this state holds as a file and no document."""
         try:
-            for chunk_id, data in (chunks or {}).items():
-                try:
-                    chunk_file = self._chunk_path(chunk_id)
-                except ValueError:
-                    logger.warning('skipping invalid journal chunk identifier <omitted>')
-                    continue
-                if chunk_file.exists():
-                    continue
-                _private_directory(chunk_file.parent)
-                with tempfile.NamedTemporaryFile(
-                    dir=chunk_file.parent, prefix=".staged-", delete=False
-                ) as stream:
-                    tmp_file = Path(stream.name)
-                    staged.append((tmp_file, chunk_file))
-                    stream.write(data.encode("utf-8"))
-            for tmp_file, chunk_file in staged:
-                os.replace(tmp_file, chunk_file)
-            with self._conn:
-                for doc in docs or []:
-                    self._insert_doc(name, doc)
-            self.finish_bookkeeping(lambda: self.mark_processed(name))
-        finally:
-            for tmp_file, _ in staged:
-                tmp_file.unlink(missing_ok=True)
+            return self._chunk_path(doc_id).is_file()
+        except ValueError:
+            return False
 
-    def _insert_doc(self, name: str, doc: object) -> None:
-        gen, rev_hash = self._validate_doc(name, doc)
-        doc_id = doc["_id"]
-        self._conn.execute("DELETE FROM text_verdicts WHERE doc_id=?", (doc_id,))
-        self._conn.execute(
-            "INSERT OR IGNORE INTO docs(doc_id, gen, rev_hash, doc_json) "
-            "VALUES (?, ?, ?, ?)",
-            (doc_id, gen, rev_hash, _dump_doc(doc)),
-        )
+    def _plan(self, records: list[dict]):
+        """Plan the file's records against the stored state, reading each tree once."""
+        trees: dict = {}
 
-    def validate_journal(self, chunks: dict[str, str], docs: list[dict]) -> None:
-        """Check deterministic store constraints without changing local state."""
-        for chunk_id, data in chunks.items():
+        def tree_of(doc_id):
+            if doc_id not in trees:
+                trees[doc_id] = self._tree(doc_id)
+                if trees[doc_id] is None and self._cache_only(doc_id):
+                    trees[doc_id] = _CACHE_ONLY
+            return trees[doc_id]
+
+        try:
+            return plan_file(records, tree_of, has_attachment=self._has_attachment)
+        except RecordRefused as refused:
+            raise RecordRefused(refused.reason, refused.stage) from None
+
+    def _has_attachment(self, digest) -> bool:
+        # verifyAttachment reads the attachment store: a stub may only name an
+        # attachment whose data an earlier batch stored and no compaction dropped.
+        return isinstance(digest, str) and self._conn.execute(
+            "SELECT 1 FROM attachment_data WHERE digest = ?", (_db_key(digest),)
+        ).fetchone() is not None
+
+    def validate_journal(
+        self, chunks: dict[str, str], docs: list[dict], records: list[dict] | None = None
+    ) -> None:
+        """Check that a publication replays as a device receives it; change nothing."""
+        for chunk_id, data in (chunks or {}).items():
             self._chunk_path(chunk_id)
             data.encode("utf-8")
         for doc in docs:
-            self._validate_doc("publication", doc)
             _dump_doc(doc)
-
-    @staticmethod
-    def _validate_doc(name: str, doc: object) -> tuple[int, str]:
-        if not isinstance(doc, dict):
-            raise ValueError(f"{name}: journal document must be a JSON object")
-        doc_id = doc.get("_id")
-        rev = doc.get("_rev")
-        if not isinstance(doc_id, str) or not doc_id:
-            raise ValueError(
-                f"{name}: journal document identifier must be a non-empty string"
-            )
-        if not isinstance(rev, str) or not rev:
-            raise ValueError(
-                f"{name}: journal document {doc_id!r} needs a non-empty _rev"
-            )
-        try:
-            gen, rev_hash = parse_rev(rev)
-        except ValueError:
-            raise ValueError(
-                f"{name}: journal document {doc_id!r} has invalid revision {rev!r}"
-            ) from None
-        return gen, rev_hash
+        plan = self._plan(list(docs) if records is None else list(records))
+        if plan.failed:
+            raise plan.refusal
 
     def _chunk_path(self, chunk_id: str) -> Path:
         if not isinstance(chunk_id, str) or _CHUNK_ID_RE.fullmatch(chunk_id) is None:
@@ -512,40 +837,167 @@ class JournalStore:
     # -- Revision trees ------------------------------------------------------
 
     def winner(self, doc_id: str) -> dict | None:
-        """The winning revision document for ``doc_id``, or ``None``."""
-        docs = self._stored_docs(doc_id)
-        if not docs:
+        """The body of the winning revision for ``doc_id``, or ``None``.
+
+        The body carries ``_deleted`` exactly when the tree marks the winner
+        revision-deleted, and its attachments as stubs, as a device serves a
+        document; LiveSync's ``deleted`` flag stays as stored. ``None`` when
+        no body is stored under the winning revision's name, as a device's
+        ``get`` reports it missing. A revision-deleted winner carries
+        ``_deleted``; a live winner's body keeps the flag it was stored with,
+        which over a shared slot is another document's. Raises
+        :class:`NoteDecodeError` when a body is stored but the tree does not
+        name the revision it spells, the one the IndexedDB adapter read off
+        the slot's key: a device's ``get`` with ``revs: true`` fails on such
+        a revision, so it is not served here under any name.
+        """
+        tree = self._tree(doc_id)
+        if tree is None:
             return None
-        return pick_winner(docs)
+        rev = winning_rev(tree)
+        body = self._body(doc_id, rev)
+        if body is None:
+            # A device's get looks the winning revision up by name and reports
+            # it missing before it reads the tree.
+            logger.warning('journal state lacks the body of a winning revision')
+            return None
+        if is_deleted(tree, rev):
+            # A device's get answers "deleted" from the tree before it reads
+            # the body's revision.
+            return _served(body, True)
+        # The body's revision is the one the IndexedDB adapter read off the
+        # slot's key; the chain is looked up for it, as a device's get does.
+        _require_named_revision(tree, body["_rev"], _display_path(body, doc_id))
+        return _served(body, False)
+
+    def raw_get(self, doc_id: str) -> dict | None:
+        """The body a raw ``get`` returns, which the plugin reads the base of
+        a file or a deletion with (`EntryManagerImpls.ts:295, 746`), or
+        ``None`` where that ``get`` reports the document missing: no document,
+        a winner the tree marks revision-deleted, or no body in the winner's
+        slot.
+
+        The body is the one the slot holds, whichever document stored it,
+        with the identity the IndexedDB adapter read off the slot's key and
+        the flags it was stored with; the tree of the document asked for is
+        not read into it.
+        """
+        tree = self._tree(doc_id)
+        if tree is None:
+            return None
+        rev = winning_rev(tree)
+        if is_deleted(tree, rev):
+            return None
+        body = self._body(doc_id, rev)
+        return None if body is None else _with_stubs(body)
+
+    def delete_base(self, doc_id: str, path: str) -> dict | None:
+        """The object a device's deletion is put back with: the body of a
+        raw ``get``. Raises :class:`NoteDecodeError` for a revision core
+        refuses: the plugin hands that body to ``put``, which fails before
+        anything is written.
+        """
+        base = self.raw_get(doc_id)
+        if base is not None and not valid_rev(base["_rev"]):
+            raise NoteDecodeError(PublicDiagnostic(
+                DiagnosticCode.IS_CORRUPT_REVISION_NOT_NAMED_BY_THE_TREE,
+                paths=(DiagnosticPath(path, remote=True),)))
+        return base
+
+    def put_base(self, doc_id: str, path: str) -> dict | None:
+        """The base a file is put over on a device, or ``None`` where no
+        document is and the write starts a tree.
+
+        That is the body a raw ``get`` hands to the ``put``
+        (`EntryManagerImpls.ts:295`), with the revision core refuses refused
+        as a deletion's is. Where that ``get`` reports the document missing
+        and one is, the ``put`` goes without a revision and PouchDB attaches
+        it below a revision-deleted winner the tree names
+        (pouchdb-adapter-utils ``updateDoc``): the winner is returned for
+        that, its stored body if one is. Any other such document makes
+        PouchDB answer the write with a conflict, and raises
+        :class:`NoteDecodeError` here, so that nothing is published over it.
+        """
+        tree = self._tree(doc_id)
+        if tree is None:
+            return None
+        base = self.delete_base(doc_id, path)
+        if base is not None:
+            return base
+        rev = winning_rev(tree)
+        if _named(tree, rev):
+            if is_deleted(tree, rev):
+                # A raw get reports this winner missing, so the put names no
+                # revision of the body's; PouchDB takes the winner's.
+                base = _served(self._body(doc_id, rev) or {"_id": doc_id}, True)
+                base["_id"], base["_rev"] = doc_id, rev
+                return base
+            raise NoteDecodeError(PublicDiagnostic(
+                DiagnosticCode.IS_CORRUPT_THE_WINNING_REVISION_HAS_NO_STORED_BODY,
+                paths=(DiagnosticPath(path, remote=True),)))
+        raise NoteDecodeError(PublicDiagnostic(
+            DiagnosticCode.IS_CORRUPT_REVISION_NOT_NAMED_BY_THE_TREE,
+            paths=(DiagnosticPath(path, remote=True),)))
 
     def leaves(self, doc_id: str) -> list[dict]:
-        """All stored leaves for ``doc_id``, ascending ``(gen, hash)``.
+        """Leaf revision bodies for ``doc_id``, highest position first.
 
-        Journal records carry no revision parentage, so every stored
-        revision is an independent leaf (see the module docstring); losing
-        siblings from concurrent devices remain queryable here.
+        Every branch a device still holds, in the order of PouchDB's
+        ``collectLeaves``: losing siblings of concurrent devices and revision
+        tombstones included.
         """
-        return self._stored_docs(doc_id)
+        tree = self._tree(doc_id)
+        if tree is None:
+            return []
+        return [self._leaf(doc_id, rev, deleted) for rev, deleted in collect_leaves(tree)]
 
-    def _stored_docs(self, doc_id: str) -> list[dict]:
+    def conflicts(self, doc_id: str) -> list[dict]:
+        """Live leaves other than the winner, in leaf order."""
+        tree = self._tree(doc_id)
+        if tree is None:
+            return []
+        return [self._leaf(doc_id, rev, False) for rev in collect_conflicts(tree)]
+
+    def revisions(self, doc_id: str) -> list[dict]:
+        """Every stored revision for ``doc_id`` in arrival order."""
         rows = self._conn.execute(
-            "SELECT doc_json FROM docs WHERE doc_id = ? ORDER BY gen, rev_hash",
-            (doc_id,),
-        ).fetchall()
-        return [json.loads(row[0]) for row in rows]
+            "SELECT seq_key, doc_json FROM docs WHERE doc_id = ? ORDER BY rowid", (_db_key(doc_id),)
+        )
+        return [_decoded(json.loads(stored), _db_unkey(seq_key)) for seq_key, stored in rows]
+
+    def revision_chain(self, doc_id: str, rev: str) -> dict:
+        """The ``_revisions`` a device reports for ``rev``; see
+        :func:`revision_tree.revision_chain`."""
+        tree = self._tree(doc_id)
+        if tree is None:
+            raise ValueError("revision is not in the tree")
+        return revision_chain(tree, rev)
+
+    def _leaf(self, doc_id: str, rev: str, deleted: bool) -> dict:
+        body = self._body(doc_id, rev) or {"_id": doc_id, "_rev": rev}
+        return _served(body, deleted)
 
     # -- Note reads ----------------------------------------------------------
 
     def note_ids(self) -> list[str]:
-        """Sorted ids of live notes: note-classified winners, no tombstones."""
+        """Sorted ids of live notes: documents whose winning revision is a live note."""
         result: list[str] = []
-        for (doc_id,) in self._conn.execute(
-            "SELECT DISTINCT doc_id FROM docs ORDER BY doc_id"
+        for stored_id, stored in self._conn.execute(
+            "SELECT doc_id, tree FROM rev_trees ORDER BY doc_id"
         ):
-            doc = self.winner(doc_id)
-            if doc is not None and is_note_document(doc):
+            doc_id = _db_unkey(stored_id)
+            if doc_id.startswith("h:"):
+                # A chunk document is never a note (journalReceive.ts:8-15).
+                continue
+            tree = json.loads(stored)
+            rev = winning_rev(tree)
+            if is_deleted(tree, rev):
+                continue
+            body = self._body(doc_id, rev)
+            if body is not None and is_note_document(body):
                 result.append(doc_id)
-        return result
+        # By name: a spelled-out key would otherwise sort by its marker.
+        return sorted(result)
 
     def read_note(
         self, doc_id: str
@@ -570,7 +1022,7 @@ class JournalStore:
         backend seam never lists or exposes internal documents to MCP callers.
         """
         winner = self.winner(doc_id)
-        if (winner is None or winner.get('deleted') or winner.get('_deleted')
+        if (winner is None or _js_truthy(winner.get('deleted')) or _js_truthy(winner.get('_deleted'))
                 or winner.get('type') not in ('plain', 'newnote', 'notes')):
             return None
         if not doc_id.startswith('i:') and not is_note_document(winner):
@@ -632,13 +1084,13 @@ class JournalStore:
         key = (doc['_id'], doc['_rev'], cache_budget)
         verdict = self._conn.execute(
             'SELECT rev, budget FROM text_verdicts WHERE doc_id=?',
-            (doc['_id'],)).fetchone()
-        if verdict == key[1:] and not strict_budget:
+            (_db_key(doc['_id']),)).fetchone()
+        if verdict is not None and (_db_unkey(verdict[0]), verdict[1]) == key[1:] and not strict_budget:
             self._remember_nontext(key)
             return None
         if verdict is not None:
             with self._conn:
-                self._conn.execute('DELETE FROM text_verdicts WHERE doc_id=?', (doc['_id'],))
+                self._conn.execute('DELETE FROM text_verdicts WHERE doc_id=?', (_db_key(doc['_id']),))
         if doc.get('e_'):
             raise EncryptedNoteError(PublicDiagnostic(DiagnosticCode.ENCRYPTED_NOTE, paths=(DiagnosticPath(doc['path'], remote=True),)))
         children = doc.get('children') or []
@@ -663,8 +1115,9 @@ class JournalStore:
     def _remember_nontext(self, key: tuple[str, str, int]) -> None:
         # Reinsert on a hit so rowid orders least-to-most recently used.
         with self._conn:
-            self._conn.execute('DELETE FROM text_verdicts WHERE doc_id=?', (key[0],))
-            self._conn.execute('INSERT INTO text_verdicts VALUES (?, ?, ?, 0)', key)
+            self._conn.execute('DELETE FROM text_verdicts WHERE doc_id=?', (_db_key(key[0]),))
+            self._conn.execute('INSERT INTO text_verdicts VALUES (?, ?, ?, 0)',
+                               (_db_key(key[0]), _db_key(key[1]), key[2]))
             self._trim_text_verdicts()
 
     def _trim_text_verdicts(self) -> None:
@@ -677,7 +1130,8 @@ class JournalStore:
         self, children: list[str], inline: dict[str, str], path: str
     ) -> list[str]:
         """Resolve chunk data in children order: eden inline first, then the
-        chunk store, then full-JSON chunk records in the docs table."""
+        chunk document, then a file a release before chunk documents wrote
+        for a chunk no document names."""
         datas: list[str] = []
         for child in children:
             try:
@@ -687,22 +1141,29 @@ class JournalStore:
             if child in inline:
                 datas.append(inline[child])
                 continue
-            if chunk_file.is_file():
+            if self._tree(child) is not None:
+                # A device reads the chunk document: what its winner holds if the
+                # tree names one, and nothing once it is deleted or gone.
+                chunk_doc = self.winner(child)
+                if chunk_doc is not None:
+                    if chunk_doc.get("e_"):
+                        raise EncryptedNoteError(
+                            PublicDiagnostic(DiagnosticCode.ENCRYPTED_NOTE, paths=(DiagnosticPath(path, remote=True),)
+                            )
+                        )
+                    # A revision-deleted chunk is deleted on every device too.
+                    data = chunk_doc.get("data")
+                    if (not _js_truthy(chunk_doc.get("_deleted"))
+                            and not _js_truthy(chunk_doc.get("deleted")) and isinstance(data, str)):
+                        datas.append(data)
+                        continue
+            elif chunk_file.is_file():
+                # A chunk a release before chunk documents held as a file only.
                 try:
                     datas.append(chunk_file.read_bytes().decode("utf-8"))
                 except (OSError, UnicodeDecodeError):
                     raise NoteDecodeError(PublicDiagnostic(DiagnosticCode.IS_CORRUPT_UNREADABLE_CHUNK_FILE, paths=(DiagnosticPath(path, remote=True),))) from None
                 continue
-            chunk_doc = self.winner(child)
-            if chunk_doc is not None:
-                if chunk_doc.get("e_"):
-                    raise EncryptedNoteError(
-                        PublicDiagnostic(DiagnosticCode.ENCRYPTED_NOTE, paths=(DiagnosticPath(path, remote=True),))
-                    )
-                data = chunk_doc.get("data")
-                if not chunk_doc.get("deleted") and isinstance(data, str):
-                    datas.append(data)
-                    continue
             raise NoteDecodeError(PublicDiagnostic(DiagnosticCode.IS_CORRUPT_A_CONTENT_CHUNK_IS_MISSING, paths=(DiagnosticPath(path, remote=True),)))
         return datas
 
@@ -738,6 +1199,57 @@ def _dump_doc(doc: dict) -> str:
     # Retain local handling of replayed numeric overflows for note isolation;
     # strict wire publication validation belongs in serialize_journal.
     return escape_json_surrogates(json.dumps(doc, ensure_ascii=False, separators=(",", ":")))
+
+
+def _named(tree, rev: object) -> bool:
+    """Whether a device reports a chain for ``rev`` (pouchdb-core ``get``)."""
+    try:
+        revision_chain(tree, rev)
+    except (ValueError, TypeError, AttributeError):
+        return False
+    return True
+
+
+def _require_named_revision(tree, rev: object, path: str) -> None:
+    """A device reports no chain for a revision its tree does not name by string
+    (pouchdb-core ``get`` fails with ``invalid rev tree``); such a note is
+    corrupt for it and is not served here either."""
+    if not _named(tree, rev):
+        raise NoteDecodeError(PublicDiagnostic(
+            DiagnosticCode.IS_CORRUPT_REVISION_NOT_NAMED_BY_THE_TREE,
+            paths=(DiagnosticPath(path, remote=True),)))
+
+
+def _served(body: dict, deleted: bool) -> dict:
+    """A stored body as a device serves a winner: deletion stamped from the
+    tree, attachments stubs."""
+    return _with_stubs(_mark_deletion(body, deleted))
+
+
+def _with_stubs(body: dict) -> dict:
+    """A stored body as core ``get`` hands it back: every attachment a stub."""
+    attachments = body.get("_attachments")
+    if isinstance(attachments, list):
+        body["_attachments"] = [
+            {**attachment, "stub": True} if isinstance(attachment, dict) else attachment
+            for attachment in attachments]
+    elif isinstance(attachments, dict):
+        body["_attachments"] = {
+            name: {**attachment, "stub": True} if isinstance(attachment, dict) else attachment
+            for name, attachment in attachments.items()}
+    return body
+
+
+def _mark_deletion(body: dict, deleted: bool) -> dict:
+    """Stamp a winner's deletion as a device answers it: from the tree for a
+    revision-deleted winner, whose raw ``get`` reports it missing before any
+    body is read. A live winner's body keeps the flag it was stored with: the
+    plugin reads ``_deleted`` off the body (`EntryManagerImpls.ts:435-436`),
+    and over a shared slot that is another document's."""
+    body = dict(body)
+    if deleted:
+        body["_deleted"] = True
+    return body
 
 
 def _display_path(doc: dict, doc_id: str) -> str:

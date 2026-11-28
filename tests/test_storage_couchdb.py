@@ -750,6 +750,26 @@ async def test_resurrect_requires_create():
     assert meta["size"] == len("fresh".encode("utf-8"))
 
 
+@pytest.mark.parametrize("flag", [[], {}])
+async def test_deletion_flags_read_with_javascript_truthiness(flag):
+    # The plugin tests `obj.deleted || obj._deleted`: an empty array or
+    # object deletes as truly as true, for readers and writers alike.
+    docs = {
+        "note.md": plain_note("note.md", "note.md", [], deleted=flag),
+        "other.md": plain_note("other.md", "other.md", [], deleted=flag),
+    }
+    async with fake_vault(docs) as (backend, raw, log):
+        with pytest.raises(NoteNotFound):
+            await backend.write_note("note.md", "fresh", overwrite=True)
+        assert await backend.delete_note("other.md") is False
+        ops_end = len(log)
+        await backend.write_note("note.md", "fresh", create=True)
+        stored = await stored_doc(raw, "note.md")
+    assert mutation_free(log, ops_end)
+    assert "deleted" not in stored
+    assert stored["_rev"] == "2-fake2"
+
+
 async def test_delete_soft():
     # B2: deletion is a new revision with deleted:true; type/path/
     # children preserved, chunk untouched, zero DELETE requests.

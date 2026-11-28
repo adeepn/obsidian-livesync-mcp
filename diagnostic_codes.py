@@ -52,7 +52,6 @@ class DiagnosticCode(str, Enum):
     ENCRYPTED_INLINE_CHUNK = 'encrypted inline chunk'
     ENCRYPTED_NOTE = 'note uses end-to-end encryption, which this server does not support'
     EXISTING_NOTE_HAS_AN_INVALID_REVISION = 'existing note has an invalid revision'
-    EXISTING_NOTE_HAS_INVALID_REVISION_ANCESTRY = 'existing note has invalid revision ancestry'
     EXISTING_NOTE_HAS_NO_REVISION_TOKEN = 'existing note has no revision token'
     EXISTING_SHARED_CONTENT_CHUNK_COULD_NOT_BE_VALIDATED = 'existing shared content chunk could not be validated'
     EXISTING_SHARED_CONTENT_CHUNK_HOLDS_DIFFERENT_DATA = 'existing shared content chunk holds different data; inspect and resolve the conflicting leaf in Obsidian, or coordinate an alternate hashAlg or a positive customChunkSize before retrying'
@@ -112,3 +111,5 @@ class DiagnosticCode(str, Enum):
     CANNOT_BE_WRITTEN_CONTENT_CHUNK_IS_ENCRYPTED_OR_CHANGED_CONCURRENTLY = 'cannot be written: content chunk is encrypted or changed concurrently'
     IS_CORRUPT_INVALID_CHUNK_REFERENCE = 'is corrupt: invalid chunk reference'
     IS_CORRUPT_UNREADABLE_CHUNK_FILE = 'is corrupt: unreadable chunk file'
+    IS_CORRUPT_REVISION_NOT_NAMED_BY_THE_TREE = 'is corrupt: the revision tree does not name the winning revision'
+    IS_CORRUPT_THE_WINNING_REVISION_HAS_NO_STORED_BODY = 'is corrupt: the winning revision has no stored body'

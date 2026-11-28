@@ -12,8 +12,9 @@ journals. Subsequent refreshes use the processed-file ledger. A confirmed remote
 wipe clears only deduplication tracking and starts replay from the beginning;
 local notes and chunks stay readable. Use a dedicated writable
 state directory per vault/peer and persist it across restarts. It contains
-`journal.sqlite3` (SQLite revision state and processed journals) and
-`chunks/` (cached chunk files).
+`journal.sqlite3` (revision trees, every document a device holds — chunk documents
+included — and processed journals) and `chunks/` (files written by releases before
+chunk documents; read only for a chunk no document names).
 
 `obsidian_refresh` lists remote journals and replays unseen files.
 `S3_REFRESH_MIN_INTERVAL_SEC` is the minimum spacing between refresh attempts, including failures
@@ -36,9 +37,9 @@ parse or SQLite transaction can finish after the deadline. Configure budgets
 large enough for one journal plus control reads. Restarting the server restarts
 the listing sweep; the durable ledger preserves progress.
 
-Local state directories and chunk shards are private (`0700`); SQLite and newly
-written chunk files use `0600`. Opening an existing cache tightens permissive
-directory modes and logs each correction once.
+Local state directories and chunk shards are private (`0700`); the SQLite file
+uses `0600`. Opening an existing state directory tightens permissive directory
+modes and logs each correction once.
 
 Remote storage is append-only: updates publish new journal objects.
 Publication first attempts atomic create-only `PutObject(IfNoneMatch="*")`
@@ -51,9 +52,24 @@ The backend never deletes S3 objects, prunes history, or runs remote garbage
 collection. Deleting a note publishes a tombstone; it does not remove journal
 objects. Automatic dedupe resets retain all local documents and chunks.
 
-Concurrent edits can leave sibling revisions. The winner is deterministic:
-highest revision generation, then lexicographically greatest revision hash.
-A successful write confirms publication, not that it will remain the winner.
+Concurrent edits can leave sibling revisions. The peer replays every journal
+file the way a device receives it and holds the revision a device's database
+holds: a revision that conflict resolution did not delete (`_deleted`) beats a
+deleted one, then the higher position wins, then the greatest revision hash.
+Each document's tree is cut to the device's limit of 100 revisions per path,
+so a late ancestor can become a branch of its own again, as on a device. A
+file a device refuses is refused here too and stays unprocessed; what a
+device committed before refusing stays as well (its chunk batch, and the
+the other records of a batch with one refused member). A compact chunk record is
+received as the chunk document a device's decoder makes of it: a chunk the
+state holds is kept as it is, and two records for one chunk in a file refuse
+the file. A chunk is held as a document; no file is written for it. Every new revision
+the peer publishes takes the base a device's write takes, the plugin's raw
+`get` of the note, and descends from the revision it spells: over a
+revision-deleted winner too, and where the tree does not name that revision,
+as a new root above its hash ([peer limits](peer-limitations.md), the slot a
+body is stored in). A successful write confirms publication, not that it will
+remain the winner.
 Sibling revisions remain available to LiveSync's conflict UI in Obsidian for
 resolution.
 

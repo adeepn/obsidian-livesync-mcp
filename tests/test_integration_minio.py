@@ -13,7 +13,6 @@ import pytest
 import storage_journal
 
 from config import S3Config
-from journal_store import pick_winner
 from livesync_format import path2id
 from object_storage import Boto3ObjectStorage
 from storage_base import StorageError, StorageUnavailable
@@ -262,9 +261,12 @@ async def test_sibling_writers(minio, monkeypatch):
     leaves = reader._store.leaves(doc_id)
     assert {leaf["_rev"] for leaf in leaves} == {meta["rev"] for meta in revisions}
     assert len(leaves) == 2
-    assert reader._store.winner(doc_id) == pick_winner(leaves)
+    winner = reader._store.winner(doc_id)
+    assert winner in leaves
+    assert [leaf["_rev"] for leaf in reader._store.conflicts(doc_id)] == [
+        leaf["_rev"] for leaf in leaves if leaf["_rev"] != winner["_rev"]]
     actual = await reader.read_note("shared.md")
-    assert actual["rev"] == pick_winner(leaves)["_rev"]
+    assert actual["rev"] == winner["_rev"]
     bodies = {
         reader._store._chunk_path(leaf["children"][0]).read_text(encoding="utf-8")
         for leaf in leaves

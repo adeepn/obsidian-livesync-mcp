@@ -1,11 +1,16 @@
 # Local state and recovery
 
 The state directory is a **rebuildable replica**, not an eviction cache.
-`journal.sqlite3` holds revision trees, replay checkpoints and peer metadata;
-SQLite WAL/SHM sidecars may also be present. `chunks/` holds content-addressed
-chunks, including historical chunks. State grows with vault content and history
-and is **never auto-pruned** during normal operation. Remote journals are
-append-only, so deleting a note does not reclaim its history here.
+`journal.sqlite3` holds every document a device holds (chunk documents
+included), revision trees, replay checkpoints and peer metadata; SQLite WAL/SHM
+sidecars may also be present. `chunks/` holds chunk files written by releases
+before chunk documents; they are read only for a chunk no document names and
+are not written any more. State grows with vault content and history.
+The peer prunes nothing on its own and compacts exactly what a device
+compacts: a merge that stems a revision away removes its stored body
+([peer limits](peer-limitations.md)), so the local state is a working replica,
+not a revision archive. Remote journals are append-only and keep every record,
+a deleted note's included; a fresh state directory is rebuilt from them.
 
 Keep a dedicated writable `S3_STATE_DIR` per vault/peer, persisted across restarts.
 Allow roughly vault-sized disk space initially and potentially much more for
